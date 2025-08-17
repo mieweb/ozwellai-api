@@ -6,5 +6,13 @@
     "created_at": 1755458351,
     "filename": "README.md",
     "purpose": "assistants"
+  },
+  {
+    "id": "file-meg2ntbg67a6bfb7bf954e33",
+    "object": "file",
+    "bytes": 875,
+    "created_at": 1755458491,
+    "filename": "package.json",
+    "purpose": "assistants"
   }
 ]

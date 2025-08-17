@@ -117,8 +117,21 @@ export class SimpleTextGenerator {
  * Generate deterministic embedding vectors
  */
 export function generateEmbedding(text: string, dimensions: number = 1536): number[] {
-  const seed = SimpleTextGenerator['hashString'](text);
-  const rng = SimpleTextGenerator['seededRandom'](seed);
+  // Simple hash function for seeding
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    const char = text.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  const seed = Math.abs(hash);
+  
+  // Seeded random number generator
+  let currentSeed = seed;
+  const rng = () => {
+    currentSeed = (currentSeed * 9301 + 49297) % 233280;
+    return currentSeed / 233280;
+  };
   
   const embedding = new Array(dimensions);
   for (let i = 0; i < dimensions; i++) {
@@ -128,6 +141,11 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
   
   // Normalize the vector
   const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+  if (magnitude === 0) {
+    // Handle edge case of zero vector
+    embedding.fill(1 / Math.sqrt(dimensions));
+    return embedding;
+  }
   return embedding.map(val => val / magnitude);
 }
 
