@@ -69,6 +69,41 @@ graph TB
 - Same error handling and validation logic
 - Same dependency management across environments
 
+## 🎯 Release Management
+
+Our release process follows the same script-first philosophy:
+
+```mermaid
+flowchart TD
+    LocalDev[👨‍💻 Developer] --> ReleaseScript[🚀 ./scripts/release.sh]
+    ReleaseScript --> CheckPre[✅ Check Prerequisites]
+    CheckPre --> SelectVer[📝 Select Version]
+    SelectVer --> GenNotes[📖 Generate Release Notes]
+    GenNotes --> CreateTag[🏷️ Create Git Tag]
+    CreateTag --> PushTag[📤 Push Tag to GitHub]
+    PushTag --> CreateRelease[🎉 Create GitHub Release]
+    
+    CreateRelease --> TriggerPub[⚡ Trigger Publishing Workflows]
+    TriggerPub --> RunTests[🧪 Run All Tests]
+    RunTests --> PubNPM[📦 Publish to npm]
+    RunTests --> PubJSR[🦕 Publish to JSR with Provenance]
+    
+    classDef manual fill:#e1f5fe
+    classDef auto fill:#f3e5f5
+    classDef publish fill:#e8f5e8
+    
+    class LocalDev,ReleaseScript,CheckPre,SelectVer,GenNotes manual
+    class CreateTag,PushTag,CreateRelease auto
+    class TriggerPub,RunTests,PubNPM,PubJSR publish
+```
+
+**Key Features:**
+- 🎯 **Interactive Version Selection**: Suggests next version, validates semantic versioning
+- 📝 **Automated Release Notes**: Generates from git history, allows editing
+- ✅ **Prerequisites Check**: Validates git state, authentication, branch status
+- 🔒 **Cryptographic Provenance**: JSR publishing includes supply chain attestation
+- ⚡ **Script-First**: Same commands work locally and in CI
+
 ## ⚡ Workflow Triggers
 
 | Workflow | Trigger | Purpose | Key Scripts |

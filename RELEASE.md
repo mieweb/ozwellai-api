@@ -1,123 +1,166 @@
 # Release Process
 
-This document explains how to release new versions of the OzwellAI TypeScript client.
+This document explains how to release new versions of the Ozwell API project.
 
 ## TL;DR
 
-**Quick Release:**
+**Interactive Release (Recommended):**
 ```bash
-# 1. Test locally first
-./scripts/test-local.sh
-
-# 2. Create and push tag
-git tag v1.0.0 && git push origin v1.0.0
-
-# 3. Create GitHub release (triggers automatic publishing)
+./scripts/release.sh
 ```
 
-**Manual Publishing:**
+**Manual Release:**
 ```bash
-./scripts/publish-client.sh 1.0.0
+# 1. Create and push tag
+git tag v1.0.4 && git push origin v1.0.4
+
+# 2. Create GitHub release (triggers automatic publishing)
+gh release create v1.0.4 --title "v1.0.4" --notes "Release notes here"
 ```
 
 **Debug Issues:**
 ```bash
-# Test individual steps
-./scripts/extract-version.sh v1.0.0
-./scripts/build-client.sh
+# Test the complete release process locally
+./scripts/release.sh
+
+# Test individual publishing steps
 DRY_RUN=true ./scripts/publish-client.sh 1.0.0
 ```
 
 ## Overview
 
-The TypeScript client uses a tag-based release process with automatic publishing to both npm and JSR. This provides:
+The Ozwell API project uses an interactive, script-first release process with automatic publishing to npm and JSR. This provides:
 
-- **Explicit "go" button**: Only publish when you create a release
-- **Immutable provenance**: Each release is tied to a specific git tag
-- **Fewer accidental publishes**: No automatic publishing on every main branch push
-- **Version consistency**: Version numbers are extracted from git tags
+- **Interactive Release Script**: `./scripts/release.sh` guides you through the entire process
+- **Explicit "go" button**: Only publish when you create a GitHub release
+- **Immutable provenance**: Each release is tied to a specific git tag with cryptographic attestation
+- **Version validation**: Automatic semantic version checking and suggestions
+- **Release notes generation**: Auto-generated from git history with editing capabilities
+- **Cross-platform publishing**: Simultaneous npm and JSR publishing with full provenance
 
-## Release Steps
+## Release Methods
 
-### 1. Prepare for Release
+### Method 1: Interactive Script (Recommended)
 
-Make sure all changes are merged to the `main` branch and CI is passing.
-
-### 2. Create a Git Tag
-
-Create a semantic version tag. The tag must match the pattern `v{major}.{minor}.{patch}` or `{major}.{minor}.{patch}`:
+Run the interactive release script:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+./scripts/release.sh
 ```
 
-**Valid tag formats:**
-- `v1.0.0` (recommended)
-- `1.0.0` 
-- `v1.0.0-beta.1` (pre-release)
-- `v1.0.0-rc.1` (release candidate)
+The script will:
+1. ✅ Check prerequisites (git status, authentication, etc.)
+2. 📝 Help you select the next version (suggests patch increment)
+3. 📖 Generate release notes from git history
+4. 🏷️ Create and push git tag
+5. 🎉 Create GitHub release (triggers automated publishing)
 
-### 3. Create a GitHub Release
+### Method 2: Manual Process
 
-1. Go to the [Releases page](https://github.com/mieweb/ozwellai-api/releases)
-2. Click "Create a new release"
-3. Select the tag you just created
-4. Add a release title (e.g., "v1.0.0")
-5. Add release notes describing the changes
-6. Click "Publish release"
+If you prefer manual control:
 
-### 4. Automated Publishing
+#### 1. Create a Git Tag
 
-Once the release is published, GitHub Actions will automatically:
+Create a semantic version tag. The tag must match the pattern `v{major}.{minor}.{patch}`:
 
-1. **Extract version** using `./scripts/extract-version.sh`
-2. **Validate** semantic version format
-3. **Build and publish** using `./scripts/publish-client.sh`
-   - Updates package.json and jsr.json versions
-   - Builds client in all formats (ESM, CJS, types)
-   - Publishes to npm as `ozwellai`
-   - Publishes to JSR as `@mieweb/ozwellai`
+```bash
+git tag v1.0.4
+git push origin v1.0.4
+```
+
+#### 2. Create a GitHub Release
+
+```bash
+# Using GitHub CLI (recommended)
+gh release create v1.0.4 --title "v1.0.4" --notes "Release notes here"
+
+# Or via web interface at:
+# https://github.com/mieweb/ozwellai-api/releases/new
+```
+
+#### 3. Automated Publishing
+
+Once the release is created, GitHub Actions automatically:
+- ✅ Runs complete test suite
+- 📦 Publishes TypeScript client to npm
+- 🦕 Publishes to JSR with cryptographic provenance
+- 🐳 Publishes reference server Docker images
+
+## Script Features
+
+The interactive release script (`./scripts/release.sh`) provides:
+
+### ✅ Prerequisites Check
+- Validates git repository state and working directory cleanliness
+- Ensures you're on the correct branch (warns if not `main`)
+- Checks GitHub CLI availability and authentication
+- Verifies all dependencies are installed
+
+### 📝 Interactive Version Selection
+- Shows current version from git tags
+- Suggests next patch version automatically
+- Validates semantic version format (major.minor.patch)
+- Prevents duplicate tags and provides helpful error messages
+- Supports pre-release versions (beta, rc, alpha)
+
+### 📖 Release Notes Generation
+- Auto-generates notes with commit history since last release
+- Includes standard publishing information
+- Allows editing with your preferred editor (`$EDITOR` or nano)
+- Templates with consistent formatting
+
+### 🏷️ Git Tag Management
+- Creates annotated git tags with proper messages
+- Pushes tags to origin automatically
+- Follows `v1.0.0` format for consistency
+
+### 🎉 GitHub Release Creation
+- Uses GitHub CLI when available for seamless integration
+- Falls back to manual instructions with specific URLs
+- Includes formatted release notes
+- Triggers automated publishing workflow immediately
 
 ## Local Testing
 
-You can test the entire release process locally before creating a release:
+You can test parts of the release process locally:
 
-### Quick Test
+### Test the Release Script
 ```bash
-# Test the complete build and publish process (dry run)
-./scripts/test-local.sh
+# Run the interactive script (will stop before actually creating releases)
+./scripts/release.sh
 ```
 
-### Individual Steps
+### Test Individual Components
 ```bash
-# Test version extraction
-./scripts/extract-version.sh v1.0.0
+# Test the publishing workflow (dry run - won't actually publish)
+DRY_RUN=true ./scripts/publish-client.sh 1.0.4
 
-# Test building the client
-./scripts/build-client.sh
+# Test TypeScript client build
+cd clients/typescript && npm run build
 
-# Test publish process (dry run - won't actually publish)
-DRY_RUN=true ./scripts/publish-client.sh 1.0.0
+# Test reference server
+cd reference-server && npm test
 ```
 
-### Manual Publishing
-If you need to publish manually (not recommended for releases):
-
+### Verify Current State
 ```bash
-# Authenticate with npm
-npm login
+# Check current version
+git tag -l --sort=-version:refname | head -n1
 
-# Build and publish
-./scripts/publish-client.sh 1.2.3
+# Check repository status
+git status
+
+# Verify authentication
+gh auth status
 ```
 
-### 5. Verify Publication
+## Verification
 
-After the workflow completes, verify the package was published:
+After the workflow completes, verify packages were published:
 
-- **npm**: https://www.npmjs.com/package/ozwellai
-- **JSR**: https://jsr.io/@mieweb/ozwellai
+- **npm**: https://www.npmjs.com/package/@ozwell/api
+- **JSR**: https://jsr.io/@ozwell/api (with green "Has provenance" badge)
+- **Docker**: GitHub Container Registry for reference server
 
 ## Pre-release Versions
 
@@ -132,42 +175,75 @@ When creating the GitHub release, check the "Set as a pre-release" option.
 
 ## Troubleshooting
 
-### Invalid Version Tag
+### Script Issues
 
-If the workflow fails with "Tag is not a valid semantic version":
-- Test locally first: `./scripts/extract-version.sh your-tag`
-- Ensure your tag follows semantic versioning (e.g., `v1.0.0`, not `version-1.0`)
-- Check that there are no extra characters or spaces
+#### "Working directory is not clean"
+```bash
+# Check what files are modified
+git status
 
-### Build Failures
+# Commit or stash changes
+git add -A && git commit -m "Prepare for release"
+# OR
+git stash
+```
 
-If the build fails:
-- Test locally: `./scripts/build-client.sh`
-- Check TypeScript compilation errors
+#### "Tag already exists"
+```bash
+# List existing tags
+git tag -l
+
+# Delete local tag if needed
+git tag -d v1.0.4
+
+# Delete remote tag if needed (careful!)
+git push origin --delete v1.0.4
+```
+
+#### "GitHub CLI not authenticated"
+```bash
+# Authenticate with GitHub
+gh auth login
+
+# Verify authentication
+gh auth status
+```
+
+### Workflow Issues
+
+#### Publishing Failures
+- Test locally: `DRY_RUN=true ./scripts/publish-client.sh 1.0.4`
+- Check that the `NPM_TOKEN` secret is configured in GitHub repository settings
+- Verify JSR permissions are properly set in workflow
+- Ensure package names aren't already taken
+
+#### Build Failures
+- Check TypeScript compilation: `cd clients/typescript && npm run build`
 - Verify all tests pass: `cd clients/typescript && npm test`
+- Confirm dependencies are installed: `npm ci`
 
-### Publish Failures
+#### Version Validation Failures
+- Use the release script for automatic validation: `./scripts/release.sh`
+- Ensure tags follow semantic versioning (e.g., `v1.0.4`, not `version-1.0`)
+- Check that there are no extra characters or spaces in tags
 
-If publishing fails:
-- Test locally: `DRY_RUN=true ./scripts/publish-client.sh 1.0.0`
-- Check that the `NPM_TOKEN` secret is configured in GitHub
-- Verify the package name isn't already taken
-- Ensure JSR permissions are properly set
+### Recovery Steps
 
-### Local Development Issues
+If a release partially fails:
 
-If local scripts fail:
-- Ensure dependencies are installed: `cd clients/typescript && npm install`
-- Check Node.js version: `node --version` (requires >=18.0.0)
-- Verify script permissions: `chmod +x scripts/*.sh`
-- For JSR publishing: JSR CLI is included in devDependencies, or install globally: `npm install -g jsr`
+1. **Tag created but GitHub release failed**: Create the GitHub release manually
+2. **npm publishing failed**: Re-run the workflow or check npm token configuration  
+3. **JSR publishing failed**: Verify deno.json configuration and workflow permissions
 
-### Version Conflicts
+For major issues, you can always delete tags and start over:
+```bash
+# Delete tag locally and remotely
+git tag -d v1.0.4
+git push origin --delete v1.0.4
 
-If a version already exists:
-- Delete the problematic tag: `git tag -d v1.0.0 && git push origin :refs/tags/v1.0.0`
-- Create a new tag with an incremented version
-- Create a new release
+# Start fresh with a new version
+./scripts/release.sh
+```
 
 ## Workflow Architecture
 
@@ -180,9 +256,8 @@ For detailed information about our CI/CD architecture, including workflow relati
 - **Script-first approach** allows local testing before pushing changes
 
 **Key Scripts:**
-- `./scripts/test-local.sh` - Test complete release process locally
-- `./scripts/build-client.sh` - Build TypeScript client
-- `./scripts/publish-client.sh` - Publish to npm and JSR
-- `./scripts/extract-version.sh` - Extract and validate version from tags
+- `./scripts/release.sh` - Interactive release with version selection and GitHub release creation
+- `./scripts/publish-client.sh` - Publish TypeScript client to npm and JSR
+- Various test and build scripts for local development and CI/CD
 
-This separation ensures code quality on every change while giving you control over when new versions are released to users.
+This script-first approach ensures that all release operations can be performed and tested locally, making debugging easier and reducing dependency on external services.

@@ -87,6 +87,24 @@ This repository is organized to provide a clear separation between the API speci
 
 ---
 
+## Release Process
+
+We use an automated, script-first release process that ensures consistency and reliability:
+
+```bash
+# Interactive release with version selection and GitHub release creation
+./scripts/release.sh
+```
+
+The release script handles:
+- ✅ Version validation and tagging
+- 📝 Release notes generation  
+- 🏷️ Git tag creation and pushing
+- 🎉 GitHub release creation
+- ⚡ Automated publishing to npm and JSR with provenance
+
+For detailed documentation, see [RELEASE.md](RELEASE.md).
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md?utm_source=bluehive&utm_medium=chat&utm_campaign=bluehive-ai) for guidelines.
