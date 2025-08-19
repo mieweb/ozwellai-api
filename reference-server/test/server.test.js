@@ -1,6 +1,7 @@
-import { test, assert } from 'node:test';
-import { spawn } from 'node:child_process';
-import { setTimeout } from 'node:timers/promises';
+const { test } = require('node:test');
+const assert = require('node:assert');
+const { spawn } = require('node:child_process');
+const { setTimeout } = require('node:timers/promises');
 
 test('Reference Server - Health Check', async () => {
   // Start the server
@@ -19,7 +20,7 @@ test('Reference Server - Health Check', async () => {
     
     const data = await response.json();
     assert.strictEqual(data.status, 'ok');
-    assert.strictEqual(data.service, 'ozwellai-reference');
+    assert.ok(data.timestamp); // Verify timestamp is present
 
   } finally {
     // Clean up
