@@ -1,0 +1,529 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OzwellAI Reference API",
+    "description": "OpenAI-compatible API reference implementation",
+    "version": "1.0.0",
+    "contact": {
+      "name": "OzwellAI",
+      "email": "support@ozwellai.com"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "Model": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "ModelsListResponse": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "ChatCompletionRequest": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "ChatCompletionResponse": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "ResponseRequest": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "Response": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "EmbeddingRequest": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "EmbeddingResponse": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "FileObject": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "FileListResponse": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "object": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "number"
+                          },
+                          "owned_by": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "object",
+                          "created",
+                          "owned_by"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "role",
+                        "content"
+                      ]
+                    }
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "max_tokens": {
+                    "type": "number"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "model",
+                  "messages"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/responses": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "input": {
+                    "type": "string"
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "max_tokens": {
+                    "type": "number"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "input": {
+                    "type": "string"
+                  },
+                  "dimensions": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "file_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "file_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files/{file_id}/content": {
+      "get": {
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "file_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}
