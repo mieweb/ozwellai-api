@@ -5,32 +5,118 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
   fastify.post('/v1/chat/completions', {
     schema: {
-      headers: {
-        type: 'object',
-        properties: {
-          authorization: { type: 'string' }
-        }
-      },
+      security: [{ bearerAuth: [] }],
       body: {
         type: 'object',
         properties: {
-          model: { type: 'string' },
+          model: { 
+            type: 'string',
+            enum: ['gpt-4o', 'gpt-4o-mini'],
+            description: 'ID of the model to use'
+          },
           messages: { 
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                role: { type: 'string' },
-                content: { type: 'string' }
+                role: { 
+                  type: 'string',
+                  enum: ['system', 'user', 'assistant'],
+                  description: 'The role of the messages author'
+                },
+                content: { 
+                  type: 'string',
+                  description: 'The contents of the message'
+                }
               },
               required: ['role', 'content']
-            }
+            },
+            description: 'A list of messages comprising the conversation so far'
           },
-          stream: { type: 'boolean' },
-          max_tokens: { type: 'number' },
-          temperature: { type: 'number' }
+          stream: { 
+            type: 'boolean',
+            default: false,
+            description: 'If set, partial message deltas will be sent'
+          },
+          max_tokens: { 
+            type: 'number',
+            minimum: 1,
+            default: 150,
+            description: 'The maximum number of tokens to generate'
+          },
+          temperature: { 
+            type: 'number',
+            minimum: 0,
+            maximum: 2,
+            default: 0.7,
+            description: 'What sampling temperature to use, between 0 and 2'
+          }
         },
         required: ['model', 'messages']
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            object: { type: 'string' },
+            created: { type: 'number' },
+            model: { type: 'string' },
+            choices: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number' },
+                  message: {
+                    type: 'object',
+                    properties: {
+                      role: { type: 'string' },
+                      content: { type: 'string' }
+                    }
+                  },
+                  finish_reason: { type: 'string' }
+                }
+              }
+            },
+            usage: {
+              type: 'object',
+              properties: {
+                prompt_tokens: { type: 'number' },
+                completion_tokens: { type: 'number' },
+                total_tokens: { type: 'number' }
+              }
+            }
+          }
+        },
+        400: {
+          type: 'object',
+          properties: {
+            error: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' },
+                type: { type: 'string' },
+                param: { type: ['string', 'null'] },
+                code: { type: ['string', 'null'] }
+              }
+            }
+          }
+        },
+        401: {
+          type: 'object',
+          properties: {
+            error: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' },
+                type: { type: 'string' },
+                param: { type: ['string', 'null'] },
+                code: { type: ['string', 'null'] }
+              }
+            }
+          }
+        }
       }
     },
   }, async (request, reply) => {
@@ -40,7 +126,20 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid API key provided', 'invalid_request_error');
     }
 
-    const body = request.body as any;
+    interface ChatMessage {
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }
+
+    interface ChatRequest {
+      model: string;
+      messages: ChatMessage[];
+      stream?: boolean;
+      max_tokens?: number;
+      temperature?: number;
+    }
+
+    const body = request.body as ChatRequest;
     const { model, messages, stream = false, max_tokens = 150, temperature = 0.7 } = body;
 
     // Validate model
@@ -51,7 +150,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Create prompt from messages
-    const prompt = messages.map((msg: any) => `${msg.role}: ${msg.content}`).join('\n');
+    const prompt = messages.map((msg) => `${msg.role}: ${msg.content}`).join('\n');
     
     const requestId = generateId('chatcmpl');
     const created = Math.floor(Date.now() / 1000);
