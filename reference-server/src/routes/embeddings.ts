@@ -5,6 +5,7 @@ import {
   generateEmbedding,
   countTokens,
 } from "../util";
+import { getModelDimensions, getEmbeddingModels, isValidModel } from "../config/models";
 
 const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/embeddings
@@ -18,11 +19,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
           properties: {
             model: {
               type: "string",
-              enum: [
-                "text-embedding-3-small",
-                "text-embedding-3-large",
-                "text-embedding-ada-002",
-              ],
+              enum: getEmbeddingModels(),
               description: "ID of the model to use for generating embeddings",
             },
             input: {
@@ -121,14 +118,8 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       const body = request.body as EmbeddingRequest;
       const { model, input, dimensions } = body;
 
-      // Validate model and get dimensions
-      const modelDimensions: Record<string, number> = {
-        "text-embedding-3-small": 1536,
-        "text-embedding-3-large": 3072,
-        "text-embedding-ada-002": 1536,
-      };
-
-      if (!modelDimensions[model]) {
+      // Validate model using shared configuration
+      if (!isValidModel(model, "embedding")) {
         reply.code(400);
         return createError(
           `Model '${model}' not found`,
@@ -137,6 +128,8 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
         );
       }
 
+      // Get model dimensions from shared configuration
+      const modelDimensions = getModelDimensions();
       const actualDimensions = dimensions || modelDimensions[model];
 
       // Add OpenAI-compatible headers

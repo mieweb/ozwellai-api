@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import { validateAuth, createError } from "../util";
+import { getAllModels } from "../config/models";
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   // GET /v1/models
@@ -54,33 +55,8 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
         return createError("Invalid API key provided", "invalid_request_error");
       }
 
-      // Return hardcoded list of models
-      const models = [
-        {
-          id: "gpt-4o",
-          object: "model" as const,
-          created: 1677610602,
-          owned_by: "ozwellai",
-        },
-        {
-          id: "gpt-4o-mini",
-          object: "model" as const,
-          created: 1677610602,
-          owned_by: "ozwellai",
-        },
-        {
-          id: "text-embedding-3-small",
-          object: "model" as const,
-          created: 1677610602,
-          owned_by: "ozwellai",
-        },
-        {
-          id: "text-embedding-3-large",
-          object: "model" as const,
-          created: 1677610602,
-          owned_by: "ozwellai",
-        },
-      ];
+      // Return list of models from shared configuration
+      const models = getAllModels();
 
       // Add OpenAI-compatible headers
       reply.headers({

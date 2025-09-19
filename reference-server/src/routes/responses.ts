@@ -6,6 +6,7 @@ import {
   generateId,
   countTokens,
 } from "../util";
+import { getChatModels, isValidModel } from "../config/models";
 
 const responsesRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/responses
@@ -19,7 +20,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
           properties: {
             model: {
               type: "string",
-              enum: ["gpt-4o", "gpt-4o-mini"],
+              enum: getChatModels(),
               description: "ID of the model to use for generating responses",
             },
             input: {
@@ -131,9 +132,8 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
         temperature = 0.7,
       } = body;
 
-      // Validate model
-      const supportedModels = ["gpt-4o", "gpt-4o-mini"];
-      if (!supportedModels.includes(model)) {
+      // Validate model using shared configuration
+      if (!isValidModel(model, "chat")) {
         reply.code(400);
         return createError(
           `Model '${model}' not found`,
