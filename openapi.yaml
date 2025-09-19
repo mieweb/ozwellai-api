@@ -1,0 +1,1350 @@
+openapi: 3.0.3
+info:
+  title: Ozwell AI API
+  description: |
+    The Ozwell AI API provides OpenAI-compatible endpoints for chat completions, text generation, embeddings, and file management. 
+    
+    This API is fully compatible with OpenAI's API format while offering additional capabilities like semantic event streaming and enhanced conversation management.
+    
+    ## Authentication
+    
+    All API requests require authentication using a Bearer token in the Authorization header.
+    
+    ## Base URL
+    
+    - **Production**: `https://api.ozwell.ai`
+    - **Development**: `http://localhost:3000`
+    
+    ## OpenAI Compatibility
+    
+    This API is call-for-call compatible with OpenAI's API. Existing OpenAI SDKs and clients can be used by simply changing the base URL and API key.
+  version: 1.0.0
+  contact:
+    name: Ozwell AI Support
+    email: support@ozwell.ai
+    url: https://ozwell.ai
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: https://ozwell.ai/terms
+
+servers:
+  - url: https://api.ozwell.ai
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        API key authentication using Bearer token. Include your API key in the Authorization header as:
+        
+        `Authorization: Bearer YOUR_API_KEY`
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - message
+            - type
+          properties:
+            message:
+              type: string
+              description: Human-readable error message
+              example: "Invalid API key provided"
+            type:
+              type: string
+              description: Error type identifier
+              example: "invalid_request_error"
+            param:
+              type: string
+              nullable: true
+              description: Parameter that caused the error (if applicable)
+              example: "model"
+            code:
+              type: string
+              nullable: true
+              description: Error code (if applicable)
+              example: null
+
+    Model:
+      type: object
+      required:
+        - id
+        - object
+        - created
+        - owned_by
+      properties:
+        id:
+          type: string
+          description: The model identifier
+          example: "gpt-4o"
+        object:
+          type: string
+          enum: ["model"]
+          description: The object type, always "model"
+          example: "model"
+        created:
+          type: integer
+          description: Unix timestamp of when the model was created
+          example: 1677610602
+        owned_by:
+          type: string
+          description: Organization that owns the model
+          example: "ozwellai"
+
+    ModelsListResponse:
+      type: object
+      required:
+        - object
+        - data
+      properties:
+        object:
+          type: string
+          enum: ["list"]
+          description: The object type, always "list"
+          example: "list"
+        data:
+          type: array
+          description: List of available models
+          items:
+            $ref: '#/components/schemas/Model'
+
+    Message:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: ["system", "user", "assistant", "function", "tool"]
+          description: The role of the message author
+          example: "user"
+        content:
+          type: string
+          nullable: true
+          description: The contents of the message
+          example: "Hello, how are you?"
+        name:
+          type: string
+          description: The name of the author of this message (optional)
+          example: "user_123"
+        function_call:
+          type: object
+          description: Function call information (for function messages)
+          properties:
+            name:
+              type: string
+              description: The name of the function to call
+            arguments:
+              type: string
+              description: The arguments to call the function with
+        tool_calls:
+          type: array
+          description: Tool calls information (for tool messages)
+          items:
+            type: object
+            required:
+              - id
+              - type
+              - function
+            properties:
+              id:
+                type: string
+                description: The ID of the tool call
+              type:
+                type: string
+                enum: ["function"]
+                description: The type of tool call
+              function:
+                type: object
+                required:
+                  - name
+                  - arguments
+                properties:
+                  name:
+                    type: string
+                    description: The name of the function to call
+                  arguments:
+                    type: string
+                    description: The arguments to call the function with
+        tool_call_id:
+          type: string
+          description: Tool call that this message is responding to (for tool messages)
+
+    ChatCompletionRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: ID of the model to use
+          example: "gpt-4o"
+        messages:
+          type: array
+          description: A list of messages comprising the conversation so far
+          items:
+            $ref: '#/components/schemas/Message'
+          example:
+            - role: "user"
+              content: "Hello, how are you?"
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: What sampling temperature to use, between 0 and 2
+          example: 0.7
+        top_p:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: An alternative to sampling with temperature, called nucleus sampling
+          example: 0.9
+        n:
+          type: integer
+          minimum: 1
+          maximum: 128
+          description: How many chat completion choices to generate for each input message
+          example: 1
+        stream:
+          type: boolean
+          description: If set, partial message deltas will be sent
+          example: false
+        stop:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: Up to 4 sequences where the API will stop generating further tokens
+          example: ["\n", "Human:", "AI:"]
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: The maximum number of tokens to generate in the chat completion
+          example: 150
+        presence_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+          description: Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far
+          example: 0
+        frequency_penalty:
+          type: number
+          minimum: -2
+          maximum: 2
+          description: Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far
+          example: 0
+        logit_bias:
+          type: object
+          additionalProperties:
+            type: number
+          description: Modify the likelihood of specified tokens appearing in the completion
+          example: {}
+        user:
+          type: string
+          description: A unique identifier representing your end-user
+          example: "user-123"
+
+    ChatCompletionChoice:
+      type: object
+      required:
+        - index
+        - message
+        - finish_reason
+      properties:
+        index:
+          type: integer
+          description: The index of the choice in the list of choices
+          example: 0
+        message:
+          $ref: '#/components/schemas/Message'
+        finish_reason:
+          type: string
+          nullable: true
+          enum: ["stop", "length", "function_call", "tool_calls", "content_filter"]
+          description: The reason the model stopped generating tokens
+          example: "stop"
+
+    ChatCompletionResponse:
+      type: object
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
+        - usage
+      properties:
+        id:
+          type: string
+          description: A unique identifier for the chat completion
+          example: "chatcmpl-123"
+        object:
+          type: string
+          enum: ["chat.completion"]
+          description: The object type, always "chat.completion"
+          example: "chat.completion"
+        created:
+          type: integer
+          description: The Unix timestamp (in seconds) of when the chat completion was created
+          example: 1677652288
+        model:
+          type: string
+          description: The model used for the chat completion
+          example: "gpt-4o"
+        choices:
+          type: array
+          description: A list of chat completion choices
+          items:
+            $ref: '#/components/schemas/ChatCompletionChoice'
+        usage:
+          $ref: '#/components/schemas/Usage'
+
+    ChatCompletionChunk:
+      type: object
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
+      properties:
+        id:
+          type: string
+          description: A unique identifier for the chat completion
+          example: "chatcmpl-123"
+        object:
+          type: string
+          enum: ["chat.completion.chunk"]
+          description: The object type, always "chat.completion.chunk"
+          example: "chat.completion.chunk"
+        created:
+          type: integer
+          description: The Unix timestamp (in seconds) of when the chat completion was created
+          example: 1677652288
+        model:
+          type: string
+          description: The model used for the chat completion
+          example: "gpt-4o"
+        choices:
+          type: array
+          description: A list of chat completion choices
+          items:
+            type: object
+            required:
+              - index
+              - delta
+              - finish_reason
+            properties:
+              index:
+                type: integer
+                description: The index of the choice in the list of choices
+                example: 0
+              delta:
+                type: object
+                description: A chat completion delta generated by streamed model responses
+                properties:
+                  role:
+                    type: string
+                    description: The role of the author of this message
+                  content:
+                    type: string
+                    description: The contents of the chunk
+                  function_call:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      arguments:
+                        type: string
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum: ["function"]
+                        function:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                            arguments:
+                              type: string
+              finish_reason:
+                type: string
+                nullable: true
+                enum: ["stop", "length", "function_call", "tool_calls", "content_filter"]
+                description: The reason the model stopped generating tokens
+
+    ResponseRequest:
+      type: object
+      required:
+        - model
+        - input
+      properties:
+        model:
+          type: string
+          description: ID of the model to use
+          example: "gpt-4o"
+        input:
+          type: string
+          description: The input text to generate a response for
+          example: "Hello, how are you?"
+        stream:
+          type: boolean
+          description: If set, partial response deltas will be sent with semantic events
+          example: false
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: The maximum number of tokens to generate in the response
+          example: 150
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: What sampling temperature to use, between 0 and 2
+          example: 0.7
+
+    Response:
+      type: object
+      required:
+        - id
+        - object
+        - created
+        - model
+        - output
+        - usage
+      properties:
+        id:
+          type: string
+          description: A unique identifier for the response
+          example: "resp-123"
+        object:
+          type: string
+          enum: ["response"]
+          description: The object type, always "response"
+          example: "response"
+        created:
+          type: integer
+          description: The Unix timestamp (in seconds) of when the response was created
+          example: 1677652288
+        model:
+          type: string
+          description: The model used for the response
+          example: "gpt-4o"
+        output:
+          type: string
+          description: The generated response text
+          example: "Hello! I'm doing well, thank you for asking. How can I help you today?"
+        usage:
+          type: object
+          required:
+            - input_tokens
+            - output_tokens
+            - total_tokens
+          properties:
+            input_tokens:
+              type: integer
+              description: Number of tokens in the input
+              example: 5
+            output_tokens:
+              type: integer
+              description: Number of tokens in the generated output
+              example: 20
+            total_tokens:
+              type: integer
+              description: Total number of tokens used in the request (input + output)
+              example: 25
+
+    EmbeddingRequest:
+      type: object
+      required:
+        - model
+        - input
+      properties:
+        model:
+          type: string
+          description: ID of the model to use
+          example: "text-embedding-3-small"
+        input:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          description: Input text to get embeddings for, encoded as a string or array of strings
+          example: "The food was delicious and the waiter..."
+        encoding_format:
+          type: string
+          enum: ["float", "base64"]
+          description: The format to return the embeddings in
+          example: "float"
+        dimensions:
+          type: integer
+          description: The number of dimensions the resulting output embeddings should have
+          example: 1536
+        user:
+          type: string
+          description: A unique identifier representing your end-user
+          example: "user-123"
+
+    Embedding:
+      type: object
+      required:
+        - object
+        - embedding
+        - index
+      properties:
+        object:
+          type: string
+          enum: ["embedding"]
+          description: The object type, always "embedding"
+          example: "embedding"
+        embedding:
+          type: array
+          items:
+            type: number
+          description: The embedding vector, which is a list of floats
+          example: [0.0023064255, -0.009327292, 0.015797317, -0.0034532, 0.0189123]
+        index:
+          type: integer
+          description: The index of the embedding in the list of embeddings
+          example: 0
+
+    EmbeddingResponse:
+      type: object
+      required:
+        - object
+        - data
+        - model
+        - usage
+      properties:
+        object:
+          type: string
+          enum: ["list"]
+          description: The object type, always "list"
+          example: "list"
+        data:
+          type: array
+          description: The list of embeddings generated by the model
+          items:
+            $ref: '#/components/schemas/Embedding'
+        model:
+          type: string
+          description: The name of the model used to generate the embedding
+          example: "text-embedding-3-small"
+        usage:
+          type: object
+          required:
+            - prompt_tokens
+            - total_tokens
+          properties:
+            prompt_tokens:
+              type: integer
+              description: The number of tokens used by the prompt
+              example: 8
+            total_tokens:
+              type: integer
+              description: The total number of tokens used by the request
+              example: 8
+
+    FileObject:
+      type: object
+      required:
+        - id
+        - object
+        - bytes
+        - created_at
+        - filename
+        - purpose
+      properties:
+        id:
+          type: string
+          description: The file identifier, which can be referenced in the API endpoints
+          example: "file-123"
+        object:
+          type: string
+          enum: ["file"]
+          description: The object type, always "file"
+          example: "file"
+        bytes:
+          type: integer
+          description: The size of the file, in bytes
+          example: 2048
+        created_at:
+          type: integer
+          description: The Unix timestamp (in seconds) for when the file was created
+          example: 1677652288
+        filename:
+          type: string
+          description: The name of the file
+          example: "document.pdf"
+        purpose:
+          type: string
+          description: The intended purpose of the file
+          example: "assistants"
+
+    FileListResponse:
+      type: object
+      required:
+        - object
+        - data
+      properties:
+        object:
+          type: string
+          enum: ["list"]
+          description: The object type, always "list"
+          example: "list"
+        data:
+          type: array
+          description: The list of file objects
+          items:
+            $ref: '#/components/schemas/FileObject'
+
+    FileDeleteResponse:
+      type: object
+      required:
+        - id
+        - object
+        - deleted
+      properties:
+        id:
+          type: string
+          description: The ID of the deleted file
+          example: "file-123"
+        object:
+          type: string
+          enum: ["file"]
+          description: The object type, always "file"
+          example: "file"
+        deleted:
+          type: boolean
+          description: Whether the file was successfully deleted
+          example: true
+
+    Usage:
+      type: object
+      required:
+        - prompt_tokens
+        - completion_tokens
+        - total_tokens
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Number of tokens in the prompt
+          example: 9
+        completion_tokens:
+          type: integer
+          description: Number of tokens in the generated completion
+          example: 12
+        total_tokens:
+          type: integer
+          description: Total number of tokens used in the request (prompt + completion)
+          example: 21
+
+paths:
+  /health:
+    get:
+      summary: Health Check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - timestamp
+                properties:
+                  status:
+                    type: string
+                    enum: ["ok"]
+                    example: "ok"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2023-07-01T12:00:00Z"
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "error"
+                  message:
+                    type: string
+                    example: "Service temporarily unavailable"
+
+  /v1/models:
+    get:
+      summary: List Available Models
+      description: |
+        Lists the currently available models, and provides basic information about each one such as the owner and availability.
+      operationId: listModels
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: A list of available models
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelsListResponse'
+              example:
+                object: "list"
+                data:
+                  - id: "gpt-4o"
+                    object: "model"
+                    created: 1677610602
+                    owned_by: "ozwellai"
+                  - id: "gpt-4o-mini"
+                    object: "model"
+                    created: 1677610602
+                    owned_by: "ozwellai"
+                  - id: "text-embedding-3-small"
+                    object: "model"
+                    created: 1677610602
+                    owned_by: "ozwellai"
+                  - id: "text-embedding-3-large"
+                    object: "model"
+                    created: 1677610602
+                    owned_by: "ozwellai"
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "Invalid API key provided"
+                  type: "invalid_request_error"
+                  param: null
+                  code: null
+
+  /v1/chat/completions:
+    post:
+      summary: Create Chat Completion
+      description: |
+        Creates a model response for the given chat conversation. Compatible with OpenAI's chat completions API.
+        
+        Supports both streaming and non-streaming responses. When streaming is enabled, partial message deltas will be sent as Server-Sent Events.
+      operationId: createChatCompletion
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+            examples:
+              simple_chat:
+                summary: Simple chat completion
+                value:
+                  model: "gpt-4o"
+                  messages:
+                    - role: "user"
+                      content: "Hello, how are you?"
+              streaming_chat:
+                summary: Streaming chat completion
+                value:
+                  model: "gpt-4o-mini"
+                  messages:
+                    - role: "system"
+                      content: "You are a helpful assistant."
+                    - role: "user"
+                      content: "Write a short poem about trees."
+                  stream: true
+                  max_tokens: 100
+                  temperature: 0.7
+      responses:
+        '200':
+          description: Chat completion response
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+              example:
+                id: "chatcmpl-123"
+                object: "chat.completion"
+                created: 1677652288
+                model: "gpt-4o"
+                choices:
+                  - index: 0
+                    message:
+                      role: "assistant"
+                      content: "Hello! I'm doing well, thank you for asking. How can I help you today?"
+                    finish_reason: "stop"
+                usage:
+                  prompt_tokens: 9
+                  completion_tokens: 18
+                  total_tokens: 27
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream of ChatCompletionChunk objects
+              example: |
+                data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+                
+                data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+                
+                data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4o","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}
+                
+                data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+                
+                data: [DONE]
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "Model 'invalid-model' not found"
+                  type: "invalid_request_error"
+                  param: "model"
+                  code: null
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/responses:
+    post:
+      summary: Generate Response (New Primitive)
+      description: |
+        Generates a response for the given input text. This is a new primitive that provides semantic event streaming, 
+        offering more granular control over the response generation process compared to standard chat completions.
+        
+        When streaming is enabled, events are sent with semantic information such as content generation and completion events.
+      operationId: createResponse
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponseRequest'
+            examples:
+              simple_response:
+                summary: Simple response generation
+                value:
+                  model: "gpt-4o"
+                  input: "Explain quantum computing"
+              streaming_response:
+                summary: Streaming response with semantic events
+                value:
+                  model: "gpt-4o"
+                  input: "Write a brief summary of renewable energy"
+                  stream: true
+                  max_tokens: 200
+                  temperature: 0.5
+      responses:
+        '200':
+          description: Response generation successful
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+              example:
+                id: "resp-123"
+                object: "response"
+                created: 1677652288
+                model: "gpt-4o"
+                output: "Quantum computing is a revolutionary computing paradigm that leverages quantum mechanical phenomena to process information in fundamentally different ways than classical computers."
+                usage:
+                  input_tokens: 3
+                  output_tokens: 25
+                  total_tokens: 28
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream with semantic events
+              example: |
+                event: start
+                data: {"id":"resp-123","model":"gpt-4o","created":1677652288}
+                
+                event: content
+                data: {"id":"resp-123","type":"content","content":"Quantum"}
+                
+                event: content
+                data: {"id":"resp-123","type":"content","content":" computing"}
+                
+                event: completion
+                data: {"id":"resp-123","object":"response","created":1677652288,"model":"gpt-4o","output":"Quantum computing is a revolutionary computing paradigm...","usage":{"input_tokens":3,"output_tokens":25,"total_tokens":28}}
+                
+                event: done
+                data: [DONE]
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/embeddings:
+    post:
+      summary: Create Text Embeddings
+      description: |
+        Get a vector representation of a given input that can be easily consumed by machine learning models and algorithms.
+        
+        Supports both single strings and arrays of strings for batch processing.
+      operationId: createEmbeddings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmbeddingRequest'
+            examples:
+              single_text:
+                summary: Single text embedding
+                value:
+                  model: "text-embedding-3-small"
+                  input: "The food was delicious and the waiter was very friendly."
+              batch_text:
+                summary: Batch text embeddings
+                value:
+                  model: "text-embedding-3-large"
+                  input:
+                    - "The weather is beautiful today."
+                    - "I love programming in Python."
+                    - "Machine learning is fascinating."
+                  dimensions: 1024
+      responses:
+        '200':
+          description: Embeddings generated successfully
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingResponse'
+              example:
+                object: "list"
+                data:
+                  - object: "embedding"
+                    embedding: [0.0023064255, -0.009327292, 0.015797317, -0.0034532, 0.0189123]
+                    index: 0
+                model: "text-embedding-3-small"
+                usage:
+                  prompt_tokens: 8
+                  total_tokens: 8
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "Model 'invalid-embedding-model' not found"
+                  type: "invalid_request_error"
+                  param: "model"
+                  code: null
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/files:
+    get:
+      summary: List Files
+      description: Returns a list of files that have been uploaded to the API
+      operationId: listFiles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: A list of uploaded files
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileListResponse'
+              example:
+                object: "list"
+                data:
+                  - id: "file-123"
+                    object: "file"
+                    bytes: 2048
+                    created_at: 1677652288
+                    filename: "document.pdf"
+                    purpose: "assistants"
+                  - id: "file-456"
+                    object: "file"
+                    bytes: 1024
+                    created_at: 1677652300
+                    filename: "data.txt"
+                    purpose: "fine-tune"
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    post:
+      summary: Upload File
+      description: |
+        Upload a file that can be used across various endpoints. 
+        
+        The file size limit is 100MB. Supported file types include text files, PDFs, and other document formats.
+      operationId: uploadFile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The file to upload
+                purpose:
+                  type: string
+                  description: The intended purpose of the uploaded file
+                  default: "assistants"
+                  example: "assistants"
+      responses:
+        '200':
+          description: File uploaded successfully
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileObject'
+              example:
+                id: "file-123"
+                object: "file"
+                bytes: 2048
+                created_at: 1677652288
+                filename: "document.pdf"
+                purpose: "assistants"
+        '400':
+          description: Invalid request or file upload error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "No file provided"
+                  type: "invalid_request_error"
+                  param: null
+                  code: null
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/files/{file_id}:
+    get:
+      summary: Retrieve File Metadata
+      description: Returns information about a specific file
+      operationId: getFile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: The ID of the file to retrieve
+          schema:
+            type: string
+          example: "file-123"
+      responses:
+        '200':
+          description: File metadata retrieved successfully
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileObject'
+              example:
+                id: "file-123"
+                object: "file"
+                bytes: 2048
+                created_at: 1677652288
+                filename: "document.pdf"
+                purpose: "assistants"
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "File not found"
+                  type: "invalid_request_error"
+                  param: null
+                  code: null
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    
+    delete:
+      summary: Delete File
+      description: Delete a file
+      operationId: deleteFile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: The ID of the file to delete
+          schema:
+            type: string
+          example: "file-123"
+      responses:
+        '200':
+          description: File deleted successfully
+          headers:
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+            openai-processing-ms:
+              description: Processing time in milliseconds
+              schema:
+                type: string
+            openai-version:
+              description: API version
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileDeleteResponse'
+              example:
+                id: "file-123"
+                object: "file"
+                deleted: true
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/files/{file_id}/content:
+    get:
+      summary: Download File Content
+      description: Returns the content of the specified file
+      operationId: getFileContent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          description: The ID of the file to download
+          schema:
+            type: string
+          example: "file-123"
+      responses:
+        '200':
+          description: File content retrieved successfully
+          headers:
+            content-disposition:
+              description: Attachment header with filename
+              schema:
+                type: string
+              example: 'attachment; filename="document.pdf"'
+            content-type:
+              description: MIME type of the file
+              schema:
+                type: string
+              example: "application/octet-stream"
+            x-request-id:
+              description: Unique request identifier
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: The raw file content
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  message: "File content not found"
+                  type: "invalid_request_error"
+                  param: null
+                  code: null
+        '401':
+          description: Invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+tags:
+  - name: Models
+    description: Operations related to available AI models
+  - name: Chat
+    description: Chat completion operations compatible with OpenAI
+  - name: Responses
+    description: Advanced response generation with semantic events (Ozwell-specific)
+  - name: Embeddings
+    description: Text embedding operations
+  - name: Files
+    description: File upload, management, and retrieval operations
+  - name: Health
+    description: API health and status endpoints
+
+externalDocs:
+  description: Ozwell AI Documentation
+  url: https://ozwell.ai/docs

@@ -2,12 +2,15 @@ const fs = require('fs');
 const path = require('path');
 
 // Import the server to get the OpenAPI spec
-const buildServer = require('../dist/server.js').default;
+const buildServer = require('../dist/reference-server/src/server.js').default;
 
 async function writeSpec() {
   try {
     console.log('Starting server to generate OpenAPI spec...');
     const server = await buildServer();
+    
+    // Wait for server to be ready
+    await server.ready();
     
     // Get the OpenAPI specification
     const spec = server.swagger();
