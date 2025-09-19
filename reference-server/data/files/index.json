@@ -14,5 +14,13 @@
     "created_at": 1755458491,
     "filename": "package.json",
     "purpose": "assistants"
+  },
+  {
+    "id": "file-mfovswq85c425745142c4141",
+    "object": "file",
+    "bytes": 27,
+    "created_at": 1758167950,
+    "filename": "test.txt",
+    "purpose": "assistants"
   }
 ]
