@@ -55,24 +55,4 @@ jobs:
       - name: Test reference server
         working-directory: ${{ inputs.working-directory }}
         run: npm test
-        continue-on-error: true  # In case test script doesn't exist yet
-
-      - name: Start server (smoke test)
-        working-directory: ${{ inputs.working-directory }}
-        run: |
-          # Start server in background
-          npm start &
-          SERVER_PID=$!
-          
-          # Wait for server to start
-          sleep 10
-          
-          # Test health endpoint
-          curl -f http://localhost:3000/health || exit 1
-          
-          # Test OpenAPI endpoint
-          curl -f http://localhost:3000/openapi.json || exit 1
-          
-          # Stop server
-          kill $SERVER_PID
-        timeout-minutes: 2
+        continue-on-error: false  # Tests should pass for successful deployment

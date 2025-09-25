@@ -10,7 +10,7 @@
     "spec": "node scripts/write-spec.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "test": "node --test test/**/*.test.js",
+    "test": "node --test test/*.test.js",
     "test:watch": "node --test --watch test/**/*.test.js",
     "clean": "rm -rf dist"
   },
