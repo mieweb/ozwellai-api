@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Parent Page</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .status {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        #chatbot-area {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 MCP Chatbot Test Page</h1>
+        <div class="status" id="status">Loading...</div>
+
+        <h2>Test Controls:</h2>
+        <button onclick="updateTheme('dark')">Set Dark Theme</button>
+        <button onclick="updateTheme('light')">Set Light Theme</button>
+        <button onclick="updateName('John Doe')">Set Name to John Doe</button>
+
+        <div id="theme-display">Theme: light</div>
+        <div id="name-display">Name: Default User</div>
+
+        <div id="chatbot-area">
+            <h2>Chatbot will appear below:</h2>
+            <!-- Chatbot will be embedded here -->
+        </div>
+    </div>
+
+    <script type="module">
+        // Simplified test without full MCP server for now
+        console.log('📋 Test page loaded - simulating MCP server');
+
+        // Simple message handler for testing
+        window.addEventListener('message', (event) => {
+            console.log('📨 Received message from iframe:', event.data);
+
+            if (event.data.type === 'MCP_TRANSPORT_HANDSHAKE') {
+                console.log('🤝 Sending handshake reply...');
+                event.source.postMessage({
+                    type: 'MCP_TRANSPORT_HANDSHAKE_REPLY',
+                    protocolVersion: '1.0',
+                    sessionId: 'test-session-123'
+                }, event.origin);
+            }
+
+            if (event.data.type === 'MCP_MESSAGE') {
+                console.log('🔧 Received tool call:', event.data.message);
+                console.log('🔍 Params structure:', event.data.message.params);
+
+                // Simulate tool execution
+                const message = event.data.message;
+                if (message.method === 'tools/call') {
+                    // Handle the actual params format from MCP SDK
+                    let toolName, args;
+                    if (typeof message.params === 'string') {
+                        // If params is just a string, it's the tool name
+                        toolName = message.params;
+                        args = {};
+                    } else if (message.params && typeof message.params === 'object') {
+                        // If params is an object, extract name and arguments
+                        toolName = message.params.name || message.params;
+                        args = message.params.arguments || message.params;
+                    }
+
+                    console.log(`🛠️ Tool: ${toolName}, Args:`, args);
+
+                    let responseText = 'Tool executed successfully!';
+
+                    // Handle specific tools
+                    if (toolName === 'update_theme') {
+                        updateTheme(args.value || 'light');
+                        responseText = `Theme updated to ${args.value || 'light'}`;
+                    } else if (toolName === 'update_name') {
+                        updateName(args.value || 'Default');
+                        responseText = `Name updated to ${args.value || 'Default'}`;
+                    } else if (toolName === 'model_request') {
+                        responseText = `Echo: ${args.prompt || 'No prompt provided'}`;
+                    }
+
+                    console.log(`✅ Sending response: ${responseText}`);
+
+                    // Send response back
+                    event.source.postMessage({
+                        type: 'MCP_MESSAGE',
+                        message: {
+                            jsonrpc: '2.0',
+                            id: message.id,
+                            result: {
+                                content: [{ type: 'text', text: responseText }]
+                            }
+                        }
+                    }, event.origin);
+                }
+            }
+        });
+
+        // Functions to update the page
+        window.updateTheme = function (theme) {
+            document.body.style.background = theme === 'dark' ? '#333' : '#fff';
+            document.body.style.color = theme === 'dark' ? '#fff' : '#000';
+            document.getElementById('theme-display').textContent = `Theme: ${theme}`;
+        };
+
+        window.updateName = function (name) {
+            document.getElementById('name-display').textContent = `Name: ${name}`;
+        };
+
+        // Load the chatbot embed script
+        const script = document.createElement('script');
+        script.src = './embed.js';
+        document.head.appendChild(script);
+
+        document.getElementById('status').textContent = '✅ Test page loaded. Simple MCP server ready.';
+    </script>
+</body>
+
+</html>
