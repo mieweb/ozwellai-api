@@ -1,0 +1,451 @@
+/**
+ * landing-page.css - Simplified MCP Tools Demo Landing Page
+ * Design: Everything visible at once, slide-out integration guide
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: #f8f9fa;
+  color: #333;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Integration Toggle Button (Vertical on left edge) */
+.integration-toggle-btn {
+  position: fixed;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: left center;
+  background: #4169e1;
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  z-index: 9998;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 2px 4px 16px rgba(65, 105, 225, 0.5);
+  transition: all 0.2s;
+}
+
+.integration-toggle-btn:hover {
+  background: #3155c6;
+  box-shadow: 2px 6px 20px rgba(65, 105, 225, 0.6);
+  transform: translateY(-50%) rotate(-90deg) translateX(-3px);
+}
+
+/* Integration Panel (Slide-out from left) */
+.integration-panel {
+  position: fixed;
+  left: -450px;
+  top: 0;
+  width: 450px;
+  height: 100vh;
+  background: white;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  transition: left 0.3s ease-in-out;
+  overflow-y: auto;
+}
+
+.integration-panel.open {
+  left: 0;
+}
+
+.integration-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.integration-panel-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.integration-close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #718096;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.integration-close-btn:hover {
+  background: #e2e8f0;
+  color: #2d3748;
+}
+
+.integration-panel-content {
+  padding: 1.5rem;
+}
+
+.integration-step {
+  margin-bottom: 2rem;
+}
+
+.integration-step h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 0.75rem;
+}
+
+.code-block {
+  background: #2d3748;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.code-block code {
+  white-space: pre;
+}
+
+.how-it-works-list {
+  list-style: none;
+  padding: 0;
+}
+
+.how-it-works-list li {
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.how-it-works-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: #4169e1;
+  font-weight: bold;
+}
+
+/* Main Container */
+.main-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, #4169e1 0%, #7c3aed 100%);
+  color: white;
+  padding: 1.5rem 2rem;
+  text-align: center;
+}
+
+.header-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+
+.header-subtitle {
+  font-size: 0.95rem;
+  opacity: 0.95;
+  font-weight: 400;
+}
+
+/* Demo Content */
+.demo-content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.demo-left,
+.demo-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Architecture Flow */
+.architecture-flow {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.architecture-flow h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #2d3748;
+}
+
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.flow-box {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.parent-box {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.widget-box {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.handler-box {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.form-box {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.flow-arrow {
+  font-size: 1.5rem;
+  color: #718096;
+  margin: 0.25rem 0;
+  font-weight: 300;
+}
+
+/* Form Demo */
+.form-demo {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.form-demo h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #2d3748;
+}
+
+.form-field {
+  margin-bottom: 1rem;
+}
+
+.form-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 0.4rem;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 0.65rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: #f8f9fa;
+  color: #2d3748;
+  transition: all 0.2s;
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: #4169e1;
+  background: white;
+}
+
+.form-hint {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #718096;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Event Log Container */
+.event-log-container {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.event-log-container h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #2d3748;
+}
+
+.event-log-hint {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.event-log {
+  flex: 1;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 6px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-y: auto;
+  min-height: 400px;
+  max-height: 600px;
+}
+
+.event-log:empty::before {
+  content: 'Waiting for events...';
+  color: #64748b;
+  font-style: italic;
+}
+
+.event-log-entry {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #334155;
+}
+
+.event-log-entry:last-child {
+  border-bottom: none;
+}
+
+.event-timestamp {
+  color: #94a3b8;
+  font-size: 0.7rem;
+  margin-bottom: 0.25rem;
+}
+
+.event-type {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.event-type.iframe-sync {
+  color: #60a5fa;
+}
+
+.event-type.postmessage {
+  color: #34d399;
+}
+
+.event-type.tool-call {
+  color: #fbbf24;
+}
+
+.event-details {
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+}
+
+/* Footer */
+.footer {
+  background: #2d3748;
+  color: #e2e8f0;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+/* Flash animation for field updates */
+@keyframes flash-update {
+  0%, 100% {
+    background: #f8f9fa;
+    border-color: #e2e8f0;
+  }
+  50% {
+    background: #d1fae5;
+    border-color: #10b981;
+  }
+}
+
+.form-field input.flash {
+  animation: flash-update 600ms ease-in-out;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .demo-content {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-panel {
+    width: 90%;
+    left: -90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-title {
+    font-size: 1.25rem;
+  }
+
+  .header-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .demo-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+
+/* Chat wrapper z-index */
+.ozwell-chat-button,
+.ozwell-chat-wrapper {
+  z-index: 9997;
+}

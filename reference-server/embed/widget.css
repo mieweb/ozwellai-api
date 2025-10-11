@@ -1,0 +1,140 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f5f6f8;
+  color: #1f2933;
+}
+
+.chat-container {
+  width: 340px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.status {
+  padding: 8px 16px;
+  font-size: 12px;
+  background: #ecfeff;
+  color: #0f766e;
+  border-bottom: 1px solid #d5f5f7;
+}
+
+.messages {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #f8fafc;
+}
+
+.message {
+  padding: 10px 12px;
+  border-radius: 10px;
+  line-height: 1.4;
+  max-width: 90%;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.message.user {
+  align-self: flex-end;
+  background: #14b8a6;
+  color: white;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: white;
+  border: 1px solid #e2e8f0;
+}
+
+.message.system {
+  align-self: center;
+  background: #e2f5f5;
+  color: #0f766e;
+  border: 1px dashed #0f766e;
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #e2e8f0;
+  background: white;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 14px;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+}
+
+.chat-submit {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #0f766e;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.chat-submit:hover {
+  transform: translateY(-1px);
+}
+
+.chat-submit:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.chat-save {
+  margin: 12px;
+  margin-top: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #1d4ed8;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.chat-save:hover {
+  transform: translateY(-1px);
+}
+
+.chat-save:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.chat-footer {
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  background: #f9fafb;
+}
