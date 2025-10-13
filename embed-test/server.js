@@ -37,16 +37,20 @@ function renderHtml(filename) {
 }
 
 app.get('/', (req, res) => {
-  res.type('html').send(renderHtml('index.html'));
+  res.type('html').send(renderHtml('landing.html'));
 });
 
 app.get('/landing.html', (req, res) => {
   res.type('html').send(renderHtml('landing.html'));
 });
 
+app.get('/dashboard.html', (req, res) => {
+  res.type('html').send(renderHtml('index.html'));
+});
+
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
-    return res.type('html').send(renderHtml('index.html'));
+    return res.type('html').send(renderHtml('landing.html'));
   }
   next();
 });
