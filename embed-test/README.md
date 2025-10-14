@@ -28,17 +28,27 @@ https://ozwellai-embedtest.opensource.mieweb.org
 
 ## What This Does
 
-Landing page demonstrating MCP tool execution via iframe-sync and postMessage:
-- Landing page with live event log at `/` (default)
-- Shows complete message flow: user messages, assistant responses, tool calls, handler executions
+Multiple demos showing MCP tool execution via iframe-sync and postMessage:
+
+**Landing Page** (`/`)
+- Live event log showing complete message flow
 - Architecture diagram and integration guide
-- Mode switching between mock AI (default) and Ollama (one line change)
 - Three MCP tools: update name, address, zip code
-- Legacy dashboard at `/dashboard.html` (pre-configured for Ollama)
+- Mode switching between mock AI (default) and Ollama
+
+**Tic-Tac-Toe** (`/tictactoe.html`)
+- Play tic-tac-toe using natural language
+- Two MCP tools: make_move, reset_game
+- AI opponent with strategic logic
+- Game over detection with animations
+- Mode switching between mock AI (default) and Ollama
 
 ## Mode Switching
 
-Edit `public/landing.html` line 181 to switch between mock AI and Ollama:
+Change one line to switch between mock AI and Ollama:
+
+**Landing page:** Edit `public/landing.html` line 186
+**Tic-tac-toe:** Edit `public/tictactoe.html` line 101
 
 ```javascript
 const AI_MODE = 'mock';   // Keyword-based responses, no dependencies
@@ -56,6 +66,6 @@ const AI_MODE = 'ollama'; // Real LLM (requires Ollama + llama3.1:8b model)
 
 - `/` - Landing page demo (mock AI by default)
 - `/landing.html` - Same as root
-- `/dashboard.html` - Legacy dashboard (pre-configured for Ollama)
+- `/tictactoe.html` - Tic-tac-toe game demo (mock AI by default)
 
 For full widget documentation: [../reference-server/embed/README.md](../reference-server/embed/README.md)

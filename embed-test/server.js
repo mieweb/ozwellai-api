@@ -34,6 +34,10 @@ app.get('/assets/tictactoe.css', (req, res) => {
   res.type('text/css').sendFile(path.join(publicDir, 'tictactoe.css'));
 });
 
+app.get('/assets/tictactoe-app.js', (req, res) => {
+  res.type('application/javascript').sendFile(path.join(publicDir, 'tictactoe-app.js'));
+});
+
 function renderHtml(filename) {
   const filePath = path.join(publicDir, filename);
   const html = fs.readFileSync(filePath, 'utf8');
@@ -46,10 +50,6 @@ app.get('/', (req, res) => {
 
 app.get('/landing.html', (req, res) => {
   res.type('html').send(renderHtml('landing.html'));
-});
-
-app.get('/dashboard.html', (req, res) => {
-  res.type('html').send(renderHtml('index.html'));
 });
 
 app.get('/tictactoe.html', (req, res) => {
