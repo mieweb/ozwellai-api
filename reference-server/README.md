@@ -48,7 +48,12 @@ Add the widget to any page:
 <script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/embed.js"></script>
 ```
 
-**Live Demo (test only):** https://ozwellai-embedtest.opensource.mieweb.org
+**Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
+
+The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
+- Change one line in the HTML to switch to Ollama mode
+- Ollama mode uses `/embed/chat` endpoint which proxies to local Ollama instance
+- Requires Ollama running with `llama3.1:8b` model
 
 **For deployment:** Run Ollama in your container or set `EMBED_CHAT_BASE_URL` to your LLM endpoint for real responses.
 

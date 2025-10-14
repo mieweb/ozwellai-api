@@ -39,7 +39,8 @@ The widget auto-mounts an iframe and is ready to chat.
 
 **Chat API (POST):**
 - `/embed/chat` - Receives `{ message: string, model: string }`, streams back responses
-  - **Note:** Currently uses fallback text generator (no live model connected)
+  - Proxies to Ollama at `localhost:11434` when available, falls back to text generator
+- `/mock/chat` - Keyword-based responses for demos (no LLM dependencies)
 
 ## Architecture
 
@@ -84,3 +85,10 @@ console.log(window.OzwellChat.iframe);
 ## Live Demo
 
 https://ozwellai-embedtest.opensource.mieweb.org
+
+The demo includes:
+- Mock AI mode (default): Keyword-based pattern matching via `/mock/chat` endpoint
+- Ollama mode: Real LLM via `/embed/chat` endpoint (proxies to Ollama)
+- Switch modes by editing one line in the HTML source
+
+See [embed-test README](../../embed-test/README.md) for full documentation.

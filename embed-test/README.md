@@ -55,6 +55,15 @@ const AI_MODE = 'mock';   // Keyword-based responses, no dependencies
 const AI_MODE = 'ollama'; // Real LLM (requires Ollama + llama3.1:8b model)
 ```
 
+### Mock AI (Default)
+- Endpoint: `/mock/chat`
+- Keyword-based responses (e.g., "update my name to Bob" → `update_name` tool call)
+- No dependencies
+
+### Ollama Mode
+- Endpoint: `/embed/chat` (proxies to Ollama at `localhost:11434`)
+- Requires Ollama running locally with `llama3.1:8b` model
+
 ## Environment Variables
 
 | Variable | Default | Description |
