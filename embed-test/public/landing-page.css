@@ -181,6 +181,36 @@ body {
   font-weight: 400;
 }
 
+.demo-links {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.demo-link {
+  display: inline-block;
+  padding: 12px 24px;
+  background: white;
+  color: #4169e1;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.demo-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  background: #f8f9fa;
+}
+
+.demo-link:active {
+  transform: translateY(0);
+}
+
 /* Demo Content */
 .demo-content {
   flex: 1;
