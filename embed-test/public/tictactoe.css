@@ -20,6 +20,27 @@ body {
   text-align: center;
   color: white;
   margin-bottom: 40px;
+  position: relative;
+}
+
+.back-link-container {
+  position: absolute;
+  left: 0;
+  top: 10px;
+}
+
+.back-link {
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.back-link:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 .header-title {
@@ -73,6 +94,7 @@ body {
   gap: 10px;
   max-width: 400px;
   margin: 0 auto 20px;
+  position: relative;
 }
 
 .cell {
@@ -115,6 +137,99 @@ body {
   }
   50% {
     transform: scale(1.1);
+  }
+}
+
+.game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(102, 126, 234, 0.95);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 10;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.game-over-overlay.hidden {
+  display: none;
+}
+
+.game-over-content {
+  text-align: center;
+  color: white;
+  animation: slideDown 0.4s ease-out;
+}
+
+.game-over-emoji {
+  font-size: 80px;
+  margin-bottom: 16px;
+  animation: bounceIn 0.6s ease-out;
+}
+
+.game-over-message {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.play-again-button {
+  padding: 12px 32px;
+  background: white;
+  color: #667eea;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.play-again-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.play-again-button:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
@@ -182,6 +297,54 @@ body {
   content: 'No events yet. Start playing to see the action!';
   color: #a0aec0;
   font-style: italic;
+}
+
+.log-entry {
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.log-time {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.log-info {
+  background: #f0f4ff;
+  color: #5a67d8;
+}
+
+.log-move {
+  background: #e6f7ff;
+  color: #0958d9;
+}
+
+.log-ai-move {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.log-game-over {
+  background: #f6ffed;
+  color: #389e0d;
+  font-weight: bold;
+}
+
+.log-reset {
+  background: #f0f0f0;
+  color: #595959;
+}
+
+.log-error {
+  background: #fff2e8;
+  color: #d46b08;
+}
+
+.log-tool-call {
+  background: #f9f0ff;
+  color: #722ed1;
 }
 
 .footer {

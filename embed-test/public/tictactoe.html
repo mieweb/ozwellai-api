@@ -13,6 +13,9 @@
 <body>
   <div class="main-container">
     <header class="header">
+      <div class="back-link-container">
+        <a href="/" class="back-link">← Back to Main Demo</a>
+      </div>
       <h1 class="header-title">Tic-Tac-Toe with Ozwell AI</h1>
       <p class="header-subtitle">
         Play tic-tac-toe using natural language via MCP tools
@@ -37,6 +40,13 @@
             <div class="cell" data-position="6"></div>
             <div class="cell" data-position="7"></div>
             <div class="cell" data-position="8"></div>
+          </div>
+          <div id="game-over-overlay" class="game-over-overlay hidden">
+            <div class="game-over-content">
+              <div class="game-over-emoji" id="game-over-emoji"></div>
+              <div class="game-over-message" id="game-over-message"></div>
+              <button id="play-again-btn" class="play-again-button">Play Again</button>
+            </div>
           </div>
           <button id="reset-btn" class="reset-button">Reset Game</button>
           <div class="game-hint">
@@ -80,23 +90,79 @@
   </div>
 
   <script>
-    // TODO: Load Ozwell chat widget with MCP tools
-    // TODO: Implement mode switching (mock/ollama)
-    // TODO: Wire up game state management
-
     const referenceBaseUrl = '__REFERENCE_BASE_URL__';
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
 
-    // Placeholder - will implement tomorrow
-    console.log('Tic-tac-toe baseline loaded');
-    console.log('TODO: Add game logic, MCP tools, and mode switching');
+    // ========================================
+    // CONFIGURATION: Change this one line to switch between mock AI and Ollama
+    // ========================================
+    // Options: 'mock' (reliable keyword-based responses, no dependencies)
+    //          'ollama' (real LLM, requires Ollama running with llama3.1:8b model)
+    const AI_MODE = 'mock';
+    // ========================================
+
+    // Auto-configure based on mode
+    const config = AI_MODE === 'ollama'
+      ? {
+          model: 'llama3.1:8b',
+          endpoint: `${normalizedBase}/embed/chat`
+        }
+      : {
+          model: 'mock-ai',
+          endpoint: `${normalizedBase}/mock/chat`
+        };
+
+    // Configure Ozwell chat widget
+    window.OzwellChatConfig = {
+      containerId: 'chat-container',
+      title: 'Ozwell Assistant',
+      placeholder: 'Try: "I\'ll go top left" or "take the center"',
+      model: config.model,
+      endpoint: config.endpoint,
+      widgetUrl: `${normalizedBase}/embed/widget.html`,
+      tools: [
+        {
+          name: 'make_move',
+          description: 'Place user\'s X piece on the tic-tac-toe board at specified position',
+          parameters: {
+            type: 'object',
+            properties: {
+              position: {
+                type: 'string',
+                enum: ['top-left', 'top-center', 'top-right',
+                       'middle-left', 'middle-center', 'middle-right',
+                       'bottom-left', 'bottom-center', 'bottom-right'],
+                description: 'Board position where user wants to place their piece'
+              }
+            },
+            required: ['position']
+          }
+        },
+        {
+          name: 'reset_game',
+          description: 'Reset the tic-tac-toe game board to start a new game',
+          parameters: {
+            type: 'object',
+            properties: {}
+          }
+        }
+      ]
+    };
+
+    // Load widget embed script
+    const loader = document.createElement('script');
+    loader.src = `${normalizedBase}/embed/embed.js`;
+    loader.async = true;
+    document.head.appendChild(loader);
+
+    console.log('Tic-tac-toe configured with', AI_MODE, 'mode');
   </script>
 
   <!-- Chat wrapper functionality -->
   <script src="/assets/chat-wrapper.js"></script>
 
-  <!-- Game state management - to be created -->
-  <!-- <script src="/assets/tictactoe-app.js"></script> -->
+  <!-- Game state management -->
+  <script src="/assets/tictactoe-app.js"></script>
 </body>
 
 </html>
