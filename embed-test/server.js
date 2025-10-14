@@ -30,6 +30,10 @@ app.get('/assets/landing.css', (req, res) => {
   res.type('text/css').sendFile(path.join(publicDir, 'landing.css'));
 });
 
+app.get('/assets/tictactoe.css', (req, res) => {
+  res.type('text/css').sendFile(path.join(publicDir, 'tictactoe.css'));
+});
+
 function renderHtml(filename) {
   const filePath = path.join(publicDir, filename);
   const html = fs.readFileSync(filePath, 'utf8');
@@ -46,6 +50,10 @@ app.get('/landing.html', (req, res) => {
 
 app.get('/dashboard.html', (req, res) => {
   res.type('html').send(renderHtml('index.html'));
+});
+
+app.get('/tictactoe.html', (req, res) => {
+  res.type('html').send(renderHtml('tictactoe.html'));
 });
 
 app.get('*', (req, res, next) => {

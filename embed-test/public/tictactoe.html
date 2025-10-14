@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic-Tac-Toe - Ozwell AI Demo</title>
+  <link rel="stylesheet" href="/assets/tictactoe.css" />
+  <link rel="stylesheet" href="/assets/chat-wrapper.css" />
+  <script src="/assets/iframe-sync.js"></script>
+</head>
+
+<body>
+  <div class="main-container">
+    <header class="header">
+      <h1 class="header-title">Tic-Tac-Toe with Ozwell AI</h1>
+      <p class="header-subtitle">
+        Play tic-tac-toe using natural language via MCP tools
+      </p>
+    </header>
+
+    <div class="demo-content">
+      <!-- Left Side: Game Board -->
+      <div class="demo-left">
+        <div class="game-container">
+          <h3>Game Board</h3>
+          <div class="game-status">
+            <span id="game-status">Your turn (X)</span>
+          </div>
+          <div class="board" id="board">
+            <div class="cell" data-position="0"></div>
+            <div class="cell" data-position="1"></div>
+            <div class="cell" data-position="2"></div>
+            <div class="cell" data-position="3"></div>
+            <div class="cell" data-position="4"></div>
+            <div class="cell" data-position="5"></div>
+            <div class="cell" data-position="6"></div>
+            <div class="cell" data-position="7"></div>
+            <div class="cell" data-position="8"></div>
+          </div>
+          <button id="reset-btn" class="reset-button">Reset Game</button>
+          <div class="game-hint">
+            Try saying: "I'll place my X in the top left" or "Put my piece in the center"
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side: Event Log -->
+      <div class="demo-right">
+        <div class="event-log-container">
+          <h3>Live Event Log</h3>
+          <p class="event-log-hint">Watch game moves and AI responses</p>
+          <div id="event-log" class="event-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      Built with: Fastify • iframe-sync • postMessage • MCP Tools
+    </footer>
+  </div>
+
+  <!-- Chat Floating Button -->
+  <button id="ozwell-chat-button" class="ozwell-chat-button">
+    💬
+  </button>
+
+  <!-- Chat Window Wrapper -->
+  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
+    <div class="ozwell-chat-header">
+      <div class="ozwell-chat-title">
+        Ozwell Assistant
+      </div>
+      <div class="ozwell-chat-controls">
+        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
+        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
+      </div>
+    </div>
+    <div class="ozwell-chat-content" id="chat-container"></div>
+  </div>
+
+  <script>
+    // TODO: Load Ozwell chat widget with MCP tools
+    // TODO: Implement mode switching (mock/ollama)
+    // TODO: Wire up game state management
+
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+    // Placeholder - will implement tomorrow
+    console.log('Tic-tac-toe baseline loaded');
+    console.log('TODO: Add game logic, MCP tools, and mode switching');
+  </script>
+
+  <!-- Chat wrapper functionality -->
+  <script src="/assets/chat-wrapper.js"></script>
+
+  <!-- Game state management - to be created -->
+  <!-- <script src="/assets/tictactoe-app.js"></script> -->
+</body>
+
+</html>
