@@ -115,6 +115,79 @@ function generateMockResponse(userMessage: string, context: any, tools: Tool[]):
     };
   }
 
+  // Pattern 4: Tic-tac-toe move detection
+  // Detect board positions for make_move tool
+  let position: string | null = null;
+
+  // Check most specific patterns first (with row qualifiers)
+  // Top row
+  if (msg.match(/\b(top|upper)[\s\-]*(left|1)\b/)) {
+    position = 'top-left';
+  } else if (msg.match(/\b(top|upper)[\s\-]*(center|centre|middle|2)\b/)) {
+    position = 'top-center';
+  } else if (msg.match(/\b(top|upper)[\s\-]*(right|3)\b/)) {
+    position = 'top-right';
+  }
+  // Middle row
+  else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(left|4)\b/)) {
+    position = 'middle-left';
+  } else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(center|centre|middle|5)\b/)) {
+    position = 'middle-center';
+  } else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(right|6)\b/)) {
+    position = 'middle-right';
+  }
+  // Bottom row
+  else if (msg.match(/\b(bottom|lower)[\s\-]*(left|7)\b/)) {
+    position = 'bottom-left';
+  } else if (msg.match(/\b(bottom|lower)[\s\-]*(center|centre|middle|8)\b/)) {
+    position = 'bottom-center';
+  } else if (msg.match(/\b(bottom|lower)[\s\-]*(right|9)\b/)) {
+    position = 'bottom-right';
+  }
+  // Fallback: just direction without row qualifier (default to middle)
+  else if (msg.match(/\bleft\b/) && !msg.match(/\b(top|bottom)\b/)) {
+    position = 'middle-left';
+  } else if (msg.match(/\bright\b/) && !msg.match(/\b(top|bottom)\b/)) {
+    position = 'middle-right';
+  } else if (msg.match(/\b(center|centre|middle)\b/) && !msg.match(/\b(top|bottom)\b/)) {
+    position = 'middle-center';
+  }
+  // Numeric positions (0-8)
+  else if (msg.match(/\b(position|cell|square|spot)?\s*(0|zero)\b/)) {
+    position = 'top-left';
+  }
+
+  if (position) {
+    return {
+      role: 'assistant',
+      content: `Great move! Placing your X at ${position.replace('-', ' ')}...`,
+      tool_calls: [{
+        id: `call_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: 'make_move',
+          arguments: JSON.stringify({ position })
+        }
+      }]
+    };
+  }
+
+  // Pattern 5: Reset tic-tac-toe game
+  if (msg.match(/\b(reset|restart|new game|start over)\b/)) {
+    return {
+      role: 'assistant',
+      content: 'Starting a new game! Good luck!',
+      tool_calls: [{
+        id: `call_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: 'reset_game',
+          arguments: JSON.stringify({})
+        }
+      }]
+    };
+  }
+
   // Question patterns - respond with text using context
 
   // Question: What's my name?
