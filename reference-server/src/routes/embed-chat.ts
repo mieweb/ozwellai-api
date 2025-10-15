@@ -22,6 +22,7 @@ interface EmbedChatRequest {
   model?: string;
   system?: string;
   tools?: Tool[];
+  context?: any;
 }
 
 const DEFAULT_MODEL = (process.env.EMBED_CHAT_MODEL || 'llama3').trim();
@@ -100,13 +101,19 @@ const embedChatRoute: FastifyPluginAsync = async (fastify) => {
               },
             },
           },
+          context: { type: 'object' },
         },
       },
     },
   }, async (request, reply) => {
     const body = request.body as EmbedChatRequest;
     const model = (body.model || DEFAULT_MODEL).trim();
-    const systemPrompt = body.system || 'You are a helpful assistant.';
+    let systemPrompt = body.system || 'You are a helpful assistant.';
+
+    // Inject context into system prompt if provided
+    if (body.context) {
+      systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(body.context, null, 2)}`;
+    }
 
     let messages: ChatMessage[] = [];
 
