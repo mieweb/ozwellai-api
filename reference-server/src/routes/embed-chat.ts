@@ -142,8 +142,16 @@ const embedChatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
+    console.log('[DEBUG] ===== REQUEST TO OLLAMA =====');
+    console.log('[DEBUG] Tools being sent:', JSON.stringify(body.tools, null, 2));
+    console.log('[DEBUG] System prompt:', systemPrompt);
+    console.log('[DEBUG] Messages:', JSON.stringify(messages, null, 2));
+
     try {
       const response = await forwardToOzwell(request, model, messages, body.tools);
+
+      console.log('[DEBUG] ===== OLLAMA RESPONSE =====');
+      console.log('[DEBUG] Full response:', JSON.stringify(response, null, 2));
 
       const choice = response.choices?.[0];
       const assistantMessage = choice?.message || { role: 'assistant', content: '' };

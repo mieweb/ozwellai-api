@@ -99,14 +99,30 @@ When the user asks questions about their name, address, or zip code, answer dire
   let tools = [];
   if (state.config.tools && Array.isArray(state.config.tools)) {
     // Convert parent's tool definitions to OpenAI function calling format
-    tools = state.config.tools.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters
+    // Support both OpenAI nested format and flat format (legacy)
+    tools = state.config.tools.map(tool => {
+      if (tool.function) {
+        // OpenAI format: { type: 'function', function: { name, description, parameters } }
+        return {
+          type: 'function',
+          function: {
+            name: tool.function.name,
+            description: tool.function.description,
+            parameters: tool.function.parameters
+          }
+        };
+      } else {
+        // Flat format (legacy): { name, description, parameters }
+        return {
+          type: 'function',
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters
+          }
+        };
       }
-    }));
+    });
 
     // Add tool information to system prompt
     if (tools.length > 0 && state.formData) {
