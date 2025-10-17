@@ -60,6 +60,47 @@ function buildMessages() {
   return history;
 }
 
+function buildSystemPrompt(tools) {
+  // Start with custom system prompt from parent config
+  let systemPrompt = state.config.system || 'You are a helpful assistant.';
+
+  // APPEND form context if available (don't replace!)
+  if (state.formData) {
+    console.log('[widget.js] Including form context in system prompt:', state.formData);
+
+    // Check if formData has the expected landing page fields
+    if (state.formData.name !== undefined) {
+      systemPrompt += `\n\nYou have access to the following user information:
+
+Name: ${state.formData.name}
+Address: ${state.formData.address}
+Zip Code: ${state.formData.zipCode}
+
+When the user asks questions about their name, address, or zip code, answer directly using the information above. Be concise and friendly.`;
+    } else {
+      // Generic formData context (for other integrations like TimeHarbor)
+      systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(state.formData, null, 2)}`;
+    }
+  }
+
+  // APPEND tool usage rules if tools exist
+  if (tools && tools.length > 0) {
+    systemPrompt += `\n\nYou have access to tools that can modify data. Each tool's description explains what it does.
+
+TOOL USAGE RULES:
+- Use tools ONLY when the user explicitly asks you to take an ACTION (update, change, modify, set, create, delete, submit, etc.)
+- For ALL other interactions (questions, greetings, general conversation), respond with plain text - DO NOT call any tools
+- When in doubt, respond with text instead of calling a tool
+- NEVER return raw JSON or explain tool calls in your response - just have a natural conversation
+
+The distinction:
+• "Tell me X" / "What is X" / "Show me X" = Respond with text (you already have the context)
+• "Change X to Y" / "Update X" / "Set X to Y" = Call the appropriate tool`;
+  }
+
+  return systemPrompt;
+}
+
 async function sendMessage(text) {
   if (state.sending) return;
 
@@ -80,20 +121,6 @@ async function sendMessage(text) {
   submitButton?.setAttribute('disabled', 'true');
   saveButton?.setAttribute('disabled', 'true');
   lastAssistantMessage = '';
-
-  // Build system prompt with form context
-  let systemPrompt = state.config.system || 'You are a helpful assistant.';
-
-  if (state.formData) {
-    console.log('[widget.js] Including form context in request:', state.formData);
-    systemPrompt = `You are a helpful assistant. You have access to the following user information:
-
-Name: ${state.formData.name}
-Address: ${state.formData.address}
-Zip Code: ${state.formData.zipCode}
-
-When the user asks questions about their name, address, or zip code, answer directly using the information above. Be concise and friendly.`;
-  }
 
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
@@ -124,23 +151,11 @@ When the user asks questions about their name, address, or zip code, answer dire
       }
     });
 
-    // Add tool information to system prompt
-    if (tools.length > 0 && state.formData) {
-      systemPrompt += `\n\nYou have access to tools that can modify data. Each tool's description explains what it does.
-
-TOOL USAGE RULES:
-- Use tools ONLY when the user explicitly asks you to take an ACTION (update, change, modify, set, create, delete, submit, etc.)
-- For ALL other interactions (questions, greetings, general conversation), respond with plain text - DO NOT call any tools
-- When in doubt, respond with text instead of calling a tool
-- NEVER return raw JSON or explain tool calls in your response - just have a natural conversation
-
-The distinction:
-• "Tell me X" / "What is X" / "Show me X" = Respond with text (you already have the context)
-• "Change X to Y" / "Update X" / "Set X to Y" = Call the appropriate tool`;
-    }
-
     console.log('[widget.js] Tools loaded from config:', tools);
   }
+
+  // Build system prompt (handles custom prompts, form context, and tool rules)
+  const systemPrompt = buildSystemPrompt(tools);
 
   try {
     // Prepare headers
@@ -303,6 +318,157 @@ The distinction:
   }
 }
 
+async function continueConversationWithToolResult(result) {
+  if (state.sending) return;
+
+  console.log('[widget.js] Continuing conversation with tool result:', result);
+
+  // Add tool result to conversation history
+  const toolResultMessage = {
+    role: 'tool',
+    content: typeof result === 'string' ? result : JSON.stringify(result)
+  };
+  state.messages.push(toolResultMessage);
+
+  setStatus('Processing tool result...');
+  state.sending = true;
+  formEl?.classList.add('is-sending');
+  submitButton?.setAttribute('disabled', 'true');
+  saveButton?.setAttribute('disabled', 'true');
+
+  // Build MCP tools from parent config (same as sendMessage)
+  let tools = [];
+  if (state.config.tools && Array.isArray(state.config.tools)) {
+    tools = state.config.tools.map(tool => {
+      if (tool.function) {
+        return {
+          type: 'function',
+          function: {
+            name: tool.function.name,
+            description: tool.function.description,
+            parameters: tool.function.parameters
+          }
+        };
+      } else {
+        return {
+          type: 'function',
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters
+          }
+        };
+      }
+    });
+  }
+
+  // Build system prompt (same as sendMessage - respects custom prompts)
+  const systemPrompt = buildSystemPrompt(tools);
+
+  try {
+    // Prepare headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add Authorization header if OpenAI API key is provided
+    if (state.config.openaiApiKey) {
+      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
+      console.log('[widget.js] Using OpenAI API with authorization');
+    }
+
+    // Build messages for request
+    const requestMessages = buildMessages();
+
+    // Build request body
+    const requestBody = state.config.openaiApiKey
+      ? {
+          model: state.config.model,
+          messages: requestMessages,
+          tools: tools,
+        }
+      : {
+          model: state.config.model,
+          system: systemPrompt,
+          messages: requestMessages,
+          tools: tools,
+        };
+
+    console.log('[widget.js] Sending tool result to API:', requestBody);
+
+    const response = await fetch(state.config.endpoint || '/embed/chat', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[widget.js] API error:', errorText);
+      throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+    }
+
+    const payload = await response.json();
+    console.log('[widget.js] API response with tool result:', payload);
+
+    // Handle errors
+    if (payload.error) {
+      throw new Error(payload.error.message || 'Model request failed');
+    }
+
+    if (payload.warning) {
+      addMessage('system', payload.warning);
+    }
+
+    // Parse response based on format (OpenAI vs Ollama)
+    let assistantContent;
+
+    if (payload.choices && payload.choices[0]) {
+      // OpenAI format
+      const choice = payload.choices[0];
+      assistantContent = choice.message?.content || '';
+    } else if (payload.message) {
+      // Ollama format
+      assistantContent = payload.message.content || '';
+    } else {
+      assistantContent = '(no response)';
+    }
+
+    // Add assistant's final response to conversation
+    const assistantMessage = {
+      role: 'assistant',
+      content: assistantContent || '(no response)',
+    };
+    state.messages.push(assistantMessage);
+    lastAssistantMessage = assistantContent;
+    addMessage('assistant', assistantContent || '(no response)');
+
+    // Notify parent of assistant response
+    window.parent.postMessage({
+      source: 'ozwell-chat-widget',
+      type: 'assistant_response',
+      message: assistantContent || '(no response)',
+      hadToolCalls: false
+    }, '*');
+
+    setStatus('Ready');
+    if (lastAssistantMessage.trim()) {
+      saveButton?.removeAttribute('disabled');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    addMessage('system', `Error: ${message}`);
+    setStatus('Error');
+  } finally {
+    state.sending = false;
+    formEl?.classList.remove('is-sending');
+    submitButton?.removeAttribute('disabled');
+    if (!lastAssistantMessage.trim()) {
+      saveButton?.setAttribute('disabled', 'true');
+    }
+  }
+}
+
 function handleSubmit(event) {
   event.preventDefault();
   if (!inputEl) return;
@@ -324,6 +490,13 @@ function handleParentMessage(event) {
       state.formData = data.state.formData;
       console.log('[widget.js] Form data stored:', state.formData);
     }
+    return;
+  }
+
+  // Handle tool results from parent (OpenAI function calling protocol)
+  if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
+    console.log('[widget.js] Received tool result from parent:', data.result);
+    continueConversationWithToolResult(data.result);
     return;
   }
 

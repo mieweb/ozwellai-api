@@ -39,6 +39,23 @@ function extractUserMessage(messages: ChatMessage[]): string {
   return lastUserMsg?.content || '';
 }
 
+function hasToolResult(messages: ChatMessage[]): boolean {
+  // Check if conversation includes a tool result (second round of OpenAI protocol)
+  return messages.some(msg => msg.role === 'tool');
+}
+
+function extractToolResult(messages: ChatMessage[]): any {
+  // Get the tool result from messages
+  const toolMsg = messages.find(msg => msg.role === 'tool');
+  if (!toolMsg) return null;
+
+  try {
+    return JSON.parse(toolMsg.content);
+  } catch {
+    return { message: toolMsg.content };
+  }
+}
+
 function extractContextFromSystem(messages: ChatMessage[]): any {
   // Extract context from system message if present
   const systemMsg = messages.find(msg => msg.role === 'system');
@@ -56,10 +73,25 @@ function extractContextFromSystem(messages: ChatMessage[]): any {
   };
 }
 
-function generateMockResponse(userMessage: string, context: any, tools: Tool[]): any {
+function generateMockResponse(userMessage: string, context: any, tools: Tool[], hasToolResult: boolean, toolResult: any): any {
   const msg = userMessage.toLowerCase();
 
-  // Tool call patterns - detect action keywords
+  // If this is the second round (after tool execution), generate final response
+  if (hasToolResult && toolResult) {
+    if (toolResult.success) {
+      return {
+        role: 'assistant',
+        content: `Done! ${toolResult.message || 'Successfully updated.'}`
+      };
+    } else {
+      return {
+        role: 'assistant',
+        content: `Sorry, there was an error: ${toolResult.error || 'Unknown error'}`
+      };
+    }
+  }
+
+  // Tool call patterns - detect action keywords (first round)
 
   // Pattern 1: Update/Change/Set name to X
   const nameUpdateMatch = userMessage.match(/(?:update|change|set|make).*name.*(?:to|is)\s+([A-Za-z\s]+)/i);
@@ -312,9 +344,11 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
     // Extract user message and context
     const userMessage = extractUserMessage(messages);
     const context = extractContextFromSystem(messages);
+    const hasResult = hasToolResult(messages);
+    const toolResult = hasResult ? extractToolResult(messages) : null;
 
     // Generate mock response
-    const assistantMessage = generateMockResponse(userMessage, context, body.tools || []);
+    const assistantMessage = generateMockResponse(userMessage, context, body.tools || [], hasResult, toolResult);
 
     const requestId = generateId('mockcmpl');
     const created = Math.floor(Date.now() / 1000);

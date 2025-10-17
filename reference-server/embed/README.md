@@ -28,6 +28,8 @@ The widget auto-mounts an iframe and is ready to chat.
 | `title` | string | `'Ozwell Assistant'` | Widget title |
 | `placeholder` | string | `'Ask a question...'` | Input placeholder text |
 | `model` | string | `'llama3'` | Model name for chat requests |
+| `system` | string | `'You are a helpful assistant.'` | Custom system prompt |
+| `tools` | array | `[]` | MCP tools for function calling (OpenAI format) |
 
 ## Endpoints
 
@@ -81,6 +83,180 @@ window.OzwellChat.configure({ model: 'gpt-4' });
 // Access the iframe
 console.log(window.OzwellChat.iframe);
 ```
+
+## MCP Tool Calling Integration
+
+The widget supports OpenAI-compatible function calling (MCP tools) via postMessage API.
+
+### Tool Definition Format
+
+Tools must follow the **OpenAI function calling format**:
+
+```javascript
+window.OzwellChatConfig = {
+  // ... other config ...
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'update_name',
+        description: 'Updates the user name field',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'The new name value'
+            }
+          },
+          required: ['name']
+        }
+      }
+    }
+  ]
+};
+```
+
+### postMessage Protocol
+
+The widget communicates with the parent page using `postMessage` for tool execution.
+
+#### 1. Widget → Parent: Tool Call Request
+
+When the LLM returns a tool call, the widget sends:
+
+```javascript
+{
+  source: 'ozwell-chat-widget',
+  type: 'tool_call',
+  tool: 'update_name',
+  payload: { name: 'Bob' }
+}
+```
+
+#### 2. Parent → Widget: Tool Result
+
+After executing the tool, the parent must send back the result:
+
+```javascript
+widgetIframe.contentWindow.postMessage({
+  source: 'ozwell-chat-parent',
+  type: 'tool_result',
+  result: {
+    success: true,
+    message: 'Name updated to "Bob"'
+  }
+}, '*');
+```
+
+Or on error:
+
+```javascript
+{
+  source: 'ozwell-chat-parent',
+  type: 'tool_result',
+  result: {
+    success: false,
+    error: 'Field not found'
+  }
+}
+```
+
+### Complete Integration Example
+
+```javascript
+// 1. Define tools in config
+window.OzwellChatConfig = {
+  widgetUrl: '/embed/widget.html',
+  endpoint: '/embed/chat',
+  model: 'llama3.1:8b',
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'update_name',
+        description: 'Updates the user name field',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'The new name value' }
+          },
+          required: ['name']
+        }
+      }
+    }
+  ]
+};
+
+// 2. Listen for tool calls from widget
+window.addEventListener('message', (event) => {
+  const { source, type, tool, payload } = event.data;
+
+  if (source === 'ozwell-chat-widget' && type === 'tool_call') {
+    console.log('Tool call received:', tool, payload);
+
+    // Execute the tool
+    if (tool === 'update_name') {
+      const nameInput = document.querySelector('#name');
+      nameInput.value = payload.name;
+
+      // Send result back to widget
+      const widgetIframe = document.querySelector('iframe[src*="widget.html"]');
+      widgetIframe.contentWindow.postMessage({
+        source: 'ozwell-chat-parent',
+        type: 'tool_result',
+        result: {
+          success: true,
+          message: `Name updated to "${payload.name}"`
+        }
+      }, '*');
+    }
+  }
+});
+```
+
+### OpenAI Function Calling Protocol
+
+The widget follows the complete OpenAI function calling protocol:
+
+1. **First API call**: User message + tools → LLM returns `tool_calls`
+2. **Widget executes**: Sends `tool_call` to parent via postMessage
+3. **Parent responds**: Sends `tool_result` back to widget
+4. **Second API call**: Widget sends conversation + tool result → LLM generates final response
+5. **Widget displays**: Shows final response to user
+
+This ensures the LLM receives tool execution results and can provide natural responses like:
+- ✅ "Done! I've updated your name to Bob."
+- ✅ "Your address is now 123 Oak Street."
+
+Instead of just showing "Executing tool..." with no follow-up.
+
+### Context Synchronization with iframe-sync
+
+For dynamic form context, use iframe-sync to keep the widget updated:
+
+```javascript
+// Parent page: Sync form state to widget
+const broker = new IframeSyncBroker();
+
+function updateFormState() {
+  broker.stateChange({
+    formData: {
+      name: document.getElementById('name').value,
+      address: document.getElementById('address').value
+    }
+  });
+}
+
+// Call after tool execution to refresh widget context
+toolHandlers.update_name = (args) => {
+  document.getElementById('name').value = args.name;
+  updateFormState(); // ← Sync updated values to widget
+  sendToolResult({ success: true, message: 'Updated' });
+};
+```
+
+The widget will receive updated context and include it in future API requests.
 
 ## Live Demo
 

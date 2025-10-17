@@ -129,6 +129,33 @@
     // Set initial state
     updateFormState();
 
+    // Helper: Get widget iframe
+    function getWidgetIframe() {
+      return document.querySelector('iframe[src*="widget.html"]');
+    }
+
+    // Helper: Send tool result back to widget
+    function sendToolResult(result) {
+      const widgetIframe = getWidgetIframe();
+      if (!widgetIframe || !widgetIframe.contentWindow) {
+        console.error('[landing-app.js] Cannot send tool result: widget iframe not found');
+        return;
+      }
+
+      widgetIframe.contentWindow.postMessage({
+        source: 'ozwell-chat-parent',
+        type: 'tool_result',
+        result: result
+      }, '*');
+
+      console.log('[landing-app.js] ✓ Tool result sent to widget:', result);
+      logEvent(
+        'postmessage',
+        '[postMessage] Tool result sent',
+        JSON.stringify(result)
+      );
+    }
+
     // MCP Tool Handler Registry
     const toolHandlers = {
       'update_name': function(args) {
@@ -154,6 +181,20 @@
             '[Handler] Name field updated',
             `Value: "${args.name}"`
           );
+
+          // Sync updated form state to widget via iframe-sync
+          updateFormState();
+
+          // Send result back to widget (OpenAI protocol)
+          sendToolResult({
+            success: true,
+            message: `Name updated to "${args.name}"`
+          });
+        } else {
+          sendToolResult({
+            success: false,
+            error: 'No name provided'
+          });
         }
       },
 
@@ -180,6 +221,20 @@
             '[Handler] Address field updated',
             `Value: "${args.address}"`
           );
+
+          // Sync updated form state to widget via iframe-sync
+          updateFormState();
+
+          // Send result back to widget (OpenAI protocol)
+          sendToolResult({
+            success: true,
+            message: `Address updated to "${args.address}"`
+          });
+        } else {
+          sendToolResult({
+            success: false,
+            error: 'No address provided'
+          });
         }
       },
 
@@ -206,6 +261,20 @@
             '[Handler] Zip code field updated',
             `Value: "${args.zipCode}"`
           );
+
+          // Sync updated form state to widget via iframe-sync
+          updateFormState();
+
+          // Send result back to widget (OpenAI protocol)
+          sendToolResult({
+            success: true,
+            message: `Zip code updated to "${args.zipCode}"`
+          });
+        } else {
+          sendToolResult({
+            success: false,
+            error: 'No zip code provided'
+          });
         }
       }
     };
