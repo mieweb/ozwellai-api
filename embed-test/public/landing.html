@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ozwell Chatbot Client Demo</title>
+  <link rel="stylesheet" href="/assets/landing-page.css" />
+  <link rel="stylesheet" href="/assets/chat-wrapper.css" />
+  <!-- iframe-sync library for state synchronization -->
+  <script src="/assets/iframe-sync.js"></script>
+</head>
+
+<body>
+  <!-- Integration Guide Slide-out Button -->
+  <button id="integration-toggle-btn" class="integration-toggle-btn">
+    Integration Guide
+  </button>
+
+  <!-- Integration Guide Slide-out Panel -->
+  <div id="integration-panel" class="integration-panel">
+    <div class="integration-panel-header">
+      <h2>Integration Guide</h2>
+      <button id="integration-close-btn" class="integration-close-btn">×</button>
+    </div>
+    <div class="integration-panel-content">
+      <!-- Step 1 -->
+      <div class="integration-step">
+        <h3>1. Add the Widget Script</h3>
+        <pre class="code-block"><code>&lt;script&gt;
+  window.OzwellChatConfig = {
+    endpoint: '/mock/chat',
+    widgetUrl: '/embed/widget.html'
+  };
+&lt;/script&gt;
+&lt;script src="/embed/embed.js"&gt;&lt;/script&gt;</code></pre>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="integration-step">
+        <h3>2. Define MCP Tools</h3>
+        <pre class="code-block"><code>window.OzwellChatConfig = {
+  ...,
+  tools: [{
+    name: 'update_name',
+    description: 'Updates user name',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' }
+      },
+      required: ['name']
+    }
+  }]
+};</code></pre>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="integration-step">
+        <h3>3. Handle Tool Calls</h3>
+        <pre class="code-block"><code>window.addEventListener('message', (e) => {
+  if (e.data.type === 'tool_call') {
+    // Update your form/UI
+    nameInput.value = e.data.payload.name;
+  }
+});</code></pre>
+      </div>
+
+      <!-- How It Works -->
+      <div class="integration-step">
+        <h3>How It Works</h3>
+        <ul class="how-it-works-list">
+          <li>Parent page defines tools and handlers</li>
+          <li>Widget receives context via iframe-sync</li>
+          <li>LLM calls tools based on user intent</li>
+          <li>Tool calls sent via postMessage to parent</li>
+          <li>Parent executes handlers and updates UI</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">Ozwell Chatbot Client Demo</h1>
+      <p class="header-subtitle">
+        Embedded chat with tool execution via iframe-sync and postMessage
+      </p>
+      <div class="demo-links">
+        <a href="/tictactoe.html" class="demo-link">
+          Play Tic-Tac-Toe Demo →
+        </a>
+      </div>
+    </header>
+
+    <!-- Demo Content -->
+    <div class="demo-content">
+      <!-- Left Side: Architecture + Form -->
+      <div class="demo-left">
+        <!-- Architecture Flow -->
+        <div class="architecture-flow">
+          <h3>Architecture</h3>
+          <div class="flow-step">
+            <div class="flow-box parent-box">Parent Page</div>
+            <div class="flow-arrow">↓ iframe-sync</div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-box widget-box">Chat Widget (iframe)</div>
+            <div class="flow-arrow">↓ postMessage</div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-box handler-box">Tool Handler</div>
+            <div class="flow-arrow">↓ updates</div>
+          </div>
+          <div class="flow-step">
+            <div class="flow-box form-box">Form Fields</div>
+          </div>
+        </div>
+
+        <!-- Form Demo -->
+        <div class="form-demo">
+          <h3>User Information</h3>
+          <div class="form-field">
+            <label>Name</label>
+            <input type="text" id="input-name" value="Alice Johnson" readonly />
+          </div>
+          <div class="form-field">
+            <label>Address</label>
+            <input type="text" id="input-address" value="123 Main Street, Suite 100" readonly />
+          </div>
+          <div class="form-field">
+            <label>Zip Code</label>
+            <input type="text" id="input-zip" value="90210" readonly />
+          </div>
+          <p class="form-hint">Use the chat to update these fields</p>
+        </div>
+      </div>
+
+      <!-- Right Side: Event Log -->
+      <div class="demo-right">
+        <div class="event-log-container">
+          <h3>Live Event Log</h3>
+          <p class="event-log-hint">Watch iframe-sync and postMessage in action</p>
+          <div id="event-log" class="event-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Built with: Fastify • iframe-sync • postMessage • Mock AI
+    </footer>
+  </div>
+
+  <!-- Chat Floating Button -->
+  <button id="ozwell-chat-button" class="ozwell-chat-button">
+    💬
+  </button>
+
+  <!-- Chat Window Wrapper -->
+  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
+    <div class="ozwell-chat-header">
+      <div class="ozwell-chat-title">
+        Ozwell Assistant
+      </div>
+      <div class="ozwell-chat-controls">
+        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
+        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
+      </div>
+    </div>
+    <div class="ozwell-chat-content" id="chat-container"></div>
+  </div>
+
+  <script>
+    // Load Ozwell chat widget script
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+    // ========================================
+    // CONFIGURATION: Change this one line to switch between mock AI and Ollama
+    // ========================================
+    // Options: 'mock' (reliable keyword-based responses, no dependencies)
+    //          'ollama' (real LLM, requires Ollama running with llama3.1:8b model)
+    const AI_MODE = 'mock';
+    // ========================================
+
+    // Auto-configure based on mode
+    const config = AI_MODE === 'ollama'
+      ? {
+          model: 'llama3.1:8b',
+          endpoint: `${normalizedBase}/embed/chat`
+        }
+      : {
+          model: 'mock-ai',
+          endpoint: `${normalizedBase}/mock/chat`
+        };
+
+    window.OzwellChatConfig = {
+      containerId: 'chat-container',
+      title: 'Ozwell Assistant',
+      placeholder: 'Try: "update my name to Bob"',
+      model: config.model,
+      endpoint: config.endpoint,
+      widgetUrl: `${normalizedBase}/embed/widget.html`,
+      tools: [
+        {
+          name: 'update_name',
+          description: 'Updates the user\'s name field to a new value. Use when user requests to change/update/modify their name.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'The new name value' }
+            },
+            required: ['name']
+          }
+        },
+        {
+          name: 'update_address',
+          description: 'Updates the user\'s address field to a new value. Use when user requests to change/update/modify their address.',
+          parameters: {
+            type: 'object',
+            properties: {
+              address: { type: 'string', description: 'The new address value' }
+            },
+            required: ['address']
+          }
+        },
+        {
+          name: 'update_zip',
+          description: 'Updates the user\'s zip code field to a new value. Use when user requests to change/update/modify their zip code.',
+          parameters: {
+            type: 'object',
+            properties: {
+              zipCode: { type: 'string', description: 'The new zip code value' }
+            },
+            required: ['zipCode']
+          }
+        }
+      ]
+    };
+
+    const loader = document.createElement('script');
+    loader.src = `${normalizedBase}/embed/embed.js`;
+    loader.async = true;
+    document.head.appendChild(loader);
+  </script>
+
+  <!-- Chat wrapper functionality -->
+  <script src="/assets/chat-wrapper.js"></script>
+
+  <!-- State management with live event logging -->
+  <script src="/assets/landing-app.js"></script>
+
+  <!-- Integration panel toggle -->
+  <script>
+    const toggleBtn = document.getElementById('integration-toggle-btn');
+    const closeBtn = document.getElementById('integration-close-btn');
+    const panel = document.getElementById('integration-panel');
+
+    toggleBtn.addEventListener('click', () => {
+      panel.classList.add('open');
+    });
+
+    closeBtn.addEventListener('click', () => {
+      panel.classList.remove('open');
+    });
+
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && panel.classList.contains('open')) {
+        panel.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+
+</html>

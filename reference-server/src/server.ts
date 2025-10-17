@@ -1,8 +1,11 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
 
 // Import routes
 import modelsRoute from './routes/models';
@@ -10,7 +13,8 @@ import chatRoute from './routes/chat';
 import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
-
+import embedChatRoute from './routes/embed-chat';
+import mockChatRoute from './routes/mock-chat';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -19,6 +23,8 @@ const fastify = Fastify({
 });
 
 async function buildServer() {
+  const rootDir = path.resolve(process.cwd());
+
   // Register CORS
   await fastify.register(cors, {
     origin: true,
@@ -121,6 +127,21 @@ async function buildServer() {
   await fastify.register(responsesRoute);
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
+  await fastify.register(embedChatRoute);
+  await fastify.register(mockChatRoute);  // Mock AI for demos
+
+  // Serve public assets (documentation, misc)
+  await fastify.register(fastifyStatic, {
+    root: path.join(rootDir, 'public'),
+    prefix: '/',
+  });
+
+  // Serve embed assets from dedicated directory
+  await fastify.register(fastifyStatic, {
+    root: path.join(rootDir, 'embed'),
+    prefix: '/embed/',
+    decorateReply: false,
+  });
 
   // 404 handler
   fastify.setNotFoundHandler((request, reply) => {

@@ -1,0 +1,14 @@
+{
+  "name": "ozwellai-embedtest",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js --dev",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "iframe-sync": "^1.0.4"
+  }
+}
