@@ -33,6 +33,88 @@ const indexToPosition = Object.fromEntries(
 );
 
 // ========================================
+// Position Normalization (Natural Language → Canonical)
+// ========================================
+
+/**
+ * Normalizes natural language position descriptions to canonical position names.
+ * This allows the LLM to use natural variations like "top mid", "center", "left middle", etc.
+ *
+ * @param {string} input - Natural language position (e.g., "top mid", "center", "left middle")
+ * @returns {string|null} - Canonical position name (e.g., "top-center") or null if invalid
+ */
+function normalizePosition(input) {
+  if (!input || typeof input !== 'string') {
+    return null;
+  }
+
+  // Normalize to lowercase and trim whitespace
+  const normalized = input.toLowerCase().trim();
+
+  // Direct match (already in canonical format)
+  if (positionMap[normalized]) {
+    return normalized;
+  }
+
+  // Common variations mapping
+  const variations = {
+    // Center/middle variations
+    'center': 'middle-center',
+    'middle': 'middle-center',
+    'mid': 'middle-center',
+    'center middle': 'middle-center',
+    'middle middle': 'middle-center',
+
+    // Top row
+    'top left': 'top-left',
+    'top center': 'top-center',
+    'top middle': 'top-center',
+    'top mid': 'top-center',
+    'middle top': 'top-center',
+    'mid top': 'top-center',
+    'top right': 'top-right',
+
+    // Middle row
+    'left': 'middle-left',
+    'middle left': 'middle-left',
+    'left middle': 'middle-left',
+    'center left': 'middle-left',
+    'right': 'middle-right',
+    'middle right': 'middle-right',
+    'right middle': 'middle-right',
+    'center right': 'middle-right',
+
+    // Bottom row
+    'bottom left': 'bottom-left',
+    'bottom center': 'bottom-center',
+    'bottom middle': 'bottom-center',
+    'bottom mid': 'bottom-center',
+    'middle bottom': 'bottom-center',
+    'mid bottom': 'bottom-center',
+    'bottom right': 'bottom-right',
+
+    // Numeric positions (0-8)
+    '0': 'top-left',
+    '1': 'top-center',
+    '2': 'top-right',
+    '3': 'middle-left',
+    '4': 'middle-center',
+    '5': 'middle-right',
+    '6': 'bottom-left',
+    '7': 'bottom-center',
+    '8': 'bottom-right'
+  };
+
+  // Check variations
+  if (variations[normalized]) {
+    return variations[normalized];
+  }
+
+  // No match found
+  return null;
+}
+
+// ========================================
 // Winner Detection
 // ========================================
 
@@ -219,18 +301,30 @@ function logEvent(message, type = 'info') {
 function handleMakeMove(position) {
   if (gameOver) {
     logEvent('Game is over. Reset to play again.', 'error');
+    sendToolResult({ success: false, error: 'Game is over. Reset to play again.' });
     return;
   }
 
-  const index = positionMap[position];
+  // Normalize natural language input to canonical position
+  const normalizedPosition = normalizePosition(position);
+
+  if (!normalizedPosition) {
+    logEvent(`Invalid position: "${position}". Try "top left", "center", etc.`, 'error');
+    sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", "bottom right", etc.` });
+    return;
+  }
+
+  const index = positionMap[normalizedPosition];
 
   if (index === undefined) {
-    logEvent(`Invalid position: ${position}`, 'error');
+    logEvent(`Invalid position: ${normalizedPosition}`, 'error');
+    sendToolResult({ success: false, error: `Invalid position: ${normalizedPosition}` });
     return;
   }
 
   if (boardState[index] !== null) {
-    logEvent(`Position ${position} is already taken`, 'error');
+    logEvent(`Position ${normalizedPosition} is already taken`, 'error');
+    sendToolResult({ success: false, error: `Position ${normalizedPosition} is already taken` });
     return;
   }
 
@@ -238,7 +332,10 @@ function handleMakeMove(position) {
   boardState[index] = 'X';
   currentPlayer = 'O';
   updateBoard();
-  logEvent(`You placed X at ${position}`, 'move');
+  logEvent(`You placed X at ${normalizedPosition}`, 'move');
+
+  // Send success tool result
+  sendToolResult({ success: true, message: `Placed X at ${normalizedPosition}` });
 
   // Check if user won
   const userWinResult = checkWinner();
@@ -296,6 +393,28 @@ function handleResetGame() {
 // PostMessage Communication
 // ========================================
 
+// Helper: Get widget iframe
+function getWidgetIframe() {
+  return document.querySelector('iframe[src*="widget.html"]');
+}
+
+// Helper: Send tool result back to widget
+function sendToolResult(result) {
+  const widgetIframe = getWidgetIframe();
+  if (!widgetIframe || !widgetIframe.contentWindow) {
+    console.error('[tictactoe-app.js] Cannot send tool result: widget iframe not found');
+    return;
+  }
+
+  widgetIframe.contentWindow.postMessage({
+    source: 'ozwell-chat-parent',
+    type: 'tool_result',
+    result: result
+  }, '*');
+
+  console.log('[tictactoe-app.js] ✓ Tool result sent to widget:', result);
+}
+
 // Listen for tool calls from widget
 window.addEventListener('message', (event) => {
   // Security: Verify origin if needed
@@ -314,6 +433,7 @@ window.addEventListener('message', (event) => {
       handleMakeMove(payload.position);
     } else if (toolName === 'reset_game') {
       handleResetGame();
+      sendToolResult({ success: true, message: 'Game reset successfully' });
     }
   }
 });

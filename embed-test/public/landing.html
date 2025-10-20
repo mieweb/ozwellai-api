@@ -206,36 +206,45 @@
       widgetUrl: `${normalizedBase}/embed/widget.html`,
       tools: [
         {
-          name: 'update_name',
-          description: 'Updates the user\'s name field to a new value. Use when user requests to change/update/modify their name.',
-          parameters: {
-            type: 'object',
-            properties: {
-              name: { type: 'string', description: 'The new name value' }
-            },
-            required: ['name']
+          type: 'function',
+          function: {
+            name: 'update_name',
+            description: 'Updates the user\'s name field to a new value. Use when user requests to change/update/modify their name.',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'The new name value' }
+              },
+              required: ['name']
+            }
           }
         },
         {
-          name: 'update_address',
-          description: 'Updates the user\'s address field to a new value. Use when user requests to change/update/modify their address.',
-          parameters: {
-            type: 'object',
-            properties: {
-              address: { type: 'string', description: 'The new address value' }
-            },
-            required: ['address']
+          type: 'function',
+          function: {
+            name: 'update_address',
+            description: 'Updates the user\'s address field to a new value. Use when user requests to change/update/modify their address.',
+            parameters: {
+              type: 'object',
+              properties: {
+                address: { type: 'string', description: 'The new address value' }
+              },
+              required: ['address']
+            }
           }
         },
         {
-          name: 'update_zip',
-          description: 'Updates the user\'s zip code field to a new value. Use when user requests to change/update/modify their zip code.',
-          parameters: {
-            type: 'object',
-            properties: {
-              zipCode: { type: 'string', description: 'The new zip code value' }
-            },
-            required: ['zipCode']
+          type: 'function',
+          function: {
+            name: 'update_zip',
+            description: 'Updates the user\'s zip code field to a new value. Use when user requests to change/update/modify their zip code.',
+            parameters: {
+              type: 'object',
+              properties: {
+                zipCode: { type: 'string', description: 'The new zip code value' }
+              },
+              required: ['zipCode']
+            }
           }
         }
       ]

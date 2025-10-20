@@ -122,28 +122,31 @@
       widgetUrl: `${normalizedBase}/embed/widget.html`,
       tools: [
         {
-          name: 'make_move',
-          description: 'Place user\'s X piece on the tic-tac-toe board at specified position',
-          parameters: {
-            type: 'object',
-            properties: {
-              position: {
-                type: 'string',
-                enum: ['top-left', 'top-center', 'top-right',
-                       'middle-left', 'middle-center', 'middle-right',
-                       'bottom-left', 'bottom-center', 'bottom-right'],
-                description: 'Board position where user wants to place their piece'
-              }
-            },
-            required: ['position']
+          type: 'function',
+          function: {
+            name: 'make_move',
+            description: 'Place user\'s X piece on the tic-tac-toe board at specified position',
+            parameters: {
+              type: 'object',
+              properties: {
+                position: {
+                  type: 'string',
+                  description: 'Board position where user wants to place their piece. Examples: "top left", "center", "bottom right", "middle", "top mid"'
+                }
+              },
+              required: ['position']
+            }
           }
         },
         {
-          name: 'reset_game',
-          description: 'Reset the tic-tac-toe game board to start a new game',
-          parameters: {
-            type: 'object',
-            properties: {}
+          type: 'function',
+          function: {
+            name: 'reset_game',
+            description: 'Reset the tic-tac-toe game board to start a new game',
+            parameters: {
+              type: 'object',
+              properties: {}
+            }
           }
         }
       ]
