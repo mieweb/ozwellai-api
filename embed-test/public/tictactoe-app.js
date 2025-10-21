@@ -52,7 +52,7 @@ function normalizePosition(input) {
   const normalized = input.toLowerCase().trim();
 
   // Direct match (already in canonical format)
-  if (positionMap[normalized]) {
+  if (normalized in positionMap) {
     return normalized;
   }
 
@@ -106,7 +106,7 @@ function normalizePosition(input) {
   };
 
   // Check variations
-  if (variations[normalized]) {
+  if (normalized in variations) {
     return variations[normalized];
   }
 
