@@ -40,13 +40,18 @@ function extractUserMessage(messages: ChatMessage[]): string {
 }
 
 function hasToolResult(messages: ChatMessage[]): boolean {
-  // Check if conversation includes a tool result (second round of OpenAI protocol)
-  return messages.some(msg => msg.role === 'tool');
+  // Check if the LAST non-system message is a tool result (second round of OpenAI protocol)
+  // We need to check recency, not just existence, to avoid treating all messages after
+  // the first tool call as tool results
+  const nonSystemMessages = messages.filter(msg => msg.role !== 'system');
+  const lastMessage = nonSystemMessages[nonSystemMessages.length - 1];
+  return lastMessage?.role === 'tool';
 }
 
 function extractToolResult(messages: ChatMessage[]): any {
-  // Get the tool result from messages
-  const toolMsg = messages.find(msg => msg.role === 'tool');
+  // Get the LAST tool result from messages (most recent)
+  const toolMessages = messages.filter(msg => msg.role === 'tool');
+  const toolMsg = toolMessages[toolMessages.length - 1];
   if (!toolMsg) return null;
 
   try {
