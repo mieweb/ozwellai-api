@@ -125,31 +125,16 @@ async function sendMessage(text) {
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
   if (state.config.tools && Array.isArray(state.config.tools)) {
-    // Convert parent's tool definitions to OpenAI function calling format
-    // Support both OpenAI nested format and flat format (legacy)
-    tools = state.config.tools.map(tool => {
-      if (tool.function) {
-        // OpenAI format: { type: 'function', function: { name, description, parameters } }
-        return {
-          type: 'function',
-          function: {
-            name: tool.function.name,
-            description: tool.function.description,
-            parameters: tool.function.parameters
-          }
-        };
-      } else {
-        // Flat format (legacy): { name, description, parameters }
-        return {
-          type: 'function',
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.parameters
-          }
-        };
+    // Parent's tool definitions must be in OpenAI function calling format
+    // Format: { type: 'function', function: { name, description, parameters } }
+    tools = state.config.tools.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
       }
-    });
+    }));
 
     console.log('[widget.js] Tools loaded from config:', tools);
   }
@@ -339,27 +324,14 @@ async function continueConversationWithToolResult(result) {
   // Build MCP tools from parent config (same as sendMessage)
   let tools = [];
   if (state.config.tools && Array.isArray(state.config.tools)) {
-    tools = state.config.tools.map(tool => {
-      if (tool.function) {
-        return {
-          type: 'function',
-          function: {
-            name: tool.function.name,
-            description: tool.function.description,
-            parameters: tool.function.parameters
-          }
-        };
-      } else {
-        return {
-          type: 'function',
-          function: {
-            name: tool.name,
-            description: tool.description,
-            parameters: tool.parameters
-          }
-        };
+    tools = state.config.tools.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
       }
-    });
+    }));
   }
 
   // Build system prompt (same as sendMessage - respects custom prompts)
