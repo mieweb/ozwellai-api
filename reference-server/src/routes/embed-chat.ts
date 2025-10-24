@@ -29,21 +29,29 @@ const DEFAULT_MODEL = (process.env.EMBED_CHAT_MODEL || 'llama3').trim();
 const API_KEY = (process.env.EMBED_CHAT_API_KEY || process.env.OZWELL_API_KEY || 'ollama').trim();
 const STATIC_BASE_URL = process.env.EMBED_CHAT_BASE_URL || process.env.OZWELL_BASE_URL || undefined;
 
+console.log('[DEBUG] OZWELL_BASE_URL from env:', process.env.OZWELL_BASE_URL);
+console.log('[DEBUG] STATIC_BASE_URL:', STATIC_BASE_URL);
+console.log('[DEBUG] API_KEY:', API_KEY);
+
 function createOzwellClient(request: any) {
   const overrideHeader = request.headers['x-ozwell-base-url'] as string | undefined;
 
   if (overrideHeader) {
+    console.log('[DEBUG] Using override header:', overrideHeader);
     return new OzwellAI({ apiKey: API_KEY, baseURL: overrideHeader });
   }
 
   if (STATIC_BASE_URL) {
+    console.log('[DEBUG] Using STATIC_BASE_URL:', STATIC_BASE_URL);
     return new OzwellAI({ apiKey: API_KEY, baseURL: STATIC_BASE_URL });
   }
 
   if (API_KEY.toLowerCase() === 'ollama') {
+    console.log('[DEBUG] Using default Ollama URL: http://127.0.0.1:11434');
     return new OzwellAI({ apiKey: API_KEY, baseURL: 'http://127.0.0.1:11434' });
   }
 
+  console.log('[DEBUG] Using default OzwellAI client');
   return new OzwellAI({ apiKey: API_KEY });
 }
 
