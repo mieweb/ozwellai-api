@@ -98,7 +98,7 @@ PM2 auto-restarts if memory exceeds limit and survives container reboots.
 ### Embed Widget
 - `GET /embed/embed.js` - Widget loader script
 - `GET /embed/widget.html` - Widget iframe HTML
-- `GET /embed/widget.js` - Widget client-side logic
+- `GET /embed/ozwell.js` - Widget client-side logic
 - `GET /embed/widget.css` - Widget styles
 - `POST /embed/chat` - Widget chat endpoint
 
@@ -320,7 +320,7 @@ src/
 embed/
 ├── embed.js            # Widget loader script
 ├── widget.html         # Widget iframe content
-├── widget.js           # Widget client-side logic
+├── ozwell.js           # Widget client-side logic
 ├── widget.css          # Widget styles
 └── README.md           # Widget documentation
 ```

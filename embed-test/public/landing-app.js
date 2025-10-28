@@ -286,27 +286,6 @@
       // Only handle messages from our widget
       if (!data || data.source !== 'ozwell-chat-widget') return;
 
-      // Handle user messages
-      if (data.type === 'user_message') {
-        console.log('[landing-app.js] → User message sent:', data.message);
-        logEvent(
-          'postmessage',
-          '[User] Message sent',
-          `"${data.message}"`
-        );
-      }
-
-      // Handle assistant responses
-      if (data.type === 'assistant_response') {
-        console.log('[landing-app.js] → Assistant response received:', data.message);
-        const responseType = data.hadToolCalls ? ' (with tool calls)' : ' (text only)';
-        logEvent(
-          'postmessage',
-          '[Assistant] Response received' + responseType,
-          `"${data.message}"`
-        );
-      }
-
       // Handle tool calls using registry
       if (data.type === 'tool_call') {
         console.log('[landing-app.js] → Received tool call from widget:', data);

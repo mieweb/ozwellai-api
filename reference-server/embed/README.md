@@ -36,7 +36,7 @@ The widget auto-mounts an iframe and is ready to chat.
 **Widget Assets (GET):**
 - `/embed/embed.js` - Loader script that creates the iframe
 - `/embed/widget.html` - Widget iframe content
-- `/embed/widget.js` - Widget logic
+- `/embed/ozwell.js` - Widget logic
 - `/embed/widget.css` - Widget styles
 
 **Chat API (POST):**

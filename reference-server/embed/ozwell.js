@@ -108,13 +108,6 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
-  // Notify parent of user message
-  window.parent.postMessage({
-    source: 'ozwell-chat-widget',
-    type: 'user_message',
-    message: text
-  }, '*');
-
   setStatus('Thinking...');
   state.sending = true;
   formEl?.classList.add('is-sending');
@@ -257,14 +250,6 @@ async function sendMessage(text) {
         state.messages.push(assistantMessage);
         lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
-
-        // Notify parent of assistant response (with tool calls)
-        window.parent.postMessage({
-          source: 'ozwell-chat-widget',
-          type: 'assistant_response',
-          message: assistantContent,
-          hadToolCalls: true
-        }, '*');
       }
     } else {
       // No tool calls, just regular response
@@ -275,14 +260,6 @@ async function sendMessage(text) {
       state.messages.push(assistantMessage);
       lastAssistantMessage = assistantContent;
       addMessage('assistant', assistantContent || '(no response)');
-
-      // Notify parent of assistant response (text only)
-      window.parent.postMessage({
-        source: 'ozwell-chat-widget',
-        type: 'assistant_response',
-        message: assistantContent || '(no response)',
-        hadToolCalls: false
-      }, '*');
     }
 
     setStatus('Ready');
