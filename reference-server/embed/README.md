@@ -11,10 +11,10 @@ Add this to any HTML page to embed the chat widget:
     endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
   };
 </script>
-<script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/embed.js"></script>
+<script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-The widget auto-mounts an iframe and is ready to chat.
+Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 
 ## Configuration
 
@@ -34,7 +34,7 @@ The widget auto-mounts an iframe and is ready to chat.
 ## Endpoints
 
 **Widget Assets (GET):**
-- `/embed/embed.js` - Loader script that creates the iframe
+- `/embed/ozwell-loader.js` - Loader script that creates the iframe
 - `/embed/widget.html` - Widget iframe content
 - `/embed/ozwell.js` - Widget logic
 - `/embed/widget.css` - Widget styles
@@ -46,9 +46,10 @@ The widget auto-mounts an iframe and is ready to chat.
 
 ## Architecture
 
-1. **embed.js** loads on the parent page, reads `window.OzwellChatConfig`, and mounts an iframe
-2. **widget.html** renders inside the iframe with the chat UI
-3. Parent ↔ widget communicate via `postMessage`
+1. **ozwell-loader.js** loads on the parent page, reads `window.OzwellChatConfig`
+2. Call `window.OzwellChat.mount()` to create the iframe
+3. **widget.html** renders inside the iframe with the chat UI
+4. Parent ↔ widget communicate via `postMessage`
 4. Widget sends user input to the `/embed/chat` endpoint via fetch
 
 ## Events

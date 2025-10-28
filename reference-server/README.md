@@ -45,7 +45,7 @@ Add the widget to any page:
     endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
   };
 </script>
-<script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/embed.js"></script>
+<script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
@@ -96,7 +96,7 @@ PM2 auto-restarts if memory exceeds limit and survives container reboots.
 - `POST /v1/embeddings` - Generate text embeddings
 
 ### Embed Widget
-- `GET /embed/embed.js` - Widget loader script
+- `GET /embed/ozwell-loader.js` - Widget loader script
 - `GET /embed/widget.html` - Widget iframe HTML
 - `GET /embed/ozwell.js` - Widget client-side logic
 - `GET /embed/widget.css` - Widget styles
@@ -318,7 +318,7 @@ src/
     └── index.ts        # Text generation, embeddings, token counting, etc.
 
 embed/
-├── embed.js            # Widget loader script
+├── ozwell-loader.js    # Widget loader script
 ├── widget.html         # Widget iframe content
 ├── ozwell.js           # Widget client-side logic
 ├── widget.css          # Widget styles

@@ -160,15 +160,6 @@
     },
   };
 
-  function autoMount() {
-    mount();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', autoMount);
-  } else {
-    autoMount();
-  }
-
+  // Export API for manual initialization
   window.OzwellChat = api;
 })();
