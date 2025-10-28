@@ -416,20 +416,25 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.parent-box {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+/* Professional blue theme - clean and consistent */
+.parent-box,
+.browser-box {
+  background: #4169e1;
 }
 
-.widget-box {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+.widget-box,
+.ozwell-box {
+  background: #667eea;
 }
 
-.handler-box {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+.handler-box,
+.tool-box {
+  background: #60a5fa;
 }
 
-.form-box {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+.form-box,
+.iframe-box {
+  background: #93c5fd;
 }
 
 .flow-arrow {
