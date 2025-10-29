@@ -268,4 +268,4 @@ The demo includes:
 - Ollama mode: Real LLM via `/embed/chat` endpoint (proxies to Ollama)
 - Switch modes by editing one line in the HTML source
 
-See [embed-test README](../../embed-test/README.md) for full documentation.
+See [landing-page README](../../landing-page/README.md) for full documentation.
