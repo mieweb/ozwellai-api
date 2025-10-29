@@ -28,7 +28,7 @@ async function main() {
     // Create a chat completion
     console.log('💬 Creating chat completion...');
     const response = await client.createChatCompletion({
-      model: 'llama3', // Replace with a model you have installed
+      model: 'llama2', // Replace with a model you have installed
       messages: [
         {
           role: 'user',
@@ -40,7 +40,7 @@ async function main() {
     });
 
     console.log('🤖 Response:', response.choices[0].message.content);
-
+    
   } catch (error) {
     console.error('❌ Error:', error instanceof Error ? error.message : error);
     console.log('\n💡 Make sure:');

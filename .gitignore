@@ -137,6 +137,10 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-*.code-workspace
+
+# macOS files
 .DS_Store
+
+# Project-specific
+ozwellai-api.code-workspace
 CLAUDE.md
