@@ -372,3 +372,152 @@ body {
     font-size: 36px;
   }
 }
+
+/* ============================================
+   CHAT WRAPPER STYLES
+   ============================================ */
+
+/* Floating Chat Button */
+.ozwell-chat-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 9998;
+}
+
+.ozwell-chat-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.ozwell-chat-button:active {
+  transform: scale(0.95);
+}
+
+.ozwell-chat-button.hidden {
+  display: none;
+}
+
+/* Chat Window Wrapper */
+.ozwell-chat-wrapper {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  height: 520px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  transition: opacity 0.3s, transform 0.3s;
+  overflow: hidden;
+}
+
+.ozwell-chat-wrapper.hidden {
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+  pointer-events: none;
+}
+
+.ozwell-chat-wrapper.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* Chat Header */
+.ozwell-chat-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ozwell-chat-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-control-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.ozwell-chat-control-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ozwell-chat-control-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Chat Content Area */
+.ozwell-chat-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ozwell-chat-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Minimized State */
+.ozwell-chat-wrapper.minimized {
+  height: 52px;
+  width: 200px;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-content {
+  display: none;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-header {
+  cursor: pointer;
+}
+
+/* Dragging State */
+.ozwell-chat-wrapper.dragging {
+  cursor: move;
+  user-select: none;
+}

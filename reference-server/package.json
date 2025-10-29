@@ -25,6 +25,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^4.24.3",
     "fastify-zod": "^1.4.0",
+    "iframe-sync": "^1.0.4",
     "node-fetch": "^3.3.2",
     "openai": "^5.12.2",
     "ozwellai": "^1.0.0",
