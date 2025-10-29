@@ -8,6 +8,15 @@
   <link rel="stylesheet" href="/assets/demo.css" />
   <!-- iframe-sync library for state synchronization -->
   <script src="/assets/iframe-sync.js"></script>
+  <!-- Mermaid for sequence diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      securityLevel: 'loose'
+    });
+  </script>
 </head>
 
 <body>
@@ -98,47 +107,62 @@
     <div class="demo-content">
       <!-- Left Side: Architecture + Form -->
       <div class="demo-left">
-        <!-- Architecture Flow -->
-        <div class="architecture-flow">
-          <h3>Architecture</h3>
-          <div class="flow-step">
-            <div class="flow-box parent-box">Parent Page</div>
-            <div class="flow-arrow">↓ iframe-sync</div>
-          </div>
-          <div class="flow-step">
-            <div class="flow-box widget-box">Chat Widget (iframe)</div>
-            <div class="flow-arrow">↓ postMessage</div>
-          </div>
-          <div class="flow-step">
-            <div class="flow-box handler-box">Tool Handler</div>
-            <div class="flow-arrow">↓ updates</div>
-          </div>
-          <div class="flow-step">
-            <div class="flow-box form-box">Form Fields</div>
+        <!-- Sequence Diagram -->
+        <div class="sequence-diagram">
+          <h3>How It Works (Sequence Diagram)</h3>
+          <div class="mermaid">
+sequenceDiagram
+    participant Browser
+    participant Ozwell as Ozwell Server
+    participant Widget as Widget (iframe)
+    participant Handler as Tool Handler
+
+    Browser->>Ozwell: 1. Load ozwell-loader.js
+    Note over Browser,Ozwell: Script tag embed
+
+    Browser->>Browser: 2. User clicks chat button
+    Browser->>Widget: 3. Create iframe (lazy loading)
+    Note over Widget: Chat widget loads
+
+    rect rgb(255, 243, 205)
+        Note over Widget: 🔒 SECURE BOUNDARY<br/>All chat messages stay in iframe
+        Widget->>Widget: User types message
+        Widget->>Widget: LLM generates response
+    end
+
+    Widget->>Handler: 4. postMessage: tool_call
+    Note over Widget,Handler: Only tool calls cross boundary
+    Handler->>Handler: 5. Execute tool (update form)
+
+    Handler-->>Widget: 6. postMessage: tool_result
+
+    Browser->>Widget: 7. iframe-sync: state update
+    Note over Browser,Widget: Widget always has page context
           </div>
         </div>
+      </div>
 
+      <!-- Right Side: Form + Event Log -->
+      <div class="demo-right">
         <!-- Form Demo -->
         <div class="form-demo">
           <h3>User Information</h3>
           <div class="form-field">
             <label>Name</label>
-            <input type="text" id="input-name" value="Alice Johnson" readonly />
+            <input type="text" id="input-name" value="Alice Johnson" />
           </div>
           <div class="form-field">
             <label>Address</label>
-            <input type="text" id="input-address" value="123 Main Street, Suite 100" readonly />
+            <input type="text" id="input-address" value="123 Main Street, Suite 100" />
           </div>
           <div class="form-field">
             <label>Zip Code</label>
-            <input type="text" id="input-zip" value="90210" readonly />
+            <input type="text" id="input-zip" value="90210" />
           </div>
-          <p class="form-hint">Use the chat to update these fields</p>
+          <p class="form-hint">Type directly or use chat to update fields</p>
         </div>
-      </div>
 
-      <!-- Right Side: Event Log -->
-      <div class="demo-right">
+        <!-- Event Log -->
         <div class="event-log-container">
           <h3>Live Event Log</h3>
           <p class="event-log-hint">Watch iframe-sync and postMessage in action</p>
