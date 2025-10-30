@@ -191,6 +191,68 @@ let gameOver = false;
 let currentPlayer = 'X';
 let winner = null;
 
+// ========================================
+// iframe-sync State Broker
+// ========================================
+
+let stateBroker = null;
+
+// Initialize broker when IframeSyncBroker is available
+function initStateBroker() {
+  if (typeof IframeSyncBroker === 'undefined') {
+    console.warn('[tictactoe-app.js] IframeSyncBroker not available yet');
+    return;
+  }
+
+  stateBroker = new IframeSyncBroker();
+  console.log('[tictactoe-app.js] IframeSyncBroker initialized');
+
+  // Send initial game state
+  syncGameState();
+}
+
+// Function to sync current game state to widget
+function syncGameState() {
+  if (!stateBroker) {
+    console.warn('[tictactoe-app.js] Broker not initialized, skipping sync');
+    return;
+  }
+
+  const gameData = {
+    boardState: boardState,
+    currentPlayer: currentPlayer,
+    gameOver: gameOver,
+    winner: winner,
+    xScore: parseInt(document.getElementById('score-x').textContent) || 0,
+    oScore: parseInt(document.getElementById('score-o').textContent) || 0
+  };
+
+  // Create fake event to trigger state update
+  const fakeEvent = {
+    data: {
+      channel: 'IframeSyncClient',
+      type: 'stateChange',
+      sourceClientName: 'tictactoe-game',
+      payload: gameData
+    },
+    source: window
+  };
+  window.postMessage(fakeEvent.data, '*');
+
+  console.log('[tictactoe-app.js] Game state synced to widget:', gameData);
+}
+
+// Initialize broker when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initStateBroker);
+} else {
+  // Try immediately, will retry on window load if not available
+  initStateBroker();
+  window.addEventListener('load', () => {
+    if (!stateBroker) initStateBroker();
+  });
+}
+
 // Position name to board index mapping
 const positionMap = {
   'top-left': 0,
@@ -509,6 +571,7 @@ function handleMakeMove(position) {
   boardState[index] = 'X';
   currentPlayer = 'O';
   updateBoard();
+  syncGameState(); // Auto-sync game state to widget
   logEvent(`You placed X at ${normalizedPosition}`, 'move');
 
   // Send success tool result
@@ -520,6 +583,7 @@ function handleMakeMove(position) {
     gameOver = true;
     winner = userWinResult.winner;
     updateBoard();
+    syncGameState(); // Auto-sync final game state
     if (winner === 'X') {
       logEvent('You win!', 'game-over');
     } else if (winner === 'draw') {
@@ -536,6 +600,7 @@ function handleMakeMove(position) {
       boardState[aiIndex] = 'O';
       currentPlayer = 'X';
       updateBoard();
+      syncGameState(); // Auto-sync game state to widget
       const aiPosition = indexToPosition[aiIndex];
       logEvent(`AI placed O at ${aiPosition}`, 'ai-move');
 
@@ -545,6 +610,7 @@ function handleMakeMove(position) {
         gameOver = true;
         winner = aiWinResult.winner;
         updateBoard();
+        syncGameState(); // Auto-sync final game state
         if (winner === 'O') {
           logEvent('AI wins!', 'game-over');
         } else if (winner === 'draw') {
@@ -563,6 +629,7 @@ function handleResetGame() {
   winner = null;
   hideGameOver();
   updateBoard();
+  syncGameState(); // Auto-sync game state to widget
   logEvent('Game reset. Your turn!', 'reset');
 }
 

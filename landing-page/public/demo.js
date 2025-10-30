@@ -210,11 +210,19 @@
     const addressInput = document.getElementById('input-address');
     const zipInput = document.getElementById('input-zip');
     const eventLog = document.getElementById('event-log');
+    const updateButton = document.getElementById('update-context-btn');
 
-    if (!nameInput || !addressInput || !zipInput || !eventLog) {
+    if (!nameInput || !addressInput || !zipInput || !eventLog || !updateButton) {
       console.error('[demo.js] Required elements not found');
       return;
     }
+
+    // Track saved state for dirty checking
+    let savedState = {
+      name: nameInput.value,
+      address: addressInput.value,
+      zipCode: zipInput.value
+    };
 
     // Helper: Add event to log
     function logEvent(type, message, details = null) {
@@ -307,7 +315,44 @@
       );
 
       window.updateBrokerState(state);
+
+      // Update saved state and reset button
+      savedState = {
+        name: nameInput.value,
+        address: addressInput.value,
+        zipCode: zipInput.value
+      };
+      updateButton.disabled = true;
+      updateButton.classList.remove('dirty');
     }
+
+    // Check if form state is dirty
+    function checkDirtyState() {
+      const isDirty =
+        nameInput.value !== savedState.name ||
+        addressInput.value !== savedState.address ||
+        zipInput.value !== savedState.zipCode;
+
+      updateButton.disabled = !isDirty;
+
+      if (isDirty) {
+        updateButton.classList.add('dirty');
+      } else {
+        updateButton.classList.remove('dirty');
+      }
+    }
+
+    // Attach input listeners to check for changes
+    nameInput.addEventListener('input', checkDirtyState);
+    addressInput.addEventListener('input', checkDirtyState);
+    zipInput.addEventListener('input', checkDirtyState);
+
+    // Button click handler
+    updateButton.addEventListener('click', () => {
+      console.log('[demo.js] Update button clicked - syncing state to widget');
+      logEvent('postmessage', '[User Action] Manual sync triggered', 'Update button clicked');
+      updateFormState();
+    });
 
     // Set initial state
     updateFormState();

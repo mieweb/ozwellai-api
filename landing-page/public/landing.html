@@ -159,6 +159,7 @@ sequenceDiagram
             <label>Zip Code</label>
             <input type="text" id="input-zip" value="90210" />
           </div>
+          <button id="update-context-btn" class="update-button">Update</button>
           <p class="form-hint">Type directly or use chat to update fields</p>
         </div>
 
@@ -205,14 +206,14 @@ sequenceDiagram
     // CONFIGURATION: Change this one line to switch between mock AI and Ollama
     // ========================================
     // Options: 'mock' (reliable keyword-based responses, no dependencies)
-    //          'ollama' (real LLM, requires Ollama running with llama3.1:8b model)
+    //          'ollama' (real LLM, requires Ollama running with qwen2.5:14b model)
     const AI_MODE = 'mock';
     // ========================================
 
     // Auto-configure based on mode
     const config = AI_MODE === 'ollama'
       ? {
-          model: 'llama3.1:8b',
+          model: 'qwen2.5:14b',
           endpoint: `${normalizedBase}/embed/chat`
         }
       : {
