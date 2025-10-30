@@ -639,7 +639,7 @@ function handleResetGame() {
 
 // Helper: Get widget iframe
 function getWidgetIframe() {
-  return document.querySelector('iframe[src*="widget.html"]');
+  return document.querySelector('iframe[src*="ozwell.html"]');
 }
 
 // Helper: Send tool result back to widget

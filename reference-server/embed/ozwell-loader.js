@@ -5,7 +5,7 @@
     placeholder: 'Ask a question...',
     model: 'llama3',
     endpoint: '/embed/chat',
-    widgetUrl: '/embed/widget.html',
+    widgetUrl: '/embed/ozwell.html',
   };
 
   const state = {
@@ -41,7 +41,7 @@
       document.body;
 
     const iframe = document.createElement('iframe');
-    const widgetSrc = options.src || config.widgetUrl || config.src || '/embed/widget.html';
+    const widgetSrc = options.src || config.widgetUrl || config.src || '/embed/ozwell.html';
     iframe.src = widgetSrc;
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);

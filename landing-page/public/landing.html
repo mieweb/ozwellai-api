@@ -38,7 +38,7 @@
         <pre class="code-block"><code>&lt;script&gt;
   window.OzwellChatConfig = {
     endpoint: '/mock/chat',
-    widgetUrl: '/embed/widget.html'
+    widgetUrl: '/embed/ozwell.html'
   };
 &lt;/script&gt;
 &lt;script src="/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
@@ -227,7 +227,7 @@ sequenceDiagram
       placeholder: 'Try: "update my name to Bob"',
       model: config.model,
       endpoint: config.endpoint,
-      widgetUrl: `${normalizedBase}/embed/widget.html`,
+      widgetUrl: `${normalizedBase}/embed/ozwell.html`,
       tools: [
         {
           type: 'function',
