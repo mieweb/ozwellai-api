@@ -142,7 +142,6 @@ These commands will be added once the build system is established:
 
 ### Future Important Locations
 - `/scripts/` - Build, test, and deployment scripts (CI calls these) 🎯
-- `/docs/` - Generated OpenAPI/Swagger documentation
 - `/clients/python/` - Python client library
 - `/tests/` - Test cases and fixtures
 - `CONTRIBUTING.md` - Contribution guidelines (planned)

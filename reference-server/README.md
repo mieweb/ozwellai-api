@@ -41,7 +41,7 @@ Add the widget to any page:
 ```html
 <script>
   window.OzwellChatConfig = {
-    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/widget.html',
+    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell.html',
     endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
   };
 </script>
@@ -97,9 +97,9 @@ PM2 auto-restarts if memory exceeds limit and survives container reboots.
 
 ### Embed Widget
 - `GET /embed/ozwell-loader.js` - Widget loader script
-- `GET /embed/widget.html` - Widget iframe HTML
+- `GET /embed/ozwell.html` - Widget iframe HTML
 - `GET /embed/ozwell.js` - Widget client-side logic
-- `GET /embed/widget.css` - Widget styles
+- `GET /embed/ozwell.css` - Widget styles
 - `POST /embed/chat` - Widget chat endpoint
 
 ### Files
@@ -319,9 +319,9 @@ src/
 
 embed/
 ├── ozwell-loader.js    # Widget loader script
-├── widget.html         # Widget iframe content
+├── ozwell.html         # Widget iframe content
 ├── ozwell.js           # Widget client-side logic
-├── widget.css          # Widget styles
+├── ozwell.css          # Widget styles
 └── README.md           # Widget documentation
 ```
 

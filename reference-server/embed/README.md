@@ -7,7 +7,7 @@ Add this to any HTML page to embed the chat widget:
 ```html
 <script>
   window.OzwellChatConfig = {
-    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/widget.html',
+    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell.html',
     endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
   };
 </script>
@@ -22,7 +22,7 @@ Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `widgetUrl` or `src` | string | `/embed/widget.html` | URL to the widget iframe |
+| `widgetUrl` or `src` | string | `/embed/ozwell.html` | URL to the widget iframe |
 | `endpoint` | string | `/embed/chat` | Chat API endpoint |
 | `containerId` | string | (none) | Optional DOM element ID to mount in (defaults to `<body>`) |
 | `title` | string | `'Ozwell Assistant'` | Widget title |
@@ -35,9 +35,9 @@ Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 
 **Widget Assets (GET):**
 - `/embed/ozwell-loader.js` - Loader script that creates the iframe
-- `/embed/widget.html` - Widget iframe content
+- `/embed/ozwell.html` - Widget iframe content
 - `/embed/ozwell.js` - Widget logic
-- `/embed/widget.css` - Widget styles
+- `/embed/ozwell.css` - Widget styles
 
 **Chat API (POST):**
 - `/embed/chat` - Receives `{ message: string, model: string }`, streams back responses
@@ -48,7 +48,7 @@ Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 
 1. **ozwell-loader.js** loads on the parent page, reads `window.OzwellChatConfig`
 2. Call `window.OzwellChat.mount()` to create the iframe
-3. **widget.html** renders inside the iframe with the chat UI
+3. **ozwell.html** renders inside the iframe with the chat UI
 4. Parent ↔ widget communicate via `postMessage`
 4. Widget sends user input to the `/embed/chat` endpoint via fetch
 
@@ -168,7 +168,7 @@ Or on error:
 ```javascript
 // 1. Define tools in config
 window.OzwellChatConfig = {
-  widgetUrl: '/embed/widget.html',
+  widgetUrl: '/embed/ozwell.html',
   endpoint: '/embed/chat',
   model: 'llama3.1:8b',
   tools: [
@@ -202,7 +202,7 @@ window.addEventListener('message', (event) => {
       nameInput.value = payload.name;
 
       // Send result back to widget
-      const widgetIframe = document.querySelector('iframe[src*="widget.html"]');
+      const widgetIframe = document.querySelector('iframe[src*="ozwell.html"]');
       widgetIframe.contentWindow.postMessage({
         source: 'ozwell-chat-parent',
         type: 'tool_result',
