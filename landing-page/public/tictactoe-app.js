@@ -218,13 +218,16 @@ function syncGameState() {
     return;
   }
 
+  const scoreXEl = document.getElementById('score-x');
+  const scoreOEl = document.getElementById('score-o');
+
   const gameData = {
     boardState: boardState,
     currentPlayer: currentPlayer,
     gameOver: gameOver,
     winner: winner,
-    xScore: parseInt(document.getElementById('score-x').textContent) || 0,
-    oScore: parseInt(document.getElementById('score-o').textContent) || 0
+    xScore: scoreXEl ? parseInt(scoreXEl.textContent) || 0 : 0,
+    oScore: scoreOEl ? parseInt(scoreOEl.textContent) || 0 : 0
   };
 
   // Create fake event to trigger state update
