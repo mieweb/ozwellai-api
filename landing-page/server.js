@@ -56,6 +56,100 @@ app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
 });
 
+// Proxy /embed/* requests to reference server to avoid X-Frame-Options cross-origin issues
+app.get('/embed/*', async (req, res) => {
+  const embedPath = req.path; // e.g., /embed/ozwell.html
+  const targetUrl = `${referenceBaseUrl}${embedPath}`;
+
+  console.log(`[Proxy] ${embedPath} → ${targetUrl}`);
+
+  try {
+    const response = await fetch(targetUrl);
+    const contentType = response.headers.get('content-type');
+
+    // Forward the response
+    if (contentType) {
+      res.type(contentType);
+    }
+
+    // For text responses (HTML, JS, CSS)
+    if (contentType && (contentType.includes('text') || contentType.includes('javascript') || contentType.includes('json'))) {
+      const body = await response.text();
+      res.send(body);
+    } else {
+      // For binary responses
+      const buffer = await response.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    }
+  } catch (error) {
+    console.error(`[Proxy Error] ${embedPath}:`, error.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
+// Also proxy POST requests to /embed/* (for chat endpoint)
+app.post('/embed/*', express.json(), async (req, res) => {
+  const embedPath = req.path;
+  const targetUrl = `${referenceBaseUrl}${embedPath}`;
+
+  console.log(`[Proxy POST] ${embedPath} → ${targetUrl}`);
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const contentType = response.headers.get('content-type');
+    if (contentType) {
+      res.type(contentType);
+    }
+
+    // Handle streaming responses
+    if (response.body) {
+      response.body.pipe(res);
+    } else {
+      const body = await response.text();
+      res.send(body);
+    }
+  } catch (error) {
+    console.error(`[Proxy Error] ${embedPath}:`, error.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
+// Proxy /mock/* requests to reference server (for mock chat endpoint)
+app.post('/mock/*', express.json(), async (req, res) => {
+  const mockPath = req.path;
+  const targetUrl = `${referenceBaseUrl}${mockPath}`;
+
+  console.log(`[Proxy POST] ${mockPath} → ${targetUrl}`);
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const contentType = response.headers.get('content-type');
+    if (contentType) {
+      res.type(contentType);
+    }
+
+    const body = await response.text();
+    res.send(body);
+  } catch (error) {
+    console.error(`[Proxy Error] ${mockPath}:`, error.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
     return res.type('html').send(renderHtml('landing.html'));

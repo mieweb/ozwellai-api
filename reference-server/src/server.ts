@@ -33,11 +33,13 @@ async function buildServer() {
   });
 
   // Remove X-Frame-Options for embed routes to allow cross-origin iframe embedding
-  fastify.addHook('onSend', async (request, reply) => {
-    if (request.url.startsWith('/embed/')) {
-      reply.removeHeader('X-Frame-Options');
-    }
-  });
+  // NOTE: This didn't work because nginx adds the header after Fastify responds
+  // Commented out for investigation - 2025-10-31
+  // fastify.addHook('onSend', async (request, reply) => {
+  //   if (request.url.startsWith('/embed/')) {
+  //     reply.removeHeader('X-Frame-Options');
+  //   }
+  // });
 
   // Register multipart for file uploads
   await fastify.register(multipart, {
