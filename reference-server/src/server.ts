@@ -32,6 +32,13 @@ async function buildServer() {
     credentials: true,
   });
 
+  // Remove X-Frame-Options for embed routes to allow cross-origin iframe embedding
+  fastify.addHook('onSend', async (request, reply) => {
+    if (request.url.startsWith('/embed/')) {
+      reply.removeHeader('X-Frame-Options');
+    }
+  });
+
   // Register multipart for file uploads
   await fastify.register(multipart, {
     limits: {
