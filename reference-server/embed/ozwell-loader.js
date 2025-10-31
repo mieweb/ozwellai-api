@@ -49,7 +49,7 @@
     iframe.style.borderRadius = '12px';
     iframe.style.boxShadow = '0 20px 50px rgba(15, 23, 42, 0.12)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
 
     container.appendChild(iframe);
     state.iframe = iframe;
