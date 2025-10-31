@@ -48,6 +48,8 @@
     iframe.style.border = '0';
     iframe.style.borderRadius = '12px';
     iframe.style.boxShadow = '0 20px 50px rgba(15, 23, 42, 0.12)';
+    iframe.style.maxWidth = 'calc(100vw - 40px)';
+    iframe.style.maxHeight = 'calc(100vh - 80px)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
     iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
 
