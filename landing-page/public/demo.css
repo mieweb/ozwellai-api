@@ -15,10 +15,10 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: #5e6ad2;
+  background: #0066ff;
   border: none;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(94, 106, 210, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,7 +29,7 @@
 
 .ozwell-chat-button:hover {
   transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(94, 106, 210, 0.5);
+  box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
 }
 
 .ozwell-chat-button:active {
@@ -47,9 +47,10 @@
   right: 24px;
   width: 380px;
   height: 520px;
-  background: #2c2e31;
+  background: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   z-index: 9999;
@@ -70,7 +71,7 @@
 
 /* Chat Header */
 .ozwell-chat-header {
-  background: #5e6ad2;
+  background: #0066ff;
   color: white;
   padding: 16px 20px;
   display: flex;
@@ -98,7 +99,7 @@
 .ozwell-chat-control-btn {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
@@ -164,8 +165,8 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background: #323437;
-  color: #d1d0c5;
+  background: #fafafa;
+  color: #1a1a1a;
   line-height: 1.5;
   overflow-x: hidden;
 }
@@ -177,7 +178,7 @@ body {
   top: 50%;
   transform: translateY(-50%) rotate(-90deg);
   transform-origin: left center;
-  background: #5e6ad2;
+  background: #0066ff;
   color: white;
   border: none;
   padding: 16px 32px;
@@ -188,13 +189,13 @@ body {
   cursor: pointer;
   z-index: 9998;
   border-radius: 0 0 10px 10px;
-  box-shadow: 2px 4px 16px rgba(94, 106, 210, 0.3);
+  box-shadow: none;
   transition: all 0.2s;
 }
 
 .integration-toggle-btn:hover {
-  background: #4a56b8;
-  box-shadow: 2px 6px 20px rgba(94, 106, 210, 0.4);
+  background: #0052cc;
+  box-shadow: none;
   transform: translateY(-50%) rotate(-90deg) translateX(-3px);
 }
 
@@ -205,8 +206,9 @@ body {
   top: 0;
   width: 450px;
   height: 100vh;
-  background: #2c2e31;
-  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  box-shadow: none;
   z-index: 9999;
   transition: left 0.3s ease-in-out;
   overflow-y: auto;
@@ -220,25 +222,25 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #3a3c40;
-  background: #323437;
+  padding: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
 .integration-panel-header h2 {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: #d1d0c5;
+  color: #1a1a1a;
 }
 
 .integration-close-btn {
   background: none;
   border: none;
   font-size: 2rem;
-  color: #646669;
+  color: #6b7280;
   cursor: pointer;
   line-height: 1;
   padding: 0;
@@ -252,34 +254,34 @@ body {
 }
 
 .integration-close-btn:hover {
-  background: #3a3c40;
-  color: #d1d0c5;
+  background: #f3f4f6;
+  color: #1a1a1a;
 }
 
 .integration-panel-content {
-  padding: 1.5rem;
+  padding: 2rem;
 }
 
 .integration-step {
-  margin-bottom: 2rem;
+  margin-bottom: 3rem;
 }
 
 .integration-step h3 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #d1d0c5;
-  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 1rem;
 }
 
 .code-block {
-  background: #2d3748;
-  color: #e2e8f0;
-  padding: 1rem;
-  border-radius: 6px;
+  background: #f3f4f6;
+  color: #1a1a1a;
+  padding: 1.5rem;
+  border-radius: 8px;
   overflow-x: auto;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.85rem;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .code-block code {
@@ -295,7 +297,7 @@ body {
   padding: 0.5rem 0;
   padding-left: 1.5rem;
   position: relative;
-  color: #646669;
+  color: #4b5563;
   font-size: 0.9rem;
 }
 
@@ -303,7 +305,7 @@ body {
   content: '→';
   position: absolute;
   left: 0;
-  color: #5e6ad2;
+  color: #0066ff;
   font-weight: bold;
 }
 
@@ -316,22 +318,23 @@ body {
 
 /* Header */
 .header {
-  background: #2c2e31;
-  color: #d1d0c5;
+  background: #ffffff;
+  color: #1a1a1a;
   padding: 1.5rem 2rem;
   text-align: center;
-  border-bottom: 2px solid #5e6ad2;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .header-title {
   font-size: 1.75rem;
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 0.5rem;
+  letter-spacing: -0.025em;
 }
 
 .header-subtitle {
-  font-size: 0.95rem;
-  opacity: 0.95;
+  font-size: 1rem;
+  color: #6b7280;
   font-weight: 400;
 }
 
@@ -345,20 +348,20 @@ body {
 .demo-link {
   display: inline-block;
   padding: 12px 24px;
-  background: #5e6ad2;
+  background: #0066ff;
   color: white;
   text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   transition: all 0.2s;
 }
 
 .demo-link:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(94, 106, 210, 0.4);
-  background: #4a56b8;
+  transform: translateY(-1px);
+  box-shadow: none;
+  background: #0052cc;
 }
 
 .demo-link:active {
@@ -370,8 +373,8 @@ body {
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  padding: 2rem;
+  gap: 1.5rem;
+  padding: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
@@ -386,17 +389,18 @@ body {
 
 /* Sequence Diagram */
 .sequence-diagram {
-  background: #2c2e31;
+  background: #ffffff;
   padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
 }
 
 .sequence-diagram h3 {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1rem;
-  color: #d1d0c5;
+  color: #1a1a1a;
 }
 
 .sequence-diagram .mermaid {
@@ -407,17 +411,18 @@ body {
 
 /* Form Demo */
 .form-demo {
-  background: #2c2e31;
+  background: #ffffff;
   padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
 }
 
 .form-demo h3 {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1rem;
-  color: #d1d0c5;
+  color: #1a1a1a;
 }
 
 .form-field {
@@ -428,31 +433,32 @@ body {
   display: block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #646669;
+  color: #374151;
   margin-bottom: 0.4rem;
 }
 
 .form-field input {
   width: 100%;
   padding: 0.65rem;
-  border: 2px solid #3a3c40;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  background: #323437;
-  color: #d1d0c5;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #1a1a1a;
   transition: all 0.2s;
 }
 
 .form-field input:focus {
   outline: none;
-  border-color: #5e6ad2;
-  background: #2c2e31;
+  border-color: #0066ff;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
 .form-hint {
   margin-top: 1rem;
   font-size: 0.85rem;
-  color: #646669;
+  color: #6b7280;
   text-align: center;
   font-style: italic;
 }
@@ -462,20 +468,20 @@ body {
   width: 100%;
   padding: 0.75rem 1rem;
   margin-top: 1rem;
-  background: #5e6ad2;
+  background: #0066ff;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .update-button:hover {
-  background: #4a56b8;
+  background: #0052cc;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(94, 106, 210, 0.3);
+  box-shadow: none;
 }
 
 .update-button:active {
@@ -509,53 +515,54 @@ body {
 
 /* Event Log Container */
 .event-log-container {
-  background: #2c2e31;
+  background: #ffffff;
   padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
 .event-log-container h3 {
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #d1d0c5;
+  color: #1a1a1a;
 }
 
 .event-log-hint {
-  font-size: 0.8rem;
-  color: #646669;
+  font-size: 0.85rem;
+  color: #6b7280;
   margin-bottom: 1rem;
   font-style: italic;
 }
 
 .event-log {
   flex: 1;
-  background: #1e293b;
-  color: #e2e8f0;
+  background: #f9fafb;
+  color: #374151;
   padding: 1rem;
-  border-radius: 6px;
+  border-radius: 8px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.75rem;
   line-height: 1.6;
   overflow-y: auto;
-  min-height: 400px;
-  max-height: 600px;
+  min-height: 300px;
+  max-height: 500px;
 }
 
 .event-log:empty::before {
   content: 'Waiting for events...';
-  color: #64748b;
+  color: #9ca3af;
   font-style: italic;
 }
 
 .event-log-entry {
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #334155;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .event-log-entry:last-child {
@@ -563,42 +570,43 @@ body {
 }
 
 .event-timestamp {
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 0.7rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
 }
 
 .event-type {
   font-weight: 600;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.2rem;
+  color: #1a1a1a;
 }
 
 .event-type.iframe-sync {
-  color: #60a5fa;
+  color: #1a1a1a;
 }
 
 .event-type.postmessage {
-  color: #34d399;
+  color: #1a1a1a;
 }
 
 .event-type.tool-call {
-  color: #fbbf24;
+  color: #1a1a1a;
 }
 
 .event-details {
-  color: #cbd5e1;
+  color: #4b5563;
   font-size: 0.7rem;
   margin-left: 0.5rem;
 }
 
 /* Footer */
 .footer {
-  background: #2c2e31;
-  color: #646669;
+  background: #ffffff;
+  color: #9ca3af;
   padding: 1rem;
   text-align: center;
   font-size: 0.85rem;
-  border-top: 1px solid #3a3c40;
+  border-top: 1px solid #e5e7eb;
 }
 
 /* ============================================
@@ -608,11 +616,11 @@ body {
 /* Flash animation for field updates */
 @keyframes flash-update {
   0%, 100% {
-    background: #323437;
-    border-color: #3a3c40;
+    background: #ffffff;
+    border-color: #d1d5db;
   }
   50% {
-    background: #1a3a2e;
+    background: #ecfdf5;
     border-color: #10b981;
   }
 }
