@@ -223,6 +223,17 @@ async function sendMessage(text) {
     if (toolCalls && toolCalls.length > 0) {
       console.log('[widget.js] Model returned tool calls:', toolCalls);
 
+      // CRITICAL: Always store assistant message with tool_calls in conversation history
+      // This is required by OpenAI function calling protocol - tool results must reference
+      // a prior assistant message with tool_calls. Without this, models may call tools again.
+      const assistantMessage = {
+        role: 'assistant',
+        content: assistantContent || '',
+        tool_calls: toolCalls
+      };
+      state.messages.push(assistantMessage);
+      console.log('[widget.js] Stored assistant message with tool_calls in history');
+
       for (const toolCall of toolCalls) {
         const toolName = toolCall.function?.name;
 
@@ -251,13 +262,8 @@ async function sendMessage(text) {
         }
       }
 
-      // If there's also text content, show it
+      // Display text content in UI if present (separate from history storage)
       if (assistantContent && assistantContent.trim()) {
-        const assistantMessage = {
-          role: 'assistant',
-          content: assistantContent,
-        };
-        state.messages.push(assistantMessage);
         lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
       }

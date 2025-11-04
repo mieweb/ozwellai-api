@@ -108,13 +108,9 @@ app.post('/embed/*', express.json(), async (req, res) => {
       res.type(contentType);
     }
 
-    // Handle streaming responses
-    if (response.body) {
-      response.body.pipe(res);
-    } else {
-      const body = await response.text();
-      res.send(body);
-    }
+    // Read response body and forward it
+    const body = await response.text();
+    res.status(response.status).send(body);
   } catch (error) {
     console.error(`[Proxy Error] ${embedPath}:`, error.message);
     res.status(500).send('Proxy error');
