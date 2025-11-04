@@ -66,21 +66,6 @@ See [embed/README.md](embed/README.md) for full documentation.
 - `npm start` - Start production server
 - `npm run spec` - Generate OpenAPI specification
 
-### Deployment with PM2 (Limited Resources)
-
-If deploying in a container with limited memory, use PM2 to manage the process:
-
-```bash
-npm run build
-PORT=8080 EMBED_CHAT_API_KEY=ollama \
-  pm2 start dist/reference-server/src/server.js --name refserver \
-    --max-memory-restart 400M
-pm2 save
-pm2 startup  # Follow printed command
-```
-
-PM2 auto-restarts if memory exceeds limit and survives container reboots.
-
 ## API Endpoints
 
 ### Models
