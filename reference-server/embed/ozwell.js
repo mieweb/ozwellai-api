@@ -21,9 +21,14 @@ const saveButton = document.getElementById('save-button');
 
 let lastAssistantMessage = '';
 
-function setStatus(text) {
+function setStatus(text, processing = false) {
   if (statusEl) {
     statusEl.textContent = text;
+    if (processing) {
+      statusEl.classList.add('status--processing');
+    } else {
+      statusEl.classList.remove('status--processing');
+    }
   }
 }
 
@@ -43,10 +48,10 @@ function applyConfig(config) {
   };
 
   if (inputEl) {
-    inputEl.placeholder = state.config.placeholder || 'Ask a question...';
+    inputEl.placeholder = state.config.placeholder || 'Type a message...';
   }
 
-  setStatus('Ready');
+  setStatus('', false);
 }
 
 function buildMessages() {
@@ -108,7 +113,7 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
-  setStatus('Thinking...');
+  setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
   submitButton?.setAttribute('disabled', 'true');
@@ -262,14 +267,14 @@ async function sendMessage(text) {
       addMessage('assistant', assistantContent || '(no response)');
     }
 
-    setStatus('Ready');
+    setStatus('', false);
     if (lastAssistantMessage.trim()) {
       saveButton?.removeAttribute('disabled');
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     addMessage('system', `Error: ${message}`);
-    setStatus('Error');
+    setStatus('Error', false);
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
@@ -292,7 +297,7 @@ async function continueConversationWithToolResult(result) {
   };
   state.messages.push(toolResultMessage);
 
-  setStatus('Processing tool result...');
+  setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
   submitButton?.setAttribute('disabled', 'true');
@@ -400,14 +405,14 @@ async function continueConversationWithToolResult(result) {
       hadToolCalls: false
     }, '*');
 
-    setStatus('Ready');
+    setStatus('', false);
     if (lastAssistantMessage.trim()) {
       saveButton?.removeAttribute('disabled');
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     addMessage('system', `Error: ${message}`);
-    setStatus('Error');
+    setStatus('Error', false);
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
@@ -491,15 +496,15 @@ function handleSave() {
     },
   }, '*');
 
-  setStatus('Sent to host');
+  setStatus('', false);
 }
 
 window.addEventListener('message', handleParentMessage);
 formEl?.addEventListener('submit', handleSubmit);
 saveButton?.addEventListener('click', handleSave);
 
-addMessage('system', 'Widget loaded. Waiting for configuration...');
-setStatus('Waiting for host...');
+// Don't show initial system message - keep it clean
+setStatus('', false);
 
 // Initialize IframeSyncClient
 if (typeof IframeSyncClient !== 'undefined') {
