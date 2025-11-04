@@ -51,6 +51,11 @@ function applyConfig(config) {
     inputEl.placeholder = state.config.placeholder || 'Type a message...';
   }
 
+  // Show welcome message if provided and chat is empty
+  if (config.welcomeMessage && state.messages.length === 0) {
+    addMessage('welcome', config.welcomeMessage);
+  }
+
   setStatus('', false);
 }
 

@@ -89,6 +89,16 @@ body {
   border: none;
 }
 
+.message.welcome {
+  align-self: flex-start;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 13px;
+  font-style: italic;
+  border: 1px dashed #e5e7eb;
+  max-width: 85%;
+}
+
 .chat-form {
   display: flex;
   gap: 8px;
