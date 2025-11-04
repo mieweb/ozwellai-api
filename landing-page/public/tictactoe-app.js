@@ -78,6 +78,9 @@
 
       document.addEventListener('mouseup', () => this.dragEnd());
       document.addEventListener('touchend', () => this.dragEnd());
+
+      // Window resize - keep chat within viewport bounds
+      window.addEventListener('resize', () => this.constrainToViewport());
     },
 
     dragStart(e) {
@@ -135,6 +138,35 @@
 
       this.isDragging = false;
       this.wrapper.classList.remove('dragging');
+    },
+
+    constrainToViewport() {
+      // Only constrain if chat is visible
+      if (!this.wrapper || this.wrapper.classList.contains('hidden')) {
+        return;
+      }
+
+      // Get current position
+      const rect = this.wrapper.getBoundingClientRect();
+      const currentLeft = rect.left;
+      const currentTop = rect.top;
+
+      // Calculate max allowed positions
+      const maxX = window.innerWidth - this.wrapper.offsetWidth;
+      const maxY = window.innerHeight - this.wrapper.offsetHeight;
+
+      // Clamp to viewport bounds
+      const newLeft = Math.max(0, Math.min(currentLeft, maxX));
+      const newTop = Math.max(0, Math.min(currentTop, maxY));
+
+      // Only update if position changed
+      if (newLeft !== currentLeft || newTop !== currentTop) {
+        this.wrapper.style.left = `${newLeft}px`;
+        this.wrapper.style.top = `${newTop}px`;
+        this.wrapper.style.bottom = 'auto';
+        this.wrapper.style.right = 'auto';
+        console.log(`Chat position adjusted to stay in viewport: (${newLeft}, ${newTop})`);
+      }
     },
 
     openChat() {
