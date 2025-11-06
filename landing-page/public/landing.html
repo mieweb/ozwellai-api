@@ -6,8 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ozwell Chatbot Client Demo</title>
   <link rel="stylesheet" href="/assets/demo.css" />
-  <!-- iframe-sync library for state synchronization -->
-  <script src="/assets/iframe-sync.js"></script>
   <!-- Mermaid for sequence diagram rendering -->
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
@@ -121,33 +119,33 @@
         <div class="sequence-diagram">
           <h3>How It Works (Sequence Diagram)</h3>
           <div class="mermaid">
-sequenceDiagram
-    participant Browser
-    participant Ozwell as Ozwell Server
-    participant Widget as Widget (iframe)
-    participant Handler as Tool Handler
+            sequenceDiagram
+            participant Browser
+            participant Ozwell as Ozwell Server
+            participant Widget as Widget (iframe)
+            participant Handler as Tool Handler
 
-    Browser->>Ozwell: 1. Load ozwell-loader.js
-    Note over Browser,Ozwell: Script tag embed
+            Browser->>Ozwell: 1. Load ozwell-loader.js
+            Note over Browser,Ozwell: Script tag embed
 
-    Browser->>Browser: 2. User clicks chat button
-    Browser->>Widget: 3. Create iframe (lazy loading)
-    Note over Widget: Chat widget loads
+            Browser->>Browser: 2. User clicks chat button
+            Browser->>Widget: 3. Create iframe (lazy loading)
+            Note over Widget: Chat widget loads
 
-    rect rgb(255, 243, 205)
-        Note over Widget: 🔒 SECURE BOUNDARY<br/>All chat messages stay in iframe
-        Widget->>Widget: User types message
-        Widget->>Widget: LLM generates response
-    end
+            rect rgb(255, 243, 205)
+            Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
+            Widget->>Widget: User types message
+            Widget->>Widget: LLM generates response
+            end
 
-    Widget->>Handler: 4. postMessage: tool_call
-    Note over Widget,Handler: Only tool calls cross boundary
-    Handler->>Handler: 5. Execute tool (update form)
+            Widget->>Handler: 4. postMessage: tool_call
+            Note over Widget,Handler: Only tool calls cross boundary
+            Handler->>Handler: 5. Execute tool (update form)
 
-    Handler-->>Widget: 6. postMessage: tool_result
+            Handler-->>Widget: 6. postMessage: tool_result
 
-    Browser->>Widget: 7. iframe-sync: state update
-    Note over Browser,Widget: Widget always has page context
+            Browser->>Widget: 7. iframe-sync: state update
+            Note over Browser,Widget: Widget always has page context
           </div>
         </div>
       </div>
@@ -217,20 +215,20 @@ sequenceDiagram
     // ========================================
     // Options: 'mock' (reliable keyword-based responses, no dependencies)
     //          'ollama' (real LLM, requires Ollama running with qwen2.5:14b model)
-    const AI_MODE = 'mock';
+    const AI_MODE = 'ollama';
     // ========================================
 
     // Auto-configure based on mode
     // NOTE: Using relative URLs to go through embedtest proxy (workaround for nginx X-Frame-Options)
     const config = AI_MODE === 'ollama'
       ? {
-          model: 'qwen2.5:14b',
-          endpoint: '/embed/chat'
-        }
+        model: 'llama3.1:8b',
+        endpoint: '/embed/chat'
+      }
       : {
-          model: 'mock-ai',
-          endpoint: '/mock/chat'
-        };
+        model: 'mock-ai',
+        endpoint: '/mock/chat'
+      };
 
     window.OzwellChatConfig = {
       containerId: 'chat-container',

@@ -1,3 +1,64 @@
+/**
+ * ============================================
+ * IFRAME-SYNC CLIENT (Bundled)
+ * ============================================
+ *
+ * IframeSyncClient allows this widget iframe to receive state updates from the parent page.
+ * This is bundled here to eliminate the need for a separate iframe-sync.js script tag.
+ *
+ * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
+ */
+class IframeSyncClient {
+    #channel;
+    #recv;
+    #clientName;
+
+    constructor(clientName, recv) {
+        this.#recv = recv;
+        this.#channel = 'IframeSync';
+        this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+
+        if (!window) {
+          return;
+        }
+        window.addEventListener('message', (event) => {
+            if (!event.data || event.data.channel !== this.#channel) {
+                return;
+            }
+
+            const isOwnMessage = event.data.sourceClientName === this.#clientName;
+            const isReadyReceived = event.data.type === 'readyReceived';
+
+            if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
+                this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
+            }
+        });
+    }
+
+    ready() {
+        if (!window || !window.parent) {
+          return;
+        }
+        window.parent.postMessage({
+            channel: this.#channel,
+            type: 'ready',
+            sourceClientName: this.#clientName
+        }, '*');
+    }
+
+    stateChange(update) {
+        if (!window || !window.parent) {
+          return;
+        }
+        window.parent.postMessage({
+            channel: this.#channel,
+            type: 'stateChange',
+            sourceClientName: this.#clientName,
+            payload: update
+        }, '*');
+    }
+}
+
 const state = {
   config: {
     title: 'Ozwell',

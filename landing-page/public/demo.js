@@ -229,13 +229,13 @@
   console.log('[demo.js] Initializing MCP Tools Demo with iframe-sync...');
 
   function initializeApp() {
-    // Check if IframeSyncBroker is available
-    if (typeof IframeSyncBroker === 'undefined') {
-      console.error('[demo.js] IframeSyncBroker not loaded!');
+    // Check if OzwellChat is available
+    if (typeof OzwellChat === 'undefined') {
+      console.error('[demo.js] OzwellChat not loaded!');
       return;
     }
 
-    console.log('[demo.js] IframeSyncBroker available, initializing...');
+    console.log('[demo.js] OzwellChat available, initializing...');
 
     // Get form elements
     const nameInput = document.getElementById('input-name');
@@ -305,25 +305,6 @@
       }, 600);
     }
 
-    // Initialize IframeSyncBroker
-    const broker = new IframeSyncBroker();
-    console.log('[demo.js] IframeSyncBroker initialized');
-    logEvent('iframe-sync', '[iframe-sync] Broker initialized');
-
-    // Expose a method to update state from parent page
-    window.updateBrokerState = function(update) {
-      const fakeEvent = {
-        data: {
-          channel: 'IframeSync',
-          type: 'stateChange',
-          sourceClientName: 'parent-page',
-          payload: update
-        },
-        source: window
-      };
-      window.postMessage(fakeEvent.data, '*');
-    };
-
     // Function to get current form state
     function getFormState() {
       return {
@@ -338,15 +319,16 @@
     // Function to update state when form changes
     function updateFormState() {
       const state = getFormState();
-      console.log('[demo.js] Updating broker state:', state);
+      console.log('[demo.js] Updating context via OzwellChat.updateContext():', state);
 
       logEvent(
         'iframe-sync',
-        '[iframe-sync] State change',
+        '[iframe-sync] State change via updateContext()',
         JSON.stringify(state.formData, null, 2)
       );
 
-      window.updateBrokerState(state);
+      // Use the clean OzwellChat API instead of direct broker access
+      OzwellChat.updateContext(state);
 
       // Update saved state and reset button
       savedState = {

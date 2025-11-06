@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tic-Tac-Toe - Ozwell AI Demo</title>
   <link rel="stylesheet" href="/assets/tictactoe.css" />
-  <script src="/assets/iframe-sync.js"></script>
 </head>
 
 <body>
@@ -97,20 +96,20 @@
     // ========================================
     // Options: 'mock' (reliable keyword-based responses, no dependencies)
     //          'ollama' (real LLM, requires Ollama running with llama3.1:8b model)
-    const AI_MODE = 'mock';
+    const AI_MODE = 'ollama';
     // ========================================
 
     // Auto-configure based on mode
     // NOTE: Using relative URLs to go through embedtest proxy (workaround for nginx X-Frame-Options)
     const config = AI_MODE === 'ollama'
       ? {
-          model: 'llama3.1:8b',
-          endpoint: '/embed/chat'
-        }
+        model: 'llama3.1:8b',
+        endpoint: '/embed/chat'
+      }
       : {
-          model: 'mock-ai',
-          endpoint: '/mock/chat'
-        };
+        model: 'mock-ai',
+        endpoint: '/mock/chat'
+      };
 
     // Configure Ozwell chat widget
     window.OzwellChatConfig = {

@@ -227,17 +227,14 @@ let winner = null;
 // iframe-sync State Broker
 // ========================================
 
-let stateBroker = null;
-
-// Initialize broker when IframeSyncBroker is available
+// Initialize OzwellChat when available
 function initStateBroker() {
-  if (typeof IframeSyncBroker === 'undefined') {
-    console.warn('[tictactoe-app.js] IframeSyncBroker not available yet');
+  if (typeof OzwellChat === 'undefined') {
+    console.warn('[tictactoe-app.js] OzwellChat not available yet');
     return;
   }
 
-  stateBroker = new IframeSyncBroker();
-  console.log('[tictactoe-app.js] IframeSyncBroker initialized');
+  console.log('[tictactoe-app.js] OzwellChat available, sending initial game state');
 
   // Send initial game state
   syncGameState();
@@ -245,8 +242,8 @@ function initStateBroker() {
 
 // Function to sync current game state to widget
 function syncGameState() {
-  if (!stateBroker) {
-    console.warn('[tictactoe-app.js] Broker not initialized, skipping sync');
+  if (typeof OzwellChat === 'undefined') {
+    console.warn('[tictactoe-app.js] OzwellChat not available, skipping sync');
     return;
   }
 
@@ -262,19 +259,10 @@ function syncGameState() {
     oScore: scoreOEl ? parseInt(scoreOEl.textContent) || 0 : 0
   };
 
-  // Create fake event to trigger state update
-  const fakeEvent = {
-    data: {
-      channel: 'IframeSyncClient',
-      type: 'stateChange',
-      sourceClientName: 'tictactoe-game',
-      payload: gameData
-    },
-    source: window
-  };
-  window.postMessage(fakeEvent.data, '*');
+  // Use the clean OzwellChat API instead of direct broker access
+  OzwellChat.updateContext(gameData);
 
-  console.log('[tictactoe-app.js] Game state synced to widget:', gameData);
+  console.log('[tictactoe-app.js] Game state synced to widget via updateContext():', gameData);
 }
 
 // Initialize broker when DOM is ready

@@ -6,7 +6,6 @@ import multipart from '@fastify/multipart';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
-import fs from 'fs';
 
 // Import routes
 import modelsRoute from './routes/models';
@@ -139,13 +138,6 @@ async function buildServer() {
   await fastify.register(filesRoute);
   await fastify.register(embedChatRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
-
-  // Serve iframe-sync library from node_modules
-  fastify.get('/embed/iframe-sync.js', async (_request, reply) => {
-    const iframeSyncPath = path.join(rootDir, 'node_modules', 'iframe-sync', 'index.js');
-    const content = fs.readFileSync(iframeSyncPath, 'utf-8');
-    return reply.type('application/javascript').send(content);
-  });
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {
