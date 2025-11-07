@@ -100,15 +100,16 @@
     // ========================================
 
     // Auto-configure based on mode
-    // NOTE: Using relative URLs to go through embedtest proxy (workaround for nginx X-Frame-Options)
+    // TEMPORARILY USING DIRECT URLs (NOT PROXY) TO TEST X-FRAME-OPTIONS ERROR
+    // This will cause X-Frame-Options error - see browser console!
     const config = AI_MODE === 'ollama'
       ? {
         model: 'llama3.1:8b',
-        endpoint: '/embed/chat'
+        endpoint: `${normalizedBase}/embed/chat`
       }
       : {
         model: 'mock-ai',
-        endpoint: '/mock/chat'
+        endpoint: `${normalizedBase}/mock/chat`
       };
 
     // Configure Ozwell chat widget
@@ -118,7 +119,7 @@
       placeholder: 'Try: "I\'ll go top left" or "take the center"',
       model: config.model,
       endpoint: config.endpoint,
-      widgetUrl: '/embed/ozwell.html',
+      widgetUrl: `${normalizedBase}/embed/ozwell.html`,
       welcomeMessage: 'Ready to play! Tell me where to place your X (e.g., "top left", "center").',
       tools: [
         {
@@ -154,7 +155,7 @@
 
     // Load widget embed script
     const loader = document.createElement('script');
-    loader.src = '/embed/ozwell-loader.js';  // Relative URL to go through proxy
+    loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
     loader.async = true;
     document.head.appendChild(loader);
 

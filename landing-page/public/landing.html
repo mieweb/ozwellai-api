@@ -215,19 +215,20 @@
     // ========================================
     // Options: 'mock' (reliable keyword-based responses, no dependencies)
     //          'ollama' (real LLM, requires Ollama running with qwen2.5:14b model)
-    const AI_MODE = 'ollama';
+    const AI_MODE = 'mock';
     // ========================================
 
     // Auto-configure based on mode
-    // NOTE: Using relative URLs to go through embedtest proxy (workaround for nginx X-Frame-Options)
-    const config = AI_MODE === 'mock'
+    // TEMPORARILY USING DIRECT URLs (NOT PROXY) TO TEST X-FRAME-OPTIONS ERROR
+    // This will cause X-Frame-Options error - see browser console!
+    const config = AI_MODE === 'ollama'
       ? {
         model: 'llama3.1:8b',
-        endpoint: '/embed/chat'
+        endpoint: `${normalizedBase}/embed/chat`
       }
       : {
         model: 'mock-ai',
-        endpoint: '/mock/chat'
+        endpoint: `${normalizedBase}/mock/chat`
       };
 
     window.OzwellChatConfig = {
@@ -236,7 +237,7 @@
       placeholder: 'Try: "update my name to Bob"',
       model: config.model,
       endpoint: config.endpoint,
-      widgetUrl: '/embed/ozwell.html',
+      widgetUrl: `${normalizedBase}/embed/ozwell.html`,
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       tools: [
         {
@@ -285,7 +286,7 @@
     };
 
     const loader = document.createElement('script');
-    loader.src = '/embed/ozwell-loader.js';  // Relative URL to go through proxy
+    loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
     loader.async = true;
     document.head.appendChild(loader);
   </script>

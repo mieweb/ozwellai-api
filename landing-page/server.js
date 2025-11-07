@@ -50,7 +50,11 @@ app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
 });
 
-// Proxy /embed/* requests to reference server to avoid X-Frame-Options cross-origin issues
+// TEMPORARILY DISABLED: Proxy /embed/* requests to reference server to avoid X-Frame-Options cross-origin issues
+// This is commented out to test X-Frame-Options error reproduction
+// Uncomment this section to fix the X-Frame-Options error with same-origin proxy
+
+/*
 app.get('/embed/*', async (req, res) => {
   const embedPath = req.path; // e.g., /embed/ozwell.html
   const targetUrl = `${referenceBaseUrl}${embedPath}`;
@@ -139,6 +143,7 @@ app.post('/mock/*', express.json(), async (req, res) => {
     res.status(500).send('Proxy error');
   }
 });
+*/
 
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
