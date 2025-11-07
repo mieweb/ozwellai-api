@@ -220,7 +220,7 @@
 
     // Auto-configure based on mode
     // NOTE: Using relative URLs to go through embedtest proxy (workaround for nginx X-Frame-Options)
-    const config = AI_MODE === 'ollama'
+    const config = AI_MODE === 'mock'
       ? {
         model: 'llama3.1:8b',
         endpoint: '/embed/chat'
