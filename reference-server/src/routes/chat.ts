@@ -16,7 +16,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           model: { type: 'string' },
-          messages: { 
+          messages: {
             type: 'array',
             items: {
               type: 'object',
@@ -26,6 +26,23 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               },
               required: ['role', 'content']
             }
+          },
+          tools: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                function: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    parameters: { type: 'object' },
+                  },
+                },
+              },
+            },
           },
           stream: { type: 'boolean' },
           max_tokens: { type: 'number' },
@@ -42,7 +59,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as any;
-    const { model, messages, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    const { model, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
 
     // Extract API key from authorization header
     const authHeader = request.headers.authorization || '';
@@ -66,13 +83,20 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
         });
 
-        const response = await ollamaClient.createChatCompletion({
+        const requestOptions: any = {
           model,
           messages,
           stream: false,
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
-        });
+        };
+
+        // Include tools if provided
+        if (tools && tools.length > 0) {
+          requestOptions.tools = tools;
+        }
+
+        const response = await ollamaClient.createChatCompletion(requestOptions);
 
         return response;
       } catch (error: any) {

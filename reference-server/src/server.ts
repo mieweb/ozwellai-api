@@ -13,7 +13,6 @@ import chatRoute from './routes/chat';
 import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
-import embedChatRoute from './routes/embed-chat';
 import mockChatRoute from './routes/mock-chat';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
@@ -136,7 +135,6 @@ async function buildServer() {
   await fastify.register(responsesRoute);
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
-  await fastify.register(embedChatRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
 
   // Serve public assets (documentation, misc)

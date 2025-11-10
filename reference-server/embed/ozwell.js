@@ -427,6 +427,12 @@ async function sendMessage(text) {
       console.log('[widget.js] Using OpenAI API with authorization');
     }
 
+    // Merge in any custom headers from config
+    if (state.config.headers) {
+      Object.assign(headers, state.config.headers);
+      console.log('[widget.js] Added custom headers from config:', state.config.headers);
+    }
+
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
     if (systemPrompt) {
@@ -591,6 +597,12 @@ async function continueConversationWithToolResult(result) {
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
+    }
+
+    // Merge in any custom headers from config
+    if (state.config.headers) {
+      Object.assign(headers, state.config.headers);
+      console.log('[widget.js] Added custom headers from config:', state.config.headers);
     }
 
     // Build messages for request (OpenAI format: system message in messages array)

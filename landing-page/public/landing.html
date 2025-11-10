@@ -215,16 +215,17 @@
     // ========================================
     // Options: 'mock' (reliable keyword-based responses, no dependencies)
     //          'ollama' (real LLM, requires Ollama running with qwen2.5:14b model)
-    const AI_MODE = 'mock';
+    const AI_MODE = 'ollama';
     // ========================================
 
     // Auto-configure based on mode
     // TEMPORARILY USING DIRECT URLs (NOT PROXY) TO TEST X-FRAME-OPTIONS ERROR
     // This will cause X-Frame-Options error - see browser console!
-    const config = AI_MODE === 'ollama'
+    const config = AI_MODE === 'mock'
       ? {
         model: 'llama3.1:8b',
-        endpoint: `${normalizedBase}/embed/chat`
+        endpoint: `${normalizedBase}/v1/chat/completions`,
+        headers: { 'Authorization': 'Bearer ollama' }
       }
       : {
         model: 'mock-ai',
@@ -237,6 +238,7 @@
       placeholder: 'Try: "update my name to Bob"',
       model: config.model,
       endpoint: config.endpoint,
+      headers: config.headers,
       widgetUrl: `${normalizedBase}/embed/ozwell.html`,
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       tools: [
