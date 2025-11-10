@@ -4,25 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ozwell Chat Widget</title>
-    <link rel="stylesheet" href="./ozwell.css" />
   </head>
   <body>
-    <div class="chat-container">
-      <div id="status" class="status">Connecting...</div>
-      <div id="messages" class="messages"></div>
-      <form id="chat-form" class="chat-form">
-        <input
-          id="chat-input"
-          class="chat-input"
-          type="text"
-          placeholder="Type a message..."
-          autocomplete="off"
-        />
-        <button type="submit" class="chat-submit">Send</button>
-      </form>
-      <button type="button" id="save-button" class="chat-save" disabled>Save & Close</button>
-      <div class="chat-footer">Powered by Ozwell</div>
-    </div>
+    <!-- Widget UI injected by ozwell.js -->
     <script type="module" src="./ozwell.js"></script>
   </body>
 </html>
