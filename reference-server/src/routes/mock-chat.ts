@@ -16,11 +16,11 @@ interface Tool {
 }
 
 interface MockChatRequest {
-  messages?: ChatMessage[];
-  message?: string;
-  model?: string;
-  system?: string;
+  model: string;
+  messages: ChatMessage[];
   tools?: Tool[];
+  temperature?: number;
+  max_tokens?: number;
 }
 
 /**
@@ -288,6 +288,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
       body: {
         type: 'object',
         properties: {
+          model: { type: 'string' },
           messages: {
             type: 'array',
             items: {
@@ -299,9 +300,6 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
               required: ['role', 'content'],
             },
           },
-          message: { type: 'string' },
-          model: { type: 'string' },
-          system: { type: 'string' },
           tools: {
             type: 'array',
             items: {
@@ -319,32 +317,18 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
               },
             },
           },
+          temperature: { type: 'number' },
+          max_tokens: { type: 'number' },
         },
+        required: ['model', 'messages'],
       },
     },
   }, async (request, reply) => {
     const body = request.body as MockChatRequest;
-    const model = body.model || 'mock-ai';
+    const model = body.model;
 
-    let messages: ChatMessage[] = [];
-
-    if (Array.isArray(body.messages) && body.messages.length > 0) {
-      messages = body.messages;
-    } else if (body.message) {
-      const systemPrompt = body.system || 'You are a helpful assistant.';
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: body.message },
-      ];
-    } else {
-      reply.code(400);
-      return {
-        error: {
-          message: 'messages or message field is required',
-          type: 'invalid_request_error',
-        },
-      };
-    }
+    // Use messages as-is (OpenAI format)
+    const messages: ChatMessage[] = body.messages;
 
     // Extract user message and context
     const userMessage = extractUserMessage(messages);
@@ -364,9 +348,16 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
 
     return {
       id: requestId,
-      model,
+      object: 'chat.completion',
       created,
-      message: assistantMessage,
+      model,
+      choices: [
+        {
+          index: 0,
+          message: assistantMessage,
+          finish_reason: 'stop'
+        }
+      ],
       usage: {
         prompt_tokens: countTokens(prompt),
         completion_tokens: countTokens(completion),

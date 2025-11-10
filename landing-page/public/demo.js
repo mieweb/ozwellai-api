@@ -175,13 +175,7 @@
     },
 
     openChat() {
-      // Mount widget iframe on first open (lazy loading)
-      if (!this.isMounted && window.OzwellChat && typeof window.OzwellChat.mount === 'function') {
-        console.log('Mounting widget iframe (lazy loading)...');
-        window.OzwellChat.mount();
-        this.isMounted = true;
-      }
-
+      // Widget iframe is already mounted (eager loading in initializeApp)
       this.wrapper.classList.remove('hidden');
       this.wrapper.classList.add('visible');
       this.button.classList.add('hidden');
@@ -236,6 +230,12 @@
     }
 
     console.log('[demo.js] OzwellChat available, initializing...');
+
+    // Mount widget immediately (eager loading) to ensure broker is ready for context sync
+    if (typeof OzwellChat.mount === 'function') {
+      console.log('[demo.js] Mounting widget iframe (eager loading)...');
+      OzwellChat.mount();
+    }
 
     // Get form elements
     const nameInput = document.getElementById('input-name');

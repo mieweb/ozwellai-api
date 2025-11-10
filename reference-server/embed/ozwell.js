@@ -421,32 +421,25 @@ async function sendMessage(text) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if OpenAI API key is provided
+    // Add Authorization header if needed
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
     }
 
-    // Build messages for request (OpenAI format includes system in messages array)
+    // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
-    if (state.config.openaiApiKey && systemPrompt) {
-      // OpenAI format: system message in messages array
+    if (systemPrompt) {
+      // Add system message at the beginning
       requestMessages.unshift({ role: 'system', content: systemPrompt });
     }
 
-    // Build request body
-    const requestBody = state.config.openaiApiKey
-      ? {
-          model: state.config.model,
-          messages: requestMessages,
-          tools: tools,
-        }
-      : {
-          model: state.config.model,
-          system: systemPrompt,
-          messages: buildMessages(),
-          tools: tools,
-        };
+    // Build request body (always use OpenAI format)
+    const requestBody = {
+      model: state.config.model || 'gpt-4o',
+      messages: requestMessages,
+      tools: tools,
+    };
 
     const response = await fetch(state.config.endpoint || '/embed/chat', {
       method: 'POST',
@@ -468,26 +461,14 @@ async function sendMessage(text) {
       throw new Error(payload.error.message || 'Model request failed');
     }
 
-    if (payload.warning) {
-      addMessage('system', payload.warning);
+    // Parse OpenAI response format
+    const choice = payload.choices?.[0];
+    if (!choice) {
+      throw new Error('Invalid response format: missing choices array');
     }
 
-    // Parse response based on format (OpenAI vs Ollama)
-    let assistantContent;
-    let toolCalls = null;
-
-    if (payload.choices && payload.choices[0]) {
-      // OpenAI format
-      const choice = payload.choices[0];
-      assistantContent = choice.message?.content || '';
-      toolCalls = choice.message?.tool_calls;
-    } else if (payload.message) {
-      // Ollama format
-      assistantContent = payload.message.content || '';
-      toolCalls = payload.message.tool_calls;
-    } else {
-      assistantContent = '(no response)';
-    }
+    const assistantContent = choice.message?.content || '';
+    const toolCalls = choice.message?.tool_calls || null;
 
     // Handle tool calls (dynamic - works with any tool from parent config)
     if (toolCalls && toolCalls.length > 0) {
@@ -606,28 +587,25 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if OpenAI API key is provided
+    // Add Authorization header if needed
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
     }
 
-    // Build messages for request
+    // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
+    if (systemPrompt) {
+      // Add system message at the beginning
+      requestMessages.unshift({ role: 'system', content: systemPrompt });
+    }
 
-    // Build request body
-    const requestBody = state.config.openaiApiKey
-      ? {
-          model: state.config.model,
-          messages: requestMessages,
-          tools: tools,
-        }
-      : {
-          model: state.config.model,
-          system: systemPrompt,
-          messages: requestMessages,
-          tools: tools,
-        };
+    // Build request body (always use OpenAI format)
+    const requestBody = {
+      model: state.config.model || 'gpt-4o',
+      messages: requestMessages,
+      tools: tools,
+    };
 
     console.log('[widget.js] Sending tool result to API:', requestBody);
 
@@ -651,23 +629,13 @@ async function continueConversationWithToolResult(result) {
       throw new Error(payload.error.message || 'Model request failed');
     }
 
-    if (payload.warning) {
-      addMessage('system', payload.warning);
+    // Parse OpenAI response format
+    const choice = payload.choices?.[0];
+    if (!choice) {
+      throw new Error('Invalid response format: missing choices array');
     }
 
-    // Parse response based on format (OpenAI vs Ollama)
-    let assistantContent;
-
-    if (payload.choices && payload.choices[0]) {
-      // OpenAI format
-      const choice = payload.choices[0];
-      assistantContent = choice.message?.content || '';
-    } else if (payload.message) {
-      // Ollama format
-      assistantContent = payload.message.content || '';
-    } else {
-      assistantContent = '(no response)';
-    }
+    const assistantContent = choice.message?.content || '';
 
     // Add assistant's final response to conversation
     const assistantMessage = {
