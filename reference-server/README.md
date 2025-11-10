@@ -82,10 +82,9 @@ See [embed/README.md](embed/README.md) for full documentation.
 
 ### Embed Widget
 - `GET /embed/ozwell-loader.js` - Widget loader script
-- `GET /embed/ozwell.html` - Widget iframe HTML
-- `GET /embed/ozwell.js` - Widget client-side logic
-- `GET /embed/ozwell.css` - Widget styles
-- `POST /embed/chat` - Widget chat endpoint
+- `GET /embed/ozwell.html` - Widget iframe entry point
+- `GET /embed/ozwell.js` - Self-contained widget code
+- `POST /embed/chat` - Chat endpoint for widget (streaming)
 
 ### Files
 - `POST /v1/files` - Upload file
@@ -244,17 +243,13 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 
 ## Configuration
 
-### Core Server Environment Variables
+Environment variables:
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
-
-### Embed Chat Environment Variables
-- `EMBED_CHAT_API_KEY` - API key for Ozwell SDK (default: `ollama`)
-- `EMBED_CHAT_BASE_URL` - Base URL for external LLM API (optional)
-- `EMBED_CHAT_MODEL` - Default model name (default: `llama3`)
-
-When `EMBED_CHAT_API_KEY=ollama`, the chat endpoint expects Ollama running at `http://127.0.0.1:11434`. If not available, falls back to deterministic text generator.
+- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://localhost:11434)
+- `AI_MODE` - AI mode for embed chat: 'ollama' or 'mock' (default: ollama)
+- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: llama3.2)
 
 ## Error Handling
 
@@ -291,23 +286,21 @@ The server is designed for deterministic testing:
 
 ```
 src/
-├── server.ts           # Main server entry point
+├── server.ts           # Main server entry point that initializes a Fastify server with OpenAPI/Swagger documentation, registers all API routes, sets up middleware (CORS, multipart uploads), and handles global error responses and authentication. Serves as the central orchestration file for the entire reference server, providing a complete OpenAI-compatible API implementation with proper documentation, routing, and error handling infrastructure.
 ├── routes/             # API endpoint handlers
-│   ├── chat.ts         # /v1/chat/completions endpoint
-│   ├── embeddings.ts   # /v1/embeddings endpoint
-│   ├── files.ts        # /v1/files/* endpoints
-│   ├── models.ts       # /v1/models endpoint
-│   ├── responses.ts    # /v1/responses endpoint
-│   └── embed-chat.ts   # /embed/chat endpoint
+│   ├── chat.ts         # Implements the `/v1/chat/completions` endpoint supporting both streaming and non-streaming chat completions, with OpenAI-compatible request/response formats including message handling, model validation, and token usage tracking. Provides the core conversational AI functionality that mimics OpenAI's chat completions API, enabling clients to interact with language models for generating human-like responses in chat applications.
+│   ├── embeddings.ts   # Handles the `/v1/embeddings` endpoint for generating vector embeddings from text inputs, supporting multiple embedding models with configurable dimensions and batch processing. Enables text-to-vector conversion for semantic search, similarity matching, clustering, and other NLP tasks that require numerical representations of text for machine learning applications.
+│   ├── files.ts        # Manages file operations through multiple endpoints (`/v1/files`) including upload, listing, retrieval, content download, and deletion, with persistent storage in a local data directory. Supports file management capabilities for AI applications, allowing clients to upload training data, documents, images, or other assets that language models or processing pipelines might need to access.
+│   ├── models.ts       # Provides the `/v1/models` endpoint that returns a hardcoded list of available AI models (GPT-4 variants and embedding models) with their metadata. Allows API clients to discover and enumerate what AI models are available for use, following OpenAI's API conventions for model discovery and selection.
+│   ├── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
+│   ├── embed-chat.ts   # Handles the `/embed/chat` endpoint for the embeddable widget, supporting streaming chat with Ollama integration and mock AI mode for testing. Provides context-aware chat functionality for iframe-embedded widgets with state synchronization support.
+│   └── mock-chat.ts    # Provides mock AI responses for testing and demos without requiring Ollama. Generates deterministic responses based on input patterns for predictable testing scenarios.
 └── util/               # Utility functions
-    └── index.ts        # Text generation, embeddings, token counting, etc.
-
-embed/
-├── ozwell-loader.js    # Widget loader script
-├── ozwell.html         # Widget iframe content
-├── ozwell.js           # Widget client-side logic
-├── ozwell.css          # Widget styles
-└── README.md           # Widget documentation
+    └── index.ts        # Contains shared utility functions including a deterministic text generator for testing, embedding vector generation, unique ID creation, token counting, error response formatting, and basic authentication validation. Centralizes common functionality used across multiple routes to ensure consistency, reduce code duplication, and provide reusable components for text generation, vector math, and API utilities.
+embed/                  # Embeddable chat widget files
+├── ozwell-loader.js    # Widget loader script to be embedded in parent pages
+├── ozwell.html         # Widget iframe entry point (minimal HTML loader)
+└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and IframeSyncClient
 ```
 
 ### Adding New Endpoints
