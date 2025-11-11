@@ -129,6 +129,13 @@ async function buildServer() {
     return fastify.swagger();
   });
 
+  // Allow widget to be embedded on any website (CSP frame-ancestors)
+  fastify.addHook('onSend', async (request, reply) => {
+    if (request.url.startsWith('/embed/')) {
+      reply.header('Content-Security-Policy', 'frame-ancestors *');
+    }
+  });
+
   // Register API routes
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
