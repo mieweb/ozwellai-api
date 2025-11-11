@@ -289,7 +289,7 @@
 
     const loader = document.createElement('script');
     loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
-    // NOT async - must load before demo.js to avoid race condition
+    loader.async = true;
     document.head.appendChild(loader);
   </script>
 

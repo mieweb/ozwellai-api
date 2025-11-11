@@ -230,7 +230,8 @@ let winner = null;
 // Initialize OzwellChat when available
 function initStateBroker() {
   if (typeof OzwellChat === 'undefined') {
-    console.warn('[tictactoe-app.js] OzwellChat not available yet');
+    console.log('[tictactoe-app.js] Waiting for OzwellChat...');
+    setTimeout(initStateBroker, 100);
     return;
   }
 

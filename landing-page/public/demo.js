@@ -225,7 +225,8 @@
   function initializeApp() {
     // Check if OzwellChat is available
     if (typeof OzwellChat === 'undefined') {
-      console.error('[demo.js] OzwellChat not loaded!');
+      console.log('[demo.js] Waiting for OzwellChat...');
+      setTimeout(initializeApp, 100);
       return;
     }
 
