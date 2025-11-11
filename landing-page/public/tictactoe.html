@@ -158,7 +158,7 @@
     // Load widget embed script
     const loader = document.createElement('script');
     loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
-    loader.async = true;
+    // NOT async - must load before tictactoe-app.js to avoid race condition
     document.head.appendChild(loader);
 
     console.log('Tic-tac-toe configured with', AI_MODE, 'mode');
