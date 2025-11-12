@@ -374,7 +374,8 @@
 
     // Helper: Get widget iframe
     function getWidgetIframe() {
-      return document.querySelector('iframe[src*="ozwell.html"]');
+      // Use OzwellChat.iframe directly (works with both src and srcdoc iframes)
+      return window.OzwellChat?.iframe || null;
     }
 
     // Helper: Send tool result back to widget
