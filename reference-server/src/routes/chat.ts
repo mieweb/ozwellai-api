@@ -16,7 +16,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           model: { type: 'string' },
-          messages: {
+          messages: { 
             type: 'array',
             items: {
               type: 'object',
