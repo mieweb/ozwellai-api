@@ -9,8 +9,7 @@ Add this to any HTML page:
 ```html
 <script>
   window.OzwellChatConfig = {
-    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell.html',
-    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
+    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions'
   };
 </script>
 <script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
@@ -24,8 +23,8 @@ Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `widgetUrl` | string | `/embed/ozwell.html` | URL to widget iframe |
-| `endpoint` | string | `/embed/chat` | Chat API endpoint |
+| `widgetUrl` | string | `/embed/ozwell.html` | Base URL for widget files |
+| `endpoint` | string | `/v1/chat/completions` | Chat API endpoint |
 | `model` | string | `'llama3'` | Model name for requests |
 | `system` | string | `'You are a helpful assistant.'` | Custom system prompt |
 | `tools` | array | `[]` | MCP tools (OpenAI format) |
@@ -34,13 +33,11 @@ Call `window.OzwellChat.mount()` to initialize the widget iframe when ready.
 ## API Endpoints
 
 **Widget Assets (GET):**
-- `/embed/ozwell-loader.js` - Loader script
-- `/embed/ozwell.html` - Widget iframe HTML
-- `/embed/ozwell.js` - Widget logic
-- `/embed/ozwell.css` - Widget styles
+- `/embed/ozwell-loader.js` - Loader script (creates iframe with inline HTML)
+- `/embed/ozwell.js` - Widget logic (includes CSS)
 
 **Chat Endpoints (POST):**
-- `/embed/chat` - Proxies to Ollama or external LLM
+- `/v1/chat/completions` - OpenAI-spec endpoint (Ollama/OpenAI)
 - `/mock/chat` - Keyword-based responses (no LLM required)
 
 ## MCP Tool Calling
@@ -86,7 +83,7 @@ window.addEventListener('message', (event) => {
       document.getElementById('name').value = payload.name;
 
       // Send result back to widget
-      const iframe = document.querySelector('iframe[src*="ozwell.html"]');
+      const iframe = window.OzwellChat.iframe;
       iframe.contentWindow.postMessage({
         source: 'ozwell-chat-parent',
         type: 'tool_result',
