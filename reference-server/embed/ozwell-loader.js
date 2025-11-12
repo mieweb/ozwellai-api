@@ -295,7 +295,23 @@ class IframeSyncBroker {
 
     const iframe = document.createElement('iframe');
     const widgetSrc = options.src || config.widgetUrl || config.src || '/embed/ozwell.html';
-    iframe.src = widgetSrc;
+
+    // Extract base URL for loading ozwell.js (remove /ozwell.html from path)
+    const widgetBaseUrl = widgetSrc.replace(/\/[^/]*$/, '');
+
+    // Use srcdoc instead of src to inline HTML (eliminates ozwell.html file)
+    iframe.srcdoc = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ozwell Chat Widget</title>
+  </head>
+  <body>
+    <script type="module" src="${widgetBaseUrl}/ozwell.js"></script>
+  </body>
+</html>`;
+
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
     iframe.style.border = '0';
