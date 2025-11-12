@@ -107,7 +107,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // Create prompt from messages
     const prompt = messages.map((msg: any) => `${msg.role}: ${msg.content}`).join('\n');
-
     const requestId = generateId('chatcmpl');
     const created = Math.floor(Date.now() / 1000);
 
