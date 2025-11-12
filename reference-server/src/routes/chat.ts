@@ -16,7 +16,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           model: { type: 'string' },
-          messages: {
+          messages: { 
             type: 'array',
             items: {
               type: 'object',
@@ -126,7 +126,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
 
       const generator = SimpleTextGenerator.generateStream(prompt, max_tokens);
-
       // Send initial chunk with role
       const initialChunk = {
         id: requestId,
