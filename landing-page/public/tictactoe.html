@@ -91,34 +91,13 @@
     const referenceBaseUrl = '__REFERENCE_BASE_URL__';
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
 
-    // ========================================
-    // CONFIGURATION: Change this one line to switch between mock AI and Ollama
-    // ========================================
-    // Options: 'mock' (reliable keyword-based responses, no dependencies)
-    //          'ollama' (real LLM, requires Ollama running with llama3.1:8b model)
-    const AI_MODE = 'mock';
-    // ========================================
-
-    // Auto-configure based on mode
-    const config = AI_MODE === 'ollama'
-      ? {
-        model: 'llama3.1:8b',
-        endpoint: `${normalizedBase}/v1/chat/completions`,
-        headers: { 'Authorization': 'Bearer ollama' }
-      }
-      : {
-        model: 'mock-ai',
-        endpoint: `${normalizedBase}/mock/chat`
-      };
-
     // Configure Ozwell chat widget
     window.OzwellChatConfig = {
       containerId: 'chat-container',
       title: 'Ozwell Assistant',
       placeholder: 'Try: "I\'ll go top left" or "take the center"',
-      model: config.model,
-      endpoint: config.endpoint,
-      headers: config.headers,
+      model: 'mock-ai',
+      endpoint: `${normalizedBase}/mock/chat`,
       welcomeMessage: 'Ready to play! Tell me where to place your X (e.g., "top left", "center").',
       tools: [
         {

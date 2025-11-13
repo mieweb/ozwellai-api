@@ -36,26 +36,30 @@ The server will start at `http://localhost:3000`
 
 ### Embeddable Chat Widget
 
-Add the widget to any page:
+**Simple (one line):**
+```html
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
 
+**Advanced (with config):**
 ```html
 <script>
   window.OzwellChatConfig = {
-    widgetUrl: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell.html',
-    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/embed/chat'
+    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
+    welcomeMessage: 'Hi! How can I help?'
   };
 </script>
-<script async src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
 
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
 - Change one line in the HTML to switch to Ollama mode
-- Ollama mode uses `/embed/chat` endpoint which proxies to local Ollama instance
+- Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
 - Requires Ollama running with `llama3.1:8b` model
 
-**For deployment:** Run Ollama in your container or set `EMBED_CHAT_BASE_URL` to your LLM endpoint for real responses.
+**For deployment:** Run Ollama in your container or set `OLLAMA_BASE_URL` to your LLM endpoint for real responses.
 
 See [embed/README.md](embed/README.md) for full documentation.
 
@@ -81,10 +85,8 @@ See [embed/README.md](embed/README.md) for full documentation.
 - `POST /v1/embeddings` - Generate text embeddings
 
 ### Embed Widget
-- `GET /embed/ozwell-loader.js` - Widget loader script
-- `GET /embed/ozwell.html` - Widget iframe entry point
-- `GET /embed/ozwell.js` - Self-contained widget code
-- `POST /embed/chat` - Chat endpoint for widget (streaming)
+- `GET /embed/ozwell-loader.js` - Widget loader script (creates iframe with inline HTML)
+- `GET /embed/ozwell.js` - Self-contained widget code (includes CSS)
 
 ### Files
 - `POST /v1/files` - Upload file
