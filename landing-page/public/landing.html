@@ -45,8 +45,7 @@
         <h3>1. Add the Widget Script</h3>
         <pre class="code-block"><code>&lt;script&gt;
   window.OzwellChatConfig = {
-    endpoint: '/mock/chat',
-    widgetUrl: '/embed/ozwell.html'
+    endpoint: '/mock/chat'
   };
 &lt;/script&gt;
 &lt;script src="/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
@@ -237,7 +236,6 @@
       model: config.model,
       endpoint: config.endpoint,
       headers: config.headers,
-      widgetUrl: `${normalizedBase}/embed/ozwell.html`,
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       system: 'You are a helpful assistant with access to the user\'s information. When the user asks questions about their information (e.g., "what is my name?"), answer directly from the context provided - do NOT call any tools. Only use update tools when the user explicitly asks to UPDATE, CHANGE, or MODIFY their information (e.g., "update my name to Bob").',
       tools: [

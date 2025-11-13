@@ -273,7 +273,7 @@ const state = {
     title: 'Ozwell',
     placeholder: 'Ask a question...',
     model: 'llama3',
-    endpoint: '/embed/chat',
+    endpoint: '/v1/chat/completions',
   },
   messages: [],
   sending: false,
@@ -447,7 +447,7 @@ async function sendMessage(text) {
       tools: tools,
     };
 
-    const response = await fetch(state.config.endpoint || '/embed/chat', {
+    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
@@ -621,7 +621,7 @@ async function continueConversationWithToolResult(result) {
 
     console.log('[widget.js] Sending tool result to API:', requestBody);
 
-    const response = await fetch(state.config.endpoint || '/embed/chat', {
+    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),

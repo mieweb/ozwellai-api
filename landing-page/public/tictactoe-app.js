@@ -18,7 +18,6 @@
     header: null,
     isDragging: false,
     isMinimized: false,
-    isMounted: false,
     currentX: 0,
     currentY: 0,
     initialX: 0,
@@ -170,13 +169,7 @@
     },
 
     openChat() {
-      // Mount widget iframe on first open (lazy loading)
-      if (!this.isMounted && window.OzwellChat && typeof window.OzwellChat.mount === 'function') {
-        console.log('Mounting widget iframe (lazy loading)...');
-        window.OzwellChat.mount();
-        this.isMounted = true;
-      }
-
+      // Widget auto-mounts via ozwell-loader.js (no manual mount needed)
       this.wrapper.classList.remove('hidden');
       this.wrapper.classList.add('visible');
       this.button.classList.add('hidden');

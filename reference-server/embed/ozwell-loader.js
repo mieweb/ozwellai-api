@@ -246,7 +246,7 @@ class IframeSyncBroker {
  * Main API for embedding the Ozwell chat widget.
  *
  * Usage:
- *   1. Configure: window.OzwellChatConfig = { endpoint: '/embed/chat', tools: [...] }
+ *   1. Configure: window.OzwellChatConfig = { endpoint: '/v1/chat/completions', tools: [...] }
  *   2. Mount: OzwellChat.mount()
  *   3. Update context (optional): OzwellChat.updateContext({ formData: {...} })
  */
@@ -256,7 +256,7 @@ class IframeSyncBroker {
     title: 'Ozwell Assistant',
     placeholder: 'Ask a question...',
     model: 'llama3',
-    endpoint: '/embed/chat',
+    endpoint: '/v1/chat/completions',
     widgetUrl: '/embed/ozwell.html',
   };
 
@@ -498,4 +498,17 @@ class IframeSyncBroker {
   // Export API for manual initialization
   // Note: IframeSyncBroker/Client are NOT exposed - use updateContext() instead
   window.OzwellChat = api;
+
+  // Auto-mount widget unless explicitly disabled
+  const config = readGlobalConfig();
+  if (config.autoMount !== false) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        api.mount();
+      });
+    } else {
+      // DOM already loaded, mount immediately
+      api.mount();
+    }
+  }
 })();

@@ -1,5 +1,5 @@
 /**
- * demo.js - Consolidated JavaScript for Ozwell MCP Tools Demo
+ * landing.js - Consolidated JavaScript for Ozwell MCP Tools Demo
  * Combines: chat-wrapper.js, landing-app.js
  *
  * Features:
@@ -220,23 +220,19 @@
 (function() {
   'use strict';
 
-  console.log('[demo.js] Initializing MCP Tools Demo with iframe-sync...');
+  console.log('[landing.js] Initializing MCP Tools Demo with iframe-sync...');
 
   function initializeApp() {
     // Check if OzwellChat is available
     if (typeof OzwellChat === 'undefined') {
-      console.log('[demo.js] Waiting for OzwellChat...');
+      console.log('[landing.js] Waiting for OzwellChat...');
       setTimeout(initializeApp, 100);
       return;
     }
 
-    console.log('[demo.js] OzwellChat available, initializing...');
+    console.log('[landing.js] OzwellChat available, initializing...');
 
-    // Mount widget immediately (eager loading) to ensure broker is ready for context sync
-    if (typeof OzwellChat.mount === 'function') {
-      console.log('[demo.js] Mounting widget iframe (eager loading)...');
-      OzwellChat.mount();
-    }
+    // Widget auto-mounts via ozwell-loader.js (no manual mount needed)
 
     // Get form elements
     const nameInput = document.getElementById('input-name');
@@ -246,7 +242,7 @@
     const updateButton = document.getElementById('update-context-btn');
 
     if (!nameInput || !addressInput || !zipInput || !eventLog || !updateButton) {
-      console.error('[demo.js] Required elements not found');
+      console.error('[landing.js] Required elements not found');
       return;
     }
 
@@ -320,7 +316,7 @@
     // Function to update state when form changes
     function updateFormState() {
       const state = getFormState();
-      console.log('[demo.js] Updating context via OzwellChat.updateContext():', state);
+      console.log('[landing.js] Updating context via OzwellChat.updateContext():', state);
 
       logEvent(
         'iframe-sync',
@@ -364,7 +360,7 @@
 
     // Button click handler
     updateButton.addEventListener('click', () => {
-      console.log('[demo.js] Update button clicked - syncing state to widget');
+      console.log('[landing.js] Update button clicked - syncing state to widget');
       logEvent('postmessage', '[User Action] Manual sync triggered', 'Update button clicked');
       updateFormState();
     });
@@ -382,7 +378,7 @@
     function sendToolResult(result) {
       const widgetIframe = getWidgetIframe();
       if (!widgetIframe || !widgetIframe.contentWindow) {
-        console.error('[demo.js] Cannot send tool result: widget iframe not found');
+        console.error('[landing.js] Cannot send tool result: widget iframe not found');
         return;
       }
 
@@ -392,7 +388,7 @@
         result: result
       }, '*');
 
-      console.log('[demo.js] ✓ Tool result sent to widget:', result);
+      console.log('[landing.js] ✓ Tool result sent to widget:', result);
       logEvent(
         'postmessage',
         '[postMessage] Tool result sent',
@@ -403,7 +399,7 @@
     // MCP Tool Handler Registry
     const toolHandlers = {
       'update_name': function(args) {
-        console.log('[demo.js] ✓ Executing update_name tool handler:', args);
+        console.log('[landing.js] ✓ Executing update_name tool handler:', args);
 
         logEvent(
           'tool-call',
@@ -418,7 +414,7 @@
           const inputEvent = new Event('input', { bubbles: true });
           nameInput.dispatchEvent(inputEvent);
 
-          console.log('[demo.js] ✓ Name updated successfully to:', args.name);
+          console.log('[landing.js] ✓ Name updated successfully to:', args.name);
 
           logEvent(
             'postmessage',
@@ -443,7 +439,7 @@
       },
 
       'update_address': function(args) {
-        console.log('[demo.js] ✓ Executing update_address tool handler:', args);
+        console.log('[landing.js] ✓ Executing update_address tool handler:', args);
 
         logEvent(
           'tool-call',
@@ -458,7 +454,7 @@
           const inputEvent = new Event('input', { bubbles: true });
           addressInput.dispatchEvent(inputEvent);
 
-          console.log('[demo.js] ✓ Address updated successfully to:', args.address);
+          console.log('[landing.js] ✓ Address updated successfully to:', args.address);
 
           logEvent(
             'postmessage',
@@ -483,7 +479,7 @@
       },
 
       'update_zip': function(args) {
-        console.log('[demo.js] ✓ Executing update_zip tool handler:', args);
+        console.log('[landing.js] ✓ Executing update_zip tool handler:', args);
 
         logEvent(
           'tool-call',
@@ -498,7 +494,7 @@
           const inputEvent = new Event('input', { bubbles: true });
           zipInput.dispatchEvent(inputEvent);
 
-          console.log('[demo.js] ✓ Zip code updated successfully to:', args.zipCode);
+          console.log('[landing.js] ✓ Zip code updated successfully to:', args.zipCode);
 
           logEvent(
             'postmessage',
@@ -532,7 +528,7 @@
 
       // Handle tool calls using registry
       if (data.type === 'tool_call') {
-        console.log('[demo.js] → Received tool call from widget:', data);
+        console.log('[landing.js] → Received tool call from widget:', data);
 
         logEvent(
           'postmessage',
@@ -544,7 +540,7 @@
         if (handler) {
           handler(data.payload);
         } else {
-          console.warn('[demo.js] ⚠️  No handler registered for tool:', data.tool);
+          console.warn('[landing.js] ⚠️  No handler registered for tool:', data.tool);
           logEvent(
             'postmessage',
             '[Warning] No handler for tool',
@@ -554,9 +550,9 @@
       }
     });
 
-    console.log('[demo.js] Event listeners attached to form inputs');
-    console.log('[demo.js] Tool handlers registered:', Object.keys(toolHandlers));
-    console.log('[demo.js] ✓ Initialization complete! Ready for MCP tool calls.');
+    console.log('[landing.js] Event listeners attached to form inputs');
+    console.log('[landing.js] Tool handlers registered:', Object.keys(toolHandlers));
+    console.log('[landing.js] ✓ Initialization complete! Ready for MCP tool calls.');
 
     logEvent('iframe-sync', '[System] Initialization complete', 'Ready for MCP tool calls');
   }
