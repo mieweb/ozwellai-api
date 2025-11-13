@@ -251,13 +251,25 @@ class IframeSyncBroker {
  *   3. Update context (optional): OzwellChat.updateContext({ formData: {...} })
  */
 (function () {
+  // Auto-detect base URL from script location
+  let autoDetectedBase = '';
+  try {
+    if (document.currentScript && document.currentScript.src) {
+      const scriptUrl = new URL(document.currentScript.src);
+      autoDetectedBase = `${scriptUrl.protocol}//${scriptUrl.host}`;
+      console.log('[OzwellChat] Auto-detected base URL:', autoDetectedBase);
+    }
+  } catch (e) {
+    console.warn('[OzwellChat] Auto-detection failed, using relative paths:', e);
+  }
+
   const DEFAULT_DIMENSIONS = { width: 360, height: 420 };
   const DEFAULT_CONFIG = {
     title: 'Ozwell Assistant',
     placeholder: 'Ask a question...',
     model: 'llama3',
-    endpoint: '/v1/chat/completions',
-    widgetUrl: '/embed/ozwell.html',
+    endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
+    widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
   };
 
   const state = {

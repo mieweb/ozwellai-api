@@ -12,6 +12,8 @@ Add this to your HTML:
 
 The chat button appears automatically in the bottom-right corner.
 
+**How it works:** The widget auto-detects where the script was loaded from and uses that as the base URL for the chat endpoint and widget files. Works with any hosting setup!
+
 ## With Configuration
 
 Customize the widget with `window.OzwellChatConfig`:
@@ -27,7 +29,7 @@ Customize the widget with `window.OzwellChatConfig`:
 
   <script>
     window.OzwellChatConfig = {
-      endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
+      // endpoint auto-detected (or specify custom endpoint)
       model: 'llama3',
       welcomeMessage: 'Hi! How can I help you today?',
       system: 'You are a helpful assistant.'
@@ -53,7 +55,7 @@ Enable page interactions using MCP tools:
 
   <script>
     window.OzwellChatConfig = {
-      endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
+      // endpoint auto-detected from script URL
       tools: [
         {
           type: 'function',
@@ -102,7 +104,8 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `autoMount` | boolean | `true` | Auto-mount widget on page load |
-| `endpoint` | string | `/v1/chat/completions` | Chat API endpoint |
+| `endpoint` | string | (auto-detected) | Chat API endpoint (auto-detected from script URL) |
+| `widgetUrl` | string | (auto-detected) | Widget iframe URL (auto-detected from script URL) |
 | `model` | string | `'llama3'` | Model name |
 | `system` | string | `'You are a helpful assistant.'` | System prompt |
 | `tools` | array | `[]` | MCP tools (OpenAI format) |
