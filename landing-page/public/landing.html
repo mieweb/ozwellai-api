@@ -50,6 +50,7 @@
       <!-- Step 2 -->
       <div class="integration-step">
         <h3>2. Define MCP Tools (Optional)</h3>
+        <p>Tell the widget what actions are available:</p>
         <pre class="code-block"><code>&lt;script&gt;
   window.OzwellChatConfig = {
     tools: [{
@@ -72,12 +73,13 @@
 
       <!-- Step 3 -->
       <div class="integration-step">
-        <h3>3. Handle Tool Calls</h3>
+        <h3>3. Implement Tool Handlers (Your Code)</h3>
+        <p>Write code to execute tools when AI calls them:</p>
         <pre class="code-block"><code>window.addEventListener('message', (e) => {
   if (e.data.source === 'ozwell-chat-widget' &&
       e.data.type === 'tool_call') {
 
-    // Execute the tool
+    // Execute the tool on YOUR page
     if (e.data.tool === 'update_name') {
       nameInput.value = e.data.payload.name;
     }
