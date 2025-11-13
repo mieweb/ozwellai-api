@@ -43,40 +43,51 @@
       <!-- Step 1 -->
       <div class="integration-step">
         <h3>1. Add the Widget Script</h3>
-        <pre class="code-block"><code>&lt;script&gt;
-  window.OzwellChatConfig = {
-    endpoint: '/mock/chat'
-  };
-&lt;/script&gt;
-&lt;script src="/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
+        <pre class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
+        <p>That's it for basic chat! Add config for more features:</p>
       </div>
 
       <!-- Step 2 -->
       <div class="integration-step">
-        <h3>2. Define MCP Tools</h3>
-        <pre class="code-block"><code>window.OzwellChatConfig = {
-  ...,
-  tools: [{
-    name: 'update_name',
-    description: 'Updates user name',
-    parameters: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' }
-      },
-      required: ['name']
-    }
-  }]
-};</code></pre>
+        <h3>2. Define MCP Tools (Optional)</h3>
+        <pre class="code-block"><code>&lt;script&gt;
+  window.OzwellChatConfig = {
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'update_name',
+        description: 'Updates user name',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' }
+          },
+          required: ['name']
+        }
+      }
+    }]
+  };
+&lt;/script&gt;</code></pre>
       </div>
 
       <!-- Step 3 -->
       <div class="integration-step">
         <h3>3. Handle Tool Calls</h3>
         <pre class="code-block"><code>window.addEventListener('message', (e) => {
-  if (e.data.type === 'tool_call') {
-    // Update your form/UI
-    nameInput.value = e.data.payload.name;
+  if (e.data.source === 'ozwell-chat-widget' &&
+      e.data.type === 'tool_call') {
+
+    // Execute the tool
+    if (e.data.tool === 'update_name') {
+      nameInput.value = e.data.payload.name;
+    }
+
+    // Send result back to widget
+    OzwellChat.iframe.contentWindow.postMessage({
+      source: 'ozwell-chat-parent',
+      type: 'tool_result',
+      result: { success: true }
+    }, '*');
   }
 });</code></pre>
       </div>
@@ -85,11 +96,11 @@
       <div class="integration-step">
         <h3>How It Works</h3>
         <ul class="how-it-works-list">
-          <li>Parent page defines tools and handlers</li>
-          <li>Widget receives context via iframe-sync</li>
-          <li>LLM calls tools based on user intent</li>
-          <li>Tool calls sent via postMessage to parent</li>
-          <li>Parent executes handlers and updates UI</li>
+          <li>Widget auto-mounts and auto-detects endpoint</li>
+          <li>LLM calls tools when user requests actions</li>
+          <li>Tool calls sent to parent via postMessage</li>
+          <li>Parent executes and sends result back</li>
+          <li>Widget shows natural confirmation</li>
         </ul>
       </div>
     </div>

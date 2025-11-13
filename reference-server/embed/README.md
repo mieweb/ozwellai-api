@@ -29,6 +29,28 @@ Customize the widget with `window.OzwellChatConfig`:
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
+## Getting Text Back from Widget
+
+Use the AI to improve text, then get it back with the "Save & Close" button:
+
+```html
+<textarea id="my-note">Write something...</textarea>
+
+<script>
+  window.OzwellChatConfig = { model: 'llama3' };
+
+  // Listen for Save & Close button
+  document.addEventListener('ozwell-chat-insert', (event) => {
+    document.getElementById('my-note').value = event.detail.text;
+  });
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**How it works:** User asks AI to improve their text, clicks "Save & Close" in widget, and the AI's response gets inserted into the textarea.
+
+**Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
+
 ## Providing Page Context
 
 Send page data to the widget so the AI can answer questions about current state:
