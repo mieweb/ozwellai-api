@@ -59,6 +59,7 @@ jobs:
 
       - name: Start server (smoke test)
         working-directory: ${{ inputs.working-directory }}
+        shell: bash
         run: |
           # Start server in background
           npm start &
