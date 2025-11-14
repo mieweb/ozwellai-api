@@ -266,7 +266,7 @@ if (document.readyState === 'loading') {
   // Try immediately, will retry on window load if not available
   initStateBroker();
   window.addEventListener('load', () => {
-    if (!stateBroker) initStateBroker();
+    // Removed erroneous stateBroker reference; initStateBroker() already handles retries.
   });
 }
 
