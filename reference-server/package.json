@@ -10,8 +10,8 @@
     "spec": "node scripts/write-spec.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "test": "node --test test/**/*.test.mjs",
-    "test:watch": "node --test --watch test/**/*.test.mjs",
+    "test": "node --test test/",
+    "test:watch": "node --test --watch test/",
     "clean": "rm -rf dist"
   },
   "dependencies": {
