@@ -1,0 +1,700 @@
+/**
+ * demo.css - Consolidated styles for Ozwell MCP Tools Demo
+ * Combines: chat-wrapper.css, landing-page.css, landing.css
+ */
+
+/* ============================================
+   CHAT WRAPPER STYLES
+   ============================================ */
+
+/* Floating Chat Button */
+.ozwell-chat-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #0066ff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 9998;
+}
+
+.ozwell-chat-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+}
+
+.ozwell-chat-button:active {
+  transform: scale(0.95);
+}
+
+.ozwell-chat-button.hidden {
+  display: none;
+}
+
+/* Chat Window Wrapper */
+.ozwell-chat-wrapper {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  height: 520px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  transition: opacity 0.3s, transform 0.3s;
+  overflow: hidden;
+}
+
+.ozwell-chat-wrapper.hidden {
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+  pointer-events: none;
+}
+
+.ozwell-chat-wrapper.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* Chat Header */
+.ozwell-chat-header {
+  background: #0066ff;
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ozwell-chat-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-control-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.ozwell-chat-control-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ozwell-chat-control-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Chat Content Area */
+.ozwell-chat-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ozwell-chat-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Minimized State */
+.ozwell-chat-wrapper.minimized {
+  height: 52px;
+  width: 200px;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-content {
+  display: none;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-header {
+  cursor: pointer;
+}
+
+/* Dragging State */
+.ozwell-chat-wrapper.dragging {
+  cursor: move;
+  user-select: none;
+}
+
+/* ============================================
+   LANDING PAGE STYLES
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: #fafafa;
+  color: #1a1a1a;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* Integration Toggle Button (Vertical on left edge) */
+.integration-toggle-btn {
+  position: fixed;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+  transform-origin: left center;
+  background: #0066ff;
+  color: white;
+  border: none;
+  padding: 16px 32px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  z-index: 9998;
+  border-radius: 0 0 10px 10px;
+  box-shadow: none;
+  transition: all 0.2s;
+}
+
+.integration-toggle-btn:hover {
+  background: #0052cc;
+  box-shadow: none;
+  transform: translateY(-50%) rotate(-90deg) translateX(-3px);
+}
+
+/* Integration Panel (Slide-out from left) */
+.integration-panel {
+  position: fixed;
+  left: -450px;
+  top: 0;
+  width: 450px;
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  box-shadow: none;
+  z-index: 9999;
+  transition: left 0.3s ease-in-out;
+  overflow-y: auto;
+}
+
+.integration-panel.open {
+  left: 0;
+}
+
+.integration-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.integration-panel-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.integration-close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #6b7280;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.integration-close-btn:hover {
+  background: #f3f4f6;
+  color: #1a1a1a;
+}
+
+.integration-panel-content {
+  padding: 2rem;
+}
+
+.integration-step {
+  margin-bottom: 3rem;
+}
+
+.integration-step h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 1rem;
+}
+
+.code-block {
+  background: #f3f4f6;
+  color: #1a1a1a;
+  padding: 1.5rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.code-block code {
+  white-space: pre;
+}
+
+.how-it-works-list {
+  list-style: none;
+  padding: 0;
+}
+
+.how-it-works-list li {
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.how-it-works-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: #0066ff;
+  font-weight: bold;
+}
+
+/* Main Container */
+.main-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  background: #ffffff;
+  color: #1a1a1a;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.025em;
+}
+
+.header-subtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.demo-links {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.demo-link {
+  display: inline-block;
+  padding: 12px 24px;
+  background: #0066ff;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 8px;
+  box-shadow: none;
+  transition: all 0.2s;
+}
+
+.demo-link:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
+  background: #0052cc;
+}
+
+.demo-link:active {
+  transform: translateY(0);
+}
+
+/* Demo Content */
+.demo-content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.demo-left,
+.demo-right {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Sequence Diagram */
+.sequence-diagram {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
+}
+
+.sequence-diagram h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #1a1a1a;
+}
+
+.sequence-diagram .mermaid {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+/* Form Demo */
+.form-demo {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
+}
+
+.form-demo h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #1a1a1a;
+}
+
+.form-field {
+  margin-bottom: 1rem;
+}
+
+.form-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.4rem;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #1a1a1a;
+  transition: all 0.2s;
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: #0066ff;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+}
+
+.form-hint {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Update Button */
+.update-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+  background: #0066ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.update-button:hover {
+  background: #0052cc;
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.update-button:active {
+  transform: translateY(0);
+}
+
+.update-button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.update-button.dirty {
+  background: #10b981;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.update-button.dirty:hover {
+  background: #059669;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+/* Event Log Container */
+.event-log-container {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.event-log-container h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: #1a1a1a;
+}
+
+.event-log-hint {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.event-log {
+  flex: 1;
+  background: #f9fafb;
+  color: #374151;
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  overflow-y: auto;
+  min-height: 300px;
+  max-height: 500px;
+}
+
+.event-log:empty::before {
+  content: 'Waiting for events...';
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.event-log-entry {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.event-log-entry:last-child {
+  border-bottom: none;
+}
+
+.event-timestamp {
+  color: #6b7280;
+  font-size: 0.7rem;
+  margin-bottom: 0.2rem;
+}
+
+.event-type {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  color: #1a1a1a;
+}
+
+.event-type.iframe-sync {
+  color: #1a1a1a;
+}
+
+.event-type.postmessage {
+  color: #1a1a1a;
+}
+
+.event-type.tool-call {
+  color: #1a1a1a;
+}
+
+.event-details {
+  color: #4b5563;
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+}
+
+/* Footer */
+.footer {
+  background: #ffffff;
+  color: #9ca3af;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+/* Flash animation for field updates */
+@keyframes flash-update {
+  0%, 100% {
+    background: #ffffff;
+    border-color: #d1d5db;
+  }
+  50% {
+    background: #ecfdf5;
+    border-color: #10b981;
+  }
+}
+
+.form-field input.flash {
+  animation: flash-update 600ms ease-in-out;
+}
+
+/* Flash animation for cards */
+@keyframes flash-green {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 8px 30px rgba(34, 197, 94, 0.4);
+    border-color: #22c55e;
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0);
+  }
+}
+
+.stat-card.flash-update {
+  animation: flash-green 600ms ease-in-out;
+  border: 2px solid #22c55e;
+}
+
+.stat-card {
+  transition: all 0.2s ease;
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+@media (max-width: 1024px) {
+  .demo-content {
+    grid-template-columns: 1fr;
+  }
+
+  .integration-panel {
+    width: 90%;
+    left: -90%;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-title {
+    font-size: 1.25rem;
+  }
+
+  .header-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .demo-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ozwell-chat-wrapper {
+    width: calc(100vw - 32px);
+    height: calc(100vh - 100px);
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .ozwell-chat-button {
+    bottom: 16px;
+    right: 16px;
+  }
+}

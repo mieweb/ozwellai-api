@@ -1,0 +1,532 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: #fafafa;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.main-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  color: #1a1a1a;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.back-link-container {
+  position: absolute;
+  left: 0;
+  top: 10px;
+}
+
+.back-link {
+  color: #0066ff;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.back-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.header-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.025em;
+}
+
+.header-subtitle {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.demo-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.demo-left,
+.demo-right {
+  background: #ffffff;
+  border-radius: 12px;
+  border: none;
+  padding: 24px;
+  box-shadow: none;
+}
+
+.game-container h3,
+.event-log-container h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #1a1a1a;
+}
+
+.game-status {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0066ff;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  max-width: 400px;
+  margin: 0 auto 20px;
+  position: relative;
+}
+
+.cell {
+  aspect-ratio: 1;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cell:hover {
+  background: #ffffff;
+  border-color: #0066ff;
+  transform: scale(1.02);
+}
+
+.cell.x {
+  color: #0066ff;
+}
+
+.cell.o {
+  color: #dc2626;
+}
+
+.cell.winner {
+  background: #eff6ff;
+  border-color: #0066ff;
+  animation: pulse 0.5s ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.game-over-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 2px solid #0066ff;
+  z-index: 10;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.game-over-overlay.hidden {
+  display: none;
+}
+
+.game-over-content {
+  text-align: center;
+  color: #1a1a1a;
+  animation: slideDown 0.4s ease-out;
+}
+
+.game-over-emoji {
+  font-size: 80px;
+  margin-bottom: 16px;
+  animation: bounceIn 0.6s ease-out;
+}
+
+.game-over-message {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-shadow: none;
+  color: #1a1a1a;
+}
+
+.play-again-button {
+  padding: 12px 28px;
+  background: #0066ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: none;
+}
+
+.play-again-button:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
+  background: #0052cc;
+}
+
+.play-again-button:active {
+  transform: translateY(0);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.reset-button {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  display: block;
+  padding: 12px 24px;
+  background: #0066ff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: none;
+}
+
+.reset-button:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
+  background: #0052cc;
+}
+
+.reset-button:active {
+  transform: translateY(0);
+}
+
+.game-hint {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-left: 4px solid #0066ff;
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.event-log-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-log-hint {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+}
+
+.event-log {
+  flex: 1;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 450px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  color: #374151;
+}
+
+.event-log:empty::before {
+  content: 'No events yet. Start playing to see the action!';
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.log-entry {
+  padding: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+
+.log-time {
+  font-weight: 600;
+  margin-right: 8px;
+  color: #6b7280;
+}
+
+.log-info {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.log-move {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.log-ai-move {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.log-game-over {
+  background: transparent;
+  color: #1a1a1a;
+  font-weight: bold;
+}
+
+.log-reset {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.log-error {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.log-tool-call {
+  background: transparent;
+  color: #1a1a1a;
+}
+
+.footer {
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  padding: 16px;
+}
+
+@media (max-width: 1024px) {
+  .demo-content {
+    grid-template-columns: 1fr;
+  }
+
+  .header-title {
+    font-size: 32px;
+  }
+
+  .board {
+    max-width: 300px;
+  }
+
+  .cell {
+    font-size: 36px;
+  }
+}
+
+/* ============================================
+   CHAT WRAPPER STYLES
+   ============================================ */
+
+/* Floating Chat Button */
+.ozwell-chat-button {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #0066ff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 9998;
+}
+
+.ozwell-chat-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+}
+
+.ozwell-chat-button:active {
+  transform: scale(0.95);
+}
+
+.ozwell-chat-button.hidden {
+  display: none;
+}
+
+/* Chat Window Wrapper */
+.ozwell-chat-wrapper {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  height: 520px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+  transition: opacity 0.3s, transform 0.3s;
+  overflow: hidden;
+}
+
+.ozwell-chat-wrapper.hidden {
+  opacity: 0;
+  transform: scale(0.9) translateY(20px);
+  pointer-events: none;
+}
+
+.ozwell-chat-wrapper.visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* Chat Header */
+.ozwell-chat-header {
+  background: #0066ff;
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ozwell-chat-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ozwell-chat-control-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.ozwell-chat-control-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ozwell-chat-control-btn:active {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Chat Content Area */
+.ozwell-chat-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ozwell-chat-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* Minimized State */
+.ozwell-chat-wrapper.minimized {
+  height: 52px;
+  width: 200px;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-content {
+  display: none;
+}
+
+.ozwell-chat-wrapper.minimized .ozwell-chat-header {
+  cursor: pointer;
+}
+
+/* Dragging State */
+.ozwell-chat-wrapper.dragging {
+  cursor: move;
+  user-select: none;
+}

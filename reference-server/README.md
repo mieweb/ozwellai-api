@@ -6,6 +6,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 
 - **Full OpenAI API Compatibility**: Wire-compatible with OpenAI's API specification
 - **Real Text Inference**: Uses deterministic text generation for predictable testing
+- **MCP Host**: Built-in WebSocket endpoint (`/mcp/ws`) and embeddable chat widget
 - **Streaming Support**: Server-Sent Events (SSE) for both `/v1/responses` and `/v1/chat/completions`
 - **File Management**: Complete file upload, download, and management system
 - **Docker Support**: Multi-architecture Docker images with security best practices
@@ -33,6 +34,35 @@ npm run dev
 
 The server will start at `http://localhost:3000`
 
+### Embeddable Chat Widget
+
+**Simple (one line):**
+```html
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**Advanced (with config):**
+```html
+<script>
+  window.OzwellChatConfig = {
+    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
+    welcomeMessage: 'Hi! How can I help?'
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
+
+The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
+- Change one line in the HTML to switch to Ollama mode
+- Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
+- Requires Ollama running with `llama3.1:8b` model
+
+**For deployment:** Run Ollama in your container or set `OLLAMA_BASE_URL` to your LLM endpoint for real responses.
+
+See [embed/README.md](embed/README.md) for full documentation.
+
 ### Available Scripts
 
 - `npm run dev` - Start development server with hot reload
@@ -53,6 +83,10 @@ The server will start at `http://localhost:3000`
 
 ### Embeddings
 - `POST /v1/embeddings` - Generate text embeddings
+
+### Embed Widget
+- `GET /embed/ozwell-loader.js` - Widget loader script (creates iframe with inline HTML)
+- `GET /embed/ozwell.js` - Self-contained widget code (includes CSS)
 
 ### Files
 - `POST /v1/files` - Upload file
@@ -215,6 +249,9 @@ Environment variables:
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
+- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://localhost:11434)
+- `AI_MODE` - AI mode for embed chat: 'ollama' or 'mock' (default: ollama)
+- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: llama3.2)
 
 ## Error Handling
 
@@ -257,9 +294,14 @@ src/
 │   ├── embeddings.ts   # Handles the `/v1/embeddings` endpoint for generating vector embeddings from text inputs, supporting multiple embedding models with configurable dimensions and batch processing. Enables text-to-vector conversion for semantic search, similarity matching, clustering, and other NLP tasks that require numerical representations of text for machine learning applications.
 │   ├── files.ts        # Manages file operations through multiple endpoints (`/v1/files`) including upload, listing, retrieval, content download, and deletion, with persistent storage in a local data directory. Supports file management capabilities for AI applications, allowing clients to upload training data, documents, images, or other assets that language models or processing pipelines might need to access.
 │   ├── models.ts       # Provides the `/v1/models` endpoint that returns a hardcoded list of available AI models (GPT-4 variants and embedding models) with their metadata. Allows API clients to discover and enumerate what AI models are available for use, following OpenAI's API conventions for model discovery and selection.
-│   └── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
+│   ├── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
+│   └── mock-chat.ts    # Provides mock AI responses for testing and demos without requiring Ollama. Generates deterministic responses based on input patterns for predictable testing scenarios.
 └── util/               # Utility functions
     └── index.ts        # Contains shared utility functions including a deterministic text generator for testing, embedding vector generation, unique ID creation, token counting, error response formatting, and basic authentication validation. Centralizes common functionality used across multiple routes to ensure consistency, reduce code duplication, and provide reusable components for text generation, vector math, and API utilities.
+embed/                  # Embeddable chat widget files
+├── ozwell-loader.js    # Widget loader script to be embedded in parent pages
+├── ozwell.html         # Widget iframe entry point (minimal HTML loader)
+└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and IframeSyncClient
 ```
 
 ### Adding New Endpoints

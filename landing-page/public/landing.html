@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ozwell Chatbot Client Demo</title>
+  <link rel="stylesheet" href="/assets/demo.css" />
+  <!-- Mermaid for sequence diagram rendering -->
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      securityLevel: 'loose',
+      themeVariables: {
+        primaryColor: '#ffffff',
+        primaryTextColor: '#1a1a1a',
+        primaryBorderColor: '#0066ff',
+        lineColor: '#6b7280',
+        secondaryColor: '#f9fafb',
+        tertiaryColor: '#e5e7eb',
+        fontSize: '14px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif'
+      }
+    });
+  </script>
+</head>
+
+<body>
+  <!-- Integration Guide Slide-out Button -->
+  <button id="integration-toggle-btn" class="integration-toggle-btn">
+    Integration Guide
+  </button>
+
+  <!-- Integration Guide Slide-out Panel -->
+  <div id="integration-panel" class="integration-panel">
+    <div class="integration-panel-header">
+      <h2>Integration Guide</h2>
+      <button id="integration-close-btn" class="integration-close-btn">×</button>
+    </div>
+    <div class="integration-panel-content">
+      <!-- Step 1 -->
+      <div class="integration-step">
+        <h3>1. Add the Widget Script</h3>
+        <pre class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
+        <p>That's it for basic chat! Add config for more features:</p>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="integration-step">
+        <h3>2. Define MCP Tools (Optional)</h3>
+        <p>Tell the widget what actions are available:</p>
+        <pre class="code-block"><code>&lt;script&gt;
+  window.OzwellChatConfig = {
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'update_name',
+        description: 'Updates user name',
+        parameters: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' }
+          },
+          required: ['name']
+        }
+      }
+    }]
+  };
+&lt;/script&gt;</code></pre>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="integration-step">
+        <h3>3. Implement Tool Handlers (Your Code)</h3>
+        <p>Write code to execute tools when AI calls them:</p>
+        <pre class="code-block"><code>window.addEventListener('message', (e) => {
+  if (e.data.source === 'ozwell-chat-widget' &&
+      e.data.type === 'tool_call') {
+
+    // Execute the tool on YOUR page
+    if (e.data.tool === 'update_name') {
+      nameInput.value = e.data.payload.name;
+    }
+
+    // Send result back to widget
+    OzwellChat.iframe.contentWindow.postMessage({
+      source: 'ozwell-chat-parent',
+      type: 'tool_result',
+      result: { success: true }
+    }, '*');
+  }
+});</code></pre>
+      </div>
+
+      <!-- How It Works -->
+      <div class="integration-step">
+        <h3>How It Works</h3>
+        <ul class="how-it-works-list">
+          <li>Widget auto-mounts and auto-detects endpoint</li>
+          <li>LLM calls tools when user requests actions</li>
+          <li>Tool calls sent to parent via postMessage</li>
+          <li>Parent executes and sends result back</li>
+          <li>Widget shows natural confirmation</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">Ozwell Chatbot Client Demo</h1>
+      <p class="header-subtitle">
+        Embedded chat with tool execution via iframe-sync and postMessage
+      </p>
+      <div class="demo-links">
+        <a href="/tictactoe.html" class="demo-link">
+          Play Tic-Tac-Toe Demo →
+        </a>
+      </div>
+    </header>
+
+    <!-- Demo Content -->
+    <div class="demo-content">
+      <!-- Left Side: Architecture + Form -->
+      <div class="demo-left">
+        <!-- Sequence Diagram -->
+        <div class="sequence-diagram">
+          <h3>How It Works (Sequence Diagram)</h3>
+          <div class="mermaid">
+            sequenceDiagram
+            participant Browser
+            participant Ozwell as Ozwell Server
+            participant Widget as Widget (iframe)
+            participant Handler as Tool Handler
+
+            Browser->>Ozwell: 1. Load ozwell-loader.js
+            Note over Browser,Ozwell: Script tag embed
+
+            Browser->>Browser: 2. User clicks chat button
+            Browser->>Widget: 3. Create iframe (lazy loading)
+            Note over Widget: Chat widget loads
+
+            rect rgb(255, 243, 205)
+            Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
+            Widget->>Widget: User types message
+            Widget->>Widget: LLM generates response
+            end
+
+            Widget->>Handler: 4. postMessage: tool_call
+            Note over Widget,Handler: Only tool calls cross boundary
+            Handler->>Handler: 5. Execute tool (update form)
+
+            Handler-->>Widget: 6. postMessage: tool_result
+
+            Browser->>Widget: 7. iframe-sync: state update
+            Note over Browser,Widget: Widget always has page context
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side: Form + Event Log -->
+      <div class="demo-right">
+        <!-- Form Demo -->
+        <div class="form-demo">
+          <h3>User Information</h3>
+          <div class="form-field">
+            <label>Name</label>
+            <input type="text" id="input-name" value="Alice Johnson" />
+          </div>
+          <div class="form-field">
+            <label>Address</label>
+            <input type="text" id="input-address" value="123 Main Street, Suite 100" />
+          </div>
+          <div class="form-field">
+            <label>Zip Code</label>
+            <input type="text" id="input-zip" value="90210" />
+          </div>
+          <button id="update-context-btn" class="update-button">Update</button>
+          <p class="form-hint">Type directly or use chat to update fields</p>
+        </div>
+
+        <!-- Event Log -->
+        <div class="event-log-container">
+          <h3>Live Event Log</h3>
+          <p class="event-log-hint">Watch iframe-sync and postMessage in action</p>
+          <div id="event-log" class="event-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      Built with: Fastify • iframe-sync • postMessage • Mock AI
+    </footer>
+  </div>
+
+  <!-- Chat Floating Button -->
+  <button id="ozwell-chat-button" class="ozwell-chat-button">
+    💬
+  </button>
+
+  <!-- Chat Window Wrapper -->
+  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
+    <div class="ozwell-chat-header">
+      <div class="ozwell-chat-title">
+        Ozwell Assistant
+      </div>
+      <div class="ozwell-chat-controls">
+        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
+        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
+      </div>
+    </div>
+    <div class="ozwell-chat-content" id="chat-container"></div>
+  </div>
+
+  <script>
+    // Load Ozwell chat widget script
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+    window.OzwellChatConfig = {
+      containerId: 'chat-container',
+      title: 'Ozwell Assistant',
+      placeholder: 'Try: "update my name to Bob"',
+      model: 'mock-ai',
+      endpoint: `${normalizedBase}/mock/chat`,
+      // widgetUrl auto-detected from script source
+      welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
+      system: 'You are a helpful assistant with access to the user\'s information. When the user asks questions about their information (e.g., "what is my name?"), answer directly from the context provided - do NOT call any tools. Only use update tools when the user explicitly asks to UPDATE, CHANGE, or MODIFY their information (e.g., "update my name to Bob").',
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'update_name',
+            description: 'Updates the user\'s name field to a new value. Use when user requests to change/update/modify their name.',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'The new name value' }
+              },
+              required: ['name']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'update_address',
+            description: 'Updates the user\'s address field to a new value. Use when user requests to change/update/modify their address.',
+            parameters: {
+              type: 'object',
+              properties: {
+                address: { type: 'string', description: 'The new address value' }
+              },
+              required: ['address']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'update_zip',
+            description: 'Updates the user\'s zip code field to a new value. Use when user requests to change/update/modify their zip code.',
+            parameters: {
+              type: 'object',
+              properties: {
+                zipCode: { type: 'string', description: 'The new zip code value' }
+              },
+              required: ['zipCode']
+            }
+          }
+        }
+      ]
+    };
+
+    const loader = document.createElement('script');
+    loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
+    loader.async = true;
+    document.head.appendChild(loader);
+  </script>
+
+  <!-- Consolidated landing page functionality -->
+  <script src="/assets/landing.js"></script>
+
+  <!-- Integration panel toggle -->
+  <script>
+    const toggleBtn = document.getElementById('integration-toggle-btn');
+    const closeBtn = document.getElementById('integration-close-btn');
+    const panel = document.getElementById('integration-panel');
+
+    toggleBtn.addEventListener('click', () => {
+      panel.classList.add('open');
+    });
+
+    closeBtn.addEventListener('click', () => {
+      panel.classList.remove('open');
+    });
+
+    // Close on escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && panel.classList.contains('open')) {
+        panel.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+
+</html>

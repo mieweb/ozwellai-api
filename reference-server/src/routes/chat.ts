@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens } from '../util';
+import OzwellAI from 'ozwellai';
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
@@ -26,6 +27,23 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               required: ['role', 'content']
             }
           },
+          tools: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                function: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    description: { type: 'string' },
+                    parameters: { type: 'object' },
+                  },
+                },
+              },
+            },
+          },
           stream: { type: 'boolean' },
           max_tokens: { type: 'number' },
           temperature: { type: 'number' }
@@ -41,18 +59,54 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as any;
-    const { model, messages, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    const { model, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+
+    // Extract API key from authorization header
+    const authHeader = request.headers.authorization || '';
+    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    // Check if we should proxy to Ollama
+    const useOllama = apiKey.toLowerCase() === 'ollama';
 
     // Validate model
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
-    if (!supportedModels.includes(model)) {
+    if (!useOllama && !supportedModels.includes(model)) {
       reply.code(400);
       return createError(`Model '${model}' not found`, 'invalid_request_error', 'model');
     }
 
+    // If using Ollama, proxy the request
+    if (useOllama) {
+      try {
+        const ollamaClient = new OzwellAI({
+          apiKey: 'ollama',
+          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
+        });
+
+        const requestOptions: any = {
+          model,
+          messages,
+          stream: false,
+          ...(max_tokens && { max_tokens }),
+          ...(temperature !== undefined && { temperature }),
+        };
+
+        // Include tools if provided
+        if (tools && tools.length > 0) {
+          requestOptions.tools = tools;
+        }
+
+        const response = await ollamaClient.createChatCompletion(requestOptions);
+
+        return response;
+      } catch (error: any) {
+        request.log.error({ err: error }, 'Ollama request failed, falling back to local generator');
+        // Fall through to use local generator
+      }
+    }
+
     // Create prompt from messages
     const prompt = messages.map((msg: any) => `${msg.role}: ${msg.content}`).join('\n');
-    
     const requestId = generateId('chatcmpl');
     const created = Math.floor(Date.now() / 1000);
 
@@ -72,7 +126,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
 
       const generator = SimpleTextGenerator.generateStream(prompt, max_tokens);
-      
+
       // Send initial chunk with role
       const initialChunk = {
         id: requestId,
@@ -101,7 +155,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }],
         };
         reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        
         // Add small delay to simulate streaming
         await new Promise(resolve => setTimeout(resolve, 50));
       }
