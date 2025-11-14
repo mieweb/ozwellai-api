@@ -11,7 +11,7 @@ interface Tool {
   function: {
     name: string;
     description: string;
-    parameters: any;
+    parameters: Record<string, unknown>;
   };
 }
 
@@ -48,7 +48,7 @@ function hasToolResult(messages: ChatMessage[]): boolean {
   return lastMessage?.role === 'tool';
 }
 
-function extractToolResult(messages: ChatMessage[]): any {
+function extractToolResult(messages: ChatMessage[]): Record<string, unknown> | null {
   // Get the LAST tool result from messages (most recent)
   const toolMessages = messages.filter(msg => msg.role === 'tool');
   const toolMsg = toolMessages[toolMessages.length - 1];
@@ -61,7 +61,7 @@ function extractToolResult(messages: ChatMessage[]): any {
   }
 }
 
-function extractContextFromSystem(messages: ChatMessage[]): any {
+function extractContextFromSystem(messages: ChatMessage[]): { name: string; address: string; zipCode: string } | null {
   // Extract context from system message if present
   const systemMsg = messages.find(msg => msg.role === 'system');
   if (!systemMsg) return null;
@@ -78,7 +78,7 @@ function extractContextFromSystem(messages: ChatMessage[]): any {
   };
 }
 
-function generateMockResponse(userMessage: string, context: any, tools: Tool[], hasToolResult: boolean, toolResult: any): any {
+function generateMockResponse(userMessage: string, context: { name: string; address: string; zipCode: string } | null, tools: Tool[], hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: unknown[] } {
   const msg = userMessage.toLowerCase();
 
   // If this is the second round (after tool execution), generate final response
@@ -135,7 +135,7 @@ function generateMockResponse(userMessage: string, context: any, tools: Tool[], 
   }
 
   // Pattern 3: Update/Change zip code to X
-  const zipUpdateMatch = userMessage.match(/(?:update|change|set|make).*(?:zip|zipcode|zip code).*(?:to|is)\s+([0-9\-]+)/i);
+  const zipUpdateMatch = userMessage.match(/(?:update|change|set|make).*(?:zip|zipcode|zip code).*(?:to|is)\s+([0-9-]+)/i);
   if (zipUpdateMatch) {
     const newZip = zipUpdateMatch[1].trim();
     return {
@@ -158,27 +158,27 @@ function generateMockResponse(userMessage: string, context: any, tools: Tool[], 
 
   // Check most specific patterns first (with row qualifiers)
   // Top row
-  if (msg.match(/\b(top|upper)[\s\-]*(left|1)\b/)) {
+  if (msg.match(/\b(top|upper)[\s-]*(left|1)\b/)) {
     position = 'top-left';
-  } else if (msg.match(/\b(top|upper)[\s\-]*(center|centre|middle|2)\b/)) {
+  } else if (msg.match(/\b(top|upper)[\s-]*(center|centre|middle|2)\b/)) {
     position = 'top-center';
-  } else if (msg.match(/\b(top|upper)[\s\-]*(right|3)\b/)) {
+  } else if (msg.match(/\b(top|upper)[\s-]*(right|3)\b/)) {
     position = 'top-right';
   }
   // Middle row
-  else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(left|4)\b/)) {
+  else if (msg.match(/\b(middle|mid|center|centre)[\s-]*(left|4)\b/)) {
     position = 'middle-left';
-  } else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(center|centre|middle|5)\b/)) {
+  } else if (msg.match(/\b(middle|mid|center|centre)[\s-]*(center|centre|middle|5)\b/)) {
     position = 'middle-center';
-  } else if (msg.match(/\b(middle|mid|center|centre)[\s\-]*(right|6)\b/)) {
+  } else if (msg.match(/\b(middle|mid|center|centre)[\s-]*(right|6)\b/)) {
     position = 'middle-right';
   }
   // Bottom row
-  else if (msg.match(/\b(bottom|lower)[\s\-]*(left|7)\b/)) {
+  else if (msg.match(/\b(bottom|lower)[\s-]*(left|7)\b/)) {
     position = 'bottom-left';
-  } else if (msg.match(/\b(bottom|lower)[\s\-]*(center|centre|middle|8)\b/)) {
+  } else if (msg.match(/\b(bottom|lower)[\s-]*(center|centre|middle|8)\b/)) {
     position = 'bottom-center';
-  } else if (msg.match(/\b(bottom|lower)[\s\-]*(right|9)\b/)) {
+  } else if (msg.match(/\b(bottom|lower)[\s-]*(right|9)\b/)) {
     position = 'bottom-right';
   }
   // Fallback: just direction without row qualifier (default to middle)
@@ -323,7 +323,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
         required: ['model', 'messages'],
       },
     },
-  }, async (request, reply) => {
+  }, async (request, _reply) => {
     const body = request.body as MockChatRequest;
     const model = body.model;
 
