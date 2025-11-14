@@ -2,7 +2,6 @@
   "name": "ozwellai-reference",
   "version": "1.0.0",
   "description": "OpenAI-compatible Fastify reference server for OzwellAI API",
-  "type": "module",
   "main": "dist/reference-server/src/server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
@@ -11,8 +10,8 @@
     "spec": "node scripts/write-spec.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "test": "node --test test/**/*.test.js",
-    "test:watch": "node --test --watch test/**/*.test.js",
+    "test": "node --test test/**/*.test.mjs",
+    "test:watch": "node --test --watch test/**/*.test.mjs",
     "clean": "rm -rf dist"
   },
   "dependencies": {
