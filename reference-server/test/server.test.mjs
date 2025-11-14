@@ -1,4 +1,5 @@
-import { test, assert } from 'node:test';
+import { test } from 'node:test';
+import assert from 'node:assert';
 import { spawn } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 
