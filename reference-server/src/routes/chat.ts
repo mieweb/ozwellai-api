@@ -86,7 +86,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: any = {
           model,
           messages,
-          stream: false,
+          stream,
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
         };
