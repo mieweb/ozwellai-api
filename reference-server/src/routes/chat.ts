@@ -86,7 +86,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: any = {
           model,
           messages,
-          stream,
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
         };
@@ -96,9 +95,31 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           requestOptions.tools = tools;
         }
 
-        const response = await ollamaClient.createChatCompletion(requestOptions);
+        // Handle streaming vs non-streaming
+        if (stream) {
+          // Set up SSE streaming
+          reply.type('text/event-stream');
+          reply.headers({
+            'cache-control': 'no-cache',
+            'connection': 'keep-alive',
+          });
 
-        return response;
+          const streamResponse = ollamaClient.createChatCompletionStream({
+            ...requestOptions,
+            stream: true
+          });
+
+          for await (const chunk of streamResponse) {
+            reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          }
+
+          reply.raw.write('data: [DONE]\n\n');
+          reply.raw.end();
+          return;
+        } else {
+          const response = await ollamaClient.createChatCompletion(requestOptions);
+          return response;
+        }
       } catch (error: any) {
         request.log.error({ err: error }, 'Ollama request failed, falling back to local generator');
         // Fall through to use local generator
