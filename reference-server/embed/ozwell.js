@@ -23,54 +23,54 @@
  * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
  */
 class IframeSyncClient {
-    #channel;
-    #recv;
-    #clientName;
+  #channel;
+  #recv;
+  #clientName;
 
-    constructor(clientName, recv) {
-        this.#recv = recv;
-        this.#channel = 'IframeSync';
-        this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+  constructor(clientName, recv) {
+    this.#recv = recv;
+    this.#channel = 'IframeSync';
+    this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
 
-        if (!window) {
-          return;
-        }
-        window.addEventListener('message', (event) => {
-            if (!event.data || event.data.channel !== this.#channel) {
-                return;
-            }
-
-            const isOwnMessage = event.data.sourceClientName === this.#clientName;
-            const isReadyReceived = event.data.type === 'readyReceived';
-
-            if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-                this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-            }
-        });
+    if (!window) {
+      return;
     }
+    window.addEventListener('message', (event) => {
+      if (!event.data || event.data.channel !== this.#channel) {
+        return;
+      }
 
-    ready() {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'ready',
-            sourceClientName: this.#clientName
-        }, '*');
-    }
+      const isOwnMessage = event.data.sourceClientName === this.#clientName;
+      const isReadyReceived = event.data.type === 'readyReceived';
 
-    stateChange(update) {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'stateChange',
-            sourceClientName: this.#clientName,
-            payload: update
-        }, '*');
+      if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
+        this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
+      }
+    });
+  }
+
+  ready() {
+    if (!window || !window.parent) {
+      return;
     }
+    window.parent.postMessage({
+      channel: this.#channel,
+      type: 'ready',
+      sourceClientName: this.#clientName
+    }, '*');
+  }
+
+  stateChange(update) {
+    if (!window || !window.parent) {
+      return;
+    }
+    window.parent.postMessage({
+      channel: this.#channel,
+      type: 'stateChange',
+      sourceClientName: this.#clientName,
+      payload: update
+    }, '*');
+  }
 }
 
 /**
@@ -365,17 +365,25 @@ When the user asks questions about their name, address, or zip code, answer dire
 
   // APPEND tool usage rules if tools exist
   if (tools && tools.length > 0) {
-    systemPrompt += `\n\nYou have access to tools that can modify data. Each tool's description explains what it does.
+    systemPrompt += `\n\n=== CRITICAL TOOL USAGE RULES ===
 
-TOOL USAGE RULES:
-- Use tools ONLY when the user explicitly asks you to take an ACTION (update, change, modify, set, create, delete, submit, etc.)
-- For ALL other interactions (questions, greetings, general conversation), respond with plain text - DO NOT call any tools
-- When in doubt, respond with text instead of calling a tool
-- NEVER return raw JSON or explain tool calls in your response - just have a natural conversation
+You have access to tools, but you must use them ONLY when explicitly instructed.
 
-The distinction:
-• "Tell me X" / "What is X" / "Show me X" = Respond with text (you already have the context)
-• "Change X to Y" / "Update X" / "Set X to Y" = Call the appropriate tool`;
+WHEN TO USE TOOLS (Action verbs):
+- "update my name to X" → use update_name tool
+- "change my address to X" → use update_address tool
+- "set my zip code to X" → use update_zip tool
+
+WHEN NOT TO USE TOOLS (Questions or statements):
+- "what is my name?" → Answer: "Your name is [name from context]" (NO TOOL)
+- "tell me my address" → Answer: "Your address is [address from context]" (NO TOOL)
+- "what is my zip code?" → Answer: "Your zip code is [zip from context]" (NO TOOL)
+- Any question, greeting, or conversation → NEVER use tools
+
+RULE: If the user is ASKING a question, ANSWER it using the context provided above. DO NOT call any tools.
+RULE: If the user is REQUESTING an action (update, change, set, modify), THEN use the appropriate tool.
+
+If you are unsure, DO NOT use tools - just answer with text.`;
   }
 
   return systemPrompt;
@@ -388,18 +396,9 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
-  setStatus('Processing...', true);
-  state.sending = true;
-  formEl?.classList.add('is-sending');
-  submitButton?.setAttribute('disabled', 'true');
-  saveButton?.setAttribute('disabled', 'true');
-  lastAssistantMessage = '';
-
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
   if (state.config.tools && Array.isArray(state.config.tools)) {
-    // Parent's tool definitions must be in OpenAI function calling format
-    // Format: { type: 'function', function: { name, description, parameters } }
     tools = state.config.tools.map(tool => ({
       type: 'function',
       function: {
@@ -408,9 +407,20 @@ async function sendMessage(text) {
         parameters: tool.function.parameters
       }
     }));
-
     console.log('[widget.js] Tools loaded from config:', tools);
   }
+
+  // Always use streaming (handles both text and tool calls)
+  await sendMessageStreaming(text, tools);
+}
+
+async function sendMessageNonStreaming(text, tools) {
+  setStatus('Processing...', true);
+  state.sending = true;
+  formEl?.classList.add('is-sending');
+  submitButton?.setAttribute('disabled', 'true');
+  saveButton?.setAttribute('disabled', 'true');
+  lastAssistantMessage = '';
 
   // Build system prompt (handles custom prompts, form context, and tool rules)
   const systemPrompt = buildSystemPrompt(tools);
@@ -436,15 +446,15 @@ async function sendMessage(text) {
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
     if (systemPrompt) {
-      // Add system message at the beginning
       requestMessages.unshift({ role: 'system', content: systemPrompt });
     }
 
-    // Build request body (always use OpenAI format)
+    // Build request body (non-streaming)
     const requestBody = {
       model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       tools: tools,
+      stream: false,
     };
 
     const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
@@ -481,8 +491,6 @@ async function sendMessage(text) {
       console.log('[widget.js] Model returned tool calls:', toolCalls);
 
       // CRITICAL: Always store assistant message with tool_calls in conversation history
-      // This is required by OpenAI function calling protocol - tool results must reference
-      // a prior assistant message with tool_calls. Without this, models may call tools again.
       const assistantMessage = {
         role: 'assistant',
         content: assistantContent || '',
@@ -519,7 +527,7 @@ async function sendMessage(text) {
         }
       }
 
-      // Display text content in UI if present (separate from history storage)
+      // Display text content in UI if present
       if (assistantContent && assistantContent.trim()) {
         lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
@@ -541,6 +549,234 @@ async function sendMessage(text) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
+    addMessage('system', `Error: ${message}`);
+    setStatus('Error', false);
+  } finally {
+    state.sending = false;
+    formEl?.classList.remove('is-sending');
+    submitButton?.removeAttribute('disabled');
+    if (!lastAssistantMessage.trim()) {
+      saveButton?.setAttribute('disabled', 'true');
+    }
+  }
+}
+
+async function sendMessageStreaming(text, tools) {
+  setStatus('Processing...', true);
+  state.sending = true;
+  formEl?.classList.add('is-sending');
+  submitButton?.setAttribute('disabled', 'true');
+  saveButton?.setAttribute('disabled', 'true');
+  lastAssistantMessage = '';
+
+  // Build system prompt
+  const systemPrompt = buildSystemPrompt(tools);
+
+  // Create placeholder message element for incremental updates
+  const assistantMsgEl = document.createElement('div');
+  assistantMsgEl.className = 'message assistant';
+  messagesEl?.appendChild(assistantMsgEl);
+
+  try {
+    // Prepare headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    if (state.config.openaiApiKey) {
+      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
+    }
+
+    if (state.config.headers) {
+      Object.assign(headers, state.config.headers);
+    }
+
+    // Build messages for request
+    const requestMessages = buildMessages();
+    if (systemPrompt) {
+      requestMessages.unshift({ role: 'system', content: systemPrompt });
+    }
+
+    // Build request body (streaming)
+    const requestBody = {
+      model: state.config.model || 'gpt-4o',
+      messages: requestMessages,
+      stream: true,
+    };
+
+    // Include tools if available
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools;
+    }
+
+    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[widget.js] API error:', errorText);
+      throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    // Parse SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let accumulatedToolCalls = []; // Accumulate tool calls from deltas
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const chunk = JSON.parse(data);
+            const delta = chunk.choices?.[0]?.delta;
+
+            if (!delta) continue;
+
+            // Handle text content (streaming)
+            if (delta.content) {
+              fullContent += delta.content;
+              assistantMsgEl.textContent = fullContent;
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            // Handle tool calls (accumulate from deltas)
+            if (delta.tool_calls) {
+              for (const toolCallDelta of delta.tool_calls) {
+                const index = toolCallDelta.index;
+
+                // Initialize tool call object if new
+                if (!accumulatedToolCalls[index]) {
+                  accumulatedToolCalls[index] = {
+                    id: toolCallDelta.id || '',
+                    type: toolCallDelta.type || 'function',
+                    function: {
+                      name: '',
+                      arguments: ''
+                    }
+                  };
+                }
+
+                // Set function name (not accumulated, sent once)
+                if (toolCallDelta.function?.name) {
+                  accumulatedToolCalls[index].function.name = toolCallDelta.function.name;
+                }
+
+                // Accumulate function arguments (sent in chunks)
+                if (toolCallDelta.function?.arguments) {
+                  accumulatedToolCalls[index].function.arguments += toolCallDelta.function.arguments;
+                }
+
+                // Update ID if provided
+                if (toolCallDelta.id) {
+                  accumulatedToolCalls[index].id = toolCallDelta.id;
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[widget.js] Failed to parse chunk:', err);
+          }
+        }
+      }
+    }
+
+    // Check if we have tool calls
+    const hasToolCalls = accumulatedToolCalls.length > 0 && accumulatedToolCalls.some(tc => tc.function.name);
+
+    if (hasToolCalls) {
+      console.log('[widget.js] Model returned tool calls from stream:', accumulatedToolCalls);
+
+      // Store assistant message with tool_calls in history
+      const assistantMessage = {
+        role: 'assistant',
+        content: fullContent || '',
+        tool_calls: accumulatedToolCalls
+      };
+      state.messages.push(assistantMessage);
+      console.log('[widget.js] Stored assistant message with tool_calls in history');
+
+      // Remove the text placeholder (tool execution messages will be shown instead)
+      if (assistantMsgEl.parentNode) {
+        assistantMsgEl.parentNode.removeChild(assistantMsgEl);
+      }
+
+      // Execute each tool call
+      for (const toolCall of accumulatedToolCalls) {
+        const toolName = toolCall.function?.name;
+
+        if (toolName) {
+          try {
+            const args = typeof toolCall.function.arguments === 'string'
+              ? JSON.parse(toolCall.function.arguments)
+              : toolCall.function.arguments;
+
+            console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
+
+            // Send tool call to parent via postMessage
+            window.parent.postMessage({
+              source: 'ozwell-chat-widget',
+              type: 'tool_call',
+              tool: toolName,
+              payload: args
+            }, '*');
+
+            // Add system message to chat
+            addMessage('system', `Executing ${toolName}...`);
+          } catch (error) {
+            console.error('[widget.js] Error parsing tool arguments:', error);
+            addMessage('system', `Error: Could not execute ${toolName}`);
+          }
+        }
+      }
+
+      // Display text content if present (separate from tool execution)
+      if (fullContent && fullContent.trim()) {
+        lastAssistantMessage = fullContent;
+        addMessage('assistant', fullContent);
+      }
+    } else {
+      // No tool calls, just text response
+      const assistantMessage = {
+        role: 'assistant',
+        content: fullContent || '(no response)',
+      };
+      state.messages.push(assistantMessage);
+      lastAssistantMessage = fullContent;
+
+      // Update placeholder if empty
+      if (!fullContent.trim()) {
+        assistantMsgEl.textContent = '(no response)';
+      }
+    }
+
+    setStatus('', false);
+    if (lastAssistantMessage.trim()) {
+      saveButton?.removeAttribute('disabled');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    // Remove placeholder on error
+    if (assistantMsgEl.parentNode) {
+      assistantMsgEl.parentNode.removeChild(assistantMsgEl);
+    }
     addMessage('system', `Error: ${message}`);
     setStatus('Error', false);
   } finally {
@@ -771,7 +1007,7 @@ setStatus('', false);
 if (typeof IframeSyncClient !== 'undefined') {
   console.log('[widget.js] Initializing IframeSyncClient...');
 
-  const iframeClient = new IframeSyncClient('ozwell-widget', function(payload, isOwnMessage, isReadyReceived) {
+  const iframeClient = new IframeSyncClient('ozwell-widget', function (payload, isOwnMessage, isReadyReceived) {
     console.log('[widget.js] Received state from broker:', { payload, isOwnMessage, isReadyReceived });
 
     if (payload && payload.formData) {

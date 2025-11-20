@@ -16,7 +16,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: 'object',
         properties: {
           model: { type: 'string' },
-          messages: { 
+          messages: {
             type: 'array',
             items: {
               type: 'object',
@@ -97,11 +97,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
         // Handle streaming vs non-streaming
         if (stream) {
-          // Set up SSE streaming
-          reply.type('text/event-stream');
-          reply.headers({
+          // Set up SSE streaming with CORS headers
+          reply.raw.writeHead(200, {
+            'content-type': 'text/event-stream',
             'cache-control': 'no-cache',
             'connection': 'keep-alive',
+            'access-control-allow-origin': request.headers.origin || '*',
+            'access-control-allow-credentials': 'true',
           });
 
           const streamResponse = ollamaClient.createChatCompletionStream({
@@ -139,11 +141,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     if (stream) {
-      // Streaming response
-      reply.type('text/event-stream');
-      reply.headers({
+      // Streaming response with CORS headers
+      reply.raw.writeHead(200, {
+        'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
         'connection': 'keep-alive',
+        'access-control-allow-origin': request.headers.origin || '*',
+        'access-control-allow-credentials': 'true',
+        'x-request-id': `req_${Date.now()}`,
+        'openai-processing-ms': '150',
+        'openai-version': '2020-10-01',
       });
 
       const generator = SimpleTextGenerator.generateStream(prompt, max_tokens);
