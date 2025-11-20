@@ -613,6 +613,7 @@ async function sendMessageStreaming(text, tools) {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(300000) // 5 minute timeout for slow Ollama with large tool contexts
     });
 
     if (!response.ok) {
