@@ -80,7 +80,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       try {
         const ollamaClient = new OzwellAI({
           apiKey: 'ollama',
-          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
+          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+          timeout: 300000 // 5 minutes - Ollama can be slow with large tool contexts
         });
 
         const requestOptions: any = {
@@ -106,25 +107,36 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-credentials': 'true',
           });
 
-          const streamResponse = ollamaClient.createChatCompletionStream({
-            ...requestOptions,
-            stream: true
-          });
+          try {
+            const streamResponse = ollamaClient.createChatCompletionStream({
+              ...requestOptions,
+              stream: true
+            });
 
-          for await (const chunk of streamResponse) {
-            reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            for await (const chunk of streamResponse) {
+              reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            }
+
+            reply.raw.write('data: [DONE]\n\n');
+            reply.raw.end();
+            return;
+          } catch (streamError: any) {
+            request.log.error({ err: streamError }, 'Ollama streaming failed after headers sent');
+            // Headers already sent, just end the stream
+            reply.raw.write('data: [DONE]\n\n');
+            reply.raw.end();
+            return;
           }
-
-          reply.raw.write('data: [DONE]\n\n');
-          reply.raw.end();
-          return;
         } else {
           const response = await ollamaClient.createChatCompletion(requestOptions);
           return response;
         }
       } catch (error: any) {
         request.log.error({ err: error }, 'Ollama request failed, falling back to local generator');
-        // Fall through to use local generator
+        // Only fall through if headers haven't been sent yet
+        if (reply.raw.headersSent) {
+          return;
+        }
       }
     }
 
