@@ -268,6 +268,72 @@ body {
  * WIDGET STATE AND LOGIC
  * ============================================
  */
+
+// Global runtime configuration (accessible via console for testing)
+window.OzwellDebug = {
+  disableTools: false, // Set to true in console to disable tools
+  verbose: false, // Set to true for detailed logging
+  log: function (message, ...args) {
+    if (this.verbose) {
+      console.log(`[OzwellDebug] ${message}`, ...args);
+    }
+  }
+};
+
+// Expose helper functions for console testing
+window.OzwellDebug.help = function () {
+  console.log(`
+🔧 Ozwell Debug Console Commands:
+
+Toggle Features:
+  OzwellDebug.disableTools = true/false    // Enable/disable tool calling
+  OzwellDebug.verbose = true/false         // Enable/disable verbose logging
+
+View State:
+  OzwellDebug.getState()                   // View current widget state
+  OzwellDebug.getMessages()                // View conversation history
+  OzwellDebug.getTools()                   // View configured tools
+
+Reset:
+  OzwellDebug.clearMessages()              // Clear conversation history
+  OzwellDebug.reset()                      // Full reset
+
+Examples:
+  OzwellDebug.disableTools = true          // Test without tools
+  OzwellDebug.verbose = true               // See detailed logs
+  `);
+};
+
+window.OzwellDebug.getState = function () {
+  return state;
+};
+
+window.OzwellDebug.getMessages = function () {
+  return state.messages;
+};
+
+window.OzwellDebug.getTools = function () {
+  return state.config.tools || [];
+};
+
+window.OzwellDebug.clearMessages = function () {
+  state.messages = [];
+  if (messagesEl) {
+    messagesEl.innerHTML = '';
+  }
+  if (state.config.welcomeMessage) {
+    addMessage('welcome', state.config.welcomeMessage);
+  }
+  console.log('[OzwellDebug] Messages cleared');
+};
+
+window.OzwellDebug.reset = function () {
+  this.clearMessages();
+  this.disableTools = false;
+  this.verbose = false;
+  console.log('[OzwellDebug] Reset complete. Type OzwellDebug.help() for available commands.');
+};
+
 const state = {
   config: {
     title: 'Ozwell',
@@ -281,6 +347,7 @@ const state = {
 };
 
 console.log('[widget.js] Widget initializing...');
+console.log('[widget.js] Type OzwellDebug.help() in console for debug commands');
 
 const statusEl = document.getElementById('status');
 const messagesEl = document.getElementById('messages');
@@ -398,7 +465,12 @@ async function sendMessage(text) {
 
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
-  if (state.config.tools && Array.isArray(state.config.tools)) {
+
+  // Check if tools are disabled via console debug flag
+  if (window.OzwellDebug.disableTools) {
+    console.log('[widget.js] Tools disabled via OzwellDebug.disableTools');
+    window.OzwellDebug.log('Tools bypassed for this request');
+  } else if (state.config.tools && Array.isArray(state.config.tools)) {
     tools = state.config.tools.map(tool => ({
       type: 'function',
       function: {
@@ -408,6 +480,7 @@ async function sendMessage(text) {
       }
     }));
     console.log('[widget.js] Tools loaded from config:', tools);
+    window.OzwellDebug.log('Tools enabled', tools);
   }
 
   // Always use streaming (handles both text and tool calls)
