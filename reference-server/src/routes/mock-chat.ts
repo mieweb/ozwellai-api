@@ -21,6 +21,7 @@ interface MockChatRequest {
   tools?: Tool[];
   temperature?: number;
   max_tokens?: number;
+  stream?: boolean;
 }
 
 /**
@@ -319,6 +320,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
           },
           temperature: { type: 'number' },
           max_tokens: { type: 'number' },
+          stream: { type: 'boolean' },
         },
         required: ['model', 'messages'],
       },
@@ -346,6 +348,71 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
     const prompt = messages.map(msg => msg.content).join(' ');
     const completion = assistantMessage.content || JSON.stringify(assistantMessage.tool_calls || []);
 
+    // Handle streaming response
+    if (body.stream) {
+      _reply.raw.setHeader('Content-Type', 'text/event-stream');
+      _reply.raw.setHeader('Cache-Control', 'no-cache');
+      _reply.raw.setHeader('Connection', 'keep-alive');
+      _reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+
+      // Send content as streaming chunks
+      if (assistantMessage.content) {
+        const chunk = {
+          id: requestId,
+          object: 'chat.completion.chunk',
+          created,
+          model,
+          choices: [{
+            index: 0,
+            delta: { content: assistantMessage.content },
+            finish_reason: null
+          }]
+        };
+        _reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+
+      // Send tool calls if present (streaming format requires index on each tool call)
+      if (assistantMessage.tool_calls) {
+        const toolCallsWithIndex = assistantMessage.tool_calls.map((tc: any, idx: number) => ({
+          index: idx,
+          id: tc.id,
+          type: tc.type,
+          function: tc.function
+        }));
+
+        const chunk = {
+          id: requestId,
+          object: 'chat.completion.chunk',
+          created,
+          model,
+          choices: [{
+            index: 0,
+            delta: { tool_calls: toolCallsWithIndex },
+            finish_reason: null
+          }]
+        };
+        _reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      }
+
+      // Send final chunk
+      const finalChunk = {
+        id: requestId,
+        object: 'chat.completion.chunk',
+        created,
+        model,
+        choices: [{
+          index: 0,
+          delta: {},
+          finish_reason: 'stop'
+        }]
+      };
+      _reply.raw.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+      _reply.raw.write('data: [DONE]\n\n');
+      _reply.raw.end();
+      return _reply;
+    }
+
+    // Non-streaming response (existing behavior)
     return {
       id: requestId,
       object: 'chat.completion',
