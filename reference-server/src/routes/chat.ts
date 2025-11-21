@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens } from '../util';
+import { getModelAdapter } from '../util/model-adapters';
 import OzwellAI from 'ozwellai';
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -84,16 +85,22 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           timeout: 300000 // 5 minutes - Ollama can be slow with large tool contexts
         });
 
+        // Get model-specific adapter (e.g., for Qwen)
+        const adapter = getModelAdapter(model);
+
+        // Preprocess request with model-specific logic
+        const { messages: processedMessages, tools: processedTools } = adapter.preprocessRequest(messages, tools);
+
         const requestOptions: any = {
           model,
-          messages,
+          messages: processedMessages,
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
         };
 
         // Include tools if provided
-        if (tools && tools.length > 0) {
-          requestOptions.tools = tools;
+        if (processedTools && processedTools.length > 0) {
+          requestOptions.tools = processedTools;
         }
 
         // Handle streaming vs non-streaming
@@ -114,7 +121,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             });
 
             for await (const chunk of streamResponse) {
-              reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+              // Parse chunk with model-specific logic if needed
+              const parsedChunk = adapter.parseStreamChunk ? adapter.parseStreamChunk(chunk) : chunk;
+              reply.raw.write(`data: ${JSON.stringify(parsedChunk)}\n\n`);
             }
 
             reply.raw.write('data: [DONE]\n\n');
@@ -129,7 +138,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
         } else {
           const response = await ollamaClient.createChatCompletion(requestOptions);
-          return response;
+          // Parse response with model-specific logic (e.g., Qwen tool call format)
+          return adapter.parseResponse(response);
         }
       } catch (error: any) {
         request.log.error({ err: error }, 'Ollama request failed, falling back to local generator');
