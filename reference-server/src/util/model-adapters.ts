@@ -21,10 +21,10 @@ export interface ModelAdapter {
  * Check if the model is a Qwen model
  */
 export function isQwenModel(model: string): boolean {
-    return model.toLowerCase().includes('qwen');
-}
-
-// ============================================================================
+  const isQwen = model.toLowerCase().includes('qwen');
+  console.log(`[Model Adapter] Checking model: ${model}, isQwen: ${isQwen}`);
+  return isQwen;
+}// ============================================================================
 // Qwen-Specific Handling
 // ============================================================================
 
@@ -83,61 +83,67 @@ Only use this format when you need to call a tool. For regular responses, reply 
  * Qwen may output tool calls differently, this normalizes them
  */
 function parseQwenResponse(response: any): any {
-    // If no choices, return as-is
-    if (!response.choices || response.choices.length === 0) {
-        return response;
-    }
-
-    const choice = response.choices[0];
-    const message = choice.message;
-
-    // If message doesn't have content, return as-is
-    if (!message || !message.content) {
-        return response;
-    }
-
-    // Try to parse tool calls from content if they're embedded as JSON
-    try {
-        const content = message.content.trim();
-
-        // Check if the response looks like a tool call JSON
-        if (content.startsWith('{') && content.includes('"tool_calls"')) {
-            const parsed = JSON.parse(content);
-
-            if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-                // Move tool_calls from content to proper message field
-                return {
-                    ...response,
-                    choices: [{
-                        ...choice,
-                        message: {
-                            ...message,
-                            content: null,
-                            tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
-                                id: tc.id || `call_${Date.now()}_${index}`,
-                                type: tc.type || 'function',
-                                function: {
-                                    name: tc.function.name,
-                                    arguments: typeof tc.function.arguments === 'string'
-                                        ? tc.function.arguments
-                                        : JSON.stringify(tc.function.arguments)
-                                }
-                            }))
-                        },
-                        finish_reason: 'tool_calls'
-                    }]
-                };
-            }
-        }
-    } catch (e) {
-        // If parsing fails, return original response
-        // The content might just be regular text that happens to contain JSON-like strings
-    }
-
+  console.log('[Qwen Parser] Input response:', JSON.stringify(response, null, 2));
+  
+  // If no choices, return as-is
+  if (!response.choices || response.choices.length === 0) {
     return response;
-}
+  }
 
-/**
+  const choice = response.choices[0];
+  const message = choice.message;
+
+  // If message doesn't have content, return as-is
+  if (!message || !message.content) {
+    return response;
+  }
+
+  console.log('[Qwen Parser] Message content:', message.content);
+
+  // Try to parse tool calls from content if they're embedded as JSON
+  try {
+    const content = message.content.trim();
+    
+    // Check if the response looks like a tool call JSON
+    // Handle both formats: { "tool_calls": [...] } or just the array
+    if (content.startsWith('{') && content.includes('tool_calls')) {
+      const parsed = JSON.parse(content);
+      console.log('[Qwen Parser] Parsed JSON:', parsed);
+      
+      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+        const transformed = {
+          ...response,
+          choices: [{
+            ...choice,
+            message: {
+              ...message,
+              content: null,
+              tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
+                id: tc.id || `call_${Date.now()}_${index}`,
+                type: tc.type || 'function',
+                function: {
+                  name: tc.function.name,
+                  arguments: typeof tc.function.arguments === 'string' 
+                    ? tc.function.arguments 
+                    : JSON.stringify(tc.function.arguments)
+                }
+              }))
+            },
+            finish_reason: 'tool_calls'
+          }]
+        };
+        console.log('[Qwen Parser] Transformed response:', JSON.stringify(transformed, null, 2));
+        return transformed;
+      }
+    }
+  } catch (e) {
+    // If parsing fails, log for debugging but return original
+    console.error('Qwen parsing error:', e);
+  }
+
+  console.log('[Qwen Parser] Returning original response');
+  return response;
+}/**
  * Parse Qwen streaming chunk to ensure it matches OpenAI format
  */
 function parseQwenStreamChunk(chunk: any): any {
