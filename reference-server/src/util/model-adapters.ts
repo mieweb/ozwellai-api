@@ -21,9 +21,9 @@ export interface ModelAdapter {
  * Check if the model is a Qwen model
  */
 export function isQwenModel(model: string): boolean {
-  const isQwen = model.toLowerCase().includes('qwen');
-  console.log(`[Model Adapter] Checking model: ${model}, isQwen: ${isQwen}`);
-  return isQwen;
+    const isQwen = model.toLowerCase().includes('qwen');
+    console.log(`[Model Adapter] Checking model: ${model}, isQwen: ${isQwen}`);
+    return isQwen;
 }// ============================================================================
 // Qwen-Specific Handling
 // ============================================================================
@@ -83,74 +83,121 @@ Only use this format when you need to call a tool. For regular responses, reply 
  * Qwen may output tool calls differently, this normalizes them
  */
 function parseQwenResponse(response: any): any {
-  console.log('[Qwen Parser] Input response:', JSON.stringify(response, null, 2));
-  
-  // If no choices, return as-is
-  if (!response.choices || response.choices.length === 0) {
-    return response;
-  }
+    console.log('[Qwen Parser] Input response:', JSON.stringify(response, null, 2));
 
-  const choice = response.choices[0];
-  const message = choice.message;
-
-  // If message doesn't have content, return as-is
-  if (!message || !message.content) {
-    return response;
-  }
-
-  console.log('[Qwen Parser] Message content:', message.content);
-
-  // Try to parse tool calls from content if they're embedded as JSON
-  try {
-    const content = message.content.trim();
-    
-    // Check if the response looks like a tool call JSON
-    // Handle both formats: { "tool_calls": [...] } or just the array
-    if (content.startsWith('{') && content.includes('tool_calls')) {
-      const parsed = JSON.parse(content);
-      console.log('[Qwen Parser] Parsed JSON:', parsed);
-      
-      if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-        const transformed = {
-          ...response,
-          choices: [{
-            ...choice,
-            message: {
-              ...message,
-              content: null,
-              tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
-                id: tc.id || `call_${Date.now()}_${index}`,
-                type: tc.type || 'function',
-                function: {
-                  name: tc.function.name,
-                  arguments: typeof tc.function.arguments === 'string' 
-                    ? tc.function.arguments 
-                    : JSON.stringify(tc.function.arguments)
-                }
-              }))
-            },
-            finish_reason: 'tool_calls'
-          }]
-        };
-        console.log('[Qwen Parser] Transformed response:', JSON.stringify(transformed, null, 2));
-        return transformed;
-      }
+    // If no choices, return as-is
+    if (!response.choices || response.choices.length === 0) {
+        return response;
     }
-  } catch (e) {
-    // If parsing fails, log for debugging but return original
-    console.error('Qwen parsing error:', e);
-  }
 
-  console.log('[Qwen Parser] Returning original response');
-  return response;
+    const choice = response.choices[0];
+    const message = choice.message;
+
+    // If message doesn't have content, return as-is
+    if (!message || !message.content) {
+        return response;
+    }
+
+    console.log('[Qwen Parser] Message content:', message.content);
+
+    // Try to parse tool calls from content if they're embedded as JSON
+    try {
+        const content = message.content.trim();
+
+        // Check if the response looks like a tool call JSON
+        // Handle both formats: { "tool_calls": [...] } or just the array
+        if (content.startsWith('{') && content.includes('tool_calls')) {
+            const parsed = JSON.parse(content);
+            console.log('[Qwen Parser] Parsed JSON:', parsed);
+
+            if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+                const transformed = {
+                    ...response,
+                    choices: [{
+                        ...choice,
+                        message: {
+                            ...message,
+                            content: null,
+                            tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
+                                id: tc.id || `call_${Date.now()}_${index}`,
+                                type: tc.type || 'function',
+                                function: {
+                                    name: tc.function.name,
+                                    arguments: typeof tc.function.arguments === 'string'
+                                        ? tc.function.arguments
+                                        : JSON.stringify(tc.function.arguments)
+                                }
+                            }))
+                        },
+                        finish_reason: 'tool_calls'
+                    }]
+                };
+                console.log('[Qwen Parser] Transformed response:', JSON.stringify(transformed, null, 2));
+                return transformed;
+            }
+        }
+    } catch (e) {
+        // If parsing fails, log for debugging but return original
+        console.error('Qwen parsing error:', e);
+    }
+
+    console.log('[Qwen Parser] Returning original response');
+    return response;
 }/**
  * Parse Qwen streaming chunk to ensure it matches OpenAI format
+ * Accumulates content and detects tool calls in streaming responses
  */
-function parseQwenStreamChunk(chunk: any): any {
-    // For streaming, we'll accumulate content and parse at the end
-    // This is a simple pass-through for now, but could be enhanced
-    // to detect when tool calls are being streamed
-    return chunk;
+function createQwenStreamParser() {
+    let accumulatedContent = '';
+    let toolCallDetected = false;
+
+    return function parseQwenStreamChunk(chunk: any): any {
+        console.log('[Qwen Stream Parser] Chunk:', JSON.stringify(chunk));
+
+        // Check if this chunk has content
+        if (chunk.choices?.[0]?.delta?.content) {
+            accumulatedContent += chunk.choices[0].delta.content;
+            console.log('[Qwen Stream Parser] Accumulated:', accumulatedContent);
+
+            // Try to detect if we have a complete tool call JSON
+            if (!toolCallDetected && accumulatedContent.trim().startsWith('{') && accumulatedContent.includes('tool_calls')) {
+                try {
+                    // Try to parse the accumulated content
+                    const parsed = JSON.parse(accumulatedContent.trim());
+                    
+                    if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+                        toolCallDetected = true;
+                        console.log('[Qwen Stream Parser] Tool call detected!', parsed);
+                        
+                        // Return a chunk with tool_calls instead of content
+                        return {
+                            ...chunk,
+                            choices: [{
+                                ...chunk.choices[0],
+                                delta: {
+                                    tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
+                                        id: tc.id || `call_${Date.now()}_${index}`,
+                                        type: tc.type || 'function',
+                                        function: {
+                                            name: tc.function.name,
+                                            arguments: typeof tc.function.arguments === 'string'
+                                                ? tc.function.arguments
+                                                : JSON.stringify(tc.function.arguments)
+                                        }
+                                    }))
+                                },
+                                finish_reason: 'tool_calls'
+                            }]
+                        };
+                    }
+                } catch (e) {
+                    // Not complete yet, keep accumulating
+                }
+            }
+        }
+
+        return chunk;
+    };
 }
 
 // ============================================================================
@@ -165,7 +212,7 @@ export function getModelAdapter(model: string): ModelAdapter {
         return {
             preprocessRequest: preprocessQwenRequest,
             parseResponse: parseQwenResponse,
-            parseStreamChunk: parseQwenStreamChunk,
+            parseStreamChunk: createQwenStreamParser(),
         };
     }
 
