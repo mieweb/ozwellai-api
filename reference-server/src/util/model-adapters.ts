@@ -11,6 +11,7 @@ export interface ModelAdapter {
     preprocessRequest: (messages: any[], tools?: any[]) => { messages: any[]; tools?: any[] };
     parseResponse: (response: any) => any;
     parseStreamChunk?: (chunk: any) => any;
+    hasTools?: boolean; // Track if tools were provided in the request
 }
 
 // ============================================================================
@@ -146,8 +147,9 @@ function parseQwenResponse(response: any): any {
 }/**
  * Parse Qwen streaming chunk to ensure it matches OpenAI format
  * Accumulates content and detects tool calls in streaming responses
+ * ONLY when tools were provided in the request
  */
-function createQwenStreamParser() {
+function createQwenStreamParser(hasTools: boolean) {
     let accumulatedContent = '';
     let toolCallDetected = false;
 
@@ -159,23 +161,41 @@ function createQwenStreamParser() {
             accumulatedContent += chunk.choices[0].delta.content;
             console.log('[Qwen Stream Parser] Accumulated:', accumulatedContent);
 
-            // Try to detect if we have a complete tool call JSON
-            if (!toolCallDetected && accumulatedContent.trim().startsWith('{') && accumulatedContent.includes('tool_calls')) {
+            // ONLY try to detect tool calls if tools were provided in the request
+            if (hasTools && !toolCallDetected && accumulatedContent.trim().startsWith('{')) {
                 try {
                     // Try to parse the accumulated content
                     const parsed = JSON.parse(accumulatedContent.trim());
-                    
+
+                    let toolCalls = null;
+
+                    // Check for OpenAI format with tool_calls array
                     if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+                        toolCalls = parsed.tool_calls;
+                    }
+                    // Check for Qwen's direct function call format
+                    else if (parsed.name && parsed.arguments) {
+                        toolCalls = [{
+                            id: `call_${Date.now()}`,
+                            type: 'function',
+                            function: {
+                                name: parsed.name,
+                                arguments: parsed.arguments
+                            }
+                        }];
+                    }
+
+                    if (toolCalls) {
                         toolCallDetected = true;
-                        console.log('[Qwen Stream Parser] Tool call detected!', parsed);
-                        
+                        console.log('[Qwen Stream Parser] Tool call detected!', toolCalls);
+
                         // Return a chunk with tool_calls instead of content
                         return {
                             ...chunk,
                             choices: [{
                                 ...chunk.choices[0],
                                 delta: {
-                                    tool_calls: parsed.tool_calls.map((tc: any, index: number) => ({
+                                    tool_calls: toolCalls.map((tc: any, index: number) => ({
                                         id: tc.id || `call_${Date.now()}_${index}`,
                                         type: tc.type || 'function',
                                         function: {
@@ -206,13 +226,16 @@ function createQwenStreamParser() {
 
 /**
  * Get the appropriate model adapter based on the model name
+ * @param model - The model identifier
+ * @param hasTools - Whether tools are provided in the request
  */
-export function getModelAdapter(model: string): ModelAdapter {
+export function getModelAdapter(model: string, hasTools: boolean = false): ModelAdapter {
     if (isQwenModel(model)) {
         return {
             preprocessRequest: preprocessQwenRequest,
             parseResponse: parseQwenResponse,
-            parseStreamChunk: createQwenStreamParser(),
+            parseStreamChunk: createQwenStreamParser(hasTools),
+            hasTools,
         };
     }
 
@@ -221,5 +244,6 @@ export function getModelAdapter(model: string): ModelAdapter {
         preprocessRequest: (messages: any[], tools?: any[]) => ({ messages, tools }),
         parseResponse: (response: any) => response,
         parseStreamChunk: (chunk: any) => chunk,
+        hasTools,
     };
 }
