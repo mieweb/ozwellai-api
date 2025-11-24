@@ -15,6 +15,15 @@ interface Tool {
   };
 }
 
+interface ToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 interface MockChatRequest {
   model: string;
   messages: ChatMessage[];
@@ -79,7 +88,7 @@ function extractContextFromSystem(messages: ChatMessage[]): { name: string; addr
   };
 }
 
-function generateMockResponse(userMessage: string, context: { name: string; address: string; zipCode: string } | null, tools: Tool[], hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: unknown[] } {
+function generateMockResponse(userMessage: string, context: { name: string; address: string; zipCode: string } | null, tools: Tool[], hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
   const msg = userMessage.toLowerCase();
 
   // If this is the second round (after tool execution), generate final response
@@ -373,7 +382,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
 
       // Send tool calls if present (streaming format requires index on each tool call)
       if (assistantMessage.tool_calls) {
-        const toolCallsWithIndex = assistantMessage.tool_calls.map((tc: any, idx: number) => ({
+        const toolCallsWithIndex = assistantMessage.tool_calls.map((tc: ToolCall, idx: number) => ({
           index: idx,
           id: tc.id,
           type: tc.type,

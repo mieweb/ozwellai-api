@@ -1,6 +1,19 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens } from '../util';
 import OzwellAI from 'ozwellai';
+import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
+import type { ChatCompletionRequest, Message } from '../../../spec/index';
+
+// Local helper types to support tool definitions in the server
+type ToolFunction = {
+  name: string;
+  description?: string;
+  parameters?: unknown;
+};
+
+type ToolDef = { type: 'function'; function: ToolFunction };
+type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
+type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name'] };
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
@@ -58,8 +71,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid API key provided', 'invalid_request_error');
     }
 
-    const body = request.body as any;
+    const body = request.body as ChatCompletionRequestWithTools;
     const { model, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+
+    // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
+    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
+      role: m.role,
+      content: m.content ?? '',
+      name: m.name
+    }));
 
     // Extract API key from authorization header
     const authHeader = request.headers.authorization || '';
@@ -85,16 +105,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         });
 
         // Pass through without preprocessing (client-side handles parsing)
-        const requestOptions: any = {
+        const requestOptions: ChatCompletionRequestWithTools = {
           model,
-          messages,
+          messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
         };
 
         // Include tools if provided
         if (tools && tools.length > 0) {
-          requestOptions.tools = tools;
+          requestOptions.tools = tools as ToolDef[];
         }
 
         // Handle streaming vs non-streaming
@@ -109,10 +129,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           });
 
           try {
-            const streamResponse = ollamaClient.createChatCompletionStream({
-              ...requestOptions,
-              stream: true
-            });
+            // Client type may not include "tools" in the ChatCompletionRequest by design,
+            // so cast via unknown to pass through our tooling information to the client.
+            const requestForClient: ChatCompletionRequest = {
+              model: requestOptions.model,
+              messages: requestOptions.messages as ChatCompletionRequest['messages'],
+              ...(max_tokens && { max_tokens }),
+              ...(temperature !== undefined && { temperature }),
+              stream: true,
+            };
+            const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
             for await (const chunk of streamResponse) {
               // Pass through chunk unchanged (client-side handles parsing)
@@ -122,20 +148,29 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
             return;
-          } catch (streamError: any) {
-            request.log.error({ err: streamError }, 'Ollama streaming failed after headers sent');
+          } catch (streamError: unknown) {
+            const errToLog = streamError instanceof Error ? streamError : new Error(String(streamError));
+            request.log.error({ err: errToLog }, 'Ollama streaming failed after headers sent');
             // Headers already sent, just end the stream
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
             return;
           }
         } else {
-          const response = await ollamaClient.createChatCompletion(requestOptions);
+          const requestForClientNonStream: ChatCompletionRequest = {
+            model: requestOptions.model,
+            messages: requestOptions.messages as ChatCompletionRequest['messages'],
+            ...(max_tokens && { max_tokens }),
+            ...(temperature !== undefined && { temperature }),
+            stream: false,
+          };
+          const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
           // Pass through response unchanged (client-side handles parsing)
           return response;
         }
-      } catch (error: any) {
-        request.log.error({ err: error }, 'Ollama request failed, falling back to local generator');
+      } catch (error: unknown) {
+        const errToLog = error instanceof Error ? error : new Error(String(error));
+        request.log.error({ err: errToLog }, 'Ollama request failed, falling back to local generator');
         // Only fall through if headers haven't been sent yet
         if (reply.raw.headersSent) {
           return;
@@ -144,7 +179,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Create prompt from messages
-    const prompt = messages.map((msg: any) => `${msg.role}: ${msg.content}`).join('\n');
+    const prompt = (messages as Message[]).map((msg) => `${msg.role}: ${msg.content}`).join('\n');
     const requestId = generateId('chatcmpl');
     const created = Math.floor(Date.now() / 1000);
 
