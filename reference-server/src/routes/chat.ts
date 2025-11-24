@@ -86,7 +86,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         });
 
         // Get model-specific adapter (e.g., for Qwen)
-        const adapter = getModelAdapter(model);
+        const adapter = getModelAdapter(model, !!(tools && tools.length > 0));
 
         // Preprocess request with model-specific logic
         const { messages: processedMessages, tools: processedTools } = adapter.preprocessRequest(messages, tools);
