@@ -195,6 +195,17 @@ function createQwenStreamParser(hasTools: boolean) {
                             }
                         }];
                     }
+                    // Check for Qwen's actual format: { "name": "...", "arguments": {...} }
+                    else if (parsed.name && parsed.arguments) {
+                        toolCalls = [{
+                            id: `call_${Date.now()}`,
+                            type: 'function',
+                            function: {
+                                name: parsed.name,
+                                arguments: parsed.arguments
+                            }
+                        }];
+                    }
 
                     if (toolCalls) {
                         toolCallDetected = true;
