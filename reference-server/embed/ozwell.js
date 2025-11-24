@@ -560,6 +560,10 @@ async function sendMessageNonStreaming(text, tools) {
     const toolCalls = choice.message?.tool_calls || null;
 
     // Handle tool calls (dynamic - works with any tool from parent config)
+    // If we have tool_calls from the response (structured), hide raw JSON content
+    const parsedFromContent = parseToolCallsFromContent(assistantContent);
+    const shouldHideContent = parsedFromContent?.shouldHideContent || (!!toolCalls && toolCalls.length > 0);
+
     if (toolCalls && toolCalls.length > 0) {
       console.log('[widget.js] Model returned tool calls:', toolCalls);
 
@@ -600,8 +604,8 @@ async function sendMessageNonStreaming(text, tools) {
         }
       }
 
-      // Display text content in UI if present
-      if (assistantContent && assistantContent.trim()) {
+      // Display text content in UI if present and not hidden (parsed/structured tool calls should hide the raw JSON)
+      if (!shouldHideContent && assistantContent && assistantContent.trim()) {
         lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
       }
@@ -863,7 +867,7 @@ function parseToolCallsFromContent(content) {
 
     if (hasToolCalls || parsedResult) {
       const toolCalls = hasToolCalls ? accumulatedToolCalls : parsedResult.toolCalls;
-      const shouldHideContent = parsedResult?.shouldHideContent || false;
+      const shouldHideContent = parsedResult?.shouldHideContent || hasToolCalls || false;
       console.log('[widget.js] Tool calls detected:', toolCalls);
 
       // Store assistant message with tool_calls in history
