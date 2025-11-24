@@ -12,8 +12,82 @@ type ToolFunction = {
 };
 
 type ToolDef = { type: 'function'; function: ToolFunction };
+type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
 type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name'] };
+
+// Helper: try to detect tool calls from JSON content and convert to ToolCall[]
+function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
+  if (!content) return null;
+  let text = content.trim();
+  // strip markdown code block if present
+  const mdMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+  if (mdMatch) text = mdMatch[1].trim();
+
+  try {
+    const parsed = JSON.parse(text);
+    // already an array of tool_calls
+    if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
+      return parsed.tool_calls.map((tc: any, idx: number) => ({
+        id: tc.id || `call_${Date.now()}_${idx}`,
+        type: tc.type || 'function',
+        function: {
+          name: tc.function?.name || tc.name,
+          arguments: typeof tc.function?.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function?.arguments || tc.arguments || {})
+        }
+      }));
+    }
+
+    // Qwen-style: { name: 'fn', arguments: {...} }
+    if (parsed.name && parsed.arguments !== undefined) {
+      return [{
+        id: `call_${Date.now()}_0`,
+        type: 'function',
+        function: {
+          name: parsed.name,
+          arguments: typeof parsed.arguments === 'string' ? parsed.arguments : JSON.stringify(parsed.arguments)
+        }
+      }];
+    }
+
+    // function wrapper: { function: { name: 'fn', arguments: {...} } }
+    if (parsed.function?.name) {
+      return [{
+        id: `call_${Date.now()}_0`,
+        type: 'function',
+        function: {
+          name: parsed.function.name,
+          arguments: typeof parsed.function.arguments === 'string' ? parsed.function.arguments : JSON.stringify(parsed.function.arguments || {})
+        }
+      }];
+    }
+
+    // If parsed is an argument object (e.g., { name: 'Bob' }) and tools provided,
+    // attempt to find a single tool whose required parameters are all present
+    if (typeof parsed === 'object' && tools && Array.isArray(tools) && Object.keys(parsed).length > 0) {
+      const parsedKeys = Object.keys(parsed);
+      const matches = tools.filter((t) => {
+        const req = (t.function.parameters as any)?.required as string[] | undefined;
+        if (!req || req.length === 0) return false;
+        return req.every(k => parsedKeys.includes(k));
+      });
+      if (matches.length === 1) {
+        const tool = matches[0];
+        return [{
+          id: `call_${Date.now()}_0`,
+          type: 'function',
+          function: {
+            name: tool.function.name,
+            arguments: JSON.stringify(parsed)
+          }
+        }];
+      }
+    }
+  } catch (e) {
+    // not JSON or not recognized
+  }
+  return null;
+}
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
@@ -117,6 +191,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           requestOptions.tools = tools as ToolDef[];
         }
 
+        // (Parsing helper is defined at module scope)
+
         // Handle streaming vs non-streaming
         if (stream) {
           // Set up SSE streaming with CORS headers
@@ -141,9 +217,58 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             };
             const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
+            // Buffer map for accumulating assistant content per chat id
+            const buffers: Record<string, string> = {};
+
             for await (const chunk of streamResponse) {
-              // Pass through chunk unchanged (client-side handles parsing)
-              reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+              try {
+                const id = chunk.id as string;
+                const choice = chunk.choices?.[0];
+                const delta = choice?.delta;
+
+                // Initialize buffer
+                if (!buffers[id]) buffers[id] = '';
+
+                // Accumulate content deltas for parsing when the stream finishes
+                if (delta?.content) {
+                  buffers[id] += delta.content;
+                }
+
+                // Forward original chunk unchanged
+                reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+
+                // If model finished this message, attempt to parse as tool call and emit tool_calls
+                const finishReason = (choice as any)?.finish_reason || (delta as any)?.finish_reason;
+                if (finishReason === 'stop') {
+                  const content = buffers[id] || '';
+                  const extracted = tryExtractToolCallsFromContent(content, requestOptions.tools as ToolDef[] | undefined);
+                  if (extracted && extracted.length > 0) {
+                    const toolCallsWithIndex = extracted.map((tc: ToolCall, idx: number) => ({
+                      index: idx,
+                      id: tc.id || `call_${Date.now()}_${idx}`,
+                      type: tc.type,
+                      function: {
+                        name: tc.function.name,
+                        arguments: tc.function.arguments,
+                      }
+                    }));
+
+                    const toolChunk = {
+                      id,
+                      object: 'chat.completion.chunk',
+                      created: Math.floor(Date.now() / 1000),
+                      model,
+                      choices: [{ index: 0, delta: { tool_calls: toolCallsWithIndex }, finish_reason: null }]
+                    };
+                    reply.raw.write(`data: ${JSON.stringify(toolChunk)}\n\n`);
+                  }
+                  // cleanup buffer
+                  delete buffers[id];
+                }
+              } catch (err) {
+                // If anything goes wrong, still forward the chunk to the client
+                reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+              }
             }
 
             reply.raw.write('data: [DONE]\n\n');
@@ -167,7 +292,22 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             stream: false,
           };
           const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
-          // Pass through response unchanged (client-side handles parsing)
+          // If the model returned plain JSON as assistant content, try to convert it to tool_calls
+          try {
+            if (response && Array.isArray(response.choices)) {
+              for (const choice of response.choices) {
+                const msg = choice.message as any;
+                if (msg && !msg.tool_calls && typeof msg.content === 'string') {
+                  const extracted = tryExtractToolCallsFromContent(msg.content, requestOptions.tools as ToolDef[] | undefined);
+                  if (extracted && extracted.length > 0) {
+                    msg.tool_calls = extracted as any;
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            // No-op: parsing fallback should not break the response
+          }
           return response;
         }
       } catch (error: unknown) {
