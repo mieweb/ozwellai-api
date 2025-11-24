@@ -173,14 +173,14 @@ function createQwenStreamParser(hasTools: boolean) {
                     if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
                         toolCalls = parsed.tool_calls;
                     }
-                    // Check for Qwen's direct function call format
-                    else if (parsed.name && parsed.arguments) {
+                    // Check for Qwen's direct function call format: { "function": { "name": "...", "arguments": {...} } }
+                    else if (parsed.function?.name && parsed.function?.arguments) {
                         toolCalls = [{
                             id: `call_${Date.now()}`,
                             type: 'function',
                             function: {
-                                name: parsed.name,
-                                arguments: parsed.arguments
+                                name: parsed.function.name,
+                                arguments: parsed.function.arguments
                             }
                         }];
                     }
