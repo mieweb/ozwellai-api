@@ -162,10 +162,21 @@ function createQwenStreamParser(hasTools: boolean) {
             console.log('[Qwen Stream Parser] Accumulated:', accumulatedContent);
 
             // ONLY try to detect tool calls if tools were provided in the request
-            if (hasTools && !toolCallDetected && accumulatedContent.trim().startsWith('{')) {
+            if (hasTools && !toolCallDetected) {
+                let contentToParse = accumulatedContent.trim();
+
+                // Check if content is wrapped in markdown code block (```json ... ```)
+                const markdownMatch = contentToParse.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+                if (markdownMatch) {
+                    contentToParse = markdownMatch[1].trim();
+                } else if (!contentToParse.startsWith('{')) {
+                    // Not JSON-like content, skip parsing
+                    return chunk;
+                }
+
                 try {
                     // Try to parse the accumulated content
-                    const parsed = JSON.parse(accumulatedContent.trim());
+                    const parsed = JSON.parse(contentToParse);
 
                     let toolCalls = null;
 
