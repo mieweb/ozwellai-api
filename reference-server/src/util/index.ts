@@ -189,7 +189,3 @@ export function validateAuth(authorization: string | undefined): boolean {
   const token = authorization.substring(7);
   return token.length > 0; // Accept any non-empty token for testing
 }
-
-// Export model adapters
-export { getModelAdapter, isQwenModel } from './model-adapters';
-export type { ModelAdapter } from './model-adapters';
