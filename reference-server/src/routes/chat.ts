@@ -136,6 +136,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               messages: requestOptions.messages as ChatCompletionRequest['messages'],
               ...(max_tokens && { max_tokens }),
               ...(temperature !== undefined && { temperature }),
+              ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
             const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
@@ -162,6 +163,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             messages: requestOptions.messages as ChatCompletionRequest['messages'],
             ...(max_tokens && { max_tokens }),
             ...(temperature !== undefined && { temperature }),
+            ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };
           const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
