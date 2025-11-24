@@ -634,7 +634,87 @@ async function sendMessageNonStreaming(text, tools) {
   }
 }
 
-async function sendMessageStreaming(text, tools) {
+/**
+ * Parse tool calls from message content (for models that output JSON in text).
+ * Handles Qwen's format: outputs {"name": "function_name", "arguments": {...}} wrapped in markdown.
+ * 
+ * @param {string} content - The accumulated message content
+ * @returns {Object|null} Object with {toolCalls, shouldHideContent} or null if no tool calls found
+ */
+function parseToolCallsFromContent(content) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
+  try {
+    // Strip markdown code blocks (```json...``` or ```...```)
+    let jsonText = content.trim();
+    const markdownMatch = jsonText.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+    if (markdownMatch) {
+      jsonText = markdownMatch[1].trim();
+    }
+
+    // Try to parse as JSON
+    const parsed = JSON.parse(jsonText);
+
+    // Handle format: {"tool_calls": [...]}
+    if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
+      return {
+        toolCalls: parsed.tool_calls.map((tc, idx) => ({
+          id: tc.id || `call_${Date.now()}_${idx}`,
+          type: tc.type || 'function',
+          function: {
+            name: tc.function?.name || tc.name,
+            arguments: typeof tc.function?.arguments === 'string'
+              ? tc.function.arguments
+              : JSON.stringify(tc.function?.arguments || tc.arguments || {})
+          }
+        })),
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // Handle format: {"name": "function_name", "arguments": {...}} (Qwen's format)
+    if (parsed.name && parsed.arguments !== undefined) {
+      return {
+        toolCalls: [{
+          id: `call_${Date.now()}_0`,
+          type: 'function',
+          function: {
+            name: parsed.name,
+            arguments: typeof parsed.arguments === 'string'
+              ? parsed.arguments
+              : JSON.stringify(parsed.arguments)
+          }
+        }],
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // Handle format: {"function": {"name": "...", "arguments": ...}}
+    if (parsed.function?.name) {
+      return {
+        toolCalls: [{
+          id: `call_${Date.now()}_0`,
+          type: 'function',
+          function: {
+            name: parsed.function.name,
+            arguments: typeof parsed.function.arguments === 'string'
+              ? parsed.function.arguments
+              : JSON.stringify(parsed.function.arguments || {})
+          }
+        }],
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // No recognized tool call format
+    return null;
+  } catch (e) {
+    // Not valid JSON or doesn't match expected format
+    return null;
+  }
+} async function sendMessageStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
@@ -772,17 +852,25 @@ async function sendMessageStreaming(text, tools) {
       }
     }
 
-    // Check if we have tool calls
+    // Check if we have tool calls from deltas
     const hasToolCalls = accumulatedToolCalls.length > 0 && accumulatedToolCalls.some(tc => tc.function.name);
 
-    if (hasToolCalls) {
-      console.log('[widget.js] Model returned tool calls from stream:', accumulatedToolCalls);
+    // If no tool calls from deltas, check if content contains JSON tool calls
+    let parsedResult = null;
+    if (!hasToolCalls && fullContent.trim()) {
+      parsedResult = parseToolCallsFromContent(fullContent);
+    }
+
+    if (hasToolCalls || parsedResult) {
+      const toolCalls = hasToolCalls ? accumulatedToolCalls : parsedResult.toolCalls;
+      const shouldHideContent = parsedResult?.shouldHideContent || false;
+      console.log('[widget.js] Tool calls detected:', toolCalls);
 
       // Store assistant message with tool_calls in history
       const assistantMessage = {
         role: 'assistant',
         content: fullContent || '',
-        tool_calls: accumulatedToolCalls
+        tool_calls: toolCalls
       };
       state.messages.push(assistantMessage);
       console.log('[widget.js] Stored assistant message with tool_calls in history');
@@ -793,7 +881,7 @@ async function sendMessageStreaming(text, tools) {
       }
 
       // Execute each tool call
-      for (const toolCall of accumulatedToolCalls) {
+      for (const toolCall of toolCalls) {
         const toolName = toolCall.function?.name;
 
         if (toolName) {
@@ -804,6 +892,9 @@ async function sendMessageStreaming(text, tools) {
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
+            // Add execution message to chat
+            addMessage('system', `Executing ${toolName}...`);
+
             // Send tool call to parent via postMessage
             window.parent.postMessage({
               source: 'ozwell-chat-widget',
@@ -811,9 +902,6 @@ async function sendMessageStreaming(text, tools) {
               tool: toolName,
               payload: args
             }, '*');
-
-            // Add system message to chat
-            addMessage('system', `Executing ${toolName}...`);
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
             addMessage('system', `Error: Could not execute ${toolName}`);
@@ -821,8 +909,8 @@ async function sendMessageStreaming(text, tools) {
         }
       }
 
-      // Display text content if present (separate from tool execution)
-      if (fullContent && fullContent.trim()) {
+      // Display text content only if it shouldn't be hidden (i.e., not JSON)
+      if (!shouldHideContent && fullContent && fullContent.trim()) {
         lastAssistantMessage = fullContent;
         addMessage('assistant', fullContent);
       }
@@ -1021,7 +1109,20 @@ function handleParentMessage(event) {
   // Handle tool results from parent (OpenAI function calling protocol)
   if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
     console.log('[widget.js] Received tool result from parent:', data.result);
-    continueConversationWithToolResult(data.result);
+
+    // Display success/error message in chat
+    const result = data.result;
+    if (result.success && result.message) {
+      addMessage('assistant', result.message);
+      lastAssistantMessage = result.message;
+      saveButton?.removeAttribute('disabled');
+    } else if (result.error) {
+      addMessage('system', `Error: ${result.error}`);
+    }
+
+    // Note: continueConversationWithToolResult() removed - not needed since we're already
+    // showing the success message. The extra LLM call was adding latency and Qwen was
+    // just echoing JSON instead of providing natural language response.
     return;
   }
 
