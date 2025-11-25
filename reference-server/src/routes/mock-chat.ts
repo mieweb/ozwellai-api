@@ -6,6 +6,56 @@ interface ChatMessage {
   content: string;
 }
 
+interface StreamingConfig {
+  initialDelayMs: number;    // Delay before first token (simulates TTFB)
+  perChunkDelayMs: number;   // Delay between each chunk
+  chunkSize: number;         // Characters per chunk
+  enableJitter: boolean;     // Add random variance to delays
+}
+
+/**
+ * Sleep helper for simulating delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Split text into chunks for streaming
+ */
+function splitIntoChunks(text: string, chunkSize: number): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+/**
+ * Get streaming configuration from query parameters
+ */
+function getStreamingConfig(queryParams: Record<string, unknown>): StreamingConfig {
+  // Preset modes
+  if (queryParams.slow === 'true') {
+    return { initialDelayMs: 2000, perChunkDelayMs: 150, chunkSize: 3, enableJitter: true };
+  }
+  if (queryParams.fast === 'true') {
+    return { initialDelayMs: 100, perChunkDelayMs: 30, chunkSize: 5, enableJitter: false };
+  }
+  if (queryParams.realistic === 'true' || !queryParams.initialDelay) {
+    // Default realistic mode
+    return { initialDelayMs: 500, perChunkDelayMs: 50, chunkSize: 3, enableJitter: true };
+  }
+
+  // Custom params
+  return {
+    initialDelayMs: parseInt(String(queryParams.initialDelay || '500'), 10),
+    perChunkDelayMs: parseInt(String(queryParams.chunkDelay || '50'), 10),
+    chunkSize: parseInt(String(queryParams.chunkSize || '3'), 10),
+    enableJitter: queryParams.jitter === 'true'
+  };
+}
+
 interface Tool {
   type: string;
   function: {
@@ -364,24 +414,46 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
       _reply.raw.setHeader('Connection', 'keep-alive');
       _reply.raw.setHeader('Access-Control-Allow-Origin', '*');
 
-      // Send content as streaming chunks
+      // Get streaming config from query params
+      const streamingConfig = getStreamingConfig(request.query as Record<string, unknown>);
+
+      // Initial delay (simulate TTFB/model loading)
+      await sleep(streamingConfig.initialDelayMs);
+
+      // Stream text content in chunks
       if (assistantMessage.content) {
-        const chunk = {
-          id: requestId,
-          object: 'chat.completion.chunk',
-          created,
-          model,
-          choices: [{
-            index: 0,
-            delta: { content: assistantMessage.content },
-            finish_reason: null
-          }]
-        };
-        _reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        const chunks = splitIntoChunks(
+          assistantMessage.content,
+          streamingConfig.chunkSize
+        );
+
+        for (const chunk of chunks) {
+          const delay = streamingConfig.perChunkDelayMs;
+          const actualDelay = streamingConfig.enableJitter
+            ? delay * (0.7 + Math.random() * 0.6)  // ±30% variance
+            : delay;
+
+          await sleep(actualDelay);
+
+          _reply.raw.write(`data: ${JSON.stringify({
+            id: requestId,
+            object: 'chat.completion.chunk',
+            created,
+            model,
+            choices: [{
+              index: 0,
+              delta: { content: chunk },
+              finish_reason: null
+            }]
+          })}\n\n`);
+        }
       }
 
       // Send tool calls if present (streaming format requires index on each tool call)
       if (assistantMessage.tool_calls) {
+        // Brief pause before tool call appears
+        await sleep(200);
+
         const toolCallsWithIndex = assistantMessage.tool_calls.map((tc: ToolCall, idx: number) => ({
           index: idx,
           id: tc.id,
@@ -389,7 +461,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
           function: tc.function
         }));
 
-        const chunk = {
+        _reply.raw.write(`data: ${JSON.stringify({
           id: requestId,
           object: 'chat.completion.chunk',
           created,
@@ -399,12 +471,12 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
             delta: { tool_calls: toolCallsWithIndex },
             finish_reason: null
           }]
-        };
-        _reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        })}\n\n`);
       }
 
       // Send final chunk
-      const finalChunk = {
+      await sleep(100); // Small delay before finish
+      _reply.raw.write(`data: ${JSON.stringify({
         id: requestId,
         object: 'chat.completion.chunk',
         created,
@@ -414,8 +486,7 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
           delta: {},
           finish_reason: 'stop'
         }]
-      };
-      _reply.raw.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+      })}\n\n`);
       _reply.raw.write('data: [DONE]\n\n');
       _reply.raw.end();
       return _reply;
