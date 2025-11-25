@@ -4,6 +4,11 @@ import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
 
+// SSE Heartbeat Configuration
+// Send keepalive every 25s to prevent 60s Nginx timeout
+const STREAMING_HEARTBEAT_ENABLED = process.env.STREAMING_HEARTBEAT_ENABLED !== 'false'; // enabled by default
+const STREAMING_HEARTBEAT_MS = parseInt(process.env.STREAMING_HEARTBEAT_MS || '25000', 10);
+
 // Local helper types to support tool definitions in the server
 type ToolFunction = {
   name: string;
@@ -204,6 +209,25 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-credentials': 'true',
           });
 
+          // Start SSE heartbeat to prevent proxy timeout during slow model loading
+          let heartbeatInterval: NodeJS.Timeout | null = null;
+          if (STREAMING_HEARTBEAT_ENABLED) {
+            // Send initial warming event
+            reply.raw.write(': heartbeat\n\n');
+
+            heartbeatInterval = setInterval(() => {
+              try {
+                reply.raw.write(': heartbeat\n\n');
+              } catch (e) {
+                // Connection closed, clear interval
+                if (heartbeatInterval) {
+                  clearInterval(heartbeatInterval);
+                  heartbeatInterval = null;
+                }
+              }
+            }, STREAMING_HEARTBEAT_MS);
+          }
+
           try {
             // Client type may not include "tools" in the ChatCompletionRequest by design,
             // so cast via unknown to pass through our tooling information to the client.
@@ -273,10 +297,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
+
+            // Clear heartbeat interval
+            if (heartbeatInterval) {
+              clearInterval(heartbeatInterval);
+              heartbeatInterval = null;
+            }
+
             return;
           } catch (streamError: unknown) {
             const errToLog = streamError instanceof Error ? streamError : new Error(String(streamError));
             request.log.error({ err: errToLog }, 'Ollama streaming failed after headers sent');
+
+            // Clear heartbeat interval
+            if (heartbeatInterval) {
+              clearInterval(heartbeatInterval);
+              heartbeatInterval = null;
+            }
+
             // Headers already sent, just end the stream
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
