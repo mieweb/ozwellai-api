@@ -60,7 +60,7 @@ export class SimpleTextGenerator {
     while (response.length < targetLength * 0.7) {
       const contIndex = Math.floor(rng() * this.CONTINUATIONS.length);
       response += this.CONTINUATIONS[contIndex];
-
+      
       // Add some varied content
       const words = prompt.toLowerCase().split(' ').filter(w => w.length > 3);
       if (words.length > 0) {
@@ -86,7 +86,7 @@ export class SimpleTextGenerator {
   static *generateStream(prompt: string, maxTokens: number = 150): Generator<string> {
     const fullResponse = this.generate(prompt, maxTokens);
     const words = fullResponse.split(' ');
-
+    
     // Yield words one by one to simulate streaming
     let current = '';
     for (const word of words) {
@@ -106,7 +106,7 @@ export class SimpleTextGenerator {
   }
 
   private static seededRandom(seed: number): () => number {
-    return function () {
+    return function() {
       seed = (seed * 9301 + 49297) % 233280;
       return seed / 233280;
     };
@@ -125,20 +125,20 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
     hash = hash & hash; // Convert to 32-bit integer
   }
   const seed = Math.abs(hash);
-
+  
   // Seeded random number generator
   let currentSeed = seed;
   const rng = () => {
     currentSeed = (currentSeed * 9301 + 49297) % 233280;
     return currentSeed / 233280;
   };
-
+  
   const embedding = new Array(dimensions);
   for (let i = 0; i < dimensions; i++) {
     // Generate values in a reasonable range for embeddings (-1 to 1)
     embedding[i] = (rng() - 0.5) * 2;
   }
-
+  
   // Normalize the vector
   const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
   if (magnitude === 0) {
