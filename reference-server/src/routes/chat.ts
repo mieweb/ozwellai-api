@@ -13,13 +13,50 @@ const STREAMING_HEARTBEAT_MS = parseInt(process.env.STREAMING_HEARTBEAT_MS || '2
 type ToolFunction = {
   name: string;
   description?: string;
-  parameters?: unknown;
+  parameters?: JSONSchemaParameters;
 };
 
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
 type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name'] };
+
+// JSON Schema type for tool function parameters
+type JSONSchemaParameters = {
+  type?: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+  [key: string]: unknown;
+};
+
+// Raw tool call structure from parsed JSON (before normalization)
+type RawToolCallJSON = {
+  id?: string;
+  type?: string;
+  name?: string;
+  function?: {
+    name?: string;
+    arguments?: string | Record<string, unknown>;
+  };
+  arguments?: string | Record<string, unknown>;
+};
+
+// Streaming chunk structure with finish_reason
+type StreamingChoice = {
+  index?: number;
+  delta?: {
+    content?: string;
+    finish_reason?: string;
+  };
+  finish_reason?: string;
+};
+
+// Chat message with optional tool_calls (for mutation)
+type ChatMessage = {
+  role: string;
+  content?: string;
+  tool_calls?: ToolCall[];
+};
 
 // Helper: try to detect tool calls from JSON content and convert to ToolCall[]
 function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
@@ -33,7 +70,7 @@ function tryExtractToolCallsFromContent(content: string | undefined, tools?: Too
     const parsed = JSON.parse(text);
     // already an array of tool_calls
     if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
-      return parsed.tool_calls.map((tc: any, idx: number) => ({
+      return parsed.tool_calls.map((tc: RawToolCallJSON, idx: number) => ({
         id: tc.id || `call_${Date.now()}_${idx}`,
         type: tc.type || 'function',
         function: {
@@ -72,7 +109,7 @@ function tryExtractToolCallsFromContent(content: string | undefined, tools?: Too
     if (typeof parsed === 'object' && tools && Array.isArray(tools) && Object.keys(parsed).length > 0) {
       const parsedKeys = Object.keys(parsed);
       const matches = tools.filter((t) => {
-        const req = (t.function.parameters as any)?.required as string[] | undefined;
+        const req = t.function.parameters?.required;
         if (!req || req.length === 0) return false;
         return req.every(k => parsedKeys.includes(k));
       });
@@ -262,7 +299,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
 
                 // If model finished this message, attempt to parse as tool call and emit tool_calls
-                const finishReason = (choice as any)?.finish_reason || (delta as any)?.finish_reason;
+                const finishReason = (choice as StreamingChoice)?.finish_reason || (delta as StreamingChoice)?.finish_reason;
                 if (finishReason === 'stop') {
                   const content = buffers[id] || '';
                   const extracted = tryExtractToolCallsFromContent(content, requestOptions.tools as ToolDef[] | undefined);
@@ -334,11 +371,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           try {
             if (response && Array.isArray(response.choices)) {
               for (const choice of response.choices) {
-                const msg = choice.message as any;
+                const msg = choice.message as ChatMessage;
                 if (msg && !msg.tool_calls && typeof msg.content === 'string') {
                   const extracted = tryExtractToolCallsFromContent(msg.content, requestOptions.tools as ToolDef[] | undefined);
                   if (extracted && extracted.length > 0) {
-                    msg.tool_calls = extracted as any;
+                    msg.tool_calls = extracted;
                   }
                 }
               }
