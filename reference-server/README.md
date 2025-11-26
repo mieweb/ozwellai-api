@@ -57,7 +57,7 @@ The server will start at `http://localhost:3000`
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
 - Change one line in the HTML to switch to Ollama mode
 - Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
-- Requires Ollama running with `llama3.1:8b` model
+- Requires Ollama running with a compatible model
 
 **For deployment:** Run Ollama in your container or set `OLLAMA_BASE_URL` to your LLM endpoint for real responses.
 
@@ -251,7 +251,9 @@ Environment variables:
 - `NODE_ENV` - Environment (development/production)
 - `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://localhost:11434)
 - `AI_MODE` - AI mode for embed chat: 'ollama' or 'mock' (default: ollama)
-- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: llama3.2)
+- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: qwen2.5-coder:3b)
+- `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
+- `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
 
 ## Error Handling
 
