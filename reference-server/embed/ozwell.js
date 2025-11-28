@@ -344,6 +344,7 @@ const state = {
   messages: [],
   sending: false,
   formData: null, // Form context from parent page
+  activeToolCalls: {}, // Track tool_call_id by tool name for OpenAI protocol
 };
 
 console.log('[widget.js] Widget initializing...');
@@ -899,11 +900,15 @@ function parseToolCallsFromContent(content) {
             // Add execution message to chat
             addMessage('system', `Executing ${toolName}...`);
 
+            // Store tool_call_id for later use in tool message
+            state.activeToolCalls[toolName] = toolCall.id;
+
             // Send tool call to parent via postMessage
             window.parent.postMessage({
               source: 'ozwell-chat-widget',
               type: 'tool_call',
               tool: toolName,
+              tool_call_id: toolCall.id,  // Include ID for parent logging/tracking
               payload: args
             }, '*');
           } catch (error) {
@@ -1129,9 +1134,18 @@ function handleParentMessage(event) {
       // Get tool - raw data returned, need to send back to LLM for final answer
       console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
 
-      // Add tool result to conversation history
+      // Get tool_call_id from parent response (required for OpenAI protocol)
+      const toolCallId = data.tool_call_id;
+      if (!toolCallId) {
+        console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
+        addMessage('system', 'Error: Tool result missing ID');
+        return;
+      }
+
+      // Add tool result to conversation history with tool_call_id
       state.messages.push({
         role: 'tool',
+        tool_call_id: toolCallId,
         content: JSON.stringify(result)
       });
 
