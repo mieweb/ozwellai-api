@@ -1114,19 +1114,41 @@ function handleParentMessage(event) {
   if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
     console.log('[widget.js] Received tool result from parent:', data.result);
 
-    // Display success/error message in chat
     const result = data.result;
+
+    // Check if this is an update tool (has success/message) or a get tool (raw data)
     if (result.success && result.message) {
+      // Update tool - just display the message (no LLM continuation needed)
       addMessage('assistant', result.message);
       lastAssistantMessage = result.message;
       saveButton?.removeAttribute('disabled');
     } else if (result.error) {
+      // Error case
       addMessage('system', `Error: ${result.error}`);
+    } else {
+      // Get tool - raw data returned, need to send back to LLM for final answer
+      console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
+
+      // Add tool result to conversation history
+      state.messages.push({
+        role: 'tool',
+        content: JSON.stringify(result)
+      });
+
+      // Continue conversation by calling LLM with tool result
+      const tools = state.config.tools?.map(tool => ({
+        type: 'function',
+        function: {
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: tool.function.parameters
+        }
+      })) || [];
+
+      // Send empty user message - we're just continuing the conversation with tool result
+      sendMessageStreaming('', tools);
     }
 
-    // Note: continueConversationWithToolResult() removed - not needed since we're already
-    // showing the success message. The extra LLM call was adding latency and Qwen was
-    // just echoing JSON instead of providing natural language response.
     return;
   }
 
