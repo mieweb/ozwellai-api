@@ -1,0 +1,38 @@
+name: Deploy Demo Site
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'landing-page/**'
+      - '.github/workflows/deploy-demo.yml'
+
+jobs:
+  deploy:
+    name: Deploy to ozwellai-embedtest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to container
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EMBEDTEST_HOST }}
+          port: 2240
+          username: ${{ secrets.EMBEDTEST_USER }}
+          password: ${{ secrets.EMBEDTEST_PASSWORD }}
+          script: |
+            cd ~/ozwellai-api
+
+            # Pull latest from main
+            git fetch origin
+            git checkout main
+            git pull origin main
+
+            # Restart landing page server
+            cd landing-page
+            pm2 restart embedtest
+
+            # Verify deployment
+            pm2 status
+            echo "Demo site deployed successfully!"
