@@ -245,13 +245,25 @@
     window.OzwellChatConfig = {
       containerId: 'chat-container',
       title: 'Ozwell Assistant',
-      placeholder: 'Try: "update my name to Bob"',
+      placeholder: 'Try: "what is my name?" or "update my name to Bob"',
       model: 'mock-ai',
       endpoint: `${normalizedBase}/mock/chat`,
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
-      system: 'You are a helpful assistant with access to the user\'s information. When the user asks questions about their information (e.g., "what is my name?"), answer directly from the context provided - do NOT call any tools. Only use update tools when the user explicitly asks to UPDATE, CHANGE, or MODIFY their information (e.g., "update my name to Bob").',
+      system: 'You are a helpful assistant. When the user asks about their information (name, address, zip code), call the get_form_data tool to retrieve it. When the user asks to update their information, use the appropriate update tool.',
       tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'get_form_data',
+            description: 'Retrieves the current user information including name, address, and zip code. Call this when the user asks about their current information.',
+            parameters: {
+              type: 'object',
+              properties: {},
+              required: []
+            }
+          }
+        },
         {
           type: 'function',
           function: {
