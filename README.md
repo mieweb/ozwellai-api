@@ -11,6 +11,20 @@
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-brightgreen.svg)](https://swagger.io/specification/)
 [![Zod](https://img.shields.io/badge/Schema-Zod-blue.svg)](https://github.com/colinhacks/zod)
 
+## Live Demo
+
+**Try it now:** [https://ozwellai-embedtest.opensource.mieweb.org](https://ozwellai-embedtest.opensource.mieweb.org)
+
+**Watch demo:** [YouTube Short](YOUTUBE_DEMO_SHORT_PLACEHOLDER)
+
+Experience the Ozwell AI chat widget with:
+- Real-time SSE streaming with Ollama
+- MCP tool calling via postMessage
+- Interactive demo with live event logging
+- Secure iframe isolation
+
+---
+
 ## Philosophy
 
 This public repository for Ozwell API is the canonical reference for the API, enabling both internal and external teams to build against a stable, well-documented contract.
