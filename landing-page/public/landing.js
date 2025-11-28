@@ -398,6 +398,34 @@
 
     // MCP Tool Handler Registry
     const toolHandlers = {
+      'get_form_data': function(args) {
+        console.log('[landing.js] ✓ Executing get_form_data tool handler');
+
+        logEvent(
+          'tool-call',
+          '[Tool Call] get_form_data',
+          'Retrieving current user information'
+        );
+
+        // Read current values from DOM
+        const formData = {
+          name: nameInput.value,
+          address: addressInput.value,
+          zipCode: zipInput.value
+        };
+
+        console.log('[landing.js] ✓ Form data retrieved:', formData);
+
+        logEvent(
+          'postmessage',
+          '[Handler] Form data retrieved',
+          JSON.stringify(formData, null, 2)
+        );
+
+        // Send result back to widget (OpenAI protocol)
+        sendToolResult(formData);
+      },
+
       'update_name': function(args) {
         console.log('[landing.js] ✓ Executing update_name tool handler:', args);
 
