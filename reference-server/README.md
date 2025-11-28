@@ -117,6 +117,8 @@ The server will start at `http://localhost:3000`
 
 **Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
 
+**Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
+
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
 - Change one line in the HTML to switch to Ollama mode
 - Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance

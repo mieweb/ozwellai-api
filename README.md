@@ -15,7 +15,7 @@
 
 **Try it now:** [https://ozwellai-embedtest.opensource.mieweb.org](https://ozwellai-embedtest.opensource.mieweb.org)
 
-**Watch demo:** [YouTube Short](YOUTUBE_DEMO_SHORT_PLACEHOLDER)
+**Watch demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
 Experience the Ozwell AI chat widget with:
 - Real-time SSE streaming with Ollama
