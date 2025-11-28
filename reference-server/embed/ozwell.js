@@ -412,48 +412,8 @@ function buildSystemPrompt(tools) {
   // Start with custom system prompt from parent config
   let systemPrompt = state.config.system || 'You are a helpful assistant.';
 
-  // APPEND form context if available (don't replace!)
-  if (state.formData) {
-    console.log('[widget.js] Including form context in system prompt:', state.formData);
-
-    // Check if formData has the expected landing page fields
-    if (state.formData.name !== undefined) {
-      systemPrompt += `\n\nYou have access to the following user information:
-
-Name: ${state.formData.name}
-Address: ${state.formData.address}
-Zip Code: ${state.formData.zipCode}
-
-When the user asks questions about their name, address, or zip code, answer directly using the information above. Be concise and friendly.`;
-    } else {
-      // Generic formData context (for other integrations like TimeHarbor)
-      systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(state.formData, null, 2)}`;
-    }
-  }
-
-  // APPEND tool usage rules if tools exist
-  if (tools && tools.length > 0) {
-    systemPrompt += `\n\n=== CRITICAL TOOL USAGE RULES ===
-
-You have access to tools, but you must use them ONLY when explicitly instructed.
-
-WHEN TO USE TOOLS (Action verbs):
-- "update my name to X" → use update_name tool
-- "change my address to X" → use update_address tool
-- "set my zip code to X" → use update_zip tool
-
-WHEN NOT TO USE TOOLS (Questions or statements):
-- "what is my name?" → Answer: "Your name is [name from context]" (NO TOOL)
-- "tell me my address" → Answer: "Your address is [address from context]" (NO TOOL)
-- "what is my zip code?" → Answer: "Your zip code is [zip from context]" (NO TOOL)
-- Any question, greeting, or conversation → NEVER use tools
-
-RULE: If the user is ASKING a question, ANSWER it using the context provided above. DO NOT call any tools.
-RULE: If the user is REQUESTING an action (update, change, set, modify), THEN use the appropriate tool.
-
-If you are unsure, DO NOT use tools - just answer with text.`;
-  }
-
+  // System prompt now comes entirely from parent config
+  // Parent defines all tool usage instructions
   return systemPrompt;
 }
 
@@ -661,6 +621,7 @@ function parseToolCallsFromContent(content) {
 
     // Try to parse as JSON
     const parsed = JSON.parse(jsonText);
+    console.log('[widget.js] parseToolCallsFromContent - parsed:', parsed);
 
     // Handle format: {"tool_calls": [...]}
     if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
@@ -863,7 +824,9 @@ function parseToolCallsFromContent(content) {
     // If no tool calls from deltas, check if content contains JSON tool calls
     let parsedResult = null;
     if (!hasToolCalls && fullContent.trim()) {
+      console.log('[widget.js] No structured tool calls, checking content:', fullContent);
       parsedResult = parseToolCallsFromContent(fullContent);
+      console.log('[widget.js] Parse result:', parsedResult);
     }
 
     if (hasToolCalls || parsedResult) {
