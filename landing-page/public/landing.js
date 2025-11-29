@@ -375,7 +375,7 @@
     }
 
     // Helper: Send tool result back to widget
-    function sendToolResult(result) {
+    function sendToolResult(result, tool_call_id) {
       const widgetIframe = getWidgetIframe();
       if (!widgetIframe || !widgetIframe.contentWindow) {
         console.error('[landing.js] Cannot send tool result: widget iframe not found');
@@ -385,6 +385,7 @@
       widgetIframe.contentWindow.postMessage({
         source: 'ozwell-chat-parent',
         type: 'tool_result',
+        tool_call_id: tool_call_id,  // Echo back for OpenAI protocol
         result: result
       }, '*');
 
@@ -398,7 +399,7 @@
 
     // MCP Tool Handler Registry
     const toolHandlers = {
-      'get_form_data': function(args) {
+      'get_form_data': function(args, tool_call_id) {
         console.log('[landing.js] ✓ Executing get_form_data tool handler');
 
         logEvent(
@@ -423,10 +424,10 @@
         );
 
         // Send result back to widget (OpenAI protocol)
-        sendToolResult(formData);
+        sendToolResult(formData, tool_call_id);
       },
 
-      'update_name': function(args) {
+      'update_name': function(args, tool_call_id) {
         console.log('[landing.js] ✓ Executing update_name tool handler:', args);
 
         logEvent(
@@ -457,16 +458,16 @@
           sendToolResult({
             success: true,
             message: `Name updated to "${args.name}"`
-          });
+          }, tool_call_id);
         } else {
           sendToolResult({
             success: false,
             error: 'No name provided'
-          });
+          }, tool_call_id);
         }
       },
 
-      'update_address': function(args) {
+      'update_address': function(args, tool_call_id) {
         console.log('[landing.js] ✓ Executing update_address tool handler:', args);
 
         logEvent(
@@ -497,16 +498,16 @@
           sendToolResult({
             success: true,
             message: `Address updated to "${args.address}"`
-          });
+          }, tool_call_id);
         } else {
           sendToolResult({
             success: false,
             error: 'No address provided'
-          });
+          }, tool_call_id);
         }
       },
 
-      'update_zip': function(args) {
+      'update_zip': function(args, tool_call_id) {
         console.log('[landing.js] ✓ Executing update_zip tool handler:', args);
 
         logEvent(
@@ -537,12 +538,12 @@
           sendToolResult({
             success: true,
             message: `Zip code updated to "${args.zipCode}"`
-          });
+          }, tool_call_id);
         } else {
           sendToolResult({
             success: false,
             error: 'No zip code provided'
-          });
+          }, tool_call_id);
         }
       }
     };
@@ -566,7 +567,7 @@
 
         const handler = toolHandlers[data.tool];
         if (handler) {
-          handler(data.payload);
+          handler(data.payload, data.tool_call_id);
         } else {
           console.warn('[landing.js] ⚠️  No handler registered for tool:', data.tool);
           logEvent(

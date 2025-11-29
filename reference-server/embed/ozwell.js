@@ -623,6 +623,59 @@ function parseToolCallsFromContent(content) {
     const parsed = JSON.parse(jsonText);
     console.log('[widget.js] parseToolCallsFromContent - parsed:', parsed);
 
+    // Handle array format: [{type: "function", ...}, {type: "text", value: "..."}]
+    if (Array.isArray(parsed)) {
+      const toolCalls = [];
+      const textParts = [];
+
+      for (const item of parsed) {
+        if (item.type === 'function' && item.function?.name) {
+          // This is a tool call
+          toolCalls.push({
+            id: item.id || `call_${Date.now()}_${toolCalls.length}`,
+            type: 'function',
+            function: {
+              name: item.function.name,
+              arguments: typeof item.function.parameters === 'object'
+                ? JSON.stringify(item.function.parameters || {})
+                : (typeof item.function.arguments === 'string'
+                  ? item.function.arguments
+                  : JSON.stringify(item.function.arguments || {}))
+            }
+          });
+        } else if (item.type === 'text' && item.value) {
+          // This is text content to display
+          textParts.push(item.value);
+        }
+      }
+
+      if (toolCalls.length > 0) {
+        return {
+          toolCalls,
+          shouldHideContent: true,
+          cleanedContent: textParts.join('\n')
+        };
+      }
+
+      // If only text (no tool calls), return as cleaned content
+      if (textParts.length > 0) {
+        return {
+          toolCalls: [],
+          shouldHideContent: false,
+          cleanedContent: textParts.join('\n')
+        };
+      }
+    }
+
+    // Handle single object with type/value: {type: "text", value: "..."}
+    if (parsed.type === 'text' && parsed.value) {
+      return {
+        toolCalls: [],
+        shouldHideContent: false,
+        cleanedContent: parsed.value
+      };
+    }
+
     // Handle format: {"tool_calls": [...]}
     if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
       return {
@@ -821,7 +874,7 @@ function parseToolCallsFromContent(content) {
     // Check if we have tool calls from deltas
     const hasToolCalls = accumulatedToolCalls.length > 0 && accumulatedToolCalls.some(tc => tc.function.name);
 
-    // If no tool calls from deltas, check if content contains JSON tool calls
+    // If no tool calls from deltas, check if content contains JSON tool calls or needs cleaning
     let parsedResult = null;
     if (!hasToolCalls && fullContent.trim()) {
       console.log('[widget.js] No structured tool calls, checking content:', fullContent);
@@ -829,7 +882,7 @@ function parseToolCallsFromContent(content) {
       console.log('[widget.js] Parse result:', parsedResult);
     }
 
-    if (hasToolCalls || parsedResult) {
+    if (hasToolCalls || (parsedResult && parsedResult.toolCalls && parsedResult.toolCalls.length > 0)) {
       const toolCalls = hasToolCalls ? accumulatedToolCalls : parsedResult.toolCalls;
       const shouldHideContent = parsedResult?.shouldHideContent || hasToolCalls || false;
       console.log('[widget.js] Tool calls detected:', toolCalls);
@@ -887,16 +940,26 @@ function parseToolCallsFromContent(content) {
         addMessage('assistant', fullContent);
       }
     } else {
-      // No tool calls, just text response
+      // No tool calls, but check if we need to clean the content
+      let displayContent = fullContent;
+
+      if (parsedResult && parsedResult.cleanedContent) {
+        // Use cleaned content (extracted from JSON)
+        displayContent = parsedResult.cleanedContent;
+        assistantMsgEl.textContent = displayContent;
+        console.log('[widget.js] Using cleaned content instead of JSON:', displayContent);
+      }
+
+      // Store text response
       const assistantMessage = {
         role: 'assistant',
-        content: fullContent || '(no response)',
+        content: displayContent || '(no response)',
       };
       state.messages.push(assistantMessage);
-      lastAssistantMessage = fullContent;
+      lastAssistantMessage = displayContent;
 
       // Update placeholder if empty
-      if (!fullContent.trim()) {
+      if (!displayContent.trim()) {
         assistantMsgEl.textContent = '(no response)';
       }
     }
