@@ -2,6 +2,30 @@
 
 **ALWAYS follow these instructions first and fallback to additional search and context gathering only if the information in the instructions is incomplete or found to be in error.**
 
+## Brand Values: Privacy & User Control
+
+**Ozwell is built on a foundation of user privacy and trust.** This is a core brand value that must be reflected in all code and documentation.
+
+### Privacy Principles
+
+1. **Conversations are private by default** — The dialogue between users and Ozwell is never shared with the host site unless the user explicitly consents
+2. **No message relay** — Host sites receive only lifecycle events (open, close, ready), never conversation content
+3. **Safe space for users** — Users should feel comfortable asking any question—even ones they might consider "dumb"—knowing their conversation stays between them and Ozwell
+4. **Opt-in sharing only** — Only explicit user action (e.g., clicking "Share with site") can share data with the host site
+5. **User empowerment** — Ozwell helps inform users; users control what happens with that information
+
+### Implementation Requirements
+
+When implementing frontend integrations:
+- ❌ Do NOT expose message content events (`onMessage`, `ozwell:message`)
+- ✅ DO provide lifecycle events only (`ozwell:ready`, `ozwell:open`, `ozwell:close`)
+- ✅ DO provide opt-in sharing via `ozwell:user-share` (only fires on explicit user consent)
+
+When writing documentation:
+- Always emphasize privacy as a feature, not a limitation
+- Explain that conversation privacy builds user trust
+- Make it clear that sharing is always opt-in
+
 ## Repository Overview
 This public repository for Ozwell API is the canonical reference for the API, enabling both internal and external teams to build against a stable, well-documented contract.
 The Ozwell API specification project is an open and reliable source of truth for all Ozwell API interactions. All types and endpoints are defined using [Zod](https://github.com/colinhacks/zod), ensuring type safety, clarity, and consistency. 
