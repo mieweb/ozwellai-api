@@ -1,0 +1,194 @@
+/**
+ * MIE Brand Colors
+ * Navy Blue: #0b1844 (primary)
+ * Green: #04a454 (accent/success)
+ * Yellow: #ffd100 (highlights)
+ * Light Gray: #f5f5f5 (backgrounds)
+ */
+
+:root {
+  /* Primary Navy Blue */
+  --ifm-color-primary: #0b1844;
+  --ifm-color-primary-dark: #091538;
+  --ifm-color-primary-darker: #07112c;
+  --ifm-color-primary-darkest: #050c1f;
+  --ifm-color-primary-light: #0e1d50;
+  --ifm-color-primary-lighter: #11225c;
+  --ifm-color-primary-lightest: #162b72;
+  
+  /* MIE Green for links and accents */
+  --ifm-link-color: #04a454;
+  --ifm-link-hover-color: #038c47;
+  
+  /* MIE Yellow for highlights */
+  --mie-accent-yellow: #ffd100;
+  
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(11, 24, 68, 0.1);
+  
+  /* Navbar styling */
+  --ifm-navbar-background-color: #0b1844;
+  --ifm-navbar-link-color: #ffffff;
+  --ifm-navbar-link-hover-color: #04a454;
+}
+
+/* Dark mode colors */
+[data-theme='dark'] {
+  --ifm-color-primary: #04a454;
+  --ifm-color-primary-dark: #03933c;
+  --ifm-color-primary-darker: #038734;
+  --ifm-color-primary-darkest: #026d2a;
+  --ifm-color-primary-light: #05b56c;
+  --ifm-color-primary-lighter: #06c678;
+  --ifm-color-primary-lightest: #08d787;
+  
+  --ifm-link-color: #04a454;
+  --ifm-link-hover-color: #06c678;
+  
+  --docusaurus-highlighted-code-line-bg: rgba(4, 164, 84, 0.2);
+  --ifm-background-color: #0b1844;
+  --ifm-background-surface-color: #091538;
+  --ifm-navbar-background-color: #050c1f;
+}
+
+/* Navbar title styling */
+.navbar__title {
+  color: #ffffff !important;
+}
+
+.navbar__link {
+  color: #ffffff !important;
+}
+
+.navbar__link:hover {
+  color: #04a454 !important;
+}
+
+/* Privacy callout styling */
+.privacy-note {
+  background: linear-gradient(135deg, #0b1844 0%, #162b72 100%);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  color: white;
+  margin: 1rem 0;
+  border-left: 4px solid #04a454;
+}
+
+.privacy-note strong {
+  color: #ffd100;
+}
+
+/* Better table styling */
+table {
+  display: table;
+  width: 100%;
+}
+
+/* Code block improvements */
+.theme-code-block {
+  margin: 1rem 0;
+}
+
+/* Mermaid diagram improvements */
+.docusaurus-mermaid-container {
+  margin: 1.5rem 0;
+}
+
+/* Announcement bar styling */
+.announcement-bar {
+  background-color: #04a454 !important;
+}
+
+.announcement-bar__content {
+  color: #ffffff !important;
+}
+
+.announcement-bar__content a {
+  color: #ffd100 !important;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+/* Button styling with MIE colors */
+.button--primary {
+  background-color: #04a454;
+  border-color: #04a454;
+}
+
+.button--primary:hover {
+  background-color: #038c47;
+  border-color: #038c47;
+}
+
+.button--secondary {
+  background-color: #0b1844;
+  border-color: #0b1844;
+  color: #ffffff;
+}
+
+.button--secondary:hover {
+  background-color: #162b72;
+  border-color: #162b72;
+}
+
+/* Footer styling */
+.footer--dark {
+  background-color: #0b1844;
+}
+
+.footer__title {
+  color: #04a454;
+}
+
+.footer__link-item {
+  color: #ffffff;
+}
+
+.footer__link-item:hover {
+  color: #04a454;
+}
+
+/* Sidebar styling */
+.menu__link--active {
+  color: #04a454 !important;
+  border-left-color: #04a454 !important;
+}
+
+/* Hero/landing section */
+.hero {
+  background: linear-gradient(135deg, #0b1844 0%, #162b72 100%);
+}
+
+.hero__title {
+  color: #ffffff;
+}
+
+.hero__subtitle {
+  color: #f5f5f5;
+}
+
+/* TOC highlighting */
+.table-of-contents__link--active {
+  color: #04a454 !important;
+}
+
+/* Admonition/callout customization */
+.alert--info {
+  --ifm-alert-border-color: #0b1844;
+  --ifm-alert-background-color: rgba(11, 24, 68, 0.1);
+}
+
+.alert--success {
+  --ifm-alert-border-color: #04a454;
+  --ifm-alert-background-color: rgba(4, 164, 84, 0.1);
+}
+
+.alert--warning {
+  --ifm-alert-border-color: #ffd100;
+  --ifm-alert-background-color: rgba(255, 209, 0, 0.1);
+}
+
+/* Mermaid diagram with MIE theme */
+.docusaurus-mermaid-container svg {
+  max-width: 100%;
+}
