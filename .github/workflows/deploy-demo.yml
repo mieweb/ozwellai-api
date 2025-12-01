@@ -20,7 +20,7 @@ jobs:
           host: ${{ secrets.EMBEDTEST_HOST }}
           port: 2240
           username: ${{ secrets.EMBEDTEST_USER }}
-          password: ${{ secrets.EMBEDTEST_PASSWORD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/ozwellai-api
 
