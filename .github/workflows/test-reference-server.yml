@@ -39,9 +39,25 @@ jobs:
         working-directory: ./spec
         run: npm run build
 
+      - name: Install TypeScript client dependencies
+        working-directory: ./clients/typescript
+        run: npm ci
+
+      - name: Build TypeScript client
+        working-directory: ./clients/typescript
+        run: npm run build
+
+      - name: Link TypeScript client
+        working-directory: ./clients/typescript
+        run: npm link
+
       - name: Install reference server dependencies
         working-directory: ${{ inputs.working-directory }}
         run: npm ci
+
+      - name: Link ozwellai client to reference server
+        working-directory: ${{ inputs.working-directory }}
+        run: npm link ozwellai
 
       - name: Lint reference server
         working-directory: ${{ inputs.working-directory }}
@@ -64,16 +80,16 @@ jobs:
           # Start server in background
           npm start &
           SERVER_PID=$!
-          
+
           # Wait for server to start
           sleep 10
-          
+
           # Test health endpoint
           curl -f http://localhost:3000/health || exit 1
-          
+
           # Test OpenAPI endpoint
           curl -f http://localhost:3000/openapi.json || exit 1
-          
+
           # Stop server
           kill $SERVER_PID
         timeout-minutes: 2
