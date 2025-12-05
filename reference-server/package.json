@@ -28,7 +28,7 @@
     "iframe-sync": "^1.0.4",
     "node-fetch": "^3.3.2",
     "openai": "^5.12.2",
-    "ozwellai": "^1.0.0",
+    "ozwellai": "file:../clients/typescript",
     "zod": "^3.22.4"
   },
   "devDependencies": {
