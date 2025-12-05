@@ -217,7 +217,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const ollamaClient = new OzwellAI({
           apiKey: 'ollama',
           baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-          timeout: 300000 // 5 minutes - Ollama can be slow with large tool contexts
+          timeout: 120000 // 2 minutes - reasonable timeout for Ollama requests
         });
 
         // Pass through without preprocessing (client-side handles parsing)

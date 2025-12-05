@@ -771,7 +771,7 @@ function parseToolCallsFromContent(content) {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(300000) // 5 minute timeout for slow Ollama with large tool contexts
+      signal: AbortSignal.timeout(120000) // 2 minute timeout for Ollama requests
     });
 
     if (!response.ok) {
