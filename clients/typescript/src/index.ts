@@ -1,6 +1,7 @@
 import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
+  ChatCompletionChunk,
   EmbeddingRequest,
   EmbeddingResponse,
   ModelsListResponse,
@@ -123,6 +124,96 @@ export class OzwellAI {
   }
 
   /**
+   * Create a streaming chat completion.
+   * Returns an async generator that yields chunks as they arrive via Server-Sent Events.
+   * 
+   * @example
+   * ```typescript
+   * const stream = client.createChatCompletionStream({
+   *   model: 'gpt-4o-mini',
+   *   messages: [{ role: 'user', content: 'Hello!' }],
+   *   stream: true
+   * });
+   * 
+   * for await (const chunk of stream) {
+   *   const content = chunk.choices[0]?.delta?.content || '';
+   *   process.stdout.write(content);
+   * }
+   * ```
+   */
+  async *createChatCompletionStream(
+    request: ChatCompletionRequest
+  ): AsyncGenerator<ChatCompletionChunk, void, unknown> {
+    // Force stream to true
+    const streamRequest = { ...request, stream: true };
+    
+    const url = `${this.baseURL}/v1/chat/completions`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          ...this.defaultHeaders,
+        },
+        body: JSON.stringify(streamRequest),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === '') continue;
+          
+          // Check for end of stream
+          if (trimmed === 'data: [DONE]') {
+            return;
+          }
+
+          // Parse SSE data line
+          if (trimmed.startsWith('data: ')) {
+            const jsonStr = trimmed.slice(6); // Remove "data: " prefix
+            try {
+              const chunk = JSON.parse(jsonStr) as ChatCompletionChunk;
+              yield chunk;
+            } catch (e) {
+              // Skip invalid JSON chunks
+              console.warn('Failed to parse SSE chunk:', jsonStr);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  /**
    * Create embeddings
    */
   async createEmbedding(
@@ -199,6 +290,7 @@ export default OzwellAI;
 export type {
   ChatCompletionRequest,
   ChatCompletionResponse,
+  ChatCompletionChunk,
   EmbeddingRequest,
   EmbeddingResponse,
   ModelsListResponse,
