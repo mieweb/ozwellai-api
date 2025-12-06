@@ -1,0 +1,112 @@
+name: Landing Page E2E Tests
+
+# Runs Playwright E2E tests for the landing page demo
+# Tests the Ozwell embed widget integration
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'landing-page/**'
+      - 'reference-server/**'
+      - 'reference-server/embed/**'
+      - 'spec/**'
+      - 'clients/typescript/**'
+      - '.github/workflows/landing-page-e2e.yml'
+      - 'scripts/test-e2e.sh'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'landing-page/**'
+      - 'reference-server/**'
+      - 'reference-server/embed/**'
+      - 'spec/**'
+      - 'clients/typescript/**'
+      - '.github/workflows/landing-page-e2e.yml'
+      - 'scripts/test-e2e.sh'
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # Only run on Ubuntu for now since Playwright browser deps are easier to manage
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            spec/package-lock.json
+            clients/typescript/package-lock.json
+            reference-server/package-lock.json
+            landing-page/package-lock.json
+
+      - name: Install spec dependencies
+        working-directory: ./spec
+        run: npm ci
+
+      - name: Build spec
+        working-directory: ./spec
+        run: npm run build
+
+      - name: Install TypeScript client dependencies
+        working-directory: ./clients/typescript
+        run: npm ci
+
+      - name: Build TypeScript client
+        working-directory: ./clients/typescript
+        run: npm run build
+
+      - name: Link TypeScript client
+        working-directory: ./clients/typescript
+        run: npm link
+
+      - name: Install reference server dependencies
+        working-directory: ./reference-server
+        run: npm ci
+
+      - name: Link ozwellai to reference server
+        working-directory: ./reference-server
+        run: npm link ozwellai
+
+      - name: Build reference server
+        working-directory: ./reference-server
+        run: npm run build
+
+      - name: Install landing page dependencies
+        working-directory: ./landing-page
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./landing-page
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        working-directory: ./landing-page
+        run: npm test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: landing-page/playwright-report/
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: landing-page/test-results/
+          retention-days: 7
