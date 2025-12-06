@@ -104,19 +104,19 @@ async function buildServer() {
     },
     staticCSP: true,
     transformStaticCSP: (header) => header,
-    transformSpecification: (swaggerObject, request, reply) => {
+    transformSpecification: (swaggerObject, _request, _reply) => {
       return swaggerObject;
     },
     transformSpecificationClone: true,
   });
 
   // Health check endpoint
-  fastify.get('/health', async (request, reply) => {
+  fastify.get('/health', async (_request, _reply) => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
   // OpenAPI spec endpoint
-  fastify.get('/openapi.json', async (request, reply) => {
+  fastify.get('/openapi.json', async (_request, _reply) => {
     return fastify.swagger();
   });
 
