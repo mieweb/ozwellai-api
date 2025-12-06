@@ -189,3 +189,85 @@ export function validateAuth(authorization: string | undefined): boolean {
   const token = authorization.substring(7);
   return token.length > 0; // Accept any non-empty token for testing
 }
+
+/**
+ * Check if Ollama backend is available
+ * Caches result to avoid repeated checks
+ */
+let ollamaAvailable: boolean | null = null;
+let ollamaModels: string[] = [];
+let lastOllamaCheck = 0;
+const OLLAMA_CHECK_INTERVAL = 30000; // Re-check every 30 seconds
+
+export async function isOllamaAvailable(): Promise<boolean> {
+  const now = Date.now();
+  
+  // Return cached result if recent
+  if (ollamaAvailable !== null && (now - lastOllamaCheck) < OLLAMA_CHECK_INTERVAL) {
+    return ollamaAvailable;
+  }
+  
+  const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(`${ollamaUrl}/api/tags`, {
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    ollamaAvailable = response.ok;
+    lastOllamaCheck = now;
+    
+    // Cache available models
+    if (response.ok) {
+      try {
+        const data = await response.json() as { models?: Array<{ name: string }> };
+        ollamaModels = (data.models || []).map(m => m.name);
+      } catch {
+        ollamaModels = [];
+      }
+    }
+    
+    return ollamaAvailable;
+  } catch {
+    ollamaAvailable = false;
+    ollamaModels = [];
+    lastOllamaCheck = now;
+    return false;
+  }
+}
+
+/**
+ * Get the first available Ollama model, or a fallback
+ */
+export function getOllamaDefaultModel(): string {
+  // Prefer models in this order - llama3.x and gpt-oss have better tool calling support
+  const preferredModels = [
+    'llama3.2:latest',
+    'llama3.1:latest', 
+    'llama3:latest',
+    'gpt-oss:latest',
+    'gpt-oss:20b',
+    'mistral:latest',
+    'llama2:latest', 
+    'qwen2.5-coder:3b'
+  ];
+  
+  // Check if any preferred model is available
+  for (const model of preferredModels) {
+    if (ollamaModels.includes(model)) {
+      return model;
+    }
+  }
+  
+  // Return first available model, or fallback
+  if (ollamaModels.length > 0) {
+    return ollamaModels[0];
+  }
+  
+  // Fallback if no models cached yet
+  return process.env.OLLAMA_MODEL || 'llama3.2:latest';
+}

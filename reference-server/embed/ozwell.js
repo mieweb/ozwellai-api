@@ -23,54 +23,54 @@
  * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
  */
 class IframeSyncClient {
-    #channel;
-    #recv;
-    #clientName;
+  #channel;
+  #recv;
+  #clientName;
 
-    constructor(clientName, recv) {
-        this.#recv = recv;
-        this.#channel = 'IframeSync';
-        this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+  constructor(clientName, recv) {
+    this.#recv = recv;
+    this.#channel = 'IframeSync';
+    this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
 
-        if (!window) {
-          return;
-        }
-        window.addEventListener('message', (event) => {
-            if (!event.data || event.data.channel !== this.#channel) {
-                return;
-            }
-
-            const isOwnMessage = event.data.sourceClientName === this.#clientName;
-            const isReadyReceived = event.data.type === 'readyReceived';
-
-            if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-                this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-            }
-        });
+    if (!window) {
+      return;
     }
+    window.addEventListener('message', (event) => {
+      if (!event.data || event.data.channel !== this.#channel) {
+        return;
+      }
 
-    ready() {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'ready',
-            sourceClientName: this.#clientName
-        }, '*');
-    }
+      const isOwnMessage = event.data.sourceClientName === this.#clientName;
+      const isReadyReceived = event.data.type === 'readyReceived';
 
-    stateChange(update) {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'stateChange',
-            sourceClientName: this.#clientName,
-            payload: update
-        }, '*');
+      if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
+        this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
+      }
+    });
+  }
+
+  ready() {
+    if (!window || !window.parent) {
+      return;
     }
+    window.parent.postMessage({
+      channel: this.#channel,
+      type: 'ready',
+      sourceClientName: this.#clientName
+    }, '*');
+  }
+
+  stateChange(update) {
+    if (!window || !window.parent) {
+      return;
+    }
+    window.parent.postMessage({
+      channel: this.#channel,
+      type: 'stateChange',
+      sourceClientName: this.#clientName,
+      payload: update
+    }, '*');
+  }
 }
 
 /**
@@ -268,19 +268,87 @@ body {
  * WIDGET STATE AND LOGIC
  * ============================================
  */
+
+// Global runtime configuration (accessible via console for testing)
+window.OzwellDebug = {
+  disableTools: false, // Set to true in console to disable tools
+  verbose: false, // Set to true for detailed logging
+  log: function (message, ...args) {
+    if (this.verbose) {
+      console.log(`[OzwellDebug] ${message}`, ...args);
+    }
+  }
+};
+
+// Expose helper functions for console testing
+window.OzwellDebug.help = function () {
+  console.log(`
+🔧 Ozwell Debug Console Commands:
+
+Toggle Features:
+  OzwellDebug.disableTools = true/false    // Enable/disable tool calling
+  OzwellDebug.verbose = true/false         // Enable/disable verbose logging
+
+View State:
+  OzwellDebug.getState()                   // View current widget state
+  OzwellDebug.getMessages()                // View conversation history
+  OzwellDebug.getTools()                   // View configured tools
+
+Reset:
+  OzwellDebug.clearMessages()              // Clear conversation history
+  OzwellDebug.reset()                      // Full reset
+
+Examples:
+  OzwellDebug.disableTools = true          // Test without tools
+  OzwellDebug.verbose = true               // See detailed logs
+  `);
+};
+
+window.OzwellDebug.getState = function () {
+  return state;
+};
+
+window.OzwellDebug.getMessages = function () {
+  return state.messages;
+};
+
+window.OzwellDebug.getTools = function () {
+  return state.config.tools || [];
+};
+
+window.OzwellDebug.clearMessages = function () {
+  state.messages = [];
+  if (messagesEl) {
+    messagesEl.innerHTML = '';
+  }
+  if (state.config.welcomeMessage) {
+    addMessage('welcome', state.config.welcomeMessage);
+  }
+  console.log('[OzwellDebug] Messages cleared');
+};
+
+window.OzwellDebug.reset = function () {
+  this.clearMessages();
+  this.disableTools = false;
+  this.verbose = false;
+  console.log('[OzwellDebug] Reset complete. Type OzwellDebug.help() for available commands.');
+};
+
 const state = {
   config: {
     title: 'Ozwell',
     placeholder: 'Ask a question...',
-    model: 'llama3',
+    // model is optional - server chooses default if not specified
     endpoint: '/v1/chat/completions',
   },
   messages: [],
   sending: false,
   formData: null, // Form context from parent page
+  activeToolCalls: {}, // Track tool_call_id by tool name for OpenAI protocol
 };
 
 console.log('[widget.js] Widget initializing...');
+console.log('[widget.js] Type OzwellDebug.help() in console for debug commands');
 
 const statusEl = document.getElementById('status');
 const messagesEl = document.getElementById('messages');
@@ -365,17 +433,25 @@ When the user asks questions about their name, address, or zip code, answer dire
 
   // APPEND tool usage rules if tools exist
   if (tools && tools.length > 0) {
-    systemPrompt += `\n\nYou have access to tools that can modify data. Each tool's description explains what it does.
+    systemPrompt += `\n\n=== CRITICAL TOOL USAGE RULES ===
 
-TOOL USAGE RULES:
-- Use tools ONLY when the user explicitly asks you to take an ACTION (update, change, modify, set, create, delete, submit, etc.)
-- For ALL other interactions (questions, greetings, general conversation), respond with plain text - DO NOT call any tools
-- When in doubt, respond with text instead of calling a tool
-- NEVER return raw JSON or explain tool calls in your response - just have a natural conversation
+You have access to tools, but you must use them ONLY when explicitly instructed.
 
-The distinction:
-• "Tell me X" / "What is X" / "Show me X" = Respond with text (you already have the context)
-• "Change X to Y" / "Update X" / "Set X to Y" = Call the appropriate tool`;
+WHEN TO USE TOOLS (Action verbs):
+- "update my name to X" → use update_name tool
+- "change my address to X" → use update_address tool
+- "set my zip code to X" → use update_zip tool
+
+WHEN NOT TO USE TOOLS (Questions or statements):
+- "what is my name?" → Answer: "Your name is [name from context]" (NO TOOL)
+- "tell me my address" → Answer: "Your address is [address from context]" (NO TOOL)
+- "what is my zip code?" → Answer: "Your zip code is [zip from context]" (NO TOOL)
+- Any question, greeting, or conversation → NEVER use tools
+
+RULE: If the user is ASKING a question, ANSWER it using the context provided above. DO NOT call any tools.
+RULE: If the user is REQUESTING an action (update, change, set, modify), THEN use the appropriate tool.
+
+If you are unsure, DO NOT use tools - just answer with text.`;
   }
 
   return systemPrompt;
@@ -388,18 +464,14 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
-  setStatus('Processing...', true);
-  state.sending = true;
-  formEl?.classList.add('is-sending');
-  submitButton?.setAttribute('disabled', 'true');
-  saveButton?.setAttribute('disabled', 'true');
-  lastAssistantMessage = '';
-
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
-  if (state.config.tools && Array.isArray(state.config.tools)) {
-    // Parent's tool definitions must be in OpenAI function calling format
-    // Format: { type: 'function', function: { name, description, parameters } }
+
+  // Check if tools are disabled via console debug flag
+  if (window.OzwellDebug.disableTools) {
+    console.log('[widget.js] Tools disabled via OzwellDebug.disableTools');
+    window.OzwellDebug.log('Tools bypassed for this request');
+  } else if (state.config.tools && Array.isArray(state.config.tools)) {
     tools = state.config.tools.map(tool => ({
       type: 'function',
       function: {
@@ -408,9 +480,21 @@ async function sendMessage(text) {
         parameters: tool.function.parameters
       }
     }));
-
     console.log('[widget.js] Tools loaded from config:', tools);
+    window.OzwellDebug.log('Tools enabled', tools);
   }
+
+  // Always use streaming (handles both text and tool calls)
+  await sendMessageStreaming(text, tools);
+}
+
+async function sendMessageNonStreaming(text, tools) {
+  setStatus('Processing...', true);
+  state.sending = true;
+  formEl?.classList.add('is-sending');
+  submitButton?.setAttribute('disabled', 'true');
+  saveButton?.setAttribute('disabled', 'true');
+  lastAssistantMessage = '';
 
   // Build system prompt (handles custom prompts, form context, and tool rules)
   const systemPrompt = buildSystemPrompt(tools);
@@ -421,10 +505,13 @@ async function sendMessage(text) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if needed
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config
@@ -436,16 +523,19 @@ async function sendMessage(text) {
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
     if (systemPrompt) {
-      // Add system message at the beginning
       requestMessages.unshift({ role: 'system', content: systemPrompt });
     }
 
-    // Build request body (always use OpenAI format)
+    // Build request body (non-streaming)
+    // Only include model if explicitly configured - server chooses default otherwise
     const requestBody = {
-      model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       tools: tools,
+      stream: false,
     };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
 
     const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
       method: 'POST',
@@ -477,12 +567,14 @@ async function sendMessage(text) {
     const toolCalls = choice.message?.tool_calls || null;
 
     // Handle tool calls (dynamic - works with any tool from parent config)
+    // If we have tool_calls from the response (structured), hide raw JSON content
+    const parsedFromContent = parseToolCallsFromContent(assistantContent);
+    const shouldHideContent = parsedFromContent?.shouldHideContent || (!!toolCalls && toolCalls.length > 0);
+
     if (toolCalls && toolCalls.length > 0) {
       console.log('[widget.js] Model returned tool calls:', toolCalls);
 
       // CRITICAL: Always store assistant message with tool_calls in conversation history
-      // This is required by OpenAI function calling protocol - tool results must reference
-      // a prior assistant message with tool_calls. Without this, models may call tools again.
       const assistantMessage = {
         role: 'assistant',
         content: assistantContent || '',
@@ -519,8 +611,8 @@ async function sendMessage(text) {
         }
       }
 
-      // Display text content in UI if present (separate from history storage)
-      if (assistantContent && assistantContent.trim()) {
+      // Display text content in UI if present and not hidden (parsed/structured tool calls should hide the raw JSON)
+      if (!shouldHideContent && assistantContent && assistantContent.trim()) {
         lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
       }
@@ -541,6 +633,334 @@ async function sendMessage(text) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
+    addMessage('system', `Error: ${message}`);
+    setStatus('Error', false);
+  } finally {
+    state.sending = false;
+    formEl?.classList.remove('is-sending');
+    submitButton?.removeAttribute('disabled');
+    if (!lastAssistantMessage.trim()) {
+      saveButton?.setAttribute('disabled', 'true');
+    }
+  }
+}
+
+/**
+ * Parse tool calls from message content (for models that output JSON in text).
+ * Handles Qwen's format: outputs {"name": "function_name", "arguments": {...}} wrapped in markdown.
+ * 
+ * @param {string} content - The accumulated message content
+ * @returns {Object|null} Object with {toolCalls, shouldHideContent} or null if no tool calls found
+ */
+function parseToolCallsFromContent(content) {
+  if (!content || typeof content !== 'string') {
+    return null;
+  }
+
+  try {
+    // Strip markdown code blocks (```json...``` or ```...```)
+    let jsonText = content.trim();
+    const markdownMatch = jsonText.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+    if (markdownMatch) {
+      jsonText = markdownMatch[1].trim();
+    }
+
+    // Try to parse as JSON
+    const parsed = JSON.parse(jsonText);
+
+    // Handle format: {"tool_calls": [...]}
+    if (Array.isArray(parsed.tool_calls) && parsed.tool_calls.length > 0) {
+      return {
+        toolCalls: parsed.tool_calls.map((tc, idx) => ({
+          id: tc.id || `call_${Date.now()}_${idx}`,
+          type: tc.type || 'function',
+          function: {
+            name: tc.function?.name || tc.name,
+            arguments: typeof tc.function?.arguments === 'string'
+              ? tc.function.arguments
+              : JSON.stringify(tc.function?.arguments || tc.arguments || {})
+          }
+        })),
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // Handle format: {"name": "function_name", "arguments": {...}} (Qwen's format)
+    if (parsed.name && parsed.arguments !== undefined) {
+      return {
+        toolCalls: [{
+          id: `call_${Date.now()}_0`,
+          type: 'function',
+          function: {
+            name: parsed.name,
+            arguments: typeof parsed.arguments === 'string'
+              ? parsed.arguments
+              : JSON.stringify(parsed.arguments)
+          }
+        }],
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // Handle format: {"function": {"name": "...", "arguments": ...}}
+    if (parsed.function?.name) {
+      return {
+        toolCalls: [{
+          id: `call_${Date.now()}_0`,
+          type: 'function',
+          function: {
+            name: parsed.function.name,
+            arguments: typeof parsed.function.arguments === 'string'
+              ? parsed.function.arguments
+              : JSON.stringify(parsed.function.arguments || {})
+          }
+        }],
+        shouldHideContent: true // Hide JSON from display
+      };
+    }
+
+    // No recognized tool call format
+    return null;
+  } catch (e) {
+    // Not valid JSON or doesn't match expected format
+    return null;
+  }
+} async function sendMessageStreaming(text, tools) {
+  setStatus('Processing...', true);
+  state.sending = true;
+  formEl?.classList.add('is-sending');
+  submitButton?.setAttribute('disabled', 'true');
+  saveButton?.setAttribute('disabled', 'true');
+  lastAssistantMessage = '';
+
+  // Build system prompt
+  const systemPrompt = buildSystemPrompt(tools);
+
+  // Create placeholder message element for incremental updates
+  const assistantMsgEl = document.createElement('div');
+  assistantMsgEl.className = 'message assistant';
+  messagesEl?.appendChild(assistantMsgEl);
+
+  try {
+    // Prepare headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
+    if (state.config.openaiApiKey) {
+      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
+    }
+
+    if (state.config.headers) {
+      Object.assign(headers, state.config.headers);
+    }
+
+    // Build messages for request
+    const requestMessages = buildMessages();
+    if (systemPrompt) {
+      requestMessages.unshift({ role: 'system', content: systemPrompt });
+    }
+
+    // Build request body (streaming)
+    // Only include model if explicitly configured - server chooses default otherwise
+    const requestBody = {
+      messages: requestMessages,
+      stream: true,
+    };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
+
+    // Include tools if available
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools;
+    }
+
+    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(120000) // 2 minute timeout for Ollama requests
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[widget.js] API error:', errorText);
+      throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    // Parse SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let accumulatedToolCalls = []; // Accumulate tool calls from deltas
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') continue;
+
+          try {
+            const chunk = JSON.parse(data);
+            const delta = chunk.choices?.[0]?.delta;
+
+            if (!delta) continue;
+
+            // Handle text content (streaming)
+            if (delta.content) {
+              fullContent += delta.content;
+              assistantMsgEl.textContent = fullContent;
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
+            // Handle tool calls (accumulate from deltas)
+            if (delta.tool_calls) {
+              for (const toolCallDelta of delta.tool_calls) {
+                const index = toolCallDelta.index;
+
+                // Initialize tool call object if new
+                if (!accumulatedToolCalls[index]) {
+                  accumulatedToolCalls[index] = {
+                    id: toolCallDelta.id || '',
+                    type: toolCallDelta.type || 'function',
+                    function: {
+                      name: '',
+                      arguments: ''
+                    }
+                  };
+                }
+
+                // Set function name (not accumulated, sent once)
+                if (toolCallDelta.function?.name) {
+                  accumulatedToolCalls[index].function.name = toolCallDelta.function.name;
+                }
+
+                // Accumulate function arguments (sent in chunks)
+                if (toolCallDelta.function?.arguments) {
+                  accumulatedToolCalls[index].function.arguments += toolCallDelta.function.arguments;
+                }
+
+                // Update ID if provided
+                if (toolCallDelta.id) {
+                  accumulatedToolCalls[index].id = toolCallDelta.id;
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[widget.js] Failed to parse chunk:', err);
+          }
+        }
+      }
+    }
+
+    // Check if we have tool calls from deltas
+    const hasToolCalls = accumulatedToolCalls.length > 0 && accumulatedToolCalls.some(tc => tc.function.name);
+
+    // If no tool calls from deltas, check if content contains JSON tool calls
+    let parsedResult = null;
+    if (!hasToolCalls && fullContent.trim()) {
+      parsedResult = parseToolCallsFromContent(fullContent);
+    }
+
+    if (hasToolCalls || parsedResult) {
+      const toolCalls = hasToolCalls ? accumulatedToolCalls : parsedResult.toolCalls;
+      const shouldHideContent = parsedResult?.shouldHideContent || hasToolCalls || false;
+      console.log('[widget.js] Tool calls detected:', toolCalls);
+
+      // Store assistant message with tool_calls in history
+      const assistantMessage = {
+        role: 'assistant',
+        content: fullContent || '',
+        tool_calls: toolCalls
+      };
+      state.messages.push(assistantMessage);
+      console.log('[widget.js] Stored assistant message with tool_calls in history');
+
+      // Remove the text placeholder (tool execution messages will be shown instead)
+      if (assistantMsgEl.parentNode) {
+        assistantMsgEl.parentNode.removeChild(assistantMsgEl);
+      }
+
+      // Execute each tool call
+      for (const toolCall of toolCalls) {
+        const toolName = toolCall.function?.name;
+
+        if (toolName) {
+          try {
+            const args = typeof toolCall.function.arguments === 'string'
+              ? JSON.parse(toolCall.function.arguments)
+              : toolCall.function.arguments;
+
+            console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
+
+            // Add execution message to chat
+            addMessage('system', `Executing ${toolName}...`);
+
+            // Store tool_call_id for later use in tool message
+            state.activeToolCalls[toolName] = toolCall.id;
+
+            // Send tool call to parent via postMessage
+            window.parent.postMessage({
+              source: 'ozwell-chat-widget',
+              type: 'tool_call',
+              tool: toolName,
+              tool_call_id: toolCall.id,  // Include ID for parent logging/tracking
+              payload: args
+            }, '*');
+          } catch (error) {
+            console.error('[widget.js] Error parsing tool arguments:', error);
+            addMessage('system', `Error: Could not execute ${toolName}`);
+          }
+        }
+      }
+
+      // Display text content only if it shouldn't be hidden (i.e., not JSON)
+      if (!shouldHideContent && fullContent && fullContent.trim()) {
+        lastAssistantMessage = fullContent;
+        addMessage('assistant', fullContent);
+      }
+    } else {
+      // No tool calls, just text response
+      const assistantMessage = {
+        role: 'assistant',
+        content: fullContent || '(no response)',
+      };
+      state.messages.push(assistantMessage);
+      lastAssistantMessage = fullContent;
+
+      // Update placeholder if empty
+      if (!fullContent.trim()) {
+        assistantMsgEl.textContent = '(no response)';
+      }
+    }
+
+    setStatus('', false);
+    if (lastAssistantMessage.trim()) {
+      saveButton?.removeAttribute('disabled');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    // Remove placeholder on error
+    if (assistantMsgEl.parentNode) {
+      assistantMsgEl.parentNode.removeChild(assistantMsgEl);
+    }
     addMessage('system', `Error: ${message}`);
     setStatus('Error', false);
   } finally {
@@ -593,10 +1013,13 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if needed
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config
@@ -613,11 +1036,14 @@ async function continueConversationWithToolResult(result) {
     }
 
     // Build request body (always use OpenAI format)
+    // Only include model if explicitly configured - server chooses default otherwise
     const requestBody = {
-      model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       tools: tools,
     };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
 
     console.log('[widget.js] Sending tool result to API:', requestBody);
 
@@ -711,7 +1137,51 @@ function handleParentMessage(event) {
   // Handle tool results from parent (OpenAI function calling protocol)
   if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
     console.log('[widget.js] Received tool result from parent:', data.result);
-    continueConversationWithToolResult(data.result);
+
+    const result = data.result;
+
+    // Check if this is an update tool (has success/message) or a get tool (raw data)
+    if (result.success && result.message) {
+      // Update tool - just display the message (no LLM continuation needed)
+      addMessage('assistant', result.message);
+      lastAssistantMessage = result.message;
+      saveButton?.removeAttribute('disabled');
+    } else if (result.error) {
+      // Error case
+      addMessage('system', `Error: ${result.error}`);
+    } else {
+      // Get tool - raw data returned, need to send back to LLM for final answer
+      console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
+
+      // Get tool_call_id from parent response (required for OpenAI protocol)
+      const toolCallId = data.tool_call_id;
+      if (!toolCallId) {
+        console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
+        addMessage('system', 'Error: Tool result missing ID');
+        return;
+      }
+
+      // Add tool result to conversation history with tool_call_id
+      state.messages.push({
+        role: 'tool',
+        tool_call_id: toolCallId,
+        content: JSON.stringify(result)
+      });
+
+      // Continue conversation by calling LLM with tool result
+      const tools = state.config.tools?.map(tool => ({
+        type: 'function',
+        function: {
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: tool.function.parameters
+        }
+      })) || [];
+
+      // Send empty user message - we're just continuing the conversation with tool result
+      sendMessageStreaming('', tools);
+    }
+
     return;
   }
 
@@ -771,7 +1241,7 @@ setStatus('', false);
 if (typeof IframeSyncClient !== 'undefined') {
   console.log('[widget.js] Initializing IframeSyncClient...');
 
-  const iframeClient = new IframeSyncClient('ozwell-widget', function(payload, isOwnMessage, isReadyReceived) {
+  const iframeClient = new IframeSyncClient('ozwell-widget', function (payload, isOwnMessage, isReadyReceived) {
     console.log('[widget.js] Received state from broker:', { payload, isOwnMessage, isReadyReceived });
 
     if (payload && payload.formData) {

@@ -96,8 +96,7 @@
       containerId: 'chat-container',
       title: 'Ozwell Assistant',
       placeholder: 'Try: "I\'ll go top left" or "take the center"',
-      model: 'mock-ai',
-      endpoint: `${normalizedBase}/mock/chat`,
+      // model and endpoint are not specified - auto-detected from script URL
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Ready to play! Tell me where to place your X (e.g., "top left", "center").',
       tools: [
