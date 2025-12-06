@@ -15,6 +15,69 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 - **TypeScript**: Fully typed with Zod schema validation
 - **No Database**: All data stored in JSON files under `/data`
 
+## Architecture
+
+### Streaming Chat with Ollama Integration
+
+The reference server acts as a proxy to Ollama for chat completions, with full streaming support and SSE heartbeat to prevent nginx timeouts.
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Ozwell as Reference Server
+    participant Ollama as Ollama Container
+    participant Widget as Widget (iframe)
+    participant Handler as Tool Handler
+
+    Browser->>Ozwell: 1. Load ozwell-loader.js
+    Note over Browser,Ozwell: Script tag embed
+
+    Browser->>Browser: 2. User clicks chat button
+    Browser->>Widget: 3. Create iframe (lazy loading)
+    Note over Widget: Chat widget loads
+
+    rect rgb(255, 243, 205)
+    Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
+    Widget->>Widget: User types message
+    Widget->>Ozwell: POST /v1/chat/completions<br />(stream=true)
+    Note over Widget,Ozwell: Authorization: Bearer ollama
+
+    Ozwell->>Ollama: Forward to Ollama API<br />(qwen2.5-coder:3b)
+    Note over Ozwell,Ollama: Internal IP: 10.15.123.17:8080
+
+    rect rgb(230, 255, 230)
+    Note over Ozwell,Widget: 🔄 SSE STREAMING
+    Ollama-->>Ozwell: Stream: chunk 1
+    Ozwell-->>Widget: data: {"delta":{"content":"Hello"}}
+    Ollama-->>Ozwell: Stream: chunk 2
+    Ozwell-->>Widget: data: {"delta":{"content":"!"}}
+    Note over Ozwell: ❤️ Heartbeat every 25s<br />: heartbeat
+    Ollama-->>Ozwell: Stream: chunk N
+    Ozwell-->>Widget: data: {"delta":{"content":"..."}}
+    Ollama-->>Ozwell: Stream: finish_reason=stop
+    Ozwell-->>Widget: data: [DONE]
+    end
+
+    Widget->>Widget: Parse tool calls from response
+    end
+
+    Widget->>Handler: 4. postMessage: tool_call
+    Note over Widget,Handler: Only tool calls cross boundary
+    Handler->>Handler: 5. Execute tool (update form)
+
+    Handler-->>Widget: 6. postMessage: tool_result
+
+    Browser->>Widget: 7. iframe-sync: state update
+    Note over Browser,Widget: Widget always has page context
+```
+
+**Key Components:**
+- **Reference Server**: Proxy layer handling API compatibility and SSE heartbeat
+- **Ollama Container**: Runs LLM models (qwen2.5-coder:3b, llama3.1:8b, etc.)
+- **Widget**: Embeddable chat UI with iframe isolation
+- **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
+- **Tool Calls**: Extracted from streamed responses and sent to parent page via postMessage
+
 ## Quick Start
 
 ### Prerequisites
@@ -57,7 +120,7 @@ The server will start at `http://localhost:3000`
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
 - Change one line in the HTML to switch to Ollama mode
 - Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
-- Requires Ollama running with `llama3.1:8b` model
+- Requires Ollama running with a compatible model
 
 **For deployment:** Run Ollama in your container or set `OLLAMA_BASE_URL` to your LLM endpoint for real responses.
 
@@ -251,7 +314,9 @@ Environment variables:
 - `NODE_ENV` - Environment (development/production)
 - `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://localhost:11434)
 - `AI_MODE` - AI mode for embed chat: 'ollama' or 'mock' (default: ollama)
-- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: llama3.2)
+- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: qwen2.5-coder:3b)
+- `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
+- `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
 
 ## Error Handling
 
