@@ -226,8 +226,7 @@
       containerId: 'chat-container',
       title: 'Ozwell Assistant',
       placeholder: 'Try: "update my name to Bob"',
-      model: 'mock-ai',
-      endpoint: `${normalizedBase}/mock/chat`,
+      // model and endpoint are not specified - auto-detected from script URL
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       system: 'You are a helpful assistant with access to the user\'s information. When the user asks questions about their information (e.g., "what is my name?"), answer directly from the context provided - do NOT call any tools. Only use update tools when the user explicitly asks to UPDATE, CHANGE, or MODIFY their information (e.g., "update my name to Bob").',
