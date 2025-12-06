@@ -338,7 +338,7 @@ const state = {
   config: {
     title: 'Ozwell',
     placeholder: 'Ask a question...',
-    model: 'llama3',
+    // model is optional - server chooses default if not specified
     endpoint: '/v1/chat/completions',
   },
   messages: [],
@@ -505,10 +505,13 @@ async function sendMessageNonStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if needed
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config
@@ -524,12 +527,15 @@ async function sendMessageNonStreaming(text, tools) {
     }
 
     // Build request body (non-streaming)
+    // Only include model if explicitly configured - server chooses default otherwise
     const requestBody = {
-      model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       tools: tools,
       stream: false,
     };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
 
     const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
       method: 'POST',
@@ -741,8 +747,12 @@ function parseToolCallsFromContent(content) {
       'Content-Type': 'application/json',
     };
 
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
     }
 
     if (state.config.headers) {
@@ -756,11 +766,14 @@ function parseToolCallsFromContent(content) {
     }
 
     // Build request body (streaming)
+    // Only include model if explicitly configured - server chooses default otherwise
     const requestBody = {
-      model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       stream: true,
     };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
 
     // Include tools if available
     if (tools && tools.length > 0) {
@@ -1000,10 +1013,13 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header if needed
+    // Add Authorization header - use configured key or default to 'ollama' for server routing
     if (state.config.openaiApiKey) {
       headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
       console.log('[widget.js] Using OpenAI API with authorization');
+    } else {
+      // Default to 'ollama' - server will route to Ollama if available, or mock if not
+      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config
@@ -1020,11 +1036,14 @@ async function continueConversationWithToolResult(result) {
     }
 
     // Build request body (always use OpenAI format)
+    // Only include model if explicitly configured - server chooses default otherwise
     const requestBody = {
-      model: state.config.model || 'gpt-4o',
       messages: requestMessages,
       tools: tools,
     };
+    if (state.config.model) {
+      requestBody.model = state.config.model;
+    }
 
     console.log('[widget.js] Sending tool result to API:', requestBody);
 

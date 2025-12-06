@@ -145,7 +145,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `autoMount` | boolean | `true` | Auto-mount widget on page load |
 | `endpoint` | string | (auto-detected) | Chat API endpoint (auto-detected from script URL) |
 | `widgetUrl` | string | (auto-detected) | Widget iframe URL (auto-detected from script URL) |
-| `model` | string | `'llama3'` | Model name to use for chat completions |
+| `model` | string | (server default) | Model name to use for chat completions. **Optional** - if not specified, the server chooses the appropriate model |
 | `system` | string | `'You are a helpful assistant.'` | System prompt for the AI |
 | `tools` | array | `[]` | MCP tools in OpenAI function calling format |
 | `welcomeMessage` | string | (none) | Initial greeting message displayed in chat |

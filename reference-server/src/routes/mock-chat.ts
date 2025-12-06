@@ -381,12 +381,12 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
           max_tokens: { type: 'number' },
           stream: { type: 'boolean' },
         },
-        required: ['model', 'messages'],
+        required: ['messages'],
       },
     },
   }, async (request, _reply) => {
     const body = request.body as MockChatRequest;
-    const model = body.model;
+    const model = body.model || 'mock-ai';  // Default to mock-ai if not specified
 
     // Use messages as-is (OpenAI format)
     const messages: ChatMessage[] = body.messages;

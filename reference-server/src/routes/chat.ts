@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel } from '../util';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -177,7 +177,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           max_tokens: { type: 'number' },
           temperature: { type: 'number' }
         },
-        required: ['model', 'messages']
+        required: ['messages']
       }
     },
   }, async (request, reply) => {
@@ -188,7 +188,19 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
-    const { model, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    
+    // Check if Ollama is available as a backend (check early to determine default model)
+    const ollamaAvailable = await isOllamaAvailable();
+    
+    // Server-side default model - use Ollama-compatible model when Ollama is available
+    const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+    const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
+    
+    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    // Use requested model if provided, otherwise use appropriate default
+    const model = requestedModel || DEFAULT_MODEL;
+    
+    request.log.info({ ollamaAvailable, model, requestedModel }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
@@ -200,11 +212,58 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Extract API key from authorization header
     const authHeader = request.headers.authorization || '';
     const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+    
+    // Use Ollama if: explicitly requested via 'ollama' API key, OR if available and no other backend
+    const useOllama = apiKey.toLowerCase() === 'ollama' || ollamaAvailable;
+    
+    // If no backend is available, redirect to mock endpoint
+    if (!ollamaAvailable && apiKey.toLowerCase() !== 'ollama') {
+      // Forward to mock chat endpoint
+      const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
+      try {
+        const mockResponse = await fetch(mockUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': request.headers.authorization || 'Bearer mock'
+          },
+          body: JSON.stringify(body)
+        });
+        
+        if (stream) {
+          // Forward SSE stream from mock
+          reply.raw.writeHead(mockResponse.status, {
+            'content-type': 'text/event-stream',
+            'cache-control': 'no-cache',
+            'connection': 'keep-alive',
+            'access-control-allow-origin': request.headers.origin || '*',
+            'access-control-allow-credentials': 'true',
+          });
+          
+          if (mockResponse.body) {
+            const reader = mockResponse.body.getReader();
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                reply.raw.write(value);
+              }
+            } finally {
+              reply.raw.end();
+            }
+          }
+          return;
+        } else {
+          const mockData = await mockResponse.json();
+          return mockData;
+        }
+      } catch (mockError) {
+        request.log.error({ err: mockError }, 'Mock endpoint failed, using simple generator');
+        // Fall through to simple generator below
+      }
+    }
 
-    // Check if we should proxy to Ollama
-    const useOllama = apiKey.toLowerCase() === 'ollama';
-
-    // Validate model
+    // Validate model (only if not using Ollama - Ollama accepts any model)
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
     if (!useOllama && !supportedModels.includes(model)) {
       reply.code(400);

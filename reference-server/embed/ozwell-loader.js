@@ -267,7 +267,7 @@ class IframeSyncBroker {
   const DEFAULT_CONFIG = {
     title: 'Ozwell Assistant',
     placeholder: 'Ask a question...',
-    model: 'llama3',
+    // model is optional - server chooses default if not specified by client
     endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
     widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
   };

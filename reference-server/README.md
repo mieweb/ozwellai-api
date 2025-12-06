@@ -312,11 +312,33 @@ Environment variables:
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
-- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://localhost:11434)
-- `AI_MODE` - AI mode for embed chat: 'ollama' or 'mock' (default: ollama)
-- `DEFAULT_MODEL` - Default Ollama model for embed chat (default: qwen2.5-coder:3b)
+- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://127.0.0.1:11434)
+- `OLLAMA_MODEL` - Override Ollama model for chat (optional - server auto-selects from available models)
+- `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
+
+### Model Selection
+
+The server intelligently selects the best available model:
+
+1. **Client-specified model**: If the request includes a `model` parameter, that model is used
+2. **Ollama auto-detection**: If Ollama is running, the server queries available models and prefers:
+   - `llama3.2:latest`
+   - `llama3.1:latest`
+   - `llama3:latest`
+   - `gpt-oss:latest`
+   - `mistral:latest`
+   - First available model as fallback
+3. **Mock fallback**: If no backend is available, routes to `/mock/chat` for demos
+
+### Backend Routing
+
+The server automatically routes requests based on available backends:
+
+1. **Check Ollama availability** at startup and periodically (cached for 30 seconds)
+2. **Route to Ollama** if available or if `Authorization: Bearer ollama` header is present
+3. **Fall back to mock** if no backend is available
 
 ## Error Handling
 
