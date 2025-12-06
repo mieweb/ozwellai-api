@@ -24,7 +24,7 @@
   "scripts": {
     "build": "npm run clean && npm run build:esm && npm run build:cjs && npm run build:types",
     "build:esm": "tsc -p tsconfig.esm.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json','{\\\"type\\\":\\\"commonjs\\\"}\\n')\"",
     "build:types": "tsc -p tsconfig.types.json",
     "clean": "rm -rf dist",
     "dev": "tsc -p tsconfig.esm.json --watch",
