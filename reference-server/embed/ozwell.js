@@ -725,7 +725,9 @@ function parseToolCallsFromContent(content) {
     // Not valid JSON or doesn't match expected format
     return null;
   }
-} async function sendMessageStreaming(text, tools) {
+}
+
+async function sendMessageStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
