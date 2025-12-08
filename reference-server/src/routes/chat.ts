@@ -243,10 +243,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           if (mockResponse.body) {
             const reader = mockResponse.body.getReader();
             try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                reply.raw.write(value);
+              let done = false;
+              while (!done) {
+                const result = await reader.read();
+                done = result.done;
+                if (!done) {
+                  reply.raw.write(result.value);
+                }
               }
             } finally {
               reply.raw.end();
