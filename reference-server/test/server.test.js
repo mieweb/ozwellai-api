@@ -4,10 +4,11 @@ import { spawn } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 
 test('Reference Server - Health Check', async () => {
-  // Start the server
+  // Start the server in a new process group
   const server = spawn('npm', ['start'], {
     cwd: process.cwd(),
-    stdio: 'pipe'
+    stdio: 'pipe',
+    detached: true
   });
 
   try {
@@ -17,26 +18,30 @@ test('Reference Server - Health Check', async () => {
     // Test health endpoint
     const response = await fetch('http://localhost:3000/health');
     assert.strictEqual(response.status, 200);
-    
+
     const data = await response.json();
     assert.strictEqual(data.status, 'ok');
     assert.ok(data.timestamp, 'should have a timestamp');
 
   } finally {
-    // Clean up
-    server.kill('SIGTERM');
-    await setTimeout(1000);
-    if (!server.killed) {
-      server.kill('SIGKILL');
+    // Kill entire process group (negative PID kills process group)
+    try {
+      process.kill(-server.pid, 'SIGTERM');
+      await setTimeout(1000);
+      // Force kill if still running
+      process.kill(-server.pid, 'SIGKILL');
+    } catch (err) {
+      // Process already dead, ignore error
     }
   }
 });
 
 test('Reference Server - OpenAPI Spec', async () => {
-  // Start the server
+  // Start the server in a new process group
   const server = spawn('npm', ['start'], {
     cwd: process.cwd(),
-    stdio: 'pipe'
+    stdio: 'pipe',
+    detached: true
   });
 
   try {
@@ -46,18 +51,21 @@ test('Reference Server - OpenAPI Spec', async () => {
     // Test OpenAPI endpoint
     const response = await fetch('http://localhost:3000/openapi.json');
     assert.strictEqual(response.status, 200);
-    
+
     const spec = await response.json();
     assert.ok(spec.openapi);
     assert.ok(spec.info);
     assert.ok(spec.paths);
 
   } finally {
-    // Clean up
-    server.kill('SIGTERM');
-    await setTimeout(1000);
-    if (!server.killed) {
-      server.kill('SIGKILL');
+    // Kill entire process group (negative PID kills process group)
+    try {
+      process.kill(-server.pid, 'SIGTERM');
+      await setTimeout(1000);
+      // Force kill if still running
+      process.kill(-server.pid, 'SIGKILL');
+    } catch (err) {
+      // Process already dead, ignore error
     }
   }
 });
