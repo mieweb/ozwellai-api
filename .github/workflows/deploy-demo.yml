@@ -29,9 +29,15 @@ jobs:
             git checkout main
             git pull origin main
 
-            # Restart landing page server
+            # Install dependencies
             cd landing-page
-            pm2 restart embedtest
+            npm install
+
+            # Restart landing page server with environment variable
+            pm2 stop embedtest || true
+            pm2 delete embedtest || true
+            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org pm2 start server.js --name embedtest
+            pm2 save
 
             # Verify deployment
             pm2 status
