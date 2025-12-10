@@ -408,7 +408,7 @@ function buildMessages() {
   return history;
 }
 
-function buildSystemPrompt(tools) {
+function buildSystemPrompt() {
   // Start with custom system prompt from parent config
   let systemPrompt = state.config.system || 'You are a helpful assistant.';
 
@@ -431,27 +431,20 @@ When the user asks questions about their name, address, or zip code, answer dire
     }
   }
 
-  // APPEND tool usage rules if tools exist
-  if (tools && tools.length > 0) {
-    systemPrompt += `\n\n=== CRITICAL TOOL USAGE RULES ===
+  // Add generic tool usage guidance if tools are available
+  if (state.config.tools && state.config.tools.length > 0) {
+    systemPrompt += `\n\n=== TOOL USAGE GUIDELINES ===
 
-You have access to tools, but you must use them ONLY when explicitly instructed.
+When you need to retrieve information or perform actions:
+1. Call the appropriate tool by outputting JSON in this format:
+   \`\`\`json
+   {"name": "tool_name", "arguments": {"arg": "value"}}
+   \`\`\`
 
-WHEN TO USE TOOLS (Action verbs):
-- "update my name to X" → use update_name tool
-- "change my address to X" → use update_address tool
-- "set my zip code to X" → use update_zip tool
+2. IMPORTANT: After receiving a tool result, USE the result to answer the user's question.
+   DO NOT call the same tool again. The result contains the information you need.
 
-WHEN NOT TO USE TOOLS (Questions or statements):
-- "what is my name?" → Answer: "Your name is [name from context]" (NO TOOL)
-- "tell me my address" → Answer: "Your address is [address from context]" (NO TOOL)
-- "what is my zip code?" → Answer: "Your zip code is [zip from context]" (NO TOOL)
-- Any question, greeting, or conversation → NEVER use tools
-
-RULE: If the user is ASKING a question, ANSWER it using the context provided above. DO NOT call any tools.
-RULE: If the user is REQUESTING an action (update, change, set, modify), THEN use the appropriate tool.
-
-If you are unsure, DO NOT use tools - just answer with text.`;
+3. If the tool result indicates success, provide a natural response based on that result.`;
   }
 
   return systemPrompt;
@@ -496,8 +489,8 @@ async function sendMessageNonStreaming(text, tools) {
   saveButton?.setAttribute('disabled', 'true');
   lastAssistantMessage = '';
 
-  // Build system prompt (handles custom prompts, form context, and tool rules)
-  const systemPrompt = buildSystemPrompt(tools);
+  // Build system prompt (handles custom prompts and form context)
+  const systemPrompt = buildSystemPrompt();
 
   try {
     // Prepare headers
@@ -736,7 +729,7 @@ async function sendMessageStreaming(text, tools) {
   lastAssistantMessage = '';
 
   // Build system prompt
-  const systemPrompt = buildSystemPrompt(tools);
+  const systemPrompt = buildSystemPrompt();
 
   // Create placeholder message element for incremental updates
   const assistantMsgEl = document.createElement('div');
@@ -1007,7 +1000,7 @@ async function continueConversationWithToolResult(result) {
   }
 
   // Build system prompt (same as sendMessage - respects custom prompts)
-  const systemPrompt = buildSystemPrompt(tools);
+  const systemPrompt = buildSystemPrompt();
 
   try {
     // Prepare headers
