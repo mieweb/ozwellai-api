@@ -32,7 +32,7 @@ jobs:
 
             # Install dependencies
             cd landing-page
-            npm install
+            npm ci
 
             # Restart landing page server with environment variable
             pm2 stop embedtest || true
