@@ -4,7 +4,6 @@
  *
  * Features:
  * - Floating chat button with drag/minimize
- * - iframe-sync state synchronization
  * - MCP tool call handling
  * - Live event log display
  * - Visual feedback for field updates
@@ -220,7 +219,7 @@
 (function() {
   'use strict';
 
-  console.log('[landing.js] Initializing MCP Tools Demo with iframe-sync...');
+  console.log('[landing.js] Initializing MCP Tools Demo...');
 
   function initializeApp() {
     // Check if OzwellChat is available
@@ -239,19 +238,11 @@
     const addressInput = document.getElementById('input-address');
     const zipInput = document.getElementById('input-zip');
     const eventLog = document.getElementById('event-log');
-    const updateButton = document.getElementById('update-context-btn');
 
-    if (!nameInput || !addressInput || !zipInput || !eventLog || !updateButton) {
+    if (!nameInput || !addressInput || !zipInput || !eventLog) {
       console.error('[landing.js] Required elements not found');
       return;
     }
-
-    // Track saved state for dirty checking
-    let savedState = {
-      name: nameInput.value,
-      address: addressInput.value,
-      zipCode: zipInput.value
-    };
 
     // Helper: Add event to log
     function logEvent(type, message, details = null) {
@@ -302,72 +293,6 @@
       }, 600);
     }
 
-    // Function to get current form state
-    function getFormState() {
-      return {
-        formData: {
-          name: nameInput.value,
-          address: addressInput.value,
-          zipCode: zipInput.value
-        }
-      };
-    }
-
-    // Function to update state when form changes
-    function updateFormState() {
-      const state = getFormState();
-      console.log('[landing.js] Updating context via OzwellChat.updateContext():', state);
-
-      logEvent(
-        'iframe-sync',
-        '[iframe-sync] State change via updateContext()',
-        JSON.stringify(state.formData, null, 2)
-      );
-
-      // Use the clean OzwellChat API instead of direct broker access
-      OzwellChat.updateContext(state);
-
-      // Update saved state and reset button
-      savedState = {
-        name: nameInput.value,
-        address: addressInput.value,
-        zipCode: zipInput.value
-      };
-      updateButton.disabled = true;
-      updateButton.classList.remove('dirty');
-    }
-
-    // Check if form state is dirty
-    function checkDirtyState() {
-      const isDirty =
-        nameInput.value !== savedState.name ||
-        addressInput.value !== savedState.address ||
-        zipInput.value !== savedState.zipCode;
-
-      updateButton.disabled = !isDirty;
-
-      if (isDirty) {
-        updateButton.classList.add('dirty');
-      } else {
-        updateButton.classList.remove('dirty');
-      }
-    }
-
-    // Attach input listeners to check for changes
-    nameInput.addEventListener('input', checkDirtyState);
-    addressInput.addEventListener('input', checkDirtyState);
-    zipInput.addEventListener('input', checkDirtyState);
-
-    // Button click handler
-    updateButton.addEventListener('click', () => {
-      console.log('[landing.js] Update button clicked - syncing state to widget');
-      logEvent('postmessage', '[User Action] Manual sync triggered', 'Update button clicked');
-      updateFormState();
-    });
-
-    // Set initial state
-    updateFormState();
-
     // Helper: Get widget iframe
     function getWidgetIframe() {
       // Use OzwellChat.iframe directly (works with both src and srcdoc iframes)
@@ -375,7 +300,7 @@
     }
 
     // Helper: Send tool result back to widget
-    function sendToolResult(result) {
+    function sendToolResult(toolCallId, result) {
       const widgetIframe = getWidgetIframe();
       if (!widgetIframe || !widgetIframe.contentWindow) {
         console.error('[landing.js] Cannot send tool result: widget iframe not found');
@@ -385,6 +310,7 @@
       widgetIframe.contentWindow.postMessage({
         source: 'ozwell-chat-parent',
         type: 'tool_result',
+        tool_call_id: toolCallId,
         result: result
       }, '*');
 
@@ -392,13 +318,43 @@
       logEvent(
         'postmessage',
         '[postMessage] Tool result sent',
-        JSON.stringify(result)
+        JSON.stringify({ tool_call_id: toolCallId, result })
       );
     }
 
     // MCP Tool Handler Registry
     const toolHandlers = {
-      'update_name': function(args) {
+      'get_form_data': function(toolCallId) {
+        console.log('[landing.js] ✓ Executing get_form_data tool handler');
+
+        logEvent(
+          'tool-call',
+          '[Tool Call] get_form_data',
+          'Retrieving current form data'
+        );
+
+        const formData = {
+          name: nameInput.value,
+          address: addressInput.value,
+          zipCode: zipInput.value
+        };
+
+        console.log('[landing.js] ✓ Form data retrieved:', formData);
+
+        logEvent(
+          'postmessage',
+          '[Handler] Form data retrieved',
+          JSON.stringify(formData, null, 2)
+        );
+
+        // Send result back to widget
+        sendToolResult(toolCallId, {
+          success: true,
+          data: formData
+        });
+      },
+
+      'update_name': function(toolCallId, args) {
         console.log('[landing.js] ✓ Executing update_name tool handler:', args);
 
         logEvent(
@@ -422,23 +378,20 @@
             `Value: "${args.name}"`
           );
 
-          // Sync updated form state to widget via iframe-sync
-          updateFormState();
-
           // Send result back to widget (OpenAI protocol)
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: true,
             message: `Name updated to "${args.name}"`
           });
         } else {
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: false,
             error: 'No name provided'
           });
         }
       },
 
-      'update_address': function(args) {
+      'update_address': function(toolCallId, args) {
         console.log('[landing.js] ✓ Executing update_address tool handler:', args);
 
         logEvent(
@@ -462,23 +415,20 @@
             `Value: "${args.address}"`
           );
 
-          // Sync updated form state to widget via iframe-sync
-          updateFormState();
-
           // Send result back to widget (OpenAI protocol)
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: true,
             message: `Address updated to "${args.address}"`
           });
         } else {
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: false,
             error: 'No address provided'
           });
         }
       },
 
-      'update_zip': function(args) {
+      'update_zip': function(toolCallId, args) {
         console.log('[landing.js] ✓ Executing update_zip tool handler:', args);
 
         logEvent(
@@ -502,16 +452,13 @@
             `Value: "${args.zipCode}"`
           );
 
-          // Sync updated form state to widget via iframe-sync
-          updateFormState();
-
           // Send result back to widget (OpenAI protocol)
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: true,
             message: `Zip code updated to "${args.zipCode}"`
           });
         } else {
-          sendToolResult({
+          sendToolResult(toolCallId, {
             success: false,
             error: 'No zip code provided'
           });
@@ -538,7 +485,7 @@
 
         const handler = toolHandlers[data.tool];
         if (handler) {
-          handler(data.payload);
+          handler(data.tool_call_id, data.payload);
         } else {
           console.warn('[landing.js] ⚠️  No handler registered for tool:', data.tool);
           logEvent(
@@ -554,7 +501,7 @@
     console.log('[landing.js] Tool handlers registered:', Object.keys(toolHandlers));
     console.log('[landing.js] ✓ Initialization complete! Ready for MCP tool calls.');
 
-    logEvent('iframe-sync', '[System] Initialization complete', 'Ready for MCP tool calls');
+    logEvent('tool-call', '[System] Initialization complete', 'Ready for MCP tool calls');
   }
 
   // Start initialization when DOM is ready

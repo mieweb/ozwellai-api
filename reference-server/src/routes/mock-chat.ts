@@ -121,29 +121,41 @@ function extractToolResult(messages: ChatMessage[]): Record<string, unknown> | n
   }
 }
 
-function extractContextFromSystem(messages: ChatMessage[]): { name: string; address: string; zipCode: string } | null {
-  // Extract context from system message if present
-  const systemMsg = messages.find(msg => msg.role === 'system');
-  if (!systemMsg) return null;
-
-  // Parse name, address, zip from system prompt
-  const nameMatch = systemMsg.content.match(/Name:\s*([^\n]+)/);
-  const addressMatch = systemMsg.content.match(/Address:\s*([^\n]+)/);
-  const zipMatch = systemMsg.content.match(/Zip Code:\s*([^\n]+)/);
-
-  return {
-    name: nameMatch ? nameMatch[1].trim() : 'Unknown',
-    address: addressMatch ? addressMatch[1].trim() : 'Unknown',
-    zipCode: zipMatch ? zipMatch[1].trim() : 'Unknown'
-  };
-}
-
-function generateMockResponse(userMessage: string, context: { name: string; address: string; zipCode: string } | null, tools: Tool[], hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
+function generateMockResponse(userMessage: string, hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
   const msg = userMessage.toLowerCase();
 
   // If this is the second round (after tool execution), generate final response
   if (hasToolResult && toolResult) {
     if (toolResult.success) {
+      // Handle get_form_data tool result
+      if (toolResult.data && typeof toolResult.data === 'object') {
+        const data = toolResult.data as { name?: string; address?: string; zipCode?: string };
+
+        // Determine what the user was asking about based on the original message
+        if (msg.match(/what.*my name|what.*name|my name/)) {
+          return {
+            role: 'assistant',
+            content: `Your name is ${data.name || 'not set'}.`
+          };
+        } else if (msg.match(/what.*my address|what.*address|my address/)) {
+          return {
+            role: 'assistant',
+            content: `Your address is ${data.address || 'not set'}.`
+          };
+        } else if (msg.match(/what.*my zip|what.*zip|my zip/)) {
+          return {
+            role: 'assistant',
+            content: `Your zip code is ${data.zipCode || 'not set'}.`
+          };
+        } else {
+          // General information request
+          return {
+            role: 'assistant',
+            content: `Here's your information:\n• Name: ${data.name || 'not set'}\n• Address: ${data.address || 'not set'}\n• Zip Code: ${data.zipCode || 'not set'}`
+          };
+        }
+      }
+
       return {
         role: 'assistant',
         content: `Done! ${toolResult.message || 'Successfully updated.'}`
@@ -285,29 +297,21 @@ function generateMockResponse(userMessage: string, context: { name: string; addr
     };
   }
 
-  // Question patterns - respond with text using context
+  // Question patterns - call get_form_data tool to retrieve information
 
-  // Question: What's my name?
-  if (msg.match(/what.*my name|what.*name|my name/)) {
+  // Question: What's my name/address/zip?
+  if (msg.match(/what.*my (name|address|zip)|what.*(name|address|zip)|my (name|address|zip)/)) {
     return {
       role: 'assistant',
-      content: `Your name is ${context?.name || 'not set'}.`
-    };
-  }
-
-  // Question: What's my address?
-  if (msg.match(/what.*my address|what.*address|my address/)) {
-    return {
-      role: 'assistant',
-      content: `Your address is ${context?.address || 'not set'}.`
-    };
-  }
-
-  // Question: What's my zip code?
-  if (msg.match(/what.*my zip|what.*zip|my zip/)) {
-    return {
-      role: 'assistant',
-      content: `Your zip code is ${context?.zipCode || 'not set'}.`
+      content: '',
+      tool_calls: [{
+        id: `call_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: 'get_form_data',
+          arguments: JSON.stringify({})
+        }
+      }]
     };
   }
 
@@ -391,14 +395,13 @@ const mockChatRoute: FastifyPluginAsync = async (fastify) => {
     // Use messages as-is (OpenAI format)
     const messages: ChatMessage[] = body.messages;
 
-    // Extract user message and context
+    // Extract user message and tool result
     const userMessage = extractUserMessage(messages);
-    const context = extractContextFromSystem(messages);
     const hasResult = hasToolResult(messages);
     const toolResult = hasResult ? extractToolResult(messages) : null;
 
     // Generate mock response
-    const assistantMessage = generateMockResponse(userMessage, context, body.tools || [], hasResult, toolResult);
+    const assistantMessage = generateMockResponse(userMessage, hasResult, toolResult);
 
     const requestId = generateId('mockcmpl');
     const created = Math.floor(Date.now() / 1000);
