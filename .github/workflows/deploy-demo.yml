@@ -24,33 +24,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/ozwellai-api
-
-            # Pull latest from main
             git fetch origin
             git checkout main
             git pull origin main
-
-            # Install dependencies and verify code
-            cd landing-page
-            npm ci
-
-            # Verify code syntax before deploying
-            node --check server.js || { echo "server.js syntax check failed!"; exit 1; }
-            
-            # Check that all critical public assets exist
-            test -f public/landing.html || { echo "Missing landing.html!"; exit 1; }
-            test -f public/landing.js || { echo "Missing landing.js!"; exit 1; }
-            test -f public/demo.css || { echo "Missing demo.css!"; exit 1; }
-            test -f public/tictactoe.html || { echo "Missing tictactoe.html!"; exit 1; }
-            test -f public/tictactoe-app.js || { echo "Missing tictactoe-app.js!"; exit 1; }
-            test -f public/tictactoe.css || { echo "Missing tictactoe.css!"; exit 1; }
-
-            # Restart landing page server with environment variable
-            pm2 stop embedtest || true
-            pm2 delete embedtest || true
-            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org pm2 start server.js --name embedtest
-            pm2 save
-
-            # Verify deployment
-            pm2 status
-            echo "Demo site deployed successfully!"
+            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org ./scripts/deploy-demo.sh
