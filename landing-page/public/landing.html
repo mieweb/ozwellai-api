@@ -43,7 +43,8 @@
       <!-- Step 1 -->
       <div class="integration-step">
         <h3>1. Add the Widget Script</h3>
-        <pre class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
+        <pre
+          class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
         <p>That's it for basic chat! Add config for more features:</p>
       </div>
 
@@ -252,7 +253,7 @@
       // model and endpoint are not specified - auto-detected from script URL
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
-      system: 'You are a helpful assistant. When the user asks about their information (name, address, zip code), call the get_form_data tool to retrieve it. When the user asks to update their information, use the appropriate update tool.',
+      system: 'You are a helpful assistant for managing user profile information.',
       tools: [
         {
           type: 'function',
