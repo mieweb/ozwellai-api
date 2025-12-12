@@ -398,14 +398,8 @@ function applyConfig(config) {
 }
 
 function buildMessages() {
-  const history = [...state.messages];
-  if (state.config.system) {
-    const hasSystem = history.some((msg) => msg.role === 'system');
-    if (!hasSystem) {
-      history.unshift({ role: 'system', content: state.config.system });
-    }
-  }
-  return history;
+  // Just return message history - system prompt is handled by buildSystemPrompt()
+  return [...state.messages];
 }
 
 function buildSystemPrompt() {
@@ -415,36 +409,29 @@ function buildSystemPrompt() {
   // APPEND form context if available (don't replace!)
   if (state.formData) {
     console.log('[widget.js] Including form context in system prompt:', state.formData);
-
-    // Check if formData has the expected landing page fields
-    if (state.formData.name !== undefined) {
-      systemPrompt += `\n\nYou have access to the following user information:
-
-Name: ${state.formData.name}
-Address: ${state.formData.address}
-Zip Code: ${state.formData.zipCode}
-
-When the user asks questions about their name, address, or zip code, answer directly using the information above. Be concise and friendly.`;
-    } else {
-      // Generic formData context (for other integrations like TimeHarbor)
-      systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(state.formData, null, 2)}`;
-    }
+    systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(state.formData, null, 2)}`;
   }
 
   // Add generic tool usage guidance if tools are available
   if (state.config.tools && state.config.tools.length > 0) {
     systemPrompt += `\n\n=== TOOL USAGE GUIDELINES ===
 
-When you need to retrieve information or perform actions:
-1. Call the appropriate tool by outputting JSON in this format:
-   \`\`\`json
-   {"name": "tool_name", "arguments": {"arg": "value"}}
-   \`\`\`
+You have access to tools. Use them wisely:
 
-2. IMPORTANT: After receiving a tool result, USE the result to answer the user's question.
-   DO NOT call the same tool again. The result contains the information you need.
+**Default behavior:** Respond naturally with conversation. Only use tools when truly necessary.
 
-3. If the tool result indicates success, provide a natural response based on that result.`;
+**Do NOT use tools for:**
+- Simple greetings, pleasantries, or casual conversation
+- Questions you can answer from information already provided in the context above
+- General knowledge questions within your training
+- Clarifications or follow-up conversation
+
+**DO use tools when:**
+- User explicitly requests current/live data that isn't in the context above
+- User asks you to perform an action (update, change, modify, set, etc.)
+- You genuinely need information not available in the current context
+
+**After calling a tool:** Use the result to answer the user's question. Do not call the same tool repeatedly.`;
   }
 
   return systemPrompt;
