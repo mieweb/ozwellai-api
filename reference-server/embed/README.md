@@ -117,16 +117,20 @@ Enable page interactions using MCP tools (OpenAI function calling format):
 
   // Handle tool calls from widget
   window.addEventListener('message', (event) => {
-    if (event.data.source === 'ozwell-chat-widget' && event.data.type === 'tool_call') {
-      const { tool, payload } = event.data;
+    const data = event.data;
+    if (!data || data.source !== 'ozwell-chat-widget') return;
+
+    if (data.type === 'tool_call') {
+      const { tool, tool_call_id, payload } = data;
 
       if (tool === 'update_email') {
         document.getElementById('user-email').value = payload.email;
 
-        // Send result back to widget
+        // Send result back to widget (MUST include tool_call_id)
         window.OzwellChat.iframe.contentWindow.postMessage({
           source: 'ozwell-chat-parent',
           type: 'tool_result',
+          tool_call_id: tool_call_id,  // Required for OpenAI protocol
           result: { success: true, message: 'Email updated successfully' }
         }, '*');
       }
@@ -296,11 +300,13 @@ Or use custom headers for any authentication scheme:
 
 1. User sends message: "update my email to test@example.com"
 2. LLM responds with `tool_calls` in response
-3. Widget sends `tool_call` event to parent via postMessage
+3. Widget sends `tool_call` event to parent via postMessage (includes `tool_call_id`)
 4. Parent executes tool (updates input field)
-5. Parent sends `tool_result` back to widget
-6. Widget sends result to LLM for natural confirmation
+5. Parent sends `tool_result` back to widget (MUST include same `tool_call_id`)
+6. Widget sends result to LLM with `tool_call_id` for tracking
 7. LLM responds: "Done! I've updated your email to test@example.com"
+
+**Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
 
 ## Live Demo
 
