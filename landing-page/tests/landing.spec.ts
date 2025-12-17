@@ -29,12 +29,12 @@ test.describe('Ozwell Embed Widget', () => {
     // Wait for the chat wrapper to be visible
     await expect(page.locator('#ozwell-chat-wrapper.visible')).toBeVisible({ timeout: 5000 });
     
-    // Wait for iframe to be created inside the container
-    const iframeLocator = page.locator('#chat-container iframe');
+    // Wait for iframe to be created inside the container (default UI uses #ozwell-chat-container)
+    const iframeLocator = page.locator('#ozwell-chat-container iframe');
     await expect(iframeLocator).toBeVisible({ timeout: 10000 });
-    
+
     // Get the iframe locator
-    iframe = page.frameLocator('#chat-container iframe');
+    iframe = page.frameLocator('#ozwell-chat-container iframe');
   });
 
   test('should load the landing page with widget', async ({ page }) => {
@@ -46,9 +46,9 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Verify chat button exists (hidden when chat is open, visible when closed)
     await expect(page.locator('#ozwell-chat-button')).toBeAttached();
-    
+
     // Verify widget iframe is loaded (chat is already open from beforeEach)
-    await expect(page.locator('#chat-container iframe')).toBeVisible();
+    await expect(page.locator('#ozwell-chat-container iframe')).toBeVisible();
   });
 
   test('should show welcome message in chat widget', async ({ page }) => {
