@@ -29,6 +29,27 @@ Customize the widget with `window.OzwellChatConfig`:
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
+## With Custom UI
+
+Use your own button and layout by disabling the default floating button:
+
+```html
+<!-- Your custom container -->
+<div id="my-chat-container" style="width: 100%; height: 500px;"></div>
+
+<script>
+  window.OzwellChatConfig = {
+    defaultUI: false,              // Disable default floating button
+    containerId: 'my-chat-container'
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**How it works:** Setting `defaultUI: false` disables the automatic floating button and wrapper. The widget iframe mounts directly in your custom container instead.
+
+**Use cases:** Sidebar layouts, embedded chat in dashboards, multi-panel UIs, or any design where you want full control over the chat placement and styling.
+
 ## Getting Text Back from Widget
 
 Use the AI to improve text, then get it back with the "Save & Close" button:
@@ -147,6 +168,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `autoMount` | boolean | `true` | Auto-mount widget on page load |
+| `defaultUI` | boolean | `true` | Enable default floating button and wrapper. Set to `false` to use custom UI |
 | `endpoint` | string | (auto-detected) | Chat API endpoint (auto-detected from script URL) |
 | `widgetUrl` | string | (auto-detected) | Widget iframe URL (auto-detected from script URL) |
 | `model` | string | (server default) | Model name to use for chat completions. **Optional** - if not specified, the server chooses the appropriate model |
