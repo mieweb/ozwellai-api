@@ -222,24 +222,7 @@
     </footer>
   </div>
 
-  <!-- Chat Floating Button -->
-  <button id="ozwell-chat-button" class="ozwell-chat-button">
-    💬
-  </button>
-
-  <!-- Chat Window Wrapper -->
-  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
-    <div class="ozwell-chat-header">
-      <div class="ozwell-chat-title">
-        Ozwell Assistant
-      </div>
-      <div class="ozwell-chat-controls">
-        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
-        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
-      </div>
-    </div>
-    <div class="ozwell-chat-content" id="chat-container"></div>
-  </div>
+  <!-- Default floating chat button will be created automatically by ozwell-loader.js -->
 
   <script>
     // Load Ozwell chat widget script
@@ -247,7 +230,7 @@
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
 
     window.OzwellChatConfig = {
-      containerId: 'chat-container',
+      // No containerId - using default floating button
       title: 'Ozwell Assistant',
       placeholder: 'Try: "what is my name?" or "update my name to Bob"',
       // model and endpoint are not specified - auto-detected from script URL

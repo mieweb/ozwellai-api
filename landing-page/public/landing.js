@@ -202,11 +202,12 @@
   };
 
   // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => ChatWrapper.init());
-  } else {
-    ChatWrapper.init();
-  }
+  // NOTE: Disabled - now using default floating button from ozwell-loader.js
+  // if (document.readyState === 'loading') {
+  //   document.addEventListener('DOMContentLoaded', () => ChatWrapper.init());
+  // } else {
+  //   ChatWrapper.init();
+  // }
 
   // Expose to window for debugging
   window.ChatWrapper = ChatWrapper;
