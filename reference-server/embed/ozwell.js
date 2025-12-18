@@ -239,6 +239,100 @@ body {
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
 }
+
+/* Tool Pills (Debug Mode) */
+.tool-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+  align-self: flex-start;
+  max-width: 75%;
+}
+
+.tool-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #c7d2fe;
+  user-select: none;
+}
+
+.tool-pill:hover {
+  background: #c7d2fe;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tool-pill.expanded {
+  background: #c7d2fe;
+}
+
+/* Expanded Tool Details (Debug Mode) */
+.tool-details {
+  align-self: flex-start;
+  max-width: 85%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin: 4px 0 8px 0;
+  overflow: visible;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.tool-details-header {
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+.tool-details-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.tool-details-section:last-child {
+  border-bottom: none;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.tool-details-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.tool-details-content {
+  background: #f9fafb;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
+  color: #1a1a1a;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+}
   `;
   document.head.appendChild(style);
 
@@ -340,11 +434,14 @@ const state = {
     placeholder: 'Ask a question...',
     // model is optional - server chooses default if not specified
     endpoint: '/v1/chat/completions',
+    debug: false, // Debug mode for developers
   },
   messages: [],
   sending: false,
   formData: null, // Form context from parent page
   activeToolCalls: {}, // Track tool_call_id by tool name for OpenAI protocol
+  toolExecutions: [], // Track tool executions for debug mode: { id, messageIndex, toolName, arguments, result, timestamp }
+  expandedTools: new Set(), // Track which tool pills are expanded
 };
 
 console.log('[widget.js] Widget initializing...');
@@ -435,6 +532,193 @@ You have access to tools. Use them wisely:
   }
 
   return systemPrompt;
+}
+
+/**
+ * Create and render tool pills (debug mode only)
+ * @param {Array} toolCalls - Array of tool call objects
+ * @param {string} groupId - Unique ID for this group of tool calls
+ */
+function renderToolPills(toolCalls, groupId) {
+  if (!state.config.debug || !toolCalls || toolCalls.length === 0) {
+    return; // Debug mode is off or no tools to display
+  }
+
+  // Create container for pills
+  const pillsContainer = document.createElement('div');
+  pillsContainer.className = 'tool-pills';
+  pillsContainer.dataset.groupId = groupId;
+
+  // Create a pill for each tool call
+  toolCalls.forEach((toolCall, index) => {
+    const toolId = `${groupId}-${index}`;
+    const toolName = toolCall.function?.name || 'unknown';
+
+    // Create pill element
+    const pill = document.createElement('div');
+    pill.className = 'tool-pill';
+    pill.dataset.toolId = toolId;
+
+    // No icon needed - just the tool name
+
+    // Add tool name
+    const name = document.createElement('span');
+    name.textContent = toolName;
+    pill.appendChild(name);
+
+    // Add click handler for expansion
+    pill.addEventListener('click', () => toggleToolDetails(toolId, toolCall));
+
+    pillsContainer.appendChild(pill);
+  });
+
+  // Add to messages container
+  if (messagesEl) {
+    messagesEl.appendChild(pillsContainer);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+}
+
+/**
+ * Toggle tool details expansion/collapse
+ * @param {string} toolId - Unique tool ID
+ * @param {Object} toolCall - Tool call object with arguments
+ */
+function toggleToolDetails(toolId, toolCall) {
+  const pill = document.querySelector(`[data-tool-id="${toolId}"]`);
+  if (!pill) return;
+
+  const isExpanded = state.expandedTools.has(toolId);
+
+  if (isExpanded) {
+    // Collapse - remove details and update state
+    const details = document.querySelector(`[data-tool-details="${toolId}"]`);
+    if (details) {
+      details.remove();
+    }
+    pill.classList.remove('expanded');
+    state.expandedTools.delete(toolId);
+  } else {
+    // Expand - show details
+    const details = createToolDetails(toolId, toolCall);
+
+    // Insert details after the pills container
+    const pillsContainer = pill.closest('.tool-pills');
+    if (pillsContainer && pillsContainer.nextSibling) {
+      pillsContainer.parentNode.insertBefore(details, pillsContainer.nextSibling);
+    } else if (pillsContainer) {
+      pillsContainer.parentNode.appendChild(details);
+    }
+
+    pill.classList.add('expanded');
+    state.expandedTools.add(toolId);
+
+    // Scroll to show details
+    if (messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  }
+}
+
+/**
+ * Create tool details element
+ * @param {string} toolId - Unique tool ID
+ * @param {Object} toolCall - Tool call object
+ * @returns {HTMLElement} Details element
+ */
+function createToolDetails(toolId, toolCall) {
+  const toolName = toolCall.function?.name || 'unknown';
+
+  // Parse arguments
+  let args = {};
+  try {
+    args = typeof toolCall.function?.arguments === 'string'
+      ? JSON.parse(toolCall.function.arguments)
+      : toolCall.function?.arguments || {};
+  } catch (e) {
+    args = { error: 'Failed to parse arguments' };
+  }
+
+  // Get result from tracked executions
+  const execution = state.toolExecutions.find(exec => exec.toolCallId === toolCall.id);
+  const result = execution?.result || { status: 'pending' };
+
+  // Create details container
+  const details = document.createElement('div');
+  details.className = 'tool-details';
+  details.dataset.toolDetails = toolId;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'tool-details-header';
+  header.textContent = toolName;
+  details.appendChild(header);
+
+  // Arguments section
+  const argsSection = document.createElement('div');
+  argsSection.className = 'tool-details-section';
+
+  const argsLabel = document.createElement('div');
+  argsLabel.className = 'tool-details-label';
+  argsLabel.textContent = 'Arguments';
+  argsSection.appendChild(argsLabel);
+
+  const argsContent = document.createElement('div');
+  argsContent.className = 'tool-details-content';
+  argsContent.textContent = JSON.stringify(args, null, 2);
+  argsSection.appendChild(argsContent);
+
+  details.appendChild(argsSection);
+
+  // Result section
+  const resultSection = document.createElement('div');
+  resultSection.className = 'tool-details-section';
+
+  const resultLabel = document.createElement('div');
+  resultLabel.className = 'tool-details-label';
+  resultLabel.textContent = 'Result';
+  resultSection.appendChild(resultLabel);
+
+  const resultContent = document.createElement('div');
+  resultContent.className = 'tool-details-content';
+  resultContent.textContent = JSON.stringify(result, null, 2);
+  resultSection.appendChild(resultContent);
+
+  details.appendChild(resultSection);
+
+  return details;
+}
+
+/**
+ * Update tool execution result in debug tracking
+ * @param {string} toolCallId - Tool call ID
+ * @param {Object} result - Tool execution result
+ */
+function updateToolExecutionResult(toolCallId, result) {
+  if (!state.config.debug) return;
+
+  const execution = state.toolExecutions.find(exec => exec.toolCallId === toolCallId);
+  if (execution) {
+    execution.result = result;
+    execution.completedAt = Date.now();
+
+    // If this tool is currently expanded, update the display
+    const expandedToolId = Array.from(state.expandedTools).find(id => {
+      const exec = state.toolExecutions.find(e => e.toolCallId === toolCallId);
+      return exec && id.includes(exec.toolCallId);
+    });
+
+    if (expandedToolId) {
+      // Re-render the details
+      const details = document.querySelector(`[data-tool-details="${expandedToolId}"]`);
+      if (details) {
+        const resultContent = details.querySelector('.tool-details-section:last-child .tool-details-content');
+        if (resultContent) {
+          resultContent.textContent = JSON.stringify(result, null, 2);
+        }
+      }
+    }
+  }
 }
 
 async function sendMessage(text) {
@@ -582,11 +866,10 @@ async function sendMessageNonStreaming(text, tools) {
               payload: args
             }, '*');
 
-            // Add system message to chat
-            addMessage('system', `Executing ${toolName}...`);
+            // No system messages - tools are invisible to end users
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
-            addMessage('system', `Error: Could not execute ${toolName}`);
+            // Errors are logged to console, not shown to user
           }
         }
       }
@@ -880,6 +1163,12 @@ async function sendMessageStreaming(text, tools) {
         assistantMsgEl.parentNode.removeChild(assistantMsgEl);
       }
 
+      // Render tool pills in debug mode (BEFORE executing tools)
+      const groupId = `tool-group-${Date.now()}`;
+      if (state.config.debug) {
+        renderToolPills(toolCalls, groupId);
+      }
+
       // Execute each tool call
       for (const toolCall of toolCalls) {
         const toolName = toolCall.function?.name;
@@ -892,8 +1181,20 @@ async function sendMessageStreaming(text, tools) {
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
-            // Add execution message to chat
-            addMessage('system', `Executing ${toolName}...`);
+            // Track tool execution in debug mode
+            if (state.config.debug) {
+              state.toolExecutions.push({
+                toolCallId: toolCall.id,
+                toolName: toolName,
+                arguments: args,
+                result: null,
+                timestamp: Date.now(),
+                completedAt: null
+              });
+            }
+
+            // No system messages - tools are invisible to end users when debug is off
+            // In debug mode, pills show the execution instead
 
             // Store tool_call_id for later use in tool message
             state.activeToolCalls[toolName] = toolCall.id;
@@ -908,7 +1209,7 @@ async function sendMessageStreaming(text, tools) {
             }, '*');
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
-            addMessage('system', `Error: Could not execute ${toolName}`);
+            // Errors are logged to console, not shown to user unless debug mode
           }
         }
       }
@@ -1121,6 +1422,12 @@ function handleParentMessage(event) {
     console.log('[widget.js] Received tool result from parent:', data.result);
 
     const result = data.result;
+    const toolCallId = data.tool_call_id;
+
+    // Update tool execution result in debug mode
+    if (toolCallId) {
+      updateToolExecutionResult(toolCallId, result);
+    }
 
     // Check if this is an update tool (has success/message) or a get tool (raw data)
     if (result.success && result.message) {
@@ -1136,7 +1443,6 @@ function handleParentMessage(event) {
       console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
 
       // Get tool_call_id from parent response (required for OpenAI protocol)
-      const toolCallId = data.tool_call_id;
       if (!toolCallId) {
         console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
         addMessage('system', 'Error: Tool result missing ID');

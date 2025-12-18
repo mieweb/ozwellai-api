@@ -180,6 +180,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `headers` | object | `{}` | Custom HTTP headers for API requests |
 | `openaiApiKey` | string | (none) | API key for Authorization header |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
+| `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 
 ## API Reference
 

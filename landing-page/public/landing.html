@@ -54,6 +54,7 @@
         <p>Tell the widget what actions are available:</p>
         <pre class="code-block"><code>&lt;script&gt;
   window.OzwellChatConfig = {
+    debug: false,  // Set true to see tool execution details
     tools: [{
       type: 'function',
       function: {
@@ -237,6 +238,7 @@
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       system: 'You are a helpful assistant for managing user profile information.',
+      debug: false, // Disable debug mode - no tool execution pills shown
       tools: [
         {
           type: 'function',
