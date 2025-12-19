@@ -251,6 +251,17 @@ class IframeSyncBroker {
  *   3. Update context (optional): OzwellChat.updateContext({ formData: {...} })
  */
 (function () {
+  // Inject viewport meta tag if not present (required for mobile-native behavior)
+  function ensureViewportMeta() {
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+      document.head.appendChild(meta);
+      console.log('[OzwellChat] Viewport meta tag injected for mobile support');
+    }
+  }
+
   // Auto-detect base URL from script location
   let autoDetectedBase = '';
   try {
@@ -262,6 +273,9 @@ class IframeSyncBroker {
   } catch (e) {
     console.warn('[OzwellChat] Auto-detection failed, using relative paths:', e);
   }
+
+  // Ensure viewport is set for mobile-native behavior
+  ensureViewportMeta();
 
   const DEFAULT_DIMENSIONS = { width: 360, height: 420 };
   const DEFAULT_CONFIG = {
@@ -498,15 +512,14 @@ class IframeSyncBroker {
         gap: 8px;
       }
 
-      .ozwell-minimize-btn,
-      .ozwell-close-btn {
+      .ozwell-hide-btn {
         background: none;
         border: none;
         color: white;
-        font-size: 24px;
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
-        padding: 0;
-        width: 32px;
+        padding: 6px 12px;
         height: 32px;
         display: flex;
         align-items: center;
@@ -515,8 +528,7 @@ class IframeSyncBroker {
         transition: background 0.2s;
       }
 
-      .ozwell-minimize-btn:hover,
-      .ozwell-close-btn:hover {
+      .ozwell-hide-btn:hover {
         background: rgba(255, 255, 255, 0.2);
       }
 
@@ -530,6 +542,57 @@ class IframeSyncBroker {
         width: 100%;
         height: 100%;
         border: none;
+      }
+
+      /* Mobile-native styles */
+      @media (max-width: 767px) {
+        .ozwell-chat-content iframe {
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+        }
+        .ozwell-chat-button {
+          bottom: calc(20px + env(safe-area-inset-bottom));
+          right: 20px;
+          width: 56px;
+          height: 56px;
+          font-size: 24px;
+        }
+
+        .ozwell-chat-wrapper {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+          border: none;
+          box-shadow: none;
+        }
+
+        .ozwell-chat-wrapper.hidden {
+          opacity: 0;
+          transform: translateY(100%);
+        }
+
+        .ozwell-chat-wrapper.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .ozwell-chat-header {
+          padding-top: calc(16px + env(safe-area-inset-top));
+          padding-bottom: 16px;
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
+        .ozwell-chat-content {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
       }
     `;
     document.head.appendChild(style);
@@ -588,8 +651,7 @@ class IframeSyncBroker {
     header.innerHTML = `
       <div class="ozwell-chat-title">${config.title || 'Ozwell Assistant'}</div>
       <div class="ozwell-chat-controls">
-        <button class="ozwell-minimize-btn" aria-label="Minimize" type="button">−</button>
-        <button class="ozwell-close-btn" aria-label="Close" type="button">×</button>
+        <button class="ozwell-hide-btn" aria-label="Hide chat" type="button">Hide</button>
       </div>
     `;
 
@@ -630,25 +692,14 @@ class IframeSyncBroker {
       console.log('[OzwellChat] Chat opened');
     });
 
-    // Close chat
-    const closeBtn = wrapper.querySelector('.ozwell-close-btn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
+    // Hide chat
+    const hideBtn = wrapper.querySelector('.ozwell-hide-btn');
+    if (hideBtn) {
+      hideBtn.addEventListener('click', () => {
         wrapper.classList.remove('visible');
         wrapper.classList.add('hidden');
         button.classList.remove('hidden');
-        console.log('[OzwellChat] Chat closed');
-      });
-    }
-
-    // Minimize chat
-    const minimizeBtn = wrapper.querySelector('.ozwell-minimize-btn');
-    if (minimizeBtn) {
-      minimizeBtn.addEventListener('click', () => {
-        wrapper.classList.remove('visible');
-        wrapper.classList.add('hidden');
-        button.classList.remove('hidden');
-        console.log('[OzwellChat] Chat minimized');
+        console.log('[OzwellChat] Chat hidden');
       });
     }
 
