@@ -196,7 +196,7 @@ body {
   padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid #d1d5db;
-  font-size: 14px;
+  font-size: 16px;
   background: #ffffff;
   color: #1a1a1a;
 }
