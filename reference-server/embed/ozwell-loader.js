@@ -461,6 +461,12 @@ class IframeSyncBroker {
         display: none;
       }
 
+      .ozwell-chat-icon {
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+      }
+
       /* Chat wrapper window */
       .ozwell-chat-wrapper {
         position: fixed;
@@ -636,7 +642,7 @@ class IframeSyncBroker {
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '💬';
+    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
