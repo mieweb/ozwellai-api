@@ -703,10 +703,7 @@ function updateToolExecutionResult(toolCallId, result) {
     execution.completedAt = Date.now();
 
     // If this tool is currently expanded, update the display
-    const expandedToolId = Array.from(state.expandedTools).find(id => {
-      const exec = state.toolExecutions.find(e => e.toolCallId === toolCallId);
-      return exec && id.includes(exec.toolCallId);
-    });
+    const expandedToolId = Array.from(state.expandedTools).find(id => id.includes(toolCallId));
 
     if (expandedToolId) {
       // Re-render the details
@@ -863,7 +860,8 @@ async function sendMessageNonStreaming(text, tools) {
               source: 'ozwell-chat-widget',
               type: 'tool_call',
               tool: toolName,
-              payload: args
+              payload: args,
+              tool_call_id: toolCall.id
             }, '*');
 
             // No system messages - tools are invisible to end users
