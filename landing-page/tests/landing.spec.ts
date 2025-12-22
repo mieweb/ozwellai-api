@@ -159,9 +159,8 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Check for expected tools
     const toolNames = config.tools.map((t: any) => t.function?.name);
-    expect(toolNames).toContain('update_name');
-    expect(toolNames).toContain('update_address');
-    expect(toolNames).toContain('update_zip');
+    expect(toolNames).toContain('get_form_data');
+    expect(toolNames).toContain('update_form_data');
   });
 
   test('should navigate to tic-tac-toe demo', async ({ page }) => {
