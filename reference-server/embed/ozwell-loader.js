@@ -504,12 +504,12 @@ class IframeSyncBroker {
         padding: 16px;
         background: #0066ff;
         color: white;
-        cursor: move;
         user-select: none;
       }
 
       .ozwell-chat-title {
         font-weight: 600;
+        font-size: 16px;
         font-size: 16px;
       }
 
@@ -654,12 +654,19 @@ class IframeSyncBroker {
     // Create header
     const header = document.createElement('div');
     header.className = 'ozwell-chat-header';
-    header.innerHTML = `
-      <div class="ozwell-chat-title">${config.title || 'Ozwell Assistant'}</div>
-      <div class="ozwell-chat-controls">
-        <button class="ozwell-hide-btn" aria-label="Hide chat" type="button">Hide</button>
-      </div>
-    `;
+    const titleEl = document.createElement('div');
+    titleEl.className = 'ozwell-chat-title';
+    titleEl.textContent = config.title || 'Ozwell Assistant';
+    const controlsEl = document.createElement('div');
+    controlsEl.className = 'ozwell-chat-controls';
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'ozwell-hide-btn';
+    hideBtn.setAttribute('aria-label', 'Hide chat');
+    hideBtn.setAttribute('type', 'button');
+    hideBtn.textContent = 'Hide';
+    controlsEl.appendChild(hideBtn);
+    header.appendChild(titleEl);
+    header.appendChild(controlsEl);
 
     // Create content container for iframe
     const container = document.createElement('div');
