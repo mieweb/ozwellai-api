@@ -331,6 +331,39 @@ Or use custom headers for any authentication scheme:
 
 **Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
 
+## Debug Mode
+
+Enable debug mode during development to visualize tool executions:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    debug: true  // Shows tool execution details
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**How it works:** Clickable tool pills appear before AI responses. Click a pill to expand and see:
+- Tool name and arguments sent
+- Result data returned from parent page
+- Complete execution timeline
+
+**Use cases:** Debugging tool integrations, verifying correct arguments, demonstrating MCP to stakeholders.
+
+In production (`debug: false`, default), tools execute silently and users only see the final response.
+
+## Mobile Support
+
+The widget automatically provides a native app experience on mobile devices:
+
+- Fullscreen mode (no borders or margins)
+- Proper viewport scaling (injects meta tag if missing)
+- Safe area support for iPhone notches and Android nav bars
+- 16px input font (prevents iOS auto-zoom)
+
+The widget handles all mobile optimizations automatically.
+
 ## Live Demo
 
 - **Demo:** https://ozwellai-embedtest.opensource.mieweb.org
