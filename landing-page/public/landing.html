@@ -58,14 +58,16 @@
     tools: [{
       type: 'function',
       function: {
-        name: 'update_name',
-        description: 'Updates user name',
+        name: 'update_form_data',
+        description: 'Updates user profile information',
         parameters: {
           type: 'object',
           properties: {
-            name: { type: 'string' }
+            name: { type: 'string', description: 'New name (optional)' },
+            address: { type: 'string', description: 'New address (optional)' },
+            zipCode: { type: 'string', description: 'New zip code (optional)' }
           },
-          required: ['name']
+          required: []
         }
       }
     }]
@@ -82,8 +84,10 @@
       e.data.type === 'tool_call') {
 
     // Execute the tool on YOUR page
-    if (e.data.tool === 'update_name') {
-      nameInput.value = e.data.payload.name;
+    if (e.data.tool === 'update_form_data') {
+      if (e.data.payload.name) nameInput.value = e.data.payload.name;
+      if (e.data.payload.address) addressInput.value = e.data.payload.address;
+      if (e.data.payload.zipCode) zipInput.value = e.data.payload.zipCode;
     }
 
     // Send result back to widget
