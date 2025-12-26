@@ -1167,6 +1167,13 @@ function handleParentMessage(event) {
     return;
   }
 
+  // Handle send-message from parent (per iframe-integration.md spec)
+  if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:send-message' && data.payload?.content) {
+    console.log('[widget.js] Received ozwell:send-message from parent:', data.payload.content);
+    sendMessage(data.payload.content);
+    return;
+  }
+
   // Handle legacy messages from embed system
   if (data.source !== 'ozwell-chat-parent') return;
 

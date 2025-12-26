@@ -245,12 +245,14 @@ function syncGameState() {
   const scoreOEl = document.getElementById('score-o');
 
   const gameData = {
-    boardState: boardState,
-    currentPlayer: currentPlayer,
-    gameOver: gameOver,
-    winner: winner,
-    xScore: scoreXEl ? parseInt(scoreXEl.textContent) || 0 : 0,
-    oScore: scoreOEl ? parseInt(scoreOEl.textContent) || 0 : 0
+    formData: {
+      boardState: boardState,
+      currentPlayer: currentPlayer,
+      gameOver: gameOver,
+      winner: winner,
+      xScore: scoreXEl ? parseInt(scoreXEl.textContent) || 0 : 0,
+      oScore: scoreOEl ? parseInt(scoreOEl.textContent) || 0 : 0
+    }
   };
 
   // Use the clean OzwellChat API instead of direct broker access
@@ -584,59 +586,37 @@ function handleMakeMove(position) {
     return;
   }
 
-  // User move
-  boardState[index] = 'X';
-  currentPlayer = 'O';
+  // Determine which player is making the move
+  const piece = currentPlayer;
+  const playerName = piece === 'X' ? 'You' : 'AI';
+
+  // Make the move
+  boardState[index] = piece;
+  currentPlayer = piece === 'X' ? 'O' : 'X';
   updateBoard();
   syncGameState(); // Auto-sync game state to widget
-  logEvent(`You placed X at ${normalizedPosition}`, 'move');
+  logEvent(`${playerName} placed ${piece} at ${normalizedPosition}`, piece === 'X' ? 'move' : 'ai-move');
 
   // Send success tool result
-  sendToolResult({ success: true, message: `Placed X at ${normalizedPosition}` });
+  sendToolResult({ success: true, message: `Placed ${piece} at ${normalizedPosition}` });
 
-  // Check if user won
-  const userWinResult = checkWinner();
-  if (userWinResult) {
+  // Check if game is over
+  const winResult = checkWinner();
+  if (winResult) {
     gameOver = true;
-    winner = userWinResult.winner;
+    winner = winResult.winner;
     updateBoard();
     syncGameState(); // Auto-sync final game state
     if (winner === 'X') {
       logEvent('You win!', 'game-over');
+    } else if (winner === 'O') {
+      logEvent('AI wins!', 'game-over');
     } else if (winner === 'draw') {
       logEvent("It's a draw!", 'game-over');
     }
     setTimeout(() => showGameOver(), 300);
     return;
   }
-
-  // AI move after a short delay
-  setTimeout(() => {
-    const aiIndex = makeAIMove();
-    if (aiIndex !== null) {
-      boardState[aiIndex] = 'O';
-      currentPlayer = 'X';
-      updateBoard();
-      syncGameState(); // Auto-sync game state to widget
-      const aiPosition = indexToPosition[aiIndex];
-      logEvent(`AI placed O at ${aiPosition}`, 'ai-move');
-
-      // Check if AI won
-      const aiWinResult = checkWinner();
-      if (aiWinResult) {
-        gameOver = true;
-        winner = aiWinResult.winner;
-        updateBoard();
-        syncGameState(); // Auto-sync final game state
-        if (winner === 'O') {
-          logEvent('AI wins!', 'game-over');
-        } else if (winner === 'draw') {
-          logEvent("It's a draw!", 'game-over');
-        }
-        setTimeout(() => showGameOver(), 300);
-      }
-    }
-  }, 500);
 }
 
 function handleResetGame() {
@@ -713,13 +693,93 @@ document.getElementById('play-again-btn').addEventListener('click', () => {
 });
 
 // ========================================
+// Click to Play
+// ========================================
+
+function handleUserClick(index) {
+  // Prevent clicks if game is over or not user's turn
+  if (gameOver) {
+    logEvent('Game is over. Reset to play again.', 'error');
+    return;
+  }
+
+  if (currentPlayer !== 'X') {
+    logEvent('Please wait for AI to make its move', 'error');
+    return;
+  }
+
+  // Check if position is already taken
+  if (boardState[index] !== null) {
+    logEvent('Position already taken', 'error');
+    return;
+  }
+
+  const position = indexToPosition[index];
+  const normalizedPosition = normalizePosition(position);
+
+  // Make user's move locally
+  boardState[index] = 'X';
+  currentPlayer = 'O';
+  updateBoard();
+  syncGameState();
+  logEvent(`You placed X at ${normalizedPosition}`, 'move');
+
+  // Check if user won
+  const userWinResult = checkWinner();
+  if (userWinResult) {
+    gameOver = true;
+    winner = userWinResult.winner;
+    updateBoard();
+    syncGameState();
+    if (winner === 'X') {
+      logEvent('You win!', 'game-over');
+    } else if (winner === 'draw') {
+      logEvent("It's a draw!", 'game-over');
+    }
+    setTimeout(() => showGameOver(), 300);
+    return;
+  }
+
+  // Send message to chatbot using ozwell:send-message (per iframe-integration.md spec)
+  const widgetIframe = getWidgetIframe();
+  if (widgetIframe?.contentWindow) {
+    widgetIframe.contentWindow.postMessage({
+      source: 'ozwell-chat-parent',
+      type: 'ozwell:send-message',
+      payload: {
+        content: `I played X at ${normalizedPosition}. Your turn - choose an empty position for your O!`
+      }
+    }, '*');
+    console.log('[tictactoe-app.js] Sent ozwell:send-message to widget:', normalizedPosition);
+  } else {
+    console.error('[tictactoe-app.js] Cannot send message: widget iframe not found');
+  }
+}
+
+// ========================================
 // Initialize
 // ========================================
 
 document.addEventListener('DOMContentLoaded', () => {
   logEvent('Tic-tac-toe game initialized', 'info');
-  logEvent('Say "I\'ll go top left" or "take the center" to make moves', 'info');
+  logEvent('Click any square to start playing!', 'info');
   updateBoard();
+
+  // Add click event listeners to all cells
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, index) => {
+    cell.addEventListener('click', () => {
+      handleUserClick(index);
+    });
+  });
+
+  // Auto-open the chat window on page load
+  if (window.ChatWrapper) {
+    // Wait a bit for the widget to fully initialize
+    setTimeout(() => {
+      window.ChatWrapper.openChat();
+    }, 500);
+  }
 });
 
 console.log('Tic-tac-toe app loaded');

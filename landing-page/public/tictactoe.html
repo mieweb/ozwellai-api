@@ -48,7 +48,7 @@
           </div>
           <button id="reset-btn" class="reset-button">Reset Game</button>
           <div class="game-hint">
-            Try saying: "I'll place my X in the top left" or "Put my piece in the center"
+            Click any square to place your X - the AI will respond with its O move in the chat!
           </div>
         </div>
       </div>
@@ -94,23 +94,25 @@
     // Configure Ozwell chat widget
     window.OzwellChatConfig = {
       containerId: 'chat-container',
-      title: 'Ozwell Assistant',
-      placeholder: 'Try: "I\'ll go top left" or "take the center"',
-      // model and endpoint are not specified - auto-detected from script URL
-      // widgetUrl auto-detected from script source
-      welcomeMessage: 'Ready to play! Tell me where to place your X (e.g., "top left", "center").',
+      title: 'AI Opponent (O)',
+      placeholder: 'AI is thinking...',
+      autoMount: true, // Auto-mount the widget
+      model: 'llama3.1:latest', // llama3.1 has excellent tool calling without extended reasoning format
+      // endpoint and widgetUrl auto-detected from script URL
+      system: 'You are the AI opponent playing as O in tic-tac-toe against a human who plays as X. The user makes moves by CLICKING squares on the board - they will NOT type their moves to you. When you receive a message saying they played at a position, that means they clicked that square and it now has their X. Your job is to analyze the boardState in the context and respond by calling the make_move tool with a strategic empty position for your O. Choose positions where boardState is null. IMPORTANT: If a user types a message asking you to make a move for them, politely tell them to click the square instead - you only play as O, not as X.',
+      welcomeMessage: 'Click any square to make your move! I\'ll play as O and respond.',
       tools: [
         {
           type: 'function',
           function: {
             name: 'make_move',
-            description: 'Place user\'s X piece on the tic-tac-toe board at specified position',
+            description: 'Place your O piece on the tic-tac-toe board as the AI opponent. Call this after the user clicks a square to make your counter-move.',
             parameters: {
               type: 'object',
               properties: {
                 position: {
                   type: 'string',
-                  description: 'Board position where user wants to place their piece. Examples: "top left", "center", "bottom right", "middle", "top mid"'
+                  description: 'Board position to place your O piece. Must be an empty position (null in boardState). Examples: "top-left", "middle-center", "bottom-right"'
                 }
               },
               required: ['position']
