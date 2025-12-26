@@ -53,8 +53,9 @@
         <h3>2. Define MCP Tools (Optional)</h3>
         <p>Tell the widget what actions are available:</p>
         <pre class="code-block"><code>&lt;script&gt;
+  // Documentation example - shows configuration options
   window.OzwellChatConfig = {
-    debug: false,  // Set true to see tool execution details
+    debug: true,  // Shows tool execution details (set false for production)
     tools: [{
       type: 'function',
       function: {
@@ -230,6 +231,9 @@
   <!-- Default floating chat button will be created automatically by ozwell-loader.js -->
 
   <script>
+    // ============================================
+    // ACTUAL DEMO IMPLEMENTATION (working config)
+    // ============================================
     // Load Ozwell chat widget script
     const referenceBaseUrl = '__REFERENCE_BASE_URL__';
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
@@ -242,7 +246,7 @@
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       system: 'You are a helpful assistant for managing user profile information.',
-      debug: true, // Enable debug mode - shows tool execution pills for developers
+      debug: true, // Shows tool execution pills for developers (set false for production)
       tools: [
         {
           type: 'function',
