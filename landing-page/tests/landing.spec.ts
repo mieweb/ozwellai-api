@@ -6,7 +6,7 @@ import { test, expect, type Page, type FrameLocator } from '@playwright/test';
  * Tests the embed widget functionality including:
  * - Widget loading and auto-detection
  * - Chat interactions with AI
- * - Tool calls (update_name, update_address, update_zip)
+ * - Tool calls (update_form_data)
  * - State synchronization via iframe-sync
  */
 
@@ -121,7 +121,7 @@ test.describe('Ozwell Embed Widget', () => {
     // Wait for potential tool call event in the log
     // This may not appear if AI doesn't call the tool
     try {
-      await expect(page.locator('text=Tool call received').or(page.locator('text=update_name'))).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('text=Tool call received').or(page.locator('text=update_form_data'))).toBeVisible({ timeout: 60000 });
     } catch {
       // AI may not trigger tool - test still passes if message was sent
       await expect(iframe.getByText('update my name to EventTest')).toBeVisible();

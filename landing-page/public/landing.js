@@ -323,6 +323,21 @@
       );
     }
 
+    // Helper: Update a single form field with visual feedback and logging
+    function updateField(fieldName, value, inputElement) {
+      inputElement.value = value;
+      flashInput(inputElement);
+      const inputEvent = new Event('input', { bubbles: true });
+      inputElement.dispatchEvent(inputEvent);
+      console.log(`[landing.js] ✓ ${fieldName} updated to:`, value);
+      logEvent(
+        'tool-call',
+        `[Tool Call] update_form_data - ${fieldName}`,
+        `New value: "${value}"`
+      );
+      return `${fieldName.toLowerCase()}: "${value}"`;
+    }
+
     // MCP Tool Handler Registry
     const toolHandlers = {
       'get_form_data': function(toolCallId) {
@@ -360,52 +375,15 @@
 
         const updates = [];
 
-        // Update name if provided
+        // Update fields using helper function
         if (args.name) {
-          nameInput.value = args.name;
-          flashInput(nameInput);
-          const inputEvent = new Event('input', { bubbles: true });
-          nameInput.dispatchEvent(inputEvent);
-          updates.push(`name: "${args.name}"`);
-          console.log('[landing.js] ✓ Name updated to:', args.name);
-
-          logEvent(
-            'tool-call',
-            '[Tool Call] update_form_data - Name',
-            `New value: "${args.name}"`
-          );
+          updates.push(updateField('Name', args.name, nameInput));
         }
-
-        // Update address if provided
         if (args.address) {
-          addressInput.value = args.address;
-          flashInput(addressInput);
-          const inputEvent = new Event('input', { bubbles: true });
-          addressInput.dispatchEvent(inputEvent);
-          updates.push(`address: "${args.address}"`);
-          console.log('[landing.js] ✓ Address updated to:', args.address);
-
-          logEvent(
-            'tool-call',
-            '[Tool Call] update_form_data - Address',
-            `New value: "${args.address}"`
-          );
+          updates.push(updateField('Address', args.address, addressInput));
         }
-
-        // Update zip code if provided
         if (args.zipCode) {
-          zipInput.value = args.zipCode;
-          flashInput(zipInput);
-          const inputEvent = new Event('input', { bubbles: true });
-          zipInput.dispatchEvent(inputEvent);
-          updates.push(`zipCode: "${args.zipCode}"`);
-          console.log('[landing.js] ✓ Zip code updated to:', args.zipCode);
-
-          logEvent(
-            'tool-call',
-            '[Tool Call] update_form_data - Zip',
-            `New value: "${args.zipCode}"`
-          );
+          updates.push(updateField('Zip', args.zipCode, zipInput));
         }
 
         // Send result back to widget
@@ -426,17 +404,6 @@
             error: 'No fields provided to update'
           });
         }
-      },
-
-      // Legacy compatibility - redirect old tool names to new handler
-      'update_name': function(toolCallId, args) {
-        this.update_form_data(toolCallId, { name: args.name });
-      },
-      'update_address': function(toolCallId, args) {
-        this.update_form_data(toolCallId, { address: args.address });
-      },
-      'update_zip': function(toolCallId, args) {
-        this.update_form_data(toolCallId, { zipCode: args.zipCode });
       }
     };
 
