@@ -32,7 +32,7 @@ test.describe('Ozwell Embed Widget', () => {
     // Wait for iframe to be created inside the container (default UI uses #ozwell-chat-container)
     const iframeLocator = page.locator('#ozwell-chat-container iframe');
     await expect(iframeLocator).toBeVisible({ timeout: 10000 });
-
+    
     // Get the iframe locator
     iframe = page.frameLocator('#ozwell-chat-container iframe');
   });
@@ -46,7 +46,7 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Verify chat button exists (hidden when chat is open, visible when closed)
     await expect(page.locator('#ozwell-chat-button')).toBeAttached();
-
+    
     // Verify widget iframe is loaded (chat is already open from beforeEach)
     await expect(page.locator('#ozwell-chat-container iframe')).toBeVisible();
   });
