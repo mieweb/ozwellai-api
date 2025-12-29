@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tic-Tac-Toe - Ozwell AI Demo</title>
-  <link rel="stylesheet" href="/assets/tictactoe.css" />
+  <link rel="stylesheet" href="/tictactoe.css" />
 </head>
 
 <body>
@@ -46,7 +46,17 @@
               <button id="play-again-btn" class="play-again-button">Play Again</button>
             </div>
           </div>
-          <button id="reset-btn" class="reset-button">Reset Game</button>
+          <div class="game-controls">
+            <button id="reset-btn" class="reset-button">Reset Game</button>
+            <div class="difficulty-selector">
+              <label for="difficulty">Difficulty:</label>
+              <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+          </div>
           <div class="game-hint">
             Click any square to place your X - the AI will respond with its O move in the chat!
           </div>
@@ -74,28 +84,40 @@
 
     // Configure Ozwell chat widget
     window.OzwellChatConfig = {
-      title: 'AI Opponent (O)',
-      placeholder: 'AI is thinking...',
-      model: 'llama3.1:latest', // llama3.1 has excellent tool calling without extended reasoning format
+      placeholder: 'Type a move or click a square...',
+      model: 'llama3.1:latest', // llama3.1 with simplified integer positions for better performance
       // endpoint and widgetUrl auto-detected from script URL
-      system: 'You are the game assistant for tic-tac-toe. You primarily play as O, but you also help execute moves when the user types their requests.\n\nCONTEXT DATA:\n- boardState: Array of 9 positions. null=empty, "X"=human piece, "O"=your piece\n  [0=top-left, 1=top-center, 2=top-right, 3=middle-left, 4=middle-center, 5=middle-right, 6=bottom-left, 7=bottom-center, 8=bottom-right]\n- currentPlayer: Shows whose turn ("X" or "O"). The make_move tool automatically places the piece for whoever\'s turn it is.\n\nUSER INPUT MODES:\n1. **User clicks a square**: You\'ll see "I played X at [position]. Your turn!" - their X is already placed, just call make_move for your O.\n2. **User types a move**: "i want to play top right" - call make_move with their requested position to place their X, then call make_move again for your O response.\n\nCRITICAL RULE:\nBefore EVERY make_move call, check the boardState array. ONLY call make_move with positions where boardState[index] is null (empty). If a position is taken, choose a different empty position.',
-      welcomeMessage: 'Click any square to make your move! I\'ll play as O and respond.',
+      system: 'You are a tic-tac-toe AI playing as O against the human (X).\n\n=== RULES ===\n1. When user CLICKS: You see "It\'s your turn as O" → call ai_move\n2. When user TYPES like "play center": call make_move → then IMMEDIATELY call ai_move\n\n=== CRITICAL ===\nAfter make_move returns with currentPlayer:"O", you MUST call ai_move next. Two tool calls in sequence.\n\n=== EXAMPLES ===\nUser clicks: "I played X at index 1. It\'s your turn as O." → call ai_move\nUser types: "play top right" → call make_move(2) → then call ai_move',
+      welcomeMessage: 'Click any square to play, or type moves like "play center". I\'m O, you\'re X!',
       debug: false, // Disable debug mode for clean game experience
       tools: [
         {
           type: 'function',
           function: {
             name: 'make_move',
-            description: 'Place your O piece on the tic-tac-toe board as the AI opponent. Call this after the user clicks a square to make your counter-move.',
+            description: 'ONLY use when user TYPES a move like "play center". Do NOT use when user clicks - their X is already placed.',
             parameters: {
               type: 'object',
               properties: {
                 position: {
-                  type: 'string',
-                  description: 'Board position to place your O piece. Must be an empty position (null in boardState). Examples: "top-left", "middle-center", "bottom-right"'
+                  type: 'integer',
+                  description: 'Position index (0-8) for the user\'s X move. Board layout: 0=top-left, 1=top-center, 2=top-right, 3=middle-left, 4=middle-center, 5=middle-right, 6=bottom-left, 7=bottom-center, 8=bottom-right.',
+                  minimum: 0,
+                  maximum: 8
                 }
               },
               required: ['position']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'ai_move',
+            description: 'Make YOUR O move. Call this: (1) when you see "It\'s your turn as O", OR (2) IMMEDIATELY after make_move returns with currentPlayer:"O". JavaScript calculates the optimal move.',
+            parameters: {
+              type: 'object',
+              properties: {}
             }
           }
         },
@@ -122,7 +144,7 @@
   </script>
 
   <!-- Game state management (includes chat wrapper) -->
-  <script src="/assets/tictactoe-app.js"></script>
+  <script src="/tictactoe-app.js"></script>
 </body>
 
 </html>

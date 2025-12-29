@@ -42,8 +42,29 @@ function syncGameState() {
   const scoreXEl = document.getElementById('score-x');
   const scoreOEl = document.getElementById('score-o');
 
+  // Get available positions (empty squares) - use indices for simplicity
+  const availablePositions = [];
+  const xPositions = [];
+  const oPositions = [];
+
+  boardState.forEach((value, index) => {
+    if (value === null) {
+      availablePositions.push(index);
+    } else if (value === 'X') {
+      xPositions.push(index);
+    } else if (value === 'O') {
+      oPositions.push(index);
+    }
+  });
+
   const gameData = {
     formData: {
+      // Strategic info for AI decision-making (using position indices 0-8)
+      availablePositions: availablePositions,
+      xPositions: xPositions,
+      oPositions: oPositions,
+
+      // Game state (legacy, kept for compatibility)
       boardState: boardState,
       currentPlayer: currentPlayer,
       gameOver: gameOver,
@@ -351,8 +372,239 @@ function logEvent(message, type = 'info') {
 }
 
 // ========================================
+// AI Opponent Logic (Pure JavaScript)
+// ========================================
+
+/**
+ * Get current difficulty from dropdown (defaults to 'normal')
+ */
+function getAIDifficulty() {
+  const select = document.getElementById('difficulty');
+  return select ? select.value : 'normal';
+}
+
+/**
+ * Score a move using simple heuristics (higher = better for O)
+ */
+function scoreMoveForO(index) {
+  // Check if this move wins for O
+  for (const pattern of winPatterns) {
+    const [a, b, c] = pattern;
+    if (pattern.includes(index)) {
+      const others = [a, b, c].filter(p => p !== index);
+      if (others.every(p => boardState[p] === 'O')) return 100; // Winning move
+    }
+  }
+
+  // Check if this move blocks X from winning
+  for (const pattern of winPatterns) {
+    const [a, b, c] = pattern;
+    if (pattern.includes(index)) {
+      const others = [a, b, c].filter(p => p !== index);
+      if (others.every(p => boardState[p] === 'X')) return 90; // Blocking move
+    }
+  }
+
+  // Center is valuable
+  if (index === 4) return 50;
+
+  // Corners are good
+  if ([0, 2, 6, 8].includes(index)) return 30;
+
+  // Edges are okay
+  return 10;
+}
+
+/**
+ * Get the best move using minimax-style scoring
+ */
+function getBestMove() {
+  // Strategy (deterministic, optimal):
+  // 1. Check if AI can win
+  // 2. Check if need to block user
+  // 3. Take center if available
+  // 4. Take corner if available
+  // 5. Take any available spot
+
+  // Try to win
+  for (const pattern of winPatterns) {
+    const [a, b, c] = pattern;
+    if (boardState[a] === 'O' && boardState[b] === 'O' && boardState[c] === null) return c;
+    if (boardState[a] === 'O' && boardState[c] === 'O' && boardState[b] === null) return b;
+    if (boardState[b] === 'O' && boardState[c] === 'O' && boardState[a] === null) return a;
+  }
+
+  // Block user from winning
+  for (const pattern of winPatterns) {
+    const [a, b, c] = pattern;
+    if (boardState[a] === 'X' && boardState[b] === 'X' && boardState[c] === null) return c;
+    if (boardState[a] === 'X' && boardState[c] === 'X' && boardState[b] === null) return b;
+    if (boardState[b] === 'X' && boardState[c] === 'X' && boardState[a] === null) return a;
+  }
+
+  // Take center
+  if (boardState[4] === null) return 4;
+
+  // Take corner
+  const corners = [0, 2, 6, 8];
+  for (const corner of corners) {
+    if (boardState[corner] === null) return corner;
+  }
+
+  // Take any available spot
+  for (let i = 0; i < 9; i++) {
+    if (boardState[i] === null) return i;
+  }
+
+  return null;
+}
+
+/**
+ * Make AI move with difficulty-based imperfection
+ * - easy: 25% chance to pick from top-3 moves instead of best
+ * - normal: 10% chance to pick from top-2 moves instead of best
+ * - hard: always picks optimal move (unbeatable)
+ */
+function makeAIMove() {
+  if (gameOver) return null;
+
+  // Get all available positions
+  const availableMoves = [];
+  for (let i = 0; i < 9; i++) {
+    if (boardState[i] === null) availableMoves.push(i);
+  }
+
+  if (availableMoves.length === 0) return null;
+
+  // Get the optimal move
+  const bestMove = getBestMove();
+
+  // Difficulty settings
+  const difficultyConfig = {
+    easy: { epsilon: 0.25, topK: 3 },
+    normal: { epsilon: 0.10, topK: 2 },
+    hard: { epsilon: 0, topK: 1 }
+  };
+
+  const difficulty = getAIDifficulty();
+  const { epsilon, topK } = difficultyConfig[difficulty] || difficultyConfig.normal;
+
+  // On hard mode or if random check fails, return best move
+  if (epsilon === 0 || Math.random() >= epsilon) {
+    return bestMove;
+  }
+
+  // Score all available moves and pick from top-K
+  const scoredMoves = availableMoves.map(move => ({
+    move,
+    score: scoreMoveForO(move)
+  })).sort((a, b) => b.score - a.score);
+
+  // Pick randomly from top-K moves (all are guaranteed to be legal/empty)
+  const topMoves = scoredMoves.slice(0, Math.min(topK, scoredMoves.length));
+  const chosen = topMoves[Math.floor(Math.random() * topMoves.length)];
+
+  console.log(`[AI] Difficulty: ${difficulty}, picked ${chosen.move} (score: ${chosen.score}) from top-${topK}`);
+
+  return chosen.move;
+}
+
+// ========================================
 // Game Actions
 // ========================================
+
+/**
+ * Helper: Place a piece on the board and check for game end
+ * @returns {boolean} true if game ended, false if game continues
+ */
+function placePieceAndCheckWin(index, normalizedPosition) {
+  const piece = currentPlayer;
+  const playerName = piece === 'X' ? 'You' : 'AI';
+
+  // Make the move
+  boardState[index] = piece;
+  currentPlayer = piece === 'X' ? 'O' : 'X';
+  updateBoard();
+  syncGameState();
+  logEvent(`${playerName} placed ${piece} at ${normalizedPosition}`, piece === 'X' ? 'move' : 'ai-move');
+
+  // Check if game is over
+  const winResult = checkWinner();
+  if (winResult) {
+    gameOver = true;
+    winner = winResult.winner;
+    updateBoard();
+    syncGameState();
+
+    if (winner === 'X') {
+      logEvent('You win!', 'game-over');
+    } else if (winner === 'O') {
+      logEvent('AI wins!', 'game-over');
+    } else if (winner === 'draw') {
+      logEvent("It's a draw!", 'game-over');
+    }
+
+    setTimeout(() => showGameOver(), 300);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Send a user message to the widget (triggers LLM response)
+ */
+function sendUserMessageToWidget(text) {
+  const widgetIframe = getWidgetIframe();
+  if (!widgetIframe || !widgetIframe.contentWindow) {
+    console.error('[tictactoe-app.js] Cannot send message: widget iframe not found');
+    return;
+  }
+
+  widgetIframe.contentWindow.postMessage({
+    source: 'ozwell-chat-parent',
+    type: 'ozwell:send-message',
+    payload: { content: text }
+  }, '*');
+
+  console.log('[tictactoe-app.js] Sent user message to widget:', text);
+}
+
+/**
+ * Handle ai_move tool call - LLM requests this when it's O's turn
+ * JavaScript calculates perfect move using minimax strategy
+ */
+function handleAiMove(toolCallId) {
+  if (gameOver) {
+    sendToolResult({ success: false, error: 'Game is over' }, toolCallId);
+    return;
+  }
+
+  if (currentPlayer !== 'O') {
+    sendToolResult({ success: false, error: "It's not O's turn" }, toolCallId);
+    return;
+  }
+
+  const aiIndex = makeAIMove();
+  if (aiIndex === null) {
+    sendToolResult({ success: false, error: 'No available moves' }, toolCallId);
+    return;
+  }
+
+  const aiPositionName = indexToPosition[aiIndex];
+
+  // Execute the move
+  placePieceAndCheckWin(aiIndex, aiPositionName);
+
+  // Return raw data (not success/message) so LLM can respond naturally
+  sendToolResult({
+    move: aiIndex,
+    position: aiPositionName,
+    board: boardState.map((v, i) => v || i), // Show board state with indices for empty
+    gameOver: gameOver,
+    winner: winner
+  }, toolCallId);
+}
 
 function handleMakeMove(position, toolCallId) {
   if (gameOver) {
@@ -361,59 +613,64 @@ function handleMakeMove(position, toolCallId) {
     return;
   }
 
-  // Normalize natural language input to canonical position
-  const normalizedPosition = normalizePosition(position);
-
-  if (!normalizedPosition) {
-    logEvent(`Invalid position: "${position}". Try "top left", "center", etc.`, 'error');
-    sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", "bottom right", etc.` }, toolCallId);
+  // Safety: Only allow make_move when it's X's turn
+  if (currentPlayer !== 'X') {
+    sendToolResult({ success: false, error: "Not X's turn. Call ai_move instead." }, toolCallId);
     return;
   }
 
-  const index = positionMap[normalizedPosition];
+  let index;
 
-  if (index === undefined) {
-    logEvent(`Invalid position: ${normalizedPosition}`, 'error');
-    sendToolResult({ success: false, error: `Invalid position: ${normalizedPosition}` }, toolCallId);
-    return;
-  }
-
-  if (boardState[index] !== null) {
-    logEvent(`Position ${normalizedPosition} is already taken`, 'error');
-    sendToolResult({ success: false, error: `Position ${normalizedPosition} is already taken` }, toolCallId);
-    return;
-  }
-
-  // Determine which player is making the move
-  const piece = currentPlayer;
-  const playerName = piece === 'X' ? 'You' : 'AI';
-
-  // Make the move
-  boardState[index] = piece;
-  currentPlayer = piece === 'X' ? 'O' : 'X';
-  updateBoard();
-  syncGameState(); // Auto-sync game state to widget
-  logEvent(`${playerName} placed ${piece} at ${normalizedPosition}`, piece === 'X' ? 'move' : 'ai-move');
-
-  // Send success tool result
-  sendToolResult({ success: true, message: `Placed ${piece} at ${normalizedPosition}` }, toolCallId);
-
-  // Check if game is over
-  const winResult = checkWinner();
-  if (winResult) {
-    gameOver = true;
-    winner = winResult.winner;
-    updateBoard();
-    syncGameState(); // Auto-sync final game state
-    if (winner === 'X') {
-      logEvent('You win!', 'game-over');
-    } else if (winner === 'O') {
-      logEvent('AI wins!', 'game-over');
-    } else if (winner === 'draw') {
-      logEvent("It's a draw!", 'game-over');
+  // Handle both integer (from AI choosing from availablePositions) and string (from user typing)
+  if (typeof position === 'number' || !isNaN(parseInt(position))) {
+    index = parseInt(position);
+    if (index < 0 || index > 8) {
+      logEvent(`Invalid position index: ${position}. Must be 0-8.`, 'error');
+      sendToolResult({ success: false, error: `Invalid position: ${position}. Must be 0-8.` }, toolCallId);
+      return;
     }
-    setTimeout(() => showGameOver(), 300);
+  } else {
+    // Natural language from user typing - normalize it
+    const normalizedPosition = normalizePosition(position);
+    if (!normalizedPosition) {
+      logEvent(`Invalid position: "${position}". Try "top left", "center", etc.`, 'error');
+      sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", etc.` }, toolCallId);
+      return;
+    }
+    index = positionMap[normalizedPosition];
+  }
+
+  // JavaScript-based validation: Check if position is available
+  if (boardState[index] !== null) {
+    // Get current available positions to help AI retry
+    const availablePositions = [];
+    boardState.forEach((value, idx) => {
+      if (value === null) availablePositions.push(idx);
+    });
+
+    const errorMsg = `Position ${index} is already taken. Available positions: ${availablePositions.join(', ')}. Please choose one of these positions.`;
+    logEvent(errorMsg, 'error');
+    sendToolResult({
+      success: false,
+      error: errorMsg,
+      availablePositions: availablePositions // Help LLM understand what's valid
+    }, toolCallId);
     return;
+  }
+
+  // Place piece and check for winner
+  const positionName = indexToPosition[index];
+  const gameEnded = placePieceAndCheckWin(index, positionName);
+
+  // Return success message (NOT raw data) so widget doesn't auto-continue
+  sendToolResult(
+    { success: true, message: `Placed X at ${positionName}.` },
+    toolCallId
+  );
+
+  // If game continues and it's now O's turn, trigger AI the same way as clicks
+  if (!gameEnded && currentPlayer === 'O') {
+    sendUserMessageToWidget(`I placed my X. It's your turn as O.`);
   }
 }
 
@@ -473,6 +730,8 @@ window.addEventListener('message', (event) => {
 
     if (toolName === 'make_move') {
       handleMakeMove(payload.position, toolCallId);
+    } else if (toolName === 'ai_move') {
+      handleAiMove(toolCallId);
     } else if (toolName === 'reset_game') {
       handleResetGame();
       sendToolResult({ success: true, message: 'Game reset successfully' }, toolCallId);
@@ -514,45 +773,14 @@ function handleUserClick(index) {
     return;
   }
 
-  const position = indexToPosition[index];
-  const normalizedPosition = normalizePosition(position);
+  const positionName = indexToPosition[index];
 
-  // Make user's move locally
-  boardState[index] = 'X';
-  currentPlayer = 'O';
-  updateBoard();
-  syncGameState();
-  logEvent(`You placed X at ${normalizedPosition}`, 'move');
+  // Place user's X and check for game end
+  const gameEnded = placePieceAndCheckWin(index, positionName);
 
-  // Check if user won
-  const userWinResult = checkWinner();
-  if (userWinResult) {
-    gameOver = true;
-    winner = userWinResult.winner;
-    updateBoard();
-    syncGameState();
-    if (winner === 'X') {
-      logEvent('You win!', 'game-over');
-    } else if (winner === 'draw') {
-      logEvent("It's a draw!", 'game-over');
-    }
-    setTimeout(() => showGameOver(), 300);
-    return;
-  }
-
-  // Send message to chatbot using ozwell:send-message (per iframe-integration.md spec)
-  const widgetIframe = getWidgetIframe();
-  if (widgetIframe?.contentWindow) {
-    widgetIframe.contentWindow.postMessage({
-      source: 'ozwell-chat-parent',
-      type: 'ozwell:send-message',
-      payload: {
-        content: `I played X at ${normalizedPosition}. Your turn - choose an empty position for your O!`
-      }
-    }, '*');
-    console.log('[tictactoe-app.js] Sent ozwell:send-message to widget:', normalizedPosition);
-  } else {
-    console.error('[tictactoe-app.js] Cannot send message: widget iframe not found');
+  // If game continues, send message to LLM to trigger its turn
+  if (!gameEnded) {
+    sendUserMessageToWidget(`I placed my X. It's your turn as O.`);
   }
 }
 
@@ -562,7 +790,7 @@ function handleUserClick(index) {
 
 document.addEventListener('DOMContentLoaded', () => {
   logEvent('Tic-tac-toe game initialized', 'info');
-  logEvent('Click any square to start playing!', 'info');
+  logEvent('Click a square or tell me where you want to go!', 'info');
   updateBoard();
 
   // Add click event listeners to all cells
