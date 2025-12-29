@@ -201,13 +201,6 @@
     }
   };
 
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => ChatWrapper.init());
-  } else {
-    ChatWrapper.init();
-  }
-
   // Expose to window for debugging
   window.ChatWrapper = ChatWrapper;
 })();
@@ -322,6 +315,21 @@
       );
     }
 
+    // Helper: Update a single form field with visual feedback and logging
+    function updateField(fieldName, value, inputElement) {
+      inputElement.value = value;
+      flashInput(inputElement);
+      const inputEvent = new Event('input', { bubbles: true });
+      inputElement.dispatchEvent(inputEvent);
+      console.log(`[landing.js] ✓ ${fieldName} updated to:`, value);
+      logEvent(
+        'tool-call',
+        `[Tool Call] update_form_data - ${fieldName}`,
+        `New value: "${value}"`
+      );
+      return `${fieldName.toLowerCase()}: "${value}"`;
+    }
+
     // MCP Tool Handler Registry
     const toolHandlers = {
       'get_form_data': function(toolCallId) {
@@ -354,113 +362,38 @@
         });
       },
 
-      'update_name': function(toolCallId, args) {
-        console.log('[landing.js] ✓ Executing update_name tool handler:', args);
+      'update_form_data': function(toolCallId, args) {
+        console.log('[landing.js] ✓ Executing update_form_data tool handler:', args);
 
-        logEvent(
-          'tool-call',
-          '[Tool Call] update_name',
-          `New value: "${args.name}"`
-        );
+        const updates = [];
 
+        // Update fields using helper function
         if (args.name) {
-          nameInput.value = args.name;
-          flashInput(nameInput);
-
-          const inputEvent = new Event('input', { bubbles: true });
-          nameInput.dispatchEvent(inputEvent);
-
-          console.log('[landing.js] ✓ Name updated successfully to:', args.name);
-
-          logEvent(
-            'postmessage',
-            '[Handler] Name field updated',
-            `Value: "${args.name}"`
-          );
-
-          // Send result back to widget (OpenAI protocol)
-          sendToolResult(toolCallId, {
-            success: true,
-            message: `Name updated to "${args.name}"`
-          });
-        } else {
-          sendToolResult(toolCallId, {
-            success: false,
-            error: 'No name provided'
-          });
+          updates.push(updateField('Name', args.name, nameInput));
         }
-      },
-
-      'update_address': function(toolCallId, args) {
-        console.log('[landing.js] ✓ Executing update_address tool handler:', args);
-
-        logEvent(
-          'tool-call',
-          '[Tool Call] update_address',
-          `New value: "${args.address}"`
-        );
-
         if (args.address) {
-          addressInput.value = args.address;
-          flashInput(addressInput);
-
-          const inputEvent = new Event('input', { bubbles: true });
-          addressInput.dispatchEvent(inputEvent);
-
-          console.log('[landing.js] ✓ Address updated successfully to:', args.address);
-
-          logEvent(
-            'postmessage',
-            '[Handler] Address field updated',
-            `Value: "${args.address}"`
-          );
-
-          // Send result back to widget (OpenAI protocol)
-          sendToolResult(toolCallId, {
-            success: true,
-            message: `Address updated to "${args.address}"`
-          });
-        } else {
-          sendToolResult(toolCallId, {
-            success: false,
-            error: 'No address provided'
-          });
+          updates.push(updateField('Address', args.address, addressInput));
         }
-      },
-
-      'update_zip': function(toolCallId, args) {
-        console.log('[landing.js] ✓ Executing update_zip tool handler:', args);
-
-        logEvent(
-          'tool-call',
-          '[Tool Call] update_zip',
-          `New value: "${args.zipCode}"`
-        );
-
         if (args.zipCode) {
-          zipInput.value = args.zipCode;
-          flashInput(zipInput);
+          updates.push(updateField('Zip', args.zipCode, zipInput));
+        }
 
-          const inputEvent = new Event('input', { bubbles: true });
-          zipInput.dispatchEvent(inputEvent);
-
-          console.log('[landing.js] ✓ Zip code updated successfully to:', args.zipCode);
-
+        // Send result back to widget
+        if (updates.length > 0) {
           logEvent(
             'postmessage',
-            '[Handler] Zip code field updated',
-            `Value: "${args.zipCode}"`
+            '[Handler] Form data updated',
+            `Updated: ${updates.join(', ')}`
           );
 
-          // Send result back to widget (OpenAI protocol)
           sendToolResult(toolCallId, {
             success: true,
-            message: `Zip code updated to "${args.zipCode}"`
+            message: `Updated: ${updates.join(', ')}`
           });
         } else {
           sendToolResult(toolCallId, {
             success: false,
-            error: 'No zip code provided'
+            error: 'No fields provided to update'
           });
         }
       }

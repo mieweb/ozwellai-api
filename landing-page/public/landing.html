@@ -53,18 +53,22 @@
         <h3>2. Define MCP Tools (Optional)</h3>
         <p>Tell the widget what actions are available:</p>
         <pre class="code-block"><code>&lt;script&gt;
+  // Documentation example - shows configuration options
   window.OzwellChatConfig = {
+    debug: true,  // Shows tool execution details (set false for production)
     tools: [{
       type: 'function',
       function: {
-        name: 'update_name',
-        description: 'Updates user name',
+        name: 'update_form_data',
+        description: 'Updates user profile information',
         parameters: {
           type: 'object',
           properties: {
-            name: { type: 'string' }
+            name: { type: 'string', description: 'New name (optional)' },
+            address: { type: 'string', description: 'New address (optional)' },
+            zipCode: { type: 'string', description: 'New zip code (optional)' }
           },
-          required: ['name']
+          required: []
         }
       }
     }]
@@ -81,8 +85,10 @@
       e.data.type === 'tool_call') {
 
     // Execute the tool on YOUR page
-    if (e.data.tool === 'update_name') {
-      nameInput.value = e.data.payload.name;
+    if (e.data.tool === 'update_form_data') {
+      if (e.data.payload.name) nameInput.value = e.data.payload.name;
+      if (e.data.payload.address) addressInput.value = e.data.payload.address;
+      if (e.data.payload.zipCode) zipInput.value = e.data.payload.zipCode;
     }
 
     // Send result back to widget
@@ -222,38 +228,25 @@
     </footer>
   </div>
 
-  <!-- Chat Floating Button -->
-  <button id="ozwell-chat-button" class="ozwell-chat-button">
-    💬
-  </button>
-
-  <!-- Chat Window Wrapper -->
-  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
-    <div class="ozwell-chat-header">
-      <div class="ozwell-chat-title">
-        Ozwell Assistant
-      </div>
-      <div class="ozwell-chat-controls">
-        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
-        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
-      </div>
-    </div>
-    <div class="ozwell-chat-content" id="chat-container"></div>
-  </div>
+  <!-- Default floating chat button will be created automatically by ozwell-loader.js -->
 
   <script>
+    // ============================================
+    // ACTUAL DEMO IMPLEMENTATION (working config)
+    // ============================================
     // Load Ozwell chat widget script
     const referenceBaseUrl = '__REFERENCE_BASE_URL__';
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
 
     window.OzwellChatConfig = {
-      containerId: 'chat-container',
+      // No containerId - using default floating button
       title: 'Ozwell Assistant',
       placeholder: 'Try: "what is my name?" or "update my name to Bob"',
       // model and endpoint are not specified - auto-detected from script URL
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       system: 'You are a helpful assistant for managing user profile information.',
+      debug: true, // Shows tool execution pills for developers (set false for production)
       tools: [
         {
           type: 'function',
@@ -270,42 +263,16 @@
         {
           type: 'function',
           function: {
-            name: 'update_name',
-            description: 'Updates the user\'s name field to a new value. Use when user requests to change/update/modify their name.',
+            name: 'update_form_data',
+            description: 'Updates user profile information. Can update name, address, and/or zip code in a single call. Use when user requests to change/update/modify any of these fields.',
             parameters: {
               type: 'object',
               properties: {
-                name: { type: 'string', description: 'The new name value' }
+                name: { type: 'string', description: 'The new name value (optional)' },
+                address: { type: 'string', description: 'The new address value (optional)' },
+                zipCode: { type: 'string', description: 'The new zip code value (optional)' }
               },
-              required: ['name']
-            }
-          }
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'update_address',
-            description: 'Updates the user\'s address field to a new value. Use when user requests to change/update/modify their address.',
-            parameters: {
-              type: 'object',
-              properties: {
-                address: { type: 'string', description: 'The new address value' }
-              },
-              required: ['address']
-            }
-          }
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'update_zip',
-            description: 'Updates the user\'s zip code field to a new value. Use when user requests to change/update/modify their zip code.',
-            parameters: {
-              type: 'object',
-              properties: {
-                zipCode: { type: 'string', description: 'The new zip code value' }
-              },
-              required: ['zipCode']
+              required: []
             }
           }
         }

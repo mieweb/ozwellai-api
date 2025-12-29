@@ -109,7 +109,8 @@ The server will start at `http://localhost:3000`
 <script>
   window.OzwellChatConfig = {
     endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
-    welcomeMessage: 'Hi! How can I help?'
+    welcomeMessage: 'Hi! How can I help?',
+    debug: false  // Set to true to see tool execution details (developer mode)
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>

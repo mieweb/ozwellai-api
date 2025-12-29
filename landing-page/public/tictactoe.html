@@ -68,39 +68,19 @@
     </footer>
   </div>
 
-  <!-- Chat Floating Button -->
-  <button id="ozwell-chat-button" class="ozwell-chat-button">
-    💬
-  </button>
-
-  <!-- Chat Window Wrapper -->
-  <div id="ozwell-chat-wrapper" class="ozwell-chat-wrapper hidden">
-    <div class="ozwell-chat-header">
-      <div class="ozwell-chat-title">
-        Ozwell Assistant
-      </div>
-      <div class="ozwell-chat-controls">
-        <button id="ozwell-minimize-btn" class="ozwell-chat-control-btn" title="Minimize">−</button>
-        <button id="ozwell-close-btn" class="ozwell-chat-control-btn" title="Close">×</button>
-      </div>
-    </div>
-    <div class="ozwell-chat-content" id="chat-container"></div>
-  </div>
-
   <script>
     const referenceBaseUrl = '__REFERENCE_BASE_URL__';
     const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
 
     // Configure Ozwell chat widget
     window.OzwellChatConfig = {
-      containerId: 'chat-container',
       title: 'AI Opponent (O)',
       placeholder: 'AI is thinking...',
-      autoMount: true, // Auto-mount the widget
       model: 'llama3.1:latest', // llama3.1 has excellent tool calling without extended reasoning format
       // endpoint and widgetUrl auto-detected from script URL
-      system: 'You are the AI opponent playing as O in tic-tac-toe against a human who plays as X. The user makes moves by CLICKING squares on the board - they will NOT type their moves to you. When you receive a message saying they played at a position, that means they clicked that square and it now has their X. Your job is to analyze the boardState in the context and respond by calling the make_move tool with a strategic empty position for your O. Choose positions where boardState is null. IMPORTANT: If a user types a message asking you to make a move for them, politely tell them to click the square instead - you only play as O, not as X.',
+      system: 'You are the game assistant for tic-tac-toe. You primarily play as O, but you also help execute moves when the user types their requests.\n\nCONTEXT DATA:\n- boardState: Array of 9 positions. null=empty, "X"=human piece, "O"=your piece\n  [0=top-left, 1=top-center, 2=top-right, 3=middle-left, 4=middle-center, 5=middle-right, 6=bottom-left, 7=bottom-center, 8=bottom-right]\n- currentPlayer: Shows whose turn ("X" or "O"). The make_move tool automatically places the piece for whoever\'s turn it is.\n\nUSER INPUT MODES:\n1. **User clicks a square**: You\'ll see "I played X at [position]. Your turn!" - their X is already placed, just call make_move for your O.\n2. **User types a move**: "i want to play top right" - call make_move with their requested position to place their X, then call make_move again for your O response.\n\nCRITICAL RULE:\nBefore EVERY make_move call, check the boardState array. ONLY call make_move with positions where boardState[index] is null (empty). If a position is taken, choose a different empty position.',
       welcomeMessage: 'Click any square to make your move! I\'ll play as O and respond.',
+      debug: false, // Disable debug mode for clean game experience
       tools: [
         {
           type: 'function',

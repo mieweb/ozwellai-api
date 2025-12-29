@@ -251,6 +251,17 @@ class IframeSyncBroker {
  *   3. Update context (optional): OzwellChat.updateContext({ formData: {...} })
  */
 (function () {
+  // Inject viewport meta tag if not present (required for mobile-native behavior)
+  function ensureViewportMeta() {
+    if (!document.querySelector('meta[name="viewport"]')) {
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+      document.head.appendChild(meta);
+      console.log('[OzwellChat] Viewport meta tag injected for mobile support');
+    }
+  }
+
   // Auto-detect base URL from script location
   let autoDetectedBase = '';
   try {
@@ -263,10 +274,14 @@ class IframeSyncBroker {
     console.warn('[OzwellChat] Auto-detection failed, using relative paths:', e);
   }
 
+  // Ensure viewport is set for mobile-native behavior
+  ensureViewportMeta();
+
   const DEFAULT_DIMENSIONS = { width: 360, height: 420 };
   const DEFAULT_CONFIG = {
     title: 'Ozwell Assistant',
     placeholder: 'Ask a question...',
+    defaultUI: true, // Enable floating button/wrapper by default
     // model is optional - server chooses default if not specified by client
     endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
     widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
@@ -404,6 +419,307 @@ class IframeSyncBroker {
   }
 
   /**
+   * Inject CSS styles for the default floating button and wrapper.
+   * Only injects if defaultUI is enabled.
+   */
+  function injectDefaultCSS() {
+    const config = currentConfig();
+    if (config.defaultUI === false) return;
+
+    // Check if styles already injected
+    if (document.getElementById('ozwell-default-ui-styles')) return;
+
+    const style = document.createElement('style');
+    style.id = 'ozwell-default-ui-styles';
+    style.textContent = `
+      /* Floating chat button */
+      .ozwell-chat-button {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #0066ff;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        z-index: 9998;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+
+      .ozwell-chat-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+      }
+
+      .ozwell-chat-button.hidden {
+        display: none;
+      }
+
+      .ozwell-chat-icon {
+        width: 32px;
+        height: 32px;
+        object-fit: contain;
+      }
+
+      /* Chat wrapper window */
+      .ozwell-chat-wrapper {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 380px;
+        height: 520px;
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        z-index: 9999;
+        transition: opacity 0.3s, transform 0.3s;
+        overflow: hidden;
+      }
+
+      .ozwell-chat-wrapper.hidden {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+        pointer-events: none;
+      }
+
+      .ozwell-chat-wrapper.visible {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+
+      /* Chat header */
+      .ozwell-chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: #0066ff;
+        color: white;
+        user-select: none;
+      }
+
+      .ozwell-chat-title {
+        font-weight: 600;
+        font-size: 16px;
+        font-size: 16px;
+      }
+
+      .ozwell-chat-controls {
+        display: flex;
+        gap: 8px;
+      }
+
+      .ozwell-hide-btn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 6px 12px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+
+      .ozwell-hide-btn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      /* Content area for iframe */
+      .ozwell-chat-content {
+        flex: 1;
+        overflow: hidden;
+      }
+
+      .ozwell-chat-content iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      /* Mobile-native styles */
+      @media (max-width: 767px) {
+        .ozwell-chat-content iframe {
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          max-width: 100% !important;
+          max-height: 100% !important;
+        }
+        .ozwell-chat-button {
+          bottom: calc(20px + env(safe-area-inset-bottom));
+          right: 20px;
+          width: 56px;
+          height: 56px;
+          font-size: 24px;
+        }
+
+        .ozwell-chat-wrapper {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+          border: none;
+          box-shadow: none;
+        }
+
+        .ozwell-chat-wrapper.hidden {
+          opacity: 0;
+          transform: translateY(100%);
+        }
+
+        .ozwell-chat-wrapper.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .ozwell-chat-header {
+          padding-top: calc(16px + env(safe-area-inset-top));
+          padding-bottom: 16px;
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
+        .ozwell-chat-content {
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    console.log('[OzwellChat] Default UI styles injected');
+  }
+
+  /**
+   * Create the default floating button and wrapper UI.
+   * Returns null if defaultUI is disabled or if containerId is explicitly set (backward compatibility).
+   *
+   * @returns {Object|null} UI elements {button, wrapper, container} or null if disabled
+   */
+  function createDefaultUI() {
+    const config = currentConfig();
+
+    // Backward compatibility: If user specified containerId, assume they want custom UI
+    if (config.containerId) {
+      console.log('[OzwellChat] containerId specified, skipping default UI');
+      return null;
+    }
+
+    // Check if user explicitly disabled default UI
+    if (config.defaultUI === false) {
+      console.log('[OzwellChat] defaultUI disabled, skipping default UI creation');
+      return null;
+    }
+
+    // Check if UI already exists
+    if (document.getElementById('ozwell-chat-button')) {
+      console.log('[OzwellChat] Default UI already exists');
+      return {
+        button: document.getElementById('ozwell-chat-button'),
+        wrapper: document.getElementById('ozwell-chat-wrapper'),
+        container: document.getElementById('ozwell-chat-container')
+      };
+    }
+
+    console.log('[OzwellChat] Creating default floating UI');
+
+    // Create floating button
+    const button = document.createElement('button');
+    button.id = 'ozwell-chat-button';
+    button.className = 'ozwell-chat-button';
+    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    button.setAttribute('aria-label', 'Open chat');
+    button.setAttribute('type', 'button');
+
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.id = 'ozwell-chat-wrapper';
+    wrapper.className = 'ozwell-chat-wrapper hidden';
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'ozwell-chat-header';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'ozwell-chat-title';
+    titleEl.textContent = config.title || 'Ozwell Assistant';
+    const controlsEl = document.createElement('div');
+    controlsEl.className = 'ozwell-chat-controls';
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'ozwell-hide-btn';
+    hideBtn.setAttribute('aria-label', 'Hide chat');
+    hideBtn.setAttribute('type', 'button');
+    hideBtn.textContent = 'Hide';
+    controlsEl.appendChild(hideBtn);
+    header.appendChild(titleEl);
+    header.appendChild(controlsEl);
+
+    // Create content container for iframe
+    const container = document.createElement('div');
+    container.id = 'ozwell-chat-container';
+    container.className = 'ozwell-chat-content';
+
+    // Assemble wrapper
+    wrapper.appendChild(header);
+    wrapper.appendChild(container);
+
+    // Add to page
+    document.body.appendChild(button);
+    document.body.appendChild(wrapper);
+
+    console.log('[OzwellChat] Default UI elements created');
+
+    return { button, wrapper, container };
+  }
+
+  /**
+   * Attach event handlers to default UI elements.
+   * Handles button clicks, close, and minimize actions.
+   *
+   * @param {Object} ui - UI elements {button, wrapper, container}
+   */
+  function attachDefaultUIHandlers(ui) {
+    if (!ui) return;
+
+    const { button, wrapper } = ui;
+
+    // Open chat when button clicked
+    button.addEventListener('click', () => {
+      wrapper.classList.remove('hidden');
+      wrapper.classList.add('visible');
+      button.classList.add('hidden');
+      console.log('[OzwellChat] Chat opened');
+    });
+
+    // Hide chat
+    const hideBtn = wrapper.querySelector('.ozwell-hide-btn');
+    if (hideBtn) {
+      hideBtn.addEventListener('click', () => {
+        wrapper.classList.remove('visible');
+        wrapper.classList.add('hidden');
+        button.classList.remove('hidden');
+        console.log('[OzwellChat] Chat hidden');
+      });
+    }
+
+    console.log('[OzwellChat] Default UI event handlers attached');
+  }
+
+  /**
    * Mount the Ozwell chat widget iframe.
    * Creates the iframe element and initializes the internal state sync broker.
    *
@@ -415,6 +731,19 @@ class IframeSyncBroker {
    * @returns {HTMLIFrameElement} The created iframe element
    */
   function mount(options = {}) {
+    // Inject CSS for default UI (if enabled)
+    injectDefaultCSS();
+
+    // Create default floating button and wrapper (if enabled)
+    const defaultUI = createDefaultUI();
+
+    // If default UI was created, mount iframe inside it
+    if (defaultUI) {
+      options.containerId = 'ozwell-chat-container';
+      attachDefaultUIHandlers(defaultUI);
+    }
+
+    // Create and mount iframe
     const iframe = ensureIframe(options);
     iframe.addEventListener('load', () => {
       // Widget notifies us when it is ready.

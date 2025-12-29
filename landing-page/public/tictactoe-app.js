@@ -5,208 +5,6 @@
  * with the chat widget for MCP tool execution.
  */
 
-// ============================================
-// CHAT WRAPPER
-// ============================================
-
-(function() {
-  'use strict';
-
-  const ChatWrapper = {
-    button: null,
-    wrapper: null,
-    header: null,
-    isDragging: false,
-    isMinimized: false,
-    currentX: 0,
-    currentY: 0,
-    initialX: 0,
-    initialY: 0,
-    offsetX: 0,
-    offsetY: 0,
-
-    init() {
-      this.button = document.getElementById('ozwell-chat-button');
-      this.wrapper = document.getElementById('ozwell-chat-wrapper');
-      this.header = document.querySelector('.ozwell-chat-header');
-
-      if (!this.button || !this.wrapper || !this.header) {
-        console.error('Chat wrapper elements not found');
-        return;
-      }
-
-      this.attachEventListeners();
-      console.log('Ozwell Chat Wrapper initialized');
-    },
-
-    attachEventListeners() {
-      // Button click to open chat
-      this.button.addEventListener('click', () => this.openChat());
-
-      // Close button
-      const closeBtn = document.getElementById('ozwell-close-btn');
-      if (closeBtn) {
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.closeChat();
-        });
-      }
-
-      // Minimize button
-      const minimizeBtn = document.getElementById('ozwell-minimize-btn');
-      if (minimizeBtn) {
-        minimizeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.toggleMinimize();
-        });
-      }
-
-      // Click on header when minimized to restore
-      this.header.addEventListener('click', () => {
-        if (this.isMinimized) {
-          this.toggleMinimize();
-        }
-      });
-
-      // Dragging functionality
-      this.header.addEventListener('mousedown', (e) => this.dragStart(e));
-      this.header.addEventListener('touchstart', (e) => this.dragStart(e), { passive: false });
-
-      document.addEventListener('mousemove', (e) => this.drag(e));
-      document.addEventListener('touchmove', (e) => this.drag(e), { passive: false });
-
-      document.addEventListener('mouseup', () => this.dragEnd());
-      document.addEventListener('touchend', () => this.dragEnd());
-
-      // Window resize - keep chat within viewport bounds
-      window.addEventListener('resize', () => this.constrainToViewport());
-    },
-
-    dragStart(e) {
-      // Don't drag if clicking on control buttons or if minimized
-      if (e.target.closest('.ozwell-chat-control-btn')) {
-        return;
-      }
-
-      // Don't drag if minimized (let it toggle instead)
-      if (this.isMinimized) {
-        return;
-      }
-
-      this.isDragging = true;
-      this.wrapper.classList.add('dragging');
-
-      // Get initial positions
-      const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-      const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-
-      const rect = this.wrapper.getBoundingClientRect();
-
-      this.offsetX = clientX - rect.left;
-      this.offsetY = clientY - rect.top;
-
-      e.preventDefault();
-    },
-
-    drag(e) {
-      if (!this.isDragging) return;
-
-      e.preventDefault();
-
-      const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-      const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-
-      this.currentX = clientX - this.offsetX;
-      this.currentY = clientY - this.offsetY;
-
-      // Keep within viewport bounds
-      const maxX = window.innerWidth - this.wrapper.offsetWidth;
-      const maxY = window.innerHeight - this.wrapper.offsetHeight;
-
-      this.currentX = Math.max(0, Math.min(this.currentX, maxX));
-      this.currentY = Math.max(0, Math.min(this.currentY, maxY));
-
-      this.wrapper.style.left = `${this.currentX}px`;
-      this.wrapper.style.top = `${this.currentY}px`;
-      this.wrapper.style.bottom = 'auto';
-      this.wrapper.style.right = 'auto';
-    },
-
-    dragEnd() {
-      if (!this.isDragging) return;
-
-      this.isDragging = false;
-      this.wrapper.classList.remove('dragging');
-    },
-
-    constrainToViewport() {
-      // Only constrain if chat is visible
-      if (!this.wrapper || this.wrapper.classList.contains('hidden')) {
-        return;
-      }
-
-      // Get current position
-      const rect = this.wrapper.getBoundingClientRect();
-      const currentLeft = rect.left;
-      const currentTop = rect.top;
-
-      // Calculate max allowed positions
-      const maxX = window.innerWidth - this.wrapper.offsetWidth;
-      const maxY = window.innerHeight - this.wrapper.offsetHeight;
-
-      // Clamp to viewport bounds
-      const newLeft = Math.max(0, Math.min(currentLeft, maxX));
-      const newTop = Math.max(0, Math.min(currentTop, maxY));
-
-      // Only update if position changed
-      if (newLeft !== currentLeft || newTop !== currentTop) {
-        this.wrapper.style.left = `${newLeft}px`;
-        this.wrapper.style.top = `${newTop}px`;
-        this.wrapper.style.bottom = 'auto';
-        this.wrapper.style.right = 'auto';
-        console.log(`Chat position adjusted to stay in viewport: (${newLeft}, ${newTop})`);
-      }
-    },
-
-    openChat() {
-      // Widget auto-mounts via ozwell-loader.js (no manual mount needed)
-      this.wrapper.classList.remove('hidden');
-      this.wrapper.classList.add('visible');
-      this.button.classList.add('hidden');
-      console.log('Chat opened');
-    },
-
-    closeChat() {
-      this.wrapper.classList.remove('visible');
-      this.wrapper.classList.add('hidden');
-      this.button.classList.remove('hidden');
-      console.log('Chat closed');
-    },
-
-    toggleMinimize() {
-      this.isMinimized = !this.isMinimized;
-
-      if (this.isMinimized) {
-        this.wrapper.classList.add('minimized');
-        console.log('Chat minimized');
-      } else {
-        this.wrapper.classList.remove('minimized');
-        console.log('Chat restored');
-      }
-    }
-  };
-
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => ChatWrapper.init());
-  } else {
-    ChatWrapper.init();
-  }
-
-  // Expose to window for debugging
-  window.ChatWrapper = ChatWrapper;
-})();
-
 // ========================================
 // Game State
 // ========================================
@@ -556,10 +354,10 @@ function logEvent(message, type = 'info') {
 // Game Actions
 // ========================================
 
-function handleMakeMove(position) {
+function handleMakeMove(position, toolCallId) {
   if (gameOver) {
     logEvent('Game is over. Reset to play again.', 'error');
-    sendToolResult({ success: false, error: 'Game is over. Reset to play again.' });
+    sendToolResult({ success: false, error: 'Game is over. Reset to play again.' }, toolCallId);
     return;
   }
 
@@ -568,7 +366,7 @@ function handleMakeMove(position) {
 
   if (!normalizedPosition) {
     logEvent(`Invalid position: "${position}". Try "top left", "center", etc.`, 'error');
-    sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", "bottom right", etc.` });
+    sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", "bottom right", etc.` }, toolCallId);
     return;
   }
 
@@ -576,13 +374,13 @@ function handleMakeMove(position) {
 
   if (index === undefined) {
     logEvent(`Invalid position: ${normalizedPosition}`, 'error');
-    sendToolResult({ success: false, error: `Invalid position: ${normalizedPosition}` });
+    sendToolResult({ success: false, error: `Invalid position: ${normalizedPosition}` }, toolCallId);
     return;
   }
 
   if (boardState[index] !== null) {
     logEvent(`Position ${normalizedPosition} is already taken`, 'error');
-    sendToolResult({ success: false, error: `Position ${normalizedPosition} is already taken` });
+    sendToolResult({ success: false, error: `Position ${normalizedPosition} is already taken` }, toolCallId);
     return;
   }
 
@@ -598,7 +396,7 @@ function handleMakeMove(position) {
   logEvent(`${playerName} placed ${piece} at ${normalizedPosition}`, piece === 'X' ? 'move' : 'ai-move');
 
   // Send success tool result
-  sendToolResult({ success: true, message: `Placed ${piece} at ${normalizedPosition}` });
+  sendToolResult({ success: true, message: `Placed ${piece} at ${normalizedPosition}` }, toolCallId);
 
   // Check if game is over
   const winResult = checkWinner();
@@ -641,7 +439,7 @@ function getWidgetIframe() {
 }
 
 // Helper: Send tool result back to widget
-function sendToolResult(result) {
+function sendToolResult(result, toolCallId) {
   const widgetIframe = getWidgetIframe();
   if (!widgetIframe || !widgetIframe.contentWindow) {
     console.error('[tictactoe-app.js] Cannot send tool result: widget iframe not found');
@@ -651,6 +449,7 @@ function sendToolResult(result) {
   widgetIframe.contentWindow.postMessage({
     source: 'ozwell-chat-parent',
     type: 'tool_result',
+    tool_call_id: toolCallId,
     result: result
   }, '*');
 
@@ -667,15 +466,16 @@ window.addEventListener('message', (event) => {
   // Handle tool call from widget (widget sends 'tool', not 'name')
   if (data.type === 'tool_call' && data.source === 'ozwell-chat-widget') {
     const toolName = data.tool;
+    const toolCallId = data.tool_call_id;
     const payload = data.payload;
 
     logEvent(`Tool call received: ${toolName}`, 'tool-call');
 
     if (toolName === 'make_move') {
-      handleMakeMove(payload.position);
+      handleMakeMove(payload.position, toolCallId);
     } else if (toolName === 'reset_game') {
       handleResetGame();
-      sendToolResult({ success: true, message: 'Game reset successfully' });
+      sendToolResult({ success: true, message: 'Game reset successfully' }, toolCallId);
     }
   }
 });
@@ -773,13 +573,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Auto-open the chat window on page load
-  if (window.ChatWrapper) {
-    // Wait a bit for the widget to fully initialize
-    setTimeout(() => {
-      window.ChatWrapper.openChat();
-    }, 500);
-  }
+  // Auto-open the chat window on page load (using default floating UI)
+  setTimeout(() => {
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+    const button = document.getElementById('ozwell-chat-button');
+    if (wrapper && button) {
+      wrapper.classList.remove('hidden');
+      wrapper.classList.add('visible');
+      button.classList.add('hidden');
+      console.log('[tictactoe-app.js] Chat auto-opened');
+    }
+  }, 800); // Wait for widget to fully initialize
 });
 
 console.log('Tic-tac-toe app loaded');

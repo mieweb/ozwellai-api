@@ -169,11 +169,29 @@ function generateMockResponse(userMessage: string, hasToolResult: boolean, toolR
   }
 
   // Tool call patterns - detect action keywords (first round)
+  // Consolidated pattern: Update form data (name, address, and/or zip code)
+  const formDataArgs: { name?: string; address?: string; zipCode?: string } = {};
 
   // Pattern 1: Update/Change/Set name to X
   const nameUpdateMatch = userMessage.match(/(?:update|change|set|make).*name.*(?:to|is)\s+([A-Za-z\s]+)/i);
   if (nameUpdateMatch) {
-    const newName = nameUpdateMatch[1].trim();
+    formDataArgs.name = nameUpdateMatch[1].trim();
+  }
+
+  // Pattern 2: Update/Change address to X
+  const addressUpdateMatch = userMessage.match(/(?:update|change|set|make).*address.*(?:to|is)\s+([^\n]+)/i);
+  if (addressUpdateMatch) {
+    formDataArgs.address = addressUpdateMatch[1].trim();
+  }
+
+  // Pattern 3: Update/Change zip code to X
+  const zipUpdateMatch = userMessage.match(/(?:update|change|set|make).*(?:zip|zipcode|zip code).*(?:to|is)\s+([0-9-]+)/i);
+  if (zipUpdateMatch) {
+    formDataArgs.zipCode = zipUpdateMatch[1].trim();
+  }
+
+  // If any form fields were matched, call update_form_data
+  if (Object.keys(formDataArgs).length > 0) {
     return {
       role: 'assistant',
       content: '', // No text content when making tool call
@@ -181,44 +199,8 @@ function generateMockResponse(userMessage: string, hasToolResult: boolean, toolR
         id: `call_${Date.now()}`,
         type: 'function',
         function: {
-          name: 'update_name',
-          arguments: JSON.stringify({ name: newName })
-        }
-      }]
-    };
-  }
-
-  // Pattern 2: Update/Change address to X
-  const addressUpdateMatch = userMessage.match(/(?:update|change|set|make).*address.*(?:to|is)\s+([^\n]+)/i);
-  if (addressUpdateMatch) {
-    const newAddress = addressUpdateMatch[1].trim();
-    return {
-      role: 'assistant',
-      content: '',
-      tool_calls: [{
-        id: `call_${Date.now()}`,
-        type: 'function',
-        function: {
-          name: 'update_address',
-          arguments: JSON.stringify({ address: newAddress })
-        }
-      }]
-    };
-  }
-
-  // Pattern 3: Update/Change zip code to X
-  const zipUpdateMatch = userMessage.match(/(?:update|change|set|make).*(?:zip|zipcode|zip code).*(?:to|is)\s+([0-9-]+)/i);
-  if (zipUpdateMatch) {
-    const newZip = zipUpdateMatch[1].trim();
-    return {
-      role: 'assistant',
-      content: '',
-      tool_calls: [{
-        id: `call_${Date.now()}`,
-        type: 'function',
-        function: {
-          name: 'update_zip',
-          arguments: JSON.stringify({ zipCode: newZip })
+          name: 'update_form_data',
+          arguments: JSON.stringify(formDataArgs)
         }
       }]
     };
