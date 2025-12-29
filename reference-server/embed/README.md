@@ -331,6 +331,104 @@ Or use custom headers for any authentication scheme:
 
 **Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
 
+## PostMessage Events Reference
+
+The widget communicates with the parent page via `postMessage`. This enables programmatic control and MCP tool integration.
+
+### Parent → Widget Messages
+
+Messages sent from the parent page to the widget iframe. All messages require `source: 'ozwell-chat-parent'`.
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `ozwell:send-message` | `{ content: string }` | Send a chat message programmatically (appears as user message, triggers AI response) |
+| `tool_result` | `{ tool_call_id, result }` | Return result from MCP tool execution |
+| `config` | `{ config: OzwellChatConfig }` | Update widget configuration at runtime |
+| `close` | — | Close/hide the chat widget |
+
+#### Sending a Message Programmatically
+
+Use `ozwell:send-message` to inject messages as if the user typed them. This is useful for:
+- Triggering AI responses based on page events
+- Automating conversations
+- Building game AI that responds to user actions
+
+```javascript
+// Send a message as if the user typed it
+OzwellChat.iframe.contentWindow.postMessage({
+  source: 'ozwell-chat-parent',
+  type: 'ozwell:send-message',
+  payload: { content: 'Hello, AI!' }
+}, '*');
+```
+
+#### Returning Tool Results
+
+After receiving a `tool_call` event, execute the tool and send results back:
+
+```javascript
+OzwellChat.iframe.contentWindow.postMessage({
+  source: 'ozwell-chat-parent',
+  type: 'tool_result',
+  tool_call_id: toolCallId,  // Must match the tool_call_id from the request
+  result: { success: true, message: 'Action completed' }
+}, '*');
+```
+
+### Widget → Parent Messages
+
+Messages sent from the widget iframe to the parent page. All messages include `source: 'ozwell-chat-widget'`.
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `ready` | — | Widget fully initialized and ready to receive messages |
+| `tool_call` | `{ tool, tool_call_id, payload }` | Request parent to execute an MCP tool |
+| `assistant_response` | `{ content }` | AI assistant sent a response |
+| `insert` | `{ text }` | User clicked "Save & Close" button |
+| `closed` | — | Widget was closed |
+
+#### Listening for Tool Calls
+
+```javascript
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (data?.source !== 'ozwell-chat-widget') return;
+
+  if (data.type === 'tool_call') {
+    const { tool, tool_call_id, payload } = data;
+    console.log(`Tool requested: ${tool}`, payload);
+    // Execute the tool, then send tool_result back
+  }
+});
+```
+
+#### Listening for Widget Ready
+
+```javascript
+window.addEventListener('message', (event) => {
+  if (event.data?.source === 'ozwell-chat-widget' && event.data.type === 'ready') {
+    console.log('Widget is ready!');
+    // Now safe to send messages to widget
+  }
+});
+```
+
+### DOM Events
+
+The loader also dispatches CustomEvents on `document` for convenience:
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `ozwell-chat-insert` | `{ text }` | User clicked "Save & Close" - contains last AI response |
+| `ozwell-chat-opened` | — | Chat window was opened |
+| `ozwell-chat-closed` | — | Chat window was closed |
+
+```javascript
+document.addEventListener('ozwell-chat-insert', (event) => {
+  console.log('AI response to insert:', event.detail.text);
+});
+```
+
 ## Debug Mode
 
 Enable debug mode during development to visualize tool executions:
