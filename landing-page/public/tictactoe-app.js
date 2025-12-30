@@ -14,83 +14,6 @@ let gameOver = false;
 let currentPlayer = 'X';
 let winner = null;
 
-// ========================================
-// iframe-sync State Broker
-// ========================================
-
-// Initialize OzwellChat when available
-function initStateBroker() {
-  if (typeof OzwellChat === 'undefined') {
-    console.log('[tictactoe-app.js] Waiting for OzwellChat...');
-    setTimeout(initStateBroker, 100);
-    return;
-  }
-
-  console.log('[tictactoe-app.js] OzwellChat available, sending initial game state');
-
-  // Send initial game state
-  syncGameState();
-}
-
-// Function to sync current game state to widget
-function syncGameState() {
-  if (typeof OzwellChat === 'undefined') {
-    console.warn('[tictactoe-app.js] OzwellChat not available, skipping sync');
-    return;
-  }
-
-  const scoreXEl = document.getElementById('score-x');
-  const scoreOEl = document.getElementById('score-o');
-
-  // Get available positions (empty squares) - use indices for simplicity
-  const availablePositions = [];
-  const xPositions = [];
-  const oPositions = [];
-
-  boardState.forEach((value, index) => {
-    if (value === null) {
-      availablePositions.push(index);
-    } else if (value === 'X') {
-      xPositions.push(index);
-    } else if (value === 'O') {
-      oPositions.push(index);
-    }
-  });
-
-  const gameData = {
-    formData: {
-      // Strategic info for AI decision-making (using position indices 0-8)
-      availablePositions: availablePositions,
-      xPositions: xPositions,
-      oPositions: oPositions,
-
-      // Game state (legacy, kept for compatibility)
-      boardState: boardState,
-      currentPlayer: currentPlayer,
-      gameOver: gameOver,
-      winner: winner,
-      xScore: scoreXEl ? parseInt(scoreXEl.textContent) || 0 : 0,
-      oScore: scoreOEl ? parseInt(scoreOEl.textContent) || 0 : 0
-    }
-  };
-
-  // Use the clean OzwellChat API instead of direct broker access
-  OzwellChat.updateContext(gameData);
-
-  console.log('[tictactoe-app.js] Game state synced to widget via updateContext():', gameData);
-}
-
-// Initialize broker when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initStateBroker);
-} else {
-  // Try immediately, will retry on window load if not available
-  initStateBroker();
-  window.addEventListener('load', () => {
-    // Removed erroneous stateBroker reference; initStateBroker() already handles retries.
-  });
-}
-
 // Position name to board index mapping
 const positionMap = {
   'top-left': 0,
@@ -525,7 +448,6 @@ function placePieceAndCheckWin(index, normalizedPosition) {
   boardState[index] = piece;
   currentPlayer = piece === 'X' ? 'O' : 'X';
   updateBoard();
-  syncGameState();
   logEvent(`${playerName} placed ${piece} at ${normalizedPosition}`, piece === 'X' ? 'move' : 'ai-move');
 
   // Check if game is over
@@ -534,7 +456,6 @@ function placePieceAndCheckWin(index, normalizedPosition) {
     gameOver = true;
     winner = winResult.winner;
     updateBoard();
-    syncGameState();
 
     if (winner === 'X') {
       logEvent('You win!', 'game-over');
@@ -681,7 +602,6 @@ function handleResetGame() {
   winner = null;
   hideGameOver();
   updateBoard();
-  syncGameState(); // Auto-sync game state to widget
   logEvent('Game reset. Your turn!', 'reset');
 }
 
