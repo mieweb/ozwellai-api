@@ -181,6 +181,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `openaiApiKey` | string | (none) | API key for Authorization header |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
+| `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
 
 ## API Reference
 
@@ -235,6 +236,42 @@ Access the widget's iframe element directly.
 
 ```javascript
 console.log('Widget iframe:', OzwellChat.iframe);
+```
+
+### OzwellChat.open()
+
+Programmatically open the chat window. Clears any unread notifications.
+
+```javascript
+OzwellChat.open();
+```
+
+### OzwellChat.close()
+
+Programmatically close/hide the chat window.
+
+```javascript
+OzwellChat.close();
+```
+
+### OzwellChat.isOpen
+
+Check if the chat window is currently open.
+
+```javascript
+if (OzwellChat.isOpen) {
+  console.log('Chat is visible');
+}
+```
+
+### OzwellChat.hasUnread
+
+Check if there are unread messages (badge is showing).
+
+```javascript
+if (OzwellChat.hasUnread) {
+  console.log('User has unread messages');
+}
 ```
 
 ## Advanced Usage
@@ -362,6 +399,24 @@ OzwellChat.iframe.contentWindow.postMessage({
 }, '*');
 ```
 
+#### Message Queuing
+
+The widget supports message queuing - users can send messages while the AI is still responding. Queued messages appear as dotted-outline bubbles and can be edited or cancelled before being sent.
+
+**How it works:**
+
+1. While AI is streaming a response, user types and clicks Send
+2. Message appears as a queued bubble (dotted blue outline) with edit/cancel icons
+3. User can click the pencil icon to edit the message inline
+4. When AI finishes responding, the queued message is automatically sent
+5. User can cancel the queued message by clicking the X icon
+
+This enables smooth back-and-forth conversations without waiting, and is especially useful for:
+
+- Interactive games (like tic-tac-toe) where the user can make moves immediately
+- Fast-paced conversations where users know their next response
+- Programmatic message sending via `ozwell:send-message` during tool execution
+
 #### Returning Tool Results
 
 After receiving a `tool_call` event, execute the tool and send results back:
@@ -420,14 +475,57 @@ The loader also dispatches CustomEvents on `document` for convenience:
 | Event | Detail | Description |
 |-------|--------|-------------|
 | `ozwell-chat-insert` | `{ text }` | User clicked "Save & Close" - contains last AI response |
-| `ozwell-chat-opened` | — | Chat window was opened |
+| `ozwell-chat-ready` | — | Widget fully initialized and ready |
 | `ozwell-chat-closed` | — | Chat window was closed |
+| `ozwell-chat-unread` | `{ message }` | AI responded while chat was closed (notification triggered) |
 
 ```javascript
 document.addEventListener('ozwell-chat-insert', (event) => {
   console.log('AI response to insert:', event.detail.text);
 });
 ```
+
+## Unread Notifications
+
+When the chat window is closed and the AI responds, the widget shows a notification:
+
+- **Wiggle animation** - The chat button wiggles to attract attention
+- **Red badge** - A dot appears on the button indicating unread messages
+- **Auto-clear** - Badge and animation clear when the user opens the chat
+
+### Default Behavior (wiggle + badge)
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    // autoOpenOnReply defaults to false
+    // Widget will wiggle and show badge when AI responds
+  };
+</script>
+```
+
+### Auto-Open Behavior
+
+Set `autoOpenOnReply: true` to automatically open the chat when AI responds:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    autoOpenOnReply: true  // Chat opens automatically when AI replies
+  };
+</script>
+```
+
+### Listening for Unread Notifications
+
+```javascript
+document.addEventListener('ozwell-chat-unread', (event) => {
+  console.log('New message:', event.detail.message);
+  // Play a sound, show browser notification, etc.
+});
+```
+
+**Note:** Tool calls do not trigger notifications. Only actual text responses from the AI trigger the wiggle/badge.
 
 ## Debug Mode
 

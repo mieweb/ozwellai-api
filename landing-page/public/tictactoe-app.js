@@ -474,6 +474,7 @@ function placePieceAndCheckWin(index, normalizedPosition) {
 
 /**
  * Send a user message to the widget (triggers LLM response)
+ * Widget handles queuing if LLM is busy.
  */
 function sendUserMessageToWidget(text) {
   const widgetIframe = getWidgetIframe();
@@ -540,25 +541,10 @@ function handleMakeMove(position, toolCallId) {
     return;
   }
 
-  let index;
-
-  // Handle both integer (from AI choosing from availablePositions) and string (from user typing)
-  if (typeof position === 'number' || !isNaN(parseInt(position))) {
-    index = parseInt(position);
-    if (index < 0 || index > 8) {
-      logEvent(`Invalid position index: ${position}. Must be 0-8.`, 'error');
-      sendToolResult({ success: false, error: `Invalid position: ${position}. Must be 0-8.` }, toolCallId);
-      return;
-    }
-  } else {
-    // Natural language from user typing - normalize it
-    const normalizedPosition = normalizePosition(position);
-    if (!normalizedPosition) {
-      logEvent(`Invalid position: "${position}". Try "top left", "center", etc.`, 'error');
-      sendToolResult({ success: false, error: `Invalid position: "${position}". Try "top left", "center", etc.` }, toolCallId);
-      return;
-    }
-    index = positionMap[normalizedPosition];
+  const index = typeof position === 'number' ? position : parseInt(position);
+  if (isNaN(index) || index < 0 || index > 8) {
+    sendToolResult({ success: false, error: `Invalid position: ${position}. Must be 0-8.` }, toolCallId);
+    return;
   }
 
   // JavaScript-based validation: Check if position is available
@@ -676,14 +662,9 @@ document.getElementById('play-again-btn').addEventListener('click', () => {
 // ========================================
 
 function handleUserClick(index) {
-  // Prevent clicks if game is over or not user's turn
+  // Prevent clicks if game is over
   if (gameOver) {
     logEvent('Game is over. Reset to play again.', 'error');
-    return;
-  }
-
-  if (currentPlayer !== 'X') {
-    logEvent('Please wait for AI to make its move', 'error');
     return;
   }
 
@@ -693,14 +674,26 @@ function handleUserClick(index) {
     return;
   }
 
+  // Count pieces to determine whose turn it really is (visual board state)
+  const xCount = boardState.filter(c => c === 'X').length;
+  const oCount = boardState.filter(c => c === 'O').length;
+
+  // X always goes first, so if counts are equal, it's X's turn
+  // If X has more, it's O's turn
+  if (xCount > oCount) {
+    logEvent('Please wait for AI to make its move', 'error');
+    return;
+  }
+
   const positionName = indexToPosition[index];
 
-  // Place user's X and check for game end
+  // Place user's X (force currentPlayer to X for this move)
+  currentPlayer = 'X';
   const gameEnded = placePieceAndCheckWin(index, positionName);
 
   // If game continues, send message to LLM to trigger its turn
   if (!gameEnded) {
-    sendUserMessageToWidget(`I placed my X. It's your turn as O.`);
+    sendUserMessageToWidget(`I placed my X at ${positionName}. It's your turn as O.`);
   }
 }
 

@@ -293,6 +293,8 @@ class IframeSyncBroker {
     pendingMessages: [],
     runtimeConfig: {},
     broker: null, // Internal iframe-sync broker for state updates
+    hasUnread: false, // Track unread messages when chat is closed
+    chatOpen: false, // Track if chat window is currently open
   };
 
   function readGlobalConfig() {
@@ -413,9 +415,147 @@ class IframeSyncBroker {
       case 'closed':
         document.dispatchEvent(new CustomEvent('ozwell-chat-closed'));
         break;
+      case 'assistant_response':
+        // AI responded with text (not a tool call) - handle notification
+        handleAssistantResponse(data);
+        break;
       default:
         break;
     }
+  }
+
+  /**
+   * Handle assistant response notification.
+   * Shows wiggle animation and badge when chat is closed, or auto-opens if configured.
+   *
+   * @param {Object} data - Message data with { message, hadToolCalls }
+   */
+  function handleAssistantResponse(data) {
+    // Skip notifications for tool calls - only notify on actual text responses
+    if (data.hadToolCalls) {
+      console.log('[OzwellChat] Skipping notification for tool call response');
+      return;
+    }
+
+    // If chat is already open, no notification needed
+    if (state.chatOpen) {
+      console.log('[OzwellChat] Chat is open, no notification needed');
+      return;
+    }
+
+    const config = currentConfig();
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+
+    if (!button || !wrapper) {
+      console.log('[OzwellChat] Default UI not found, cannot show notification');
+      return;
+    }
+
+    // Check autoOpenOnReply config
+    if (config.autoOpenOnReply === true) {
+      // Auto-open the chat window
+      console.log('[OzwellChat] Auto-opening chat on AI reply');
+      openChat();
+    } else {
+      // Wiggle and show badge
+      console.log('[OzwellChat] Showing unread notification');
+      showUnreadNotification();
+    }
+
+    // Dispatch custom event for external listeners
+    document.dispatchEvent(new CustomEvent('ozwell-chat-unread', {
+      detail: { message: data.message }
+    }));
+  }
+
+  /**
+   * Show unread notification (wiggle + badge).
+   */
+  function showUnreadNotification() {
+    const button = document.getElementById('ozwell-chat-button');
+    if (!button) return;
+
+    state.hasUnread = true;
+
+    // Add/ensure badge exists
+    let badge = button.querySelector('.ozwell-unread-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'ozwell-unread-badge';
+      button.appendChild(badge);
+    }
+
+    // Trigger wiggle animation
+    button.classList.remove('wiggling');
+    // Force reflow to restart animation
+    void button.offsetWidth;
+    button.classList.add('wiggling');
+    button.classList.add('has-unread');
+
+    // Remove wiggling class after animation completes (but keep has-unread for badge)
+    setTimeout(() => {
+      button.classList.remove('wiggling');
+    }, 800);
+
+    console.log('[OzwellChat] Unread notification shown');
+  }
+
+  /**
+   * Clear unread notification state.
+   */
+  function clearUnreadNotification() {
+    const button = document.getElementById('ozwell-chat-button');
+    if (!button) return;
+
+    state.hasUnread = false;
+    button.classList.remove('has-unread');
+    button.classList.remove('wiggling');
+
+    // Remove badge
+    const badge = button.querySelector('.ozwell-unread-badge');
+    if (badge) {
+      badge.remove();
+    }
+
+    console.log('[OzwellChat] Unread notification cleared');
+  }
+
+  /**
+   * Open the chat window programmatically.
+   */
+  function openChat() {
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+
+    if (!button || !wrapper) return;
+
+    wrapper.classList.remove('hidden');
+    wrapper.classList.add('visible');
+    button.classList.add('hidden');
+    state.chatOpen = true;
+
+    // Clear any unread notifications when chat opens
+    clearUnreadNotification();
+
+    console.log('[OzwellChat] Chat opened');
+  }
+
+  /**
+   * Close/hide the chat window programmatically.
+   */
+  function closeChat() {
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+
+    if (!button || !wrapper) return;
+
+    wrapper.classList.remove('visible');
+    wrapper.classList.add('hidden');
+    button.classList.remove('hidden');
+    state.chatOpen = false;
+
+    console.log('[OzwellChat] Chat closed');
   }
 
   /**
@@ -450,6 +590,8 @@ class IframeSyncBroker {
         font-size: 28px;
         z-index: 9998;
         transition: transform 0.2s, box-shadow 0.2s;
+        /* Needed for badge positioning */
+        overflow: visible;
       }
 
       .ozwell-chat-button:hover {
@@ -459,6 +601,37 @@ class IframeSyncBroker {
 
       .ozwell-chat-button.hidden {
         display: none;
+      }
+
+      /* Wiggle animation for unread notifications */
+      @keyframes ozwell-wiggle {
+        0%, 100% { transform: rotate(0deg); }
+        10% { transform: rotate(-12deg); }
+        20% { transform: rotate(12deg); }
+        30% { transform: rotate(-10deg); }
+        40% { transform: rotate(10deg); }
+        50% { transform: rotate(-6deg); }
+        60% { transform: rotate(6deg); }
+        70% { transform: rotate(-3deg); }
+        80% { transform: rotate(3deg); }
+        90% { transform: rotate(0deg); }
+      }
+
+      .ozwell-chat-button.wiggling {
+        animation: ozwell-wiggle 0.8s ease-in-out;
+      }
+
+      /* Unread badge indicator */
+      .ozwell-unread-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 16px;
+        height: 16px;
+        background: #ef4444;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
       }
 
       .ozwell-chat-icon {
@@ -697,22 +870,16 @@ class IframeSyncBroker {
 
     const { button, wrapper } = ui;
 
-    // Open chat when button clicked
+    // Open chat when button clicked - use openChat() to track state and clear notifications
     button.addEventListener('click', () => {
-      wrapper.classList.remove('hidden');
-      wrapper.classList.add('visible');
-      button.classList.add('hidden');
-      console.log('[OzwellChat] Chat opened');
+      openChat();
     });
 
-    // Hide chat
+    // Hide chat - use closeChat() to track state
     const hideBtn = wrapper.querySelector('.ozwell-hide-btn');
     if (hideBtn) {
       hideBtn.addEventListener('click', () => {
-        wrapper.classList.remove('visible');
-        wrapper.classList.add('hidden');
-        button.classList.remove('hidden');
-        console.log('[OzwellChat] Chat hidden');
+        closeChat();
       });
     }
 
@@ -821,8 +988,16 @@ class IframeSyncBroker {
     mount,
     configure,
     updateContext, // New API for real-time context updates
+    open: openChat, // Programmatically open the chat window
+    close: closeChat, // Programmatically close the chat window
     get iframe() {
       return state.iframe;
+    },
+    get isOpen() {
+      return state.chatOpen;
+    },
+    get hasUnread() {
+      return state.hasUnread;
     },
     ready() {
       if (state.ready) return Promise.resolve();
