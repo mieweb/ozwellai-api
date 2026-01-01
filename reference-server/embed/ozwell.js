@@ -1708,6 +1708,11 @@ function handleParentMessage(event) {
         message: result.message,
         hadToolCalls: false  // This is the final response after tool execution
       }, '*');
+
+      // After displaying the tool result message, send any queued user message (if present)
+      if (state.queuedMessage) {
+        sendQueuedMessage();
+      }
     } else if (result.error) {
       // Error case
       addMessage('system', `Error: ${result.error}`);
