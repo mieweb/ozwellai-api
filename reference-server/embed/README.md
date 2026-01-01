@@ -446,6 +446,9 @@ Messages sent from the widget iframe to the parent page. All messages include `s
 
 ```javascript
 window.addEventListener('message', (event) => {
+  // Security: validate origin if widget is hosted on a different domain
+  // if (event.origin !== 'https://your-widget-domain.com') return;
+
   const data = event.data;
   if (data?.source !== 'ozwell-chat-widget') return;
 
@@ -456,6 +459,8 @@ window.addEventListener('message', (event) => {
   }
 });
 ```
+
+> **Security Note:** When hosting the widget on a different domain, always validate `event.origin` to prevent malicious sites from sending fake tool_call messages.
 
 #### Listening for Widget Ready
 
