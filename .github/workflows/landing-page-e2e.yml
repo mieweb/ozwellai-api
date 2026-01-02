@@ -91,6 +91,36 @@ jobs:
         working-directory: ./landing-page
         run: npx playwright install chromium --with-deps
 
+      - name: Start reference server
+        working-directory: ./reference-server
+        run: npm start &
+
+      - name: Start landing page server
+        working-directory: ./landing-page
+        run: npm start &
+
+      - name: Wait for servers to be ready
+        run: |
+          echo "Waiting for servers to start..."
+          # Wait for reference server
+          for i in {1..30}; do
+            if curl -s http://localhost:3000/embed/ozwell-loader.js > /dev/null; then
+              echo "Reference server is ready!"
+              break
+            fi
+            echo "Waiting for reference server... ($i/30)"
+            sleep 2
+          done
+          # Wait for landing page server  
+          for i in {1..15}; do
+            if curl -s http://localhost:8080 > /dev/null; then
+              echo "Landing page server is ready!"
+              break
+            fi
+            echo "Waiting for landing page server... ($i/15)"
+            sleep 2
+          done
+
       - name: Run E2E tests
         working-directory: ./landing-page
         run: npm test
