@@ -1,0 +1,50 @@
+{
+  "name": "ozwellai-api",
+  "version": "1.0.0",
+  "description": "Ozwell Public API Specification - Single source of truth for all Ozwell API interactions",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "spec",
+    "reference-server",
+    "landing-page",
+    "clients/typescript",
+    "docs"
+  ],
+  "scripts": {
+    "dev": "./scripts/start.sh",
+    "start": "./scripts/start.sh",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "audit": "npm audit --workspaces --include-workspace-root",
+    "audit:fix": "npm audit fix --workspaces --include-workspace-root",
+    "install:all": "npm install && npm install --workspaces"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mieweb/ozwellai-api.git"
+  },
+  "keywords": [
+    "ozwell",
+    "api",
+    "openai",
+    "ai",
+    "chat",
+    "llm",
+    "indexedcp",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "MIE",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/mieweb/ozwellai-api/issues"
+  },
+  "homepage": "https://github.com/mieweb/ozwellai-api#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

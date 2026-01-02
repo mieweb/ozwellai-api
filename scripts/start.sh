@@ -60,13 +60,13 @@ kill_port $REFERENCE_PORT
 kill_port $LANDING_PORT
 
 # Install and build the TypeScript client (reference server depends on it)
-echo -e "${GREEN}Installing and building TypeScript client...${NC}"
+echo -e "${GREEN}Installing and building TypeScript client in $PROJECT_ROOT/clients/typescript ...${NC}"
 cd "$PROJECT_ROOT/clients/typescript"
 npm install
 npm run build
 
 # Start reference server
-echo -e "${GREEN}Starting reference server on port $REFERENCE_PORT...${NC}"
+echo -e "${GREEN}Starting reference server on port $REFERENCE_PORT in $PROJECT_ROOT/reference-server ...${NC}"
 cd "$PROJECT_ROOT/reference-server"
 npm install
 OLLAMA_BASE_URL="$OLLAMA_BASE_URL" npm run dev &

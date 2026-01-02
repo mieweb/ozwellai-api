@@ -25,6 +25,189 @@ Experience the Ozwell AI chat widget with:
 
 ---
 
+## Quick Start
+
+Get a local development environment running in under 5 minutes:
+
+### Prerequisites
+
+- **Node.js 18+** - [Download here](https://nodejs.org/)
+- **npm** - Comes with Node.js
+- **Optional: Ollama** - [Install Ollama](https://ollama.ai/) for real AI responses (otherwise mock responses are used)
+
+### 1. Clone and Install
+
+```bash
+# Clone the repository
+git clone https://github.com/mieweb/ozwellai-api.git
+cd ozwellai-api
+
+# Install dependencies for all workspaces (one command!)
+npm install
+```
+
+This project uses **npm workspaces** to manage all components as a monorepo.
+
+### 2. Start the Development Environment
+
+The easiest way to explore the system is to run from the root:
+
+```bash
+npm run dev
+```
+
+This will:
+- ✅ Start the reference server on `http://localhost:3000`
+- ✅ Start the demo landing page on `http://localhost:8080`
+- ✅ Detect and connect to Ollama if available (or use mock responses)
+- ✅ Display available models and connection status
+
+**Alternative: Use the script directly**
+
+```bash
+./scripts/start.sh
+```
+
+**Alternative: Start components individually**
+
+```bash
+# Terminal 1: Reference Server
+cd reference-server
+npm run dev
+
+# Terminal 2: Demo Landing Page
+cd landing-page
+npm run dev
+```
+
+### 3. Explore the Capabilities
+
+Once running, you can explore these endpoints:
+
+| What | URL | Description |
+|------|-----|-------------|
+| **Interactive Demo** | http://localhost:8080 | Full chat widget with live event logging |
+| **API Documentation** | http://localhost:3000/docs | Swagger UI with all endpoints |
+| **Health Check** | http://localhost:3000/health | Server status and configuration |
+| **Chat Completions** | http://localhost:3000/v1/chat/completions | OpenAI-compatible chat endpoint |
+| **MCP WebSocket** | ws://localhost:3000/mcp/ws | Model Context Protocol endpoint |
+
+### 4. Test the TypeScript Client
+
+```bash
+cd clients/typescript
+
+# Run a simple test
+node test-ollama.js
+
+# Or run the full test suite
+npm test
+```
+
+### 5. Optional: Install Ollama for Real AI
+
+For real AI responses instead of mock data:
+
+```bash
+# Install Ollama (macOS/Linux)
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull a model (3B parameters, fast and efficient)
+ollama pull qwen2.5-coder:3b
+
+# Verify it's running
+curl http://localhost:11434/api/tags
+
+# Restart the servers to detect Ollama
+./scripts/start.sh
+```
+
+The reference server automatically detects Ollama and switches from mock responses to real streaming AI completions.
+
+### Quick Test Commands
+
+```bash
+# Test chat completions with curl
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer test-key" \
+  -d '{
+    "model": "qwen2.5-coder:3b",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": false
+  }'
+
+# List available models
+curl http://localhost:3000/v1/models
+
+# Upload a file
+curl -X POST http://localhost:3000/v1/files \
+  -H "Authorization: Bearer test-key" \
+  -F purpose=assistants \
+  -F file=@yourfile.txt
+```
+
+### Monorepo Workspace Commands
+
+This project uses npm workspaces for unified dependency management:
+
+```bash
+# Run all tests across all workspaces
+npm test
+
+# Build all components
+npm run build
+
+# Lint all code
+npm run lint
+
+# Audit all dependencies in one command
+npm run audit
+
+# Fix audit issues
+npm run audit:fix
+
+# Clean all build artifacts
+npm run clean
+
+# Run a command in a specific workspace
+npm run dev -w reference-server
+npm run test -w clients/typescript
+```
+
+### Architecture at a Glance
+
+```
+┌─────────────────┐
+│  Landing Page   │ ← Interactive demo with widget
+│  localhost:8080 │
+└────────┬────────┘
+         │
+         │ iframe embed
+         ▼
+┌─────────────────┐
+│ Reference Server│ ← OpenAI-compatible API
+│  localhost:3000 │
+└────────┬────────┘
+         │
+         │ proxies to (optional)
+         ▼
+┌─────────────────┐
+│     Ollama      │ ← Local AI inference
+│  localhost:11434│
+└─────────────────┘
+```
+
+### What's Next?
+
+- 📖 Read the [full documentation](docs/)
+- 🔧 Explore the [API Reference](http://localhost:3000/docs)
+- 🎯 Check out [example integrations](docs/frontend/)
+- 🐍 Try the Python client (coming soon)
+- 🤝 Read [CONTRIBUTING.md](CONTRIBUTING.md) to contribute
+
+---
+
 ## Philosophy
 
 This public repository for Ozwell API is the canonical reference for the API, enabling both internal and external teams to build against a stable, well-documented contract.
