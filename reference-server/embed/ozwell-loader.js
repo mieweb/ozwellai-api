@@ -647,6 +647,7 @@ class IframeSyncBroker {
         right: 24px;
         width: 380px;
         height: 520px;
+        max-height: calc(100vh - 48px);
         background: #ffffff;
         border-radius: 16px;
         border: 1px solid #e5e7eb;
