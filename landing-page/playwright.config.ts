@@ -39,7 +39,7 @@ export default defineConfig({
   // These will be skipped if the servers are already running (reuseExistingServer: true)
   webServer: [
     {
-      command: 'cd ../reference-server && npm run dev',
+      command: 'cd ../reference-server && npm run build && npm start',
       url: 'http://localhost:3000/embed/ozwell-loader.js',
       reuseExistingServer: true,  // Always reuse if running
       timeout: 60000,
