@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
  * These tests verify the embed widget functionality including:
  * - Widget loading and initialization
  * - Chat interactions with the AI
- * - Tool calls (update_name, update_address, update_zip)
+ * - Tool calls (update_form_data)
  * - iframe-sync state synchronization
  */
 export default defineConfig({

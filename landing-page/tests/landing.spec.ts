@@ -6,7 +6,7 @@ import { test, expect, type Page, type FrameLocator } from '@playwright/test';
  * Tests the embed widget functionality including:
  * - Widget loading and auto-detection
  * - Chat interactions with AI
- * - Tool calls (update_name, update_address, update_zip)
+ * - Tool calls (update_form_data)
  * - State synchronization via iframe-sync
  */
 
@@ -29,12 +29,12 @@ test.describe('Ozwell Embed Widget', () => {
     // Wait for the chat wrapper to be visible
     await expect(page.locator('#ozwell-chat-wrapper.visible')).toBeVisible({ timeout: 5000 });
     
-    // Wait for iframe to be created inside the container
-    const iframeLocator = page.locator('#chat-container iframe');
+    // Wait for iframe to be created inside the container (default UI uses #ozwell-chat-container)
+    const iframeLocator = page.locator('#ozwell-chat-container iframe');
     await expect(iframeLocator).toBeVisible({ timeout: 10000 });
     
     // Get the iframe locator
-    iframe = page.frameLocator('#chat-container iframe');
+    iframe = page.frameLocator('#ozwell-chat-container iframe');
   });
 
   test('should load the landing page with widget', async ({ page }) => {
@@ -48,7 +48,7 @@ test.describe('Ozwell Embed Widget', () => {
     await expect(page.locator('#ozwell-chat-button')).toBeAttached();
     
     // Verify widget iframe is loaded (chat is already open from beforeEach)
-    await expect(page.locator('#chat-container iframe')).toBeVisible();
+    await expect(page.locator('#ozwell-chat-container iframe')).toBeVisible();
   });
 
   test('should show welcome message in chat widget', async ({ page }) => {
@@ -121,7 +121,7 @@ test.describe('Ozwell Embed Widget', () => {
     // Wait for potential tool call event in the log
     // This may not appear if AI doesn't call the tool
     try {
-      await expect(page.locator('text=Tool call received').or(page.locator('text=update_name'))).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('text=Tool call received').or(page.locator('text=update_form_data'))).toBeVisible({ timeout: 60000 });
     } catch {
       // AI may not trigger tool - test still passes if message was sent
       await expect(iframe.getByText('update my name to EventTest')).toBeVisible();
@@ -159,9 +159,8 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Check for expected tools
     const toolNames = config.tools.map((t: any) => t.function?.name);
-    expect(toolNames).toContain('update_name');
-    expect(toolNames).toContain('update_address');
-    expect(toolNames).toContain('update_zip');
+    expect(toolNames).toContain('get_form_data');
+    expect(toolNames).toContain('update_form_data');
   });
 
   test('should navigate to tic-tac-toe demo', async ({ page }) => {

@@ -29,6 +29,27 @@ Customize the widget with `window.OzwellChatConfig`:
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
+## With Custom UI
+
+Use your own button and layout by disabling the default floating button:
+
+```html
+<!-- Your custom container -->
+<div id="my-chat-container" style="width: 100%; height: 500px;"></div>
+
+<script>
+  window.OzwellChatConfig = {
+    defaultUI: false,              // Disable default floating button
+    containerId: 'my-chat-container'
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**How it works:** Setting `defaultUI: false` disables the automatic floating button and wrapper. The widget iframe mounts directly in your custom container instead.
+
+**Use cases:** Sidebar layouts, embedded chat in dashboards, multi-panel UIs, or any design where you want full control over the chat placement and styling.
+
 ## Getting Text Back from Widget
 
 Use the AI to improve text, then get it back with the "Save & Close" button:
@@ -117,16 +138,20 @@ Enable page interactions using MCP tools (OpenAI function calling format):
 
   // Handle tool calls from widget
   window.addEventListener('message', (event) => {
-    if (event.data.source === 'ozwell-chat-widget' && event.data.type === 'tool_call') {
-      const { tool, payload } = event.data;
+    const data = event.data;
+    if (!data || data.source !== 'ozwell-chat-widget') return;
+
+    if (data.type === 'tool_call') {
+      const { tool, tool_call_id, payload } = data;
 
       if (tool === 'update_email') {
         document.getElementById('user-email').value = payload.email;
 
-        // Send result back to widget
+        // Send result back to widget (MUST include tool_call_id)
         window.OzwellChat.iframe.contentWindow.postMessage({
           source: 'ozwell-chat-parent',
           type: 'tool_result',
+          tool_call_id: tool_call_id,  // Required for OpenAI protocol
           result: { success: true, message: 'Email updated successfully' }
         }, '*');
       }
@@ -143,6 +168,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `autoMount` | boolean | `true` | Auto-mount widget on page load |
+| `defaultUI` | boolean | `true` | Enable default floating button and wrapper. Set to `false` to use custom UI |
 | `endpoint` | string | (auto-detected) | Chat API endpoint (auto-detected from script URL) |
 | `widgetUrl` | string | (auto-detected) | Widget iframe URL (auto-detected from script URL) |
 | `model` | string | (server default) | Model name to use for chat completions. **Optional** - if not specified, the server chooses the appropriate model |
@@ -154,6 +180,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `headers` | object | `{}` | Custom HTTP headers for API requests |
 | `openaiApiKey` | string | (none) | API key for Authorization header |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
+| `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 
 ## API Reference
 
@@ -296,11 +323,46 @@ Or use custom headers for any authentication scheme:
 
 1. User sends message: "update my email to test@example.com"
 2. LLM responds with `tool_calls` in response
-3. Widget sends `tool_call` event to parent via postMessage
+3. Widget sends `tool_call` event to parent via postMessage (includes `tool_call_id`)
 4. Parent executes tool (updates input field)
-5. Parent sends `tool_result` back to widget
-6. Widget sends result to LLM for natural confirmation
+5. Parent sends `tool_result` back to widget (MUST include same `tool_call_id`)
+6. Widget sends result to LLM with `tool_call_id` for tracking
 7. LLM responds: "Done! I've updated your email to test@example.com"
+
+**Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
+
+## Debug Mode
+
+Enable debug mode during development to visualize tool executions:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    debug: true  // Shows tool execution details
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**How it works:** Clickable tool pills appear before AI responses. Click a pill to expand and see:
+- Tool name and arguments sent
+- Result data returned from parent page
+- Complete execution timeline
+
+**Use cases:** Debugging tool integrations, verifying correct arguments, demonstrating MCP to stakeholders.
+
+In production (`debug: false`, default), tools execute silently and users only see the final response.
+
+## Mobile Support
+
+The widget automatically provides a native app experience on mobile devices:
+
+- Fullscreen mode (no borders or margins)
+- Proper viewport scaling (injects meta tag if missing)
+- Safe area support for iPhone notches and Android nav bars
+- 16px input font (prevents iOS auto-zoom)
+
+The widget handles all mobile optimizations automatically.
 
 ## Live Demo
 
