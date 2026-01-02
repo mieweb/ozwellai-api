@@ -37,9 +37,10 @@ export default defineConfig({
 
   // Run local servers before starting the tests
   // These will be skipped if the servers are already running (reuseExistingServer: true)
+  // Note: In CI, the reference-server is pre-built by the workflow before tests run
   webServer: [
     {
-      command: 'cd ../reference-server && npm run build && npm start',
+      command: 'cd ../reference-server && npm start',
       url: 'http://localhost:3000/embed/ozwell-loader.js',
       reuseExistingServer: true,  // Always reuse if running
       timeout: 60000,
