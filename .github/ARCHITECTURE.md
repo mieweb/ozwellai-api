@@ -152,6 +152,9 @@ DRY_RUN=true ./scripts/publish-client.sh 1.0.0
 
 # Test everything together
 ./scripts/test-local.sh
+
+# Demo type lifecycle and source of truth
+./scripts/demo-type-lifecycle.sh
 ```
 
 ## 📝 Script-First Benefits
