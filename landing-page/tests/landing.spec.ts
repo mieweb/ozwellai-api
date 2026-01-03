@@ -202,12 +202,16 @@ test.describe('Integration Guide Modal', () => {
 test.describe('Tic-Tac-Toe Demo', () => {
   test('should load tic-tac-toe page', async ({ page }) => {
     await page.goto('/tictactoe.html');
-    
-    // Wait for page to load
-    await expect(page.locator('iframe[title="Ozwell Assistant"]')).toBeVisible({ timeout: 10000 });
-    
+
+    // Wait for page to load - use the default UI container instead of title
+    // (title is configured as 'AI Opponent (O)' for this page)
+    await expect(page.locator('#ozwell-chat-container iframe')).toBeVisible({ timeout: 10000 });
+
     // Verify the tic-tac-toe board is visible
     await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
+
+    // Verify the difficulty selector is present
+    await expect(page.locator('#difficulty')).toBeVisible();
   });
 });
 

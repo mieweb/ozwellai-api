@@ -181,6 +181,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `openaiApiKey` | string | (none) | API key for Authorization header |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
+| `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
 
 ## API Reference
 
@@ -235,6 +236,42 @@ Access the widget's iframe element directly.
 
 ```javascript
 console.log('Widget iframe:', OzwellChat.iframe);
+```
+
+### OzwellChat.open()
+
+Programmatically open the chat window. Clears any unread notifications.
+
+```javascript
+OzwellChat.open();
+```
+
+### OzwellChat.close()
+
+Programmatically close/hide the chat window.
+
+```javascript
+OzwellChat.close();
+```
+
+### OzwellChat.isOpen
+
+Check if the chat window is currently open.
+
+```javascript
+if (OzwellChat.isOpen) {
+  console.log('Chat is visible');
+}
+```
+
+### OzwellChat.hasUnread
+
+Check if there are unread messages (badge is showing).
+
+```javascript
+if (OzwellChat.hasUnread) {
+  console.log('User has unread messages');
+}
 ```
 
 ## Advanced Usage
@@ -330,6 +367,170 @@ Or use custom headers for any authentication scheme:
 7. LLM responds: "Done! I've updated your email to test@example.com"
 
 **Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
+
+## PostMessage Events Reference
+
+The widget communicates with the parent page via `postMessage`. This enables programmatic control and MCP tool integration.
+
+### Parent → Widget Messages
+
+Messages sent from the parent page to the widget iframe. All messages require `source: 'ozwell-chat-parent'`.
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `ozwell:send-message` | `{ content: string }` | Send a chat message programmatically (appears as user message, triggers AI response) |
+| `tool_result` | `{ tool_call_id, result }` | Return result from MCP tool execution |
+| `config` | `{ config: OzwellChatConfig }` | Update widget configuration at runtime |
+| `close` | — | Close/hide the chat widget |
+
+#### Sending a Message Programmatically
+
+Use `ozwell:send-message` to inject messages as if the user typed them. This is useful for:
+- Triggering AI responses based on page events
+- Automating conversations
+- Building game AI that responds to user actions
+
+```javascript
+// Send a message as if the user typed it
+OzwellChat.iframe.contentWindow.postMessage({
+  source: 'ozwell-chat-parent',
+  type: 'ozwell:send-message',
+  payload: { content: 'Hello, AI!' }
+}, '*');
+```
+
+#### Message Queuing
+
+The widget supports message queuing - users can send messages while the AI is still responding. Queued messages appear as dotted-outline bubbles and can be edited or cancelled before being sent.
+
+**How it works:**
+
+1. While AI is streaming a response, user types and clicks Send
+2. Message appears as a queued bubble (dotted blue outline) with edit/cancel icons
+3. User can click the pencil icon to edit the message inline
+4. When AI finishes responding, the queued message is automatically sent
+5. User can cancel the queued message by clicking the X icon
+
+This enables smooth back-and-forth conversations without waiting, and is especially useful for:
+
+- Interactive games (like tic-tac-toe) where the user can make moves immediately
+- Fast-paced conversations where users know their next response
+- Programmatic message sending via `ozwell:send-message` during tool execution
+
+#### Returning Tool Results
+
+After receiving a `tool_call` event, execute the tool and send results back:
+
+```javascript
+OzwellChat.iframe.contentWindow.postMessage({
+  source: 'ozwell-chat-parent',
+  type: 'tool_result',
+  tool_call_id: toolCallId,  // Must match the tool_call_id from the request
+  result: { success: true, message: 'Action completed' }
+}, '*');
+```
+
+### Widget → Parent Messages
+
+Messages sent from the widget iframe to the parent page. All messages include `source: 'ozwell-chat-widget'`.
+
+| Type | Payload | Description |
+|------|---------|-------------|
+| `ready` | — | Widget fully initialized and ready to receive messages |
+| `tool_call` | `{ tool, tool_call_id, payload }` | Request parent to execute an MCP tool |
+| `assistant_response` | `{ content }` | AI assistant sent a response |
+| `insert` | `{ text }` | User clicked "Save & Close" button |
+| `closed` | — | Widget was closed |
+
+#### Listening for Tool Calls
+
+```javascript
+window.addEventListener('message', (event) => {
+  // Security: validate origin if widget is hosted on a different domain
+  // if (event.origin !== 'https://your-widget-domain.com') return;
+
+  const data = event.data;
+  if (data?.source !== 'ozwell-chat-widget') return;
+
+  if (data.type === 'tool_call') {
+    const { tool, tool_call_id, payload } = data;
+    console.log(`Tool requested: ${tool}`, payload);
+    // Execute the tool, then send tool_result back
+  }
+});
+```
+
+> **Security Note:** When hosting the widget on a different domain, always validate `event.origin` to prevent malicious sites from sending fake tool_call messages.
+
+#### Listening for Widget Ready
+
+```javascript
+window.addEventListener('message', (event) => {
+  if (event.data?.source === 'ozwell-chat-widget' && event.data.type === 'ready') {
+    console.log('Widget is ready!');
+    // Now safe to send messages to widget
+  }
+});
+```
+
+### DOM Events
+
+The loader also dispatches CustomEvents on `document` for convenience:
+
+| Event | Detail | Description |
+|-------|--------|-------------|
+| `ozwell-chat-insert` | `{ text }` | User clicked "Save & Close" - contains last AI response |
+| `ozwell-chat-ready` | — | Widget fully initialized and ready |
+| `ozwell-chat-closed` | — | Chat window was closed |
+| `ozwell-chat-unread` | `{ message }` | AI responded while chat was closed (notification triggered) |
+
+```javascript
+document.addEventListener('ozwell-chat-insert', (event) => {
+  console.log('AI response to insert:', event.detail.text);
+});
+```
+
+## Unread Notifications
+
+When the chat window is closed and the AI responds, the widget shows a notification:
+
+- **Wiggle animation** - The chat button wiggles to attract attention
+- **Red badge** - A dot appears on the button indicating unread messages
+- **Auto-clear** - Badge and animation clear when the user opens the chat
+
+### Default Behavior (wiggle + badge)
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    // autoOpenOnReply defaults to false
+    // Widget will wiggle and show badge when AI responds
+  };
+</script>
+```
+
+### Auto-Open Behavior
+
+Set `autoOpenOnReply: true` to automatically open the chat when AI responds:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    autoOpenOnReply: true  // Chat opens automatically when AI replies
+  };
+</script>
+```
+
+### Listening for Unread Notifications
+
+```javascript
+document.addEventListener('ozwell-chat-unread', (event) => {
+  console.log('New message:', event.detail.message);
+  // Play a sound, show browser notification, etc.
+});
+```
+
+**Note:** Tool calls do not trigger notifications. Only actual text responses from the AI trigger the wiggle/badge.
 
 ## Debug Mode
 

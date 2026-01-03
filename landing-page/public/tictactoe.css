@@ -239,11 +239,17 @@ body {
   }
 }
 
-.reset-button {
-  width: 100%;
+.game-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   max-width: 400px;
   margin: 0 auto;
-  display: block;
+}
+
+.reset-button {
+  flex: 1;
   padding: 12px 24px;
   background: #0066ff;
   color: white;
@@ -254,6 +260,38 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: none;
+}
+
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.difficulty-selector label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.difficulty-selector select {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.difficulty-selector select:hover {
+  border-color: #0066ff;
+}
+
+.difficulty-selector select:focus {
+  outline: none;
+  border-color: #0066ff;
+  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
 .reset-button:hover {
@@ -379,6 +417,26 @@ body {
 
   .cell {
     font-size: 36px;
+  }
+}
+
+@media (max-width: 767px) {
+  .header {
+    padding-top: 0;
+  }
+
+  .back-link-container {
+    position: static;
+    text-align: left;
+    margin-bottom: 16px;
+  }
+
+  .header-title {
+    font-size: 24px;
+  }
+
+  .header-subtitle {
+    font-size: 14px;
   }
 }
 
