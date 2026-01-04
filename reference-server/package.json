@@ -1,8 +1,56 @@
 {
-  "name": "ozwellai-reference",
+  "name": "@mieweb/ozwellai-reference",
   "version": "1.0.0",
   "description": "OpenAI-compatible Fastify reference server for OzwellAI API",
   "main": "dist/reference-server/src/server.js",
+  "types": "dist/reference-server/src/server.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/reference-server/src/server.js",
+      "require": "./dist/reference-server/src/server.js",
+      "types": "./dist/reference-server/src/server.d.ts"
+    },
+    "./types": {
+      "import": "./dist/reference-server/src/types.js",
+      "require": "./dist/reference-server/src/types.js",
+      "types": "./dist/reference-server/src/types.d.ts"
+    },
+    "./util": {
+      "import": "./dist/reference-server/src/util/index.js",
+      "require": "./dist/reference-server/src/util/index.js",
+      "types": "./dist/reference-server/src/util/index.d.ts"
+    },
+    "./routes/models": {
+      "import": "./dist/reference-server/src/routes/models.js",
+      "require": "./dist/reference-server/src/routes/models.js",
+      "types": "./dist/reference-server/src/routes/models.d.ts"
+    },
+    "./routes/chat": {
+      "import": "./dist/reference-server/src/routes/chat.js",
+      "require": "./dist/reference-server/src/routes/chat.js",
+      "types": "./dist/reference-server/src/routes/chat.d.ts"
+    },
+    "./routes/responses": {
+      "import": "./dist/reference-server/src/routes/responses.js",
+      "require": "./dist/reference-server/src/routes/responses.js",
+      "types": "./dist/reference-server/src/routes/responses.d.ts"
+    },
+    "./routes/embeddings": {
+      "import": "./dist/reference-server/src/routes/embeddings.js",
+      "require": "./dist/reference-server/src/routes/embeddings.js",
+      "types": "./dist/reference-server/src/routes/embeddings.d.ts"
+    },
+    "./routes/files": {
+      "import": "./dist/reference-server/src/routes/files.js",
+      "require": "./dist/reference-server/src/routes/files.js",
+      "types": "./dist/reference-server/src/routes/files.d.ts"
+    },
+    "./routes/mock-chat": {
+      "import": "./dist/reference-server/src/routes/mock-chat.js",
+      "require": "./dist/reference-server/src/routes/mock-chat.js",
+      "types": "./dist/reference-server/src/routes/mock-chat.d.ts"
+    }
+  },
   "scripts": {
     "dev": "ts-node src/server.ts",
     "build": "tsc",

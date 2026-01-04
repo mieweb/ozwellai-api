@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
@@ -16,13 +16,82 @@ import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
+// Import types for extensibility
+import type { ServerOptions, AuthHandler, AuthResult } from './types';
+import { validateAuth } from './util';
 
-const fastify = Fastify({
-  logger: process.env.NODE_ENV !== 'production',
-});
+// Re-export types and route plugins for extensibility
+export type { ServerOptions, AuthHandler, AuthResult };
+export { modelsRoute, chatRoute, responsesRoute, embeddingsRoute, filesRoute, mockChatRoute };
 
-async function buildServer() {
-  const rootDir = path.resolve(process.cwd());
+/**
+ * Default authentication handler - accepts any non-empty Bearer token
+ * Override this via ServerOptions.authHandler for production use
+ */
+const defaultAuthHandler: AuthHandler = async (request) => {
+  const valid = validateAuth(request.headers.authorization);
+  return { valid };
+};
+
+/**
+ * Default public routes that skip authentication
+ */
+const DEFAULT_PUBLIC_ROUTES = ['/health', '/docs', '/openapi.json', '/embed/', '/public/'];
+
+/**
+ * Build the Fastify server with optional configuration
+ * @param options - Server configuration options for customization
+ */
+async function buildServer(options: ServerOptions = {}): Promise<FastifyInstance> {
+  const {
+    authHandler = defaultAuthHandler,
+    publicRoutes = DEFAULT_PUBLIC_ROUTES,
+    routePrefix = '',
+    onBeforeRoutes,
+    onAfterRoutes,
+    swagger: swaggerOpts = {},
+    registerDefaultRoutes = true,
+    serveStatic = true,
+    enableDocs = true,
+    fastifyOptions = {},
+    rootDir: customRootDir,
+  } = options;
+
+  const rootDir = customRootDir || path.resolve(process.cwd());
+
+  // Create Fastify instance with merged options
+  const fastify = Fastify({
+    logger: process.env.NODE_ENV !== 'production',
+    ...fastifyOptions,
+  });
+
+  // Store auth handler on server for routes to access
+  fastify.decorate('authHandler', authHandler);
+  fastify.decorate('publicRoutes', publicRoutes);
+
+  // Register global auth preHandler hook
+  fastify.addHook('preHandler', async (request, reply) => {
+    // Skip auth for public routes
+    const isPublic = publicRoutes.some(route => request.url.startsWith(route));
+    if (isPublic) {
+      return;
+    }
+
+    // Run auth handler
+    const authResult = await authHandler(request, reply);
+    request.authContext = authResult;
+
+    if (!authResult.valid) {
+      return reply.code(401).send({
+        error: {
+          message: authResult.error || 'Invalid authentication credentials',
+          type: 'invalid_request_error',
+          param: null,
+          code: 'invalid_api_key',
+        },
+      });
+    }
+  });
 
   // Register CORS
   await fastify.register(cors, {
@@ -42,10 +111,10 @@ async function buildServer() {
     openapi: {
       openapi: '3.1.0',
       info: {
-        title: 'OzwellAI Reference API',
-        description: 'OpenAI-compatible API reference implementation',
-        version: '1.0.0',
-        contact: {
+        title: swaggerOpts.title || 'OzwellAI Reference API',
+        description: swaggerOpts.description || 'OpenAI-compatible API reference implementation',
+        version: swaggerOpts.version || '1.0.0',
+        contact: swaggerOpts.contact || {
           name: 'OzwellAI',
           email: 'support@ozwellai.com',
         },
@@ -54,7 +123,7 @@ async function buildServer() {
           url: 'https://www.apache.org/licenses/LICENSE-2.0.html',
         },
       },
-      servers: [
+      servers: swaggerOpts.servers || [
         {
           url: 'http://localhost:3000',
           description: 'Development server',
@@ -91,24 +160,26 @@ async function buildServer() {
     },
   });
 
-  // Register Swagger UI
-  await fastify.register(swaggerUI, {
-    routePrefix: '/docs',
-    uiConfig: {
-      docExpansion: 'list',
-      deepLinking: false,
-    },
-    uiHooks: {
-      onRequest: function (request, reply, next) { next(); },
-      preHandler: function (request, reply, next) { next(); },
-    },
-    staticCSP: true,
-    transformStaticCSP: (header) => header,
-    transformSpecification: (swaggerObject, request, reply) => {
-      return swaggerObject;
-    },
-    transformSpecificationClone: true,
-  });
+  // Register Swagger UI (conditionally)
+  if (enableDocs) {
+    await fastify.register(swaggerUI, {
+      routePrefix: '/docs',
+      uiConfig: {
+        docExpansion: 'list',
+        deepLinking: false,
+      },
+      uiHooks: {
+        onRequest: function (request, reply, next) { next(); },
+        preHandler: function (request, reply, next) { next(); },
+      },
+      staticCSP: true,
+      transformStaticCSP: (header) => header,
+      transformSpecification: (swaggerObject, request, reply) => {
+        return swaggerObject;
+      },
+      transformSpecificationClone: true,
+    });
+  }
 
   // Health check endpoint
   fastify.get('/health', async (request, reply) => {
@@ -127,26 +198,42 @@ async function buildServer() {
     }
   });
 
-  // Register API routes
-  await fastify.register(modelsRoute);
-  await fastify.register(chatRoute);
-  await fastify.register(responsesRoute);
-  await fastify.register(embeddingsRoute);
-  await fastify.register(filesRoute);
-  await fastify.register(mockChatRoute);  // Mock AI for demos
+  // Lifecycle hook: before routes
+  if (onBeforeRoutes) {
+    await onBeforeRoutes(fastify);
+  }
 
-  // Serve public assets (documentation, misc)
-  await fastify.register(fastifyStatic, {
-    root: path.join(rootDir, 'public'),
-    prefix: '/',
-  });
+  // Register API routes (conditionally)
+  if (registerDefaultRoutes) {
+    const prefix = routePrefix || '';
+    await fastify.register(modelsRoute, { prefix });
+    await fastify.register(chatRoute, { prefix });
+    await fastify.register(responsesRoute, { prefix });
+    await fastify.register(embeddingsRoute, { prefix });
+    await fastify.register(filesRoute, { prefix });
+    await fastify.register(mockChatRoute, { prefix });  // Mock AI for demos
+  }
 
-  // Serve embed assets from dedicated directory
-  await fastify.register(fastifyStatic, {
-    root: path.join(rootDir, 'embed'),
-    prefix: '/embed/',
-    decorateReply: false,
-  });
+  // Serve static assets (conditionally)
+  if (serveStatic) {
+    // Serve public assets (documentation, misc)
+    await fastify.register(fastifyStatic, {
+      root: path.join(rootDir, 'public'),
+      prefix: '/',
+    });
+
+    // Serve embed assets from dedicated directory
+    await fastify.register(fastifyStatic, {
+      root: path.join(rootDir, 'embed'),
+      prefix: '/embed/',
+      decorateReply: false,
+    });
+  }
+
+  // Lifecycle hook: after routes
+  if (onAfterRoutes) {
+    await onAfterRoutes(fastify);
+  }
 
   // 404 handler
   fastify.setNotFoundHandler((request, reply) => {
