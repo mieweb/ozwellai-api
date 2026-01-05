@@ -74,9 +74,11 @@ import { OzwellChat } from '@ozwell/react';
 | `greeting` | `string` | Agent default | Initial message |
 | `placeholder` | `string` | `'Type a message...'` | Input placeholder |
 | `context` | `Record<string, unknown>` | `{}` | Context data for agent |
+| `tools` | `OzwellTool[]` | `[]` | MCP tools available to the AI |
 | `onReady` | `() => void` | — | Widget ready callback |
 | `onOpen` | `() => void` | — | Chat opened callback |
 | `onClose` | `() => void` | — | Chat closed callback |
+| `onToolCall` | `(tool, args, sendResult) => void` | — | Tool call handler (see below) |
 | `onUserShare` | `(data: unknown) => void` | — | User shared data callback (opt-in) |
 | `onError` | `(error: OzwellError) => void` | — | Error callback |
 
@@ -248,6 +250,87 @@ function App() {
   );
 }
 ```
+
+### Tool Handling with onToolCall
+
+Handle MCP tool calls from the AI assistant with a simple callback:
+
+```tsx
+import { OzwellChat } from '@ozwell/react';
+import type { OzwellTool } from '@ozwell/react';
+
+// Define available tools
+const tools: OzwellTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_user_info',
+      description: 'Get current user information',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_settings',
+      description: 'Update user settings',
+      parameters: {
+        type: 'object',
+        properties: {
+          theme: { type: 'string', enum: ['light', 'dark'] },
+          notifications: { type: 'boolean' }
+        },
+        required: []
+      }
+    }
+  }
+];
+
+// Define tool handlers
+const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+  get_user_info: () => ({
+    name: 'John Doe',
+    email: 'john@example.com',
+    plan: 'pro'
+  }),
+  update_settings: (args) => {
+    // Update settings in your app
+    console.log('Updating settings:', args);
+    return { success: true, updated: args };
+  }
+};
+
+function App() {
+  return (
+    <OzwellChat
+      apiKey="ozw_scoped_xxxxxxxx"
+      agentId="agent_xxxxxxxx"
+      tools={tools}
+      onToolCall={(tool, args, sendResult) => {
+        const handler = toolHandlers[tool];
+        if (handler) {
+          const result = handler(args);
+          sendResult(result);
+        } else {
+          sendResult({ error: `Unknown tool: ${tool}` });
+        }
+      }}
+    />
+  );
+}
+```
+
+The `onToolCall` callback receives:
+
+- `tool` — The name of the tool being called
+- `args` — The arguments passed to the tool
+- `sendResult` — A function to send the result back to the AI
+
+This handles all postMessage complexity internally, so you focus on your tool logic.
 
 ---
 

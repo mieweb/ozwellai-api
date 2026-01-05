@@ -26,5 +26,7 @@ export type {
   OzwellChatAPI,
   OzwellWidgetMessage,
   OzwellParentMessage,
+  OzwellToolCallMessage,
+  OzwellToolResultMessage,
   ScriptLoadStatus,
 } from './types';

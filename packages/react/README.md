@@ -121,73 +121,53 @@ function App() {
 
 ### Handling Tool Calls
 
-Tool calls from the widget are sent via `postMessage`. Listen for them in your component:
+Use the `onToolCall` prop to handle tool calls with a simple callback:
 
 ```tsx
-import { useEffect } from 'react';
 import { OzwellChat } from '@ozwell/react';
 
-function App() {
-  useEffect(() => {
-    const handleToolCall = (event: MessageEvent) => {
-      const data = event.data;
-
-      // Verify message is from Ozwell widget
-      if (data?.source !== 'ozwell-chat-widget' || data?.type !== 'tool_call') {
-        return;
-      }
-
-      const { tool_name, tool_call_id, arguments: args } = data.payload;
-
-      // Handle specific tools
-      if (tool_name === 'get_form_data') {
-        const result = {
-          name: 'John Doe',
-          address: '123 Main St',
-          zipCode: '12345'
-        };
-
-        // Send result back to widget
-        const iframe = document.querySelector('iframe[src*="ozwell"]');
-        iframe?.contentWindow?.postMessage({
-          source: 'ozwell-chat-parent',
-          type: 'tool_result',
-          payload: {
-            tool_call_id,
-            result
-          }
-        }, '*');
-      }
-    };
-
-    window.addEventListener('message', handleToolCall);
-    return () => window.removeEventListener('message', handleToolCall);
-  }, []);
-
-  return <OzwellChat endpoint="/v1/chat/completions" tools={tools} />;
-}
-```
-
-### Tool Handler Pattern
-
-For cleaner code, create a tool handler object:
-
-```tsx
-const toolHandlers = {
+// Define your tool handlers
+const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {
   get_form_data: () => ({
-    name: document.getElementById('name').value,
-    address: document.getElementById('address').value,
-    zipCode: document.getElementById('zip').value
+    name: document.getElementById('name')?.value || '',
+    address: document.getElementById('address')?.value || '',
+    zipCode: document.getElementById('zip')?.value || ''
   }),
 
-  update_form_data: (args: { name?: string; address?: string; zipCode?: string }) => {
-    if (args.name) document.getElementById('name').value = args.name;
-    if (args.address) document.getElementById('address').value = args.address;
-    if (args.zipCode) document.getElementById('zip').value = args.zipCode;
+  update_form_data: (args) => {
+    if (args.name) (document.getElementById('name') as HTMLInputElement).value = args.name as string;
+    if (args.address) (document.getElementById('address') as HTMLInputElement).value = args.address as string;
+    if (args.zipCode) (document.getElementById('zip') as HTMLInputElement).value = args.zipCode as string;
     return { success: true, updated: args };
   }
 };
+
+function App() {
+  return (
+    <OzwellChat
+      endpoint="/v1/chat/completions"
+      tools={tools}
+      onToolCall={(tool, args, sendResult) => {
+        const handler = toolHandlers[tool];
+        if (handler) {
+          const result = handler(args);
+          sendResult(result);
+        } else {
+          sendResult({ error: `Unknown tool: ${tool}` });
+        }
+      }}
+    />
+  );
+}
 ```
+
+The `onToolCall` callback receives:
+
+- `tool` - The name of the tool being called
+- `args` - The arguments passed to the tool
+- `sendResult` - A function to send the result back to the AI
+
+This handles all the postMessage complexity internally, so you just focus on your tool logic.
 
 ## Documentation
 
