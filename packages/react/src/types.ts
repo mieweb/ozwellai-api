@@ -137,6 +137,25 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
   /** Called when user inserts text to parent page */
   onInsert?: (data: { text: string; close: boolean }) => void;
 
+  /**
+   * Called when the AI requests a tool call.
+   * The callback receives the tool name, arguments, and a sendResult function.
+   * Call sendResult(result) to send the tool result back to the widget.
+   *
+   * @example
+   * ```tsx
+   * onToolCall={(tool, args, sendResult) => {
+   *   const result = toolHandlers[tool](args);
+   *   sendResult(result);
+   * }}
+   * ```
+   */
+  onToolCall?: (
+    tool: string,
+    args: Record<string, unknown>,
+    sendResult: (result: unknown) => void
+  ) => void;
+
   // 🚧 Future Callbacks (Documented but not yet implemented)
 
   /** Called when user explicitly shares data (privacy-preserving) */
@@ -278,6 +297,21 @@ export interface OzwellWidgetMessage {
 }
 
 /**
+ * Tool call message from widget to parent
+ * Properties are at the root level (not nested in payload)
+ */
+export interface OzwellToolCallMessage {
+  source: 'ozwell-chat-widget';
+  type: 'tool_call';
+  /** Tool function name */
+  tool: string;
+  /** Unique ID for this tool call */
+  tool_call_id: string;
+  /** Tool arguments (parsed from function.arguments) */
+  payload: Record<string, unknown>;
+}
+
+/**
  * Assistant response message payload
  */
 export interface AssistantResponsePayload {
@@ -292,4 +326,17 @@ export interface OzwellParentMessage {
   source: 'ozwell-chat-parent';
   type: 'config' | 'tool_result';
   payload?: unknown;
+}
+
+/**
+ * Tool result message from parent to widget
+ * Properties are at the root level (not nested in payload)
+ */
+export interface OzwellToolResultMessage {
+  source: 'ozwell-chat-parent';
+  type: 'tool_result';
+  /** Must match the tool_call_id from the tool_call message */
+  tool_call_id: string;
+  /** Result data to send back to the LLM */
+  result: unknown;
 }
