@@ -92,6 +92,9 @@ export interface OzwellConfig {
   /** Container element ID for custom mounting */
   containerId?: string;
 
+  /** Auto-open chat window when AI replies (default: false) */
+  autoOpenOnReply?: boolean;
+
   // 🚧 Planned Features (Documented but not yet implemented)
 
   /** Scoped API key for authentication */
@@ -174,6 +177,9 @@ export interface UseOzwellReturn {
   /** Whether the chat is currently open */
   isOpen: boolean;
 
+  /** Whether there are unread messages */
+  hasUnread: boolean;
+
   /** Open the chat */
   open: () => void;
 
@@ -227,7 +233,20 @@ export interface OzwellChatAPI {
 
   ready: () => Promise<void>;
 
+  /** Programmatically open the chat window */
+  open: () => void;
+
+  /** Programmatically close the chat window */
+  close: () => void;
+
+  /** Current iframe element */
   iframe: HTMLIFrameElement | null;
+
+  /** Whether the chat window is currently open */
+  isOpen: boolean;
+
+  /** Whether there are unread messages */
+  hasUnread: boolean;
 }
 
 /**
@@ -254,8 +273,16 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'insert' | 'closed';
+  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call' | 'assistant_response';
   payload?: unknown;
+}
+
+/**
+ * Assistant response message payload
+ */
+export interface AssistantResponsePayload {
+  message: string;
+  hadToolCalls: boolean;
 }
 
 /**

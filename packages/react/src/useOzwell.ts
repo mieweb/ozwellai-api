@@ -27,6 +27,7 @@ import type { UseOzwellReturn } from './types';
 export function useOzwell(): UseOzwellReturn {
   const [isReady, setIsReady] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
   const [iframe, setIframe] = useState<HTMLIFrameElement | null>(null);
 
   // Monitor widget ready state
@@ -51,7 +52,7 @@ export function useOzwell(): UseOzwellReturn {
     };
   }, []);
 
-  // Monitor open/closed state via widget events
+  // Monitor open/closed state and unread notifications via events
   useEffect(() => {
     if (!isReady) {
       return;
@@ -65,26 +66,30 @@ export function useOzwell(): UseOzwellReturn {
       }
 
       // Track open/close state
-      // Note: These events may not exist yet in vanilla widget
-      // This is forward-compatible for when they're added
       if (data.type === 'opened') {
         setIsOpen(true);
+        setHasUnread(false); // Clear unread when opened
       } else if (data.type === 'closed') {
         setIsOpen(false);
       }
     };
 
+    // Listen for unread notification events from the loader
+    const handleUnread = () => {
+      setHasUnread(true);
+    };
+
     window.addEventListener('message', handleMessage);
+    document.addEventListener('ozwell-chat-unread', handleUnread);
 
     return () => {
       window.removeEventListener('message', handleMessage);
+      document.removeEventListener('ozwell-chat-unread', handleUnread);
     };
   }, [isReady]);
 
   /**
-   * Open the chat widget
-   * Note: Currently relies on default UI or manual DOM manipulation
-   * Future: Will use window.OzwellChat.open() when available
+   * Open the chat widget programmatically
    */
   const open = useCallback(() => {
     if (!isReady) {
@@ -92,19 +97,12 @@ export function useOzwell(): UseOzwellReturn {
       return;
     }
 
-    // For now, we can't programmatically open the widget
-    // The vanilla widget doesn't expose an open() method yet
-    // This is a placeholder for future implementation
-    console.warn('[useOzwell] open() not yet implemented in vanilla widget');
-
-    // Future implementation:
-    // window.OzwellChat?.open?.();
+    window.OzwellChat?.open?.();
+    setIsOpen(true);
   }, [isReady]);
 
   /**
-   * Close the chat widget
-   * Note: Currently relies on default UI or manual DOM manipulation
-   * Future: Will use window.OzwellChat.close() when available
+   * Close the chat widget programmatically
    */
   const close = useCallback(() => {
     if (!isReady) {
@@ -112,11 +110,8 @@ export function useOzwell(): UseOzwellReturn {
       return;
     }
 
-    // Placeholder for future implementation
-    console.warn('[useOzwell] close() not yet implemented in vanilla widget');
-
-    // Future implementation:
-    // window.OzwellChat?.close?.();
+    window.OzwellChat?.close?.();
+    setIsOpen(false);
   }, [isReady]);
 
   /**
@@ -179,6 +174,7 @@ export function useOzwell(): UseOzwellReturn {
   return {
     isReady,
     isOpen,
+    hasUnread,
     open,
     close,
     toggle,
