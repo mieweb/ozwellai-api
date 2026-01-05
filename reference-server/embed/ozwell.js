@@ -183,6 +183,98 @@ body {
   max-width: 85%;
 }
 
+/* Queued message (waiting to send) */
+.message-queued-wrapper {
+  align-self: flex-end;
+  max-width: 75%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.message.queued {
+  padding: 12px 16px;
+  border-radius: 12px;
+  line-height: 1.5;
+  background: transparent;
+  color: #0066ff;
+  border: 2px dashed #0066ff;
+  opacity: 0.8;
+}
+
+.message.queued.editing {
+  background: #f0f7ff;
+  border: 2px solid #0066ff;
+  opacity: 1;
+}
+
+.queued-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 2px solid #0066ff;
+  background: #f0f7ff;
+  color: #0066ff;
+  font-size: inherit;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+
+.queued-actions {
+  display: flex;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.queued-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.queued-action-btn:hover {
+  background: #e5e7eb;
+}
+
+.queued-action-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: #6b7280;
+  stroke-width: 2;
+  fill: none;
+}
+
+.queued-action-btn:hover svg {
+  stroke: #374151;
+}
+
+.queued-action-btn.confirm svg {
+  stroke: #059669;
+}
+
+.queued-action-btn.confirm:hover {
+  background: #d1fae5;
+}
+
+.queued-action-btn.cancel svg {
+  stroke: #dc2626;
+}
+
+.queued-action-btn.cancel:hover {
+  background: #fee2e2;
+}
+
 .chat-form {
   display: flex;
   gap: 8px;
@@ -442,6 +534,9 @@ const state = {
   activeToolCalls: {}, // Track tool_call_id by tool name for OpenAI protocol
   toolExecutions: [], // Track tool executions for debug mode: { id, messageIndex, toolName, arguments, result, timestamp }
   expandedTools: new Set(), // Track which tool pills are expanded
+  queuedMessage: null, // Message queued while LLM is responding
+  queuedMessageEl: null, // DOM element for queued message bubble
+  isEditingQueued: false, // Whether user is editing the queued message
 };
 
 console.log('[widget.js] Widget initializing...');
@@ -474,6 +569,164 @@ function addMessage(role, text) {
   el.textContent = text;
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// SVG icons for queued message actions
+const ICONS = {
+  pencil: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>`,
+  x: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+};
+
+/**
+ * Build queued message bubble + actions UI inside a wrapper element
+ */
+function buildQueuedMessageUI(wrapper, text) {
+  wrapper.innerHTML = '';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message queued';
+  bubble.textContent = text;
+
+  const actions = document.createElement('div');
+  actions.className = 'queued-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'queued-action-btn edit';
+  editBtn.innerHTML = ICONS.pencil;
+  editBtn.title = 'Edit message';
+  editBtn.onclick = () => startEditingQueuedMessage();
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'queued-action-btn cancel';
+  cancelBtn.innerHTML = ICONS.x;
+  cancelBtn.title = 'Cancel message';
+  cancelBtn.onclick = () => removeQueuedMessage();
+
+  actions.appendChild(editBtn);
+  actions.appendChild(cancelBtn);
+  wrapper.appendChild(bubble);
+  wrapper.appendChild(actions);
+}
+
+/**
+ * Add a queued message bubble (shown while LLM is responding)
+ */
+function addQueuedMessage(text) {
+  if (!messagesEl) return;
+
+  removeQueuedMessage();
+  state.queuedMessage = text;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-queued-wrapper';
+  buildQueuedMessageUI(wrapper, text);
+
+  messagesEl.appendChild(wrapper);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  state.queuedMessageEl = wrapper;
+}
+
+/**
+ * Remove the queued message bubble
+ */
+function removeQueuedMessage() {
+  if (state.queuedMessageEl && state.queuedMessageEl.parentNode) {
+    state.queuedMessageEl.parentNode.removeChild(state.queuedMessageEl);
+  }
+  state.queuedMessage = null;
+  state.queuedMessageEl = null;
+  state.isEditingQueued = false;
+}
+
+/**
+ * Start inline editing of queued message
+ */
+function startEditingQueuedMessage() {
+  if (!state.queuedMessageEl || state.isEditingQueued) return;
+
+  state.isEditingQueued = true;
+
+  const wrapper = state.queuedMessageEl;
+  const bubble = wrapper.querySelector('.message.queued');
+  const actions = wrapper.querySelector('.queued-actions');
+
+  // Replace bubble with textarea
+  const textarea = document.createElement('textarea');
+  textarea.className = 'queued-input';
+  textarea.value = state.queuedMessage;
+  textarea.rows = Math.max(1, Math.ceil(state.queuedMessage.length / 40));
+
+  bubble.style.display = 'none';
+  wrapper.insertBefore(textarea, actions);
+
+  // Update action buttons to confirm/cancel
+  actions.innerHTML = '';
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'queued-action-btn confirm';
+  confirmBtn.innerHTML = ICONS.check;
+  confirmBtn.title = 'Confirm edit';
+  confirmBtn.onclick = () => confirmEditQueuedMessage(textarea.value);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'queued-action-btn cancel';
+  cancelBtn.innerHTML = ICONS.x;
+  cancelBtn.title = 'Cancel edit';
+  cancelBtn.onclick = () => cancelEditQueuedMessage();
+
+  actions.appendChild(confirmBtn);
+  actions.appendChild(cancelBtn);
+
+  textarea.focus();
+  textarea.select();
+
+  // Handle Enter key to confirm
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      confirmEditQueuedMessage(textarea.value);
+    }
+    if (e.key === 'Escape') {
+      cancelEditQueuedMessage();
+    }
+  });
+}
+
+/**
+ * Confirm the edit and update queued message
+ */
+function confirmEditQueuedMessage(newText) {
+  if (!newText.trim()) {
+    removeQueuedMessage();
+    return;
+  }
+
+  state.queuedMessage = newText.trim();
+  state.isEditingQueued = false;
+  buildQueuedMessageUI(state.queuedMessageEl, state.queuedMessage);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+/**
+ * Cancel editing and restore original bubble
+ */
+function cancelEditQueuedMessage() {
+  state.isEditingQueued = false;
+  buildQueuedMessageUI(state.queuedMessageEl, state.queuedMessage);
+}
+
+/**
+ * Send the queued message (called when LLM finishes responding)
+ */
+function sendQueuedMessage() {
+  if (!state.queuedMessage) return;
+
+  const text = state.queuedMessage;
+  removeQueuedMessage();
+
+  // Now send the message normally
+  sendMessage(text);
 }
 
 function applyConfig(config) {
@@ -719,7 +972,12 @@ function updateToolExecutionResult(toolCallId, result) {
 }
 
 async function sendMessage(text) {
-  if (state.sending) return;
+  // If LLM is busy, queue the message instead of dropping it
+  if (state.sending) {
+    console.log('[widget.js] LLM busy, queuing message:', text);
+    addQueuedMessage(text);
+    return;
+  }
 
   const userMessage = { role: 'user', content: text };
   state.messages.push(userMessage);
@@ -753,7 +1011,6 @@ async function sendMessageNonStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  submitButton?.setAttribute('disabled', 'true');
   saveButton?.setAttribute('disabled', 'true');
   lastAssistantMessage = '';
 
@@ -899,7 +1156,6 @@ async function sendMessageNonStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    submitButton?.removeAttribute('disabled');
     if (!lastAssistantMessage.trim()) {
       saveButton?.setAttribute('disabled', 'true');
     }
@@ -992,7 +1248,6 @@ async function sendMessageStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  submitButton?.setAttribute('disabled', 'true');
   saveButton?.setAttribute('disabled', 'true');
   lastAssistantMessage = '';
 
@@ -1217,6 +1472,7 @@ async function sendMessageStreaming(text, tools) {
         lastAssistantMessage = fullContent;
         addMessage('assistant', fullContent);
       }
+      // Skip notification - tool execution flow will notify when complete
     } else {
       // No tool calls, just text response
       const assistantMessage = {
@@ -1229,6 +1485,20 @@ async function sendMessageStreaming(text, tools) {
       // Update placeholder if empty
       if (!fullContent.trim()) {
         assistantMsgEl.textContent = '(no response)';
+      }
+
+      // Notify parent of assistant response (for notification system)
+      window.parent.postMessage({
+        source: 'ozwell-chat-widget',
+        type: 'assistant_response',
+        message: fullContent || '(no response)',
+        hadToolCalls: false
+      }, '*');
+
+      // Send any queued message now that LLM is done (no tool calls pending)
+      if (state.queuedMessage) {
+        // Use setTimeout to let the UI update first
+        setTimeout(() => sendQueuedMessage(), 100);
       }
     }
 
@@ -1247,7 +1517,6 @@ async function sendMessageStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    submitButton?.removeAttribute('disabled');
     if (!lastAssistantMessage.trim()) {
       saveButton?.setAttribute('disabled', 'true');
     }
@@ -1269,7 +1538,6 @@ async function continueConversationWithToolResult(result) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  submitButton?.setAttribute('disabled', 'true');
   saveButton?.setAttribute('disabled', 'true');
 
   // Build MCP tools from parent config (same as sendMessage)
@@ -1384,7 +1652,6 @@ async function continueConversationWithToolResult(result) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    submitButton?.removeAttribute('disabled');
     if (!lastAssistantMessage.trim()) {
       saveButton?.setAttribute('disabled', 'true');
     }
@@ -1433,6 +1700,19 @@ function handleParentMessage(event) {
       addMessage('assistant', result.message);
       lastAssistantMessage = result.message;
       saveButton?.removeAttribute('disabled');
+
+      // Notify parent of assistant response (for notification system)
+      window.parent.postMessage({
+        source: 'ozwell-chat-widget',
+        type: 'assistant_response',
+        message: result.message,
+        hadToolCalls: false  // This is the final response after tool execution
+      }, '*');
+
+      // After displaying the tool result message, send any queued user message (if present)
+      if (state.queuedMessage) {
+        sendQueuedMessage();
+      }
     } else if (result.error) {
       // Error case
       addMessage('system', `Error: ${result.error}`);
@@ -1468,6 +1748,13 @@ function handleParentMessage(event) {
       sendMessageStreaming('', tools);
     }
 
+    return;
+  }
+
+  // Handle send-message from parent (per iframe-integration.md spec)
+  if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:send-message' && data.payload?.content) {
+    console.log('[widget.js] Received ozwell:send-message from parent:', data.payload.content);
+    sendMessage(data.payload.content);
     return;
   }
 

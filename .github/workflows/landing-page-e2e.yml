@@ -45,51 +45,96 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: |
-            spec/package-lock.json
-            clients/typescript/package-lock.json
-            reference-server/package-lock.json
-            landing-page/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install spec dependencies
-        working-directory: ./spec
+      - name: Install all dependencies
         run: npm ci
 
       - name: Build spec
         working-directory: ./spec
         run: npm run build
 
-      - name: Install TypeScript client dependencies
-        working-directory: ./clients/typescript
-        run: npm ci
-
       - name: Build TypeScript client
         working-directory: ./clients/typescript
         run: npm run build
-
-      - name: Link TypeScript client
-        working-directory: ./clients/typescript
-        run: npm link
-
-      - name: Install reference server dependencies
-        working-directory: ./reference-server
-        run: npm ci
-
-      - name: Link ozwellai to reference server
-        working-directory: ./reference-server
-        run: npm link ozwellai
 
       - name: Build reference server
         working-directory: ./reference-server
         run: npm run build
 
-      - name: Install landing page dependencies
-        working-directory: ./landing-page
-        run: npm ci
-
       - name: Install Playwright browsers
         working-directory: ./landing-page
         run: npx playwright install chromium --with-deps
+
+      - name: Start reference server
+        working-directory: ./reference-server
+        run: |
+          npm start > /tmp/reference-server.log 2>&1 &
+          echo $! > /tmp/reference-server.pid
+
+      - name: Start landing page server
+        working-directory: ./landing-page
+        run: |
+          npm start > /tmp/landing-page.log 2>&1 &
+          echo $! > /tmp/landing-page.pid
+
+      - name: Wait for servers to be ready
+        run: |
+          echo "Waiting for servers to start..."
+          
+          # Wait for reference server
+          REFERENCE_READY=false
+          for i in {1..30}; do
+            # Check if process is still running
+            if [ -f /tmp/reference-server.pid ] && ! kill -0 $(cat /tmp/reference-server.pid) 2>/dev/null; then
+              echo "❌ Reference server process died!"
+              echo "=== Server logs ==="
+              cat /tmp/reference-server.log || true
+              exit 1
+            fi
+            
+            if curl -s http://localhost:3000/embed/ozwell-loader.js > /dev/null; then
+              echo "✅ Reference server is ready!"
+              REFERENCE_READY=true
+              break
+            fi
+            echo "Waiting for reference server... ($i/30)"
+            sleep 2
+          done
+          
+          if [ "$REFERENCE_READY" = false ]; then
+            echo "❌ Reference server failed to start within timeout"
+            echo "=== Server logs ==="
+            cat /tmp/reference-server.log || true
+            exit 1
+          fi
+          
+          # Wait for landing page server  
+          LANDING_READY=false
+          for i in {1..15}; do
+            # Check if process is still running
+            if [ -f /tmp/landing-page.pid ] && ! kill -0 $(cat /tmp/landing-page.pid) 2>/dev/null; then
+              echo "❌ Landing page server process died!"
+              echo "=== Server logs ==="
+              cat /tmp/landing-page.log || true
+              exit 1
+            fi
+            
+            if curl -s http://localhost:8080 > /dev/null; then
+              echo "✅ Landing page server is ready!"
+              LANDING_READY=true
+              break
+            fi
+            echo "Waiting for landing page server... ($i/15)"
+            sleep 2
+          done
+          
+          if [ "$LANDING_READY" = false ]; then
+            echo "❌ Landing page server failed to start within timeout"
+            echo "=== Server logs ==="
+            cat /tmp/landing-page.log || true
+            exit 1
+          fi
 
       - name: Run E2E tests
         working-directory: ./landing-page

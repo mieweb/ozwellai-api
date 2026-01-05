@@ -36,18 +36,19 @@ export default defineConfig({
   ],
 
   // Run local servers before starting the tests
-  // These will be skipped if the servers are already running (reuseExistingServer: true)
+  // In CI, servers are started by the workflow before Playwright runs
+  // Locally, these commands will start the servers if not already running
   webServer: [
     {
       command: 'cd ../reference-server && npm run dev',
       url: 'http://localhost:3000/embed/ozwell-loader.js',
-      reuseExistingServer: true,  // Always reuse if running
+      reuseExistingServer: true,  // Skip if server is already running (e.g., in CI)
       timeout: 60000,
     },
     {
       command: 'npm start',
       url: 'http://localhost:8080',
-      reuseExistingServer: true,  // Always reuse if running
+      reuseExistingServer: true,  // Skip if server is already running (e.g., in CI)
       timeout: 30000,
     },
   ],
