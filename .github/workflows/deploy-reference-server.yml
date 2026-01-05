@@ -1,0 +1,35 @@
+name: Deploy Reference Server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'reference-server/**'
+      - 'clients/typescript/**'
+      - '.github/workflows/deploy-reference-server.yml'
+
+jobs:
+  deploy:
+    name: Deploy to ozwellai-reference-server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to container
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.REFSERVER_HOST }}
+          port: 2240
+          username: ${{ secrets.REFSERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/ozwellai-api
+            git fetch origin
+            git checkout main
+            git reset --hard origin/main
+            cd reference-server
+            npm ci
+            npm run build
+            pm2 restart refserver
+            pm2 save
+            echo "✅ Reference server deployed successfully!"
