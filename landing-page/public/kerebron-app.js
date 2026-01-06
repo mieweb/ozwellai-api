@@ -577,8 +577,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Clear button
   document.getElementById('clear-btn')?.addEventListener('click', async () => {
     if (!editor) return;
-    const buffer = new TextEncoder().encode('');
-    await editor.loadDocument('text/x-markdown', buffer);
+    // Use text/html to avoid needing the markdown WASM parser
+    const buffer = new TextEncoder().encode('<p></p>');
+    await editor.loadDocument('text/html', buffer);
     await updateMarkdownPreview();
     logEvent('info', 'Document cleared');
   });
