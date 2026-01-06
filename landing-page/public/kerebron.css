@@ -334,16 +334,21 @@ body {
   .demo-right {
     flex-direction: column;
   }
+
+  .back-link-container {
+    position: static;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .header {
+    text-align: center;
+  }
 }
 
 @media (max-width: 640px) {
   .header-title {
     font-size: 24px;
-  }
-
-  .back-link-container {
-    position: static;
-    margin-bottom: 16px;
   }
 
   .editor-toolbar {
