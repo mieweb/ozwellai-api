@@ -44,7 +44,7 @@ function App() {
 
 ## Feature Support
 
-### ✅ Currently Available
+### Currently Available
 - Custom endpoints (`endpoint` prop)
 - Model selection (`model` prop)
 - MCP tool/function calling (`tools` prop)
@@ -55,7 +55,7 @@ function App() {
 - OpenAI API compatibility (`openaiApiKey` prop)
 - Custom headers (`headers` prop)
 
-### 🚧 Coming Soon
+### Coming Soon
 - Scoped API keys (`apiKey` prop)
 - Agent management (`agentId` prop)
 - Theme customization (`theme`, `primaryColor` props)
@@ -124,25 +124,30 @@ function App() {
 Use the `onToolCall` prop to handle tool calls with a simple callback:
 
 ```tsx
+import React, { useState } from 'react';
 import { OzwellChat } from '@ozwell/react';
 
-// Define your tool handlers
-const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {
-  get_form_data: () => ({
-    name: document.getElementById('name')?.value || '',
-    address: document.getElementById('address')?.value || '',
-    zipCode: document.getElementById('zip')?.value || ''
-  }),
-
-  update_form_data: (args) => {
-    if (args.name) (document.getElementById('name') as HTMLInputElement).value = args.name as string;
-    if (args.address) (document.getElementById('address') as HTMLInputElement).value = args.address as string;
-    if (args.zipCode) (document.getElementById('zip') as HTMLInputElement).value = args.zipCode as string;
-    return { success: true, updated: args };
-  }
-};
-
 function App() {
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    zipCode: ''
+  });
+
+  // Define your tool handlers
+  const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+    get_form_data: () => formData,
+
+    update_form_data: (args) => {
+      setFormData(prev => ({
+        name: (args.name as string) ?? prev.name,
+        address: (args.address as string) ?? prev.address,
+        zipCode: (args.zipCode as string) ?? prev.zipCode
+      }));
+      return { success: true, updated: args };
+    }
+  };
+
   return (
     <OzwellChat
       endpoint="/v1/chat/completions"
