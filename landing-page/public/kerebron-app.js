@@ -211,7 +211,10 @@ const toolHandlers = {
    */
   async get_document() {
     if (!editor) {
-      return { success: false, error: 'Editor not initialized' };
+      return {
+        success: false,
+        error: 'The rich text editor is not ready yet. Please wait a moment for it to finish loading, then try again.'
+      };
     }
 
     await updateMarkdownPreview();
