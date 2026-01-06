@@ -48,7 +48,7 @@ export interface OzwellTool {
  * Maps to window.OzwellChatConfig in vanilla implementation
  */
 export interface OzwellConfig {
-  // ✅ Currently Implemented (Vanilla Widget)
+  // Currently Implemented (Vanilla Widget)
 
   /** API endpoint URL */
   endpoint?: string;
@@ -95,7 +95,7 @@ export interface OzwellConfig {
   /** Auto-open chat window when AI replies (default: false) */
   autoOpenOnReply?: boolean;
 
-  // 🚧 Planned Features (Documented but not yet implemented)
+  // Planned Features (Documented but not yet implemented)
 
   /** Scoped API key for authentication */
   apiKey?: string;
@@ -156,7 +156,7 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
     sendResult: (result: unknown) => void
   ) => void;
 
-  // 🚧 Future Callbacks (Documented but not yet implemented)
+  // Future Callbacks (Documented but not yet implemented)
 
   /** Called when user explicitly shares data (privacy-preserving) */
   onUserShare?: (data: unknown) => void;
@@ -164,7 +164,7 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
   /** Called on errors */
   onError?: (error: OzwellError) => void;
 
-  // �� Future Props (Documented but not yet implemented)
+  // Future Props (Documented but not yet implemented)
 
   /** Theme mode */
   theme?: 'light' | 'dark' | 'auto';
