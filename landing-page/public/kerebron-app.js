@@ -506,13 +506,14 @@ function escapeHtml(str) {
 // Apply basic inline formatting (bold, italic)
 function applyInlineFormatting(text) {
   // Bold: **text** or __text__
-  text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  
+  // Allow inner asterisks/underscores and use backreferences to match the same delimiter
+  text = text.replace(/(\*\*)([^\n]+?)\1/g, '<strong>$2</strong>');
+  text = text.replace(/(__)([^\n]+?)\1/g, '<strong>$2</strong>');
+
   // Italic: *text* or _text_
-  text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  text = text.replace(/_([^_]+)_/g, '<em>$1</em>');
-  
+  // Avoid consuming characters that are part of bold markers (** or __)
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  text = text.replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<em>$2</em>');
   return text;
 }
 
