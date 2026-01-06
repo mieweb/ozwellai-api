@@ -292,7 +292,7 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call' | 'assistant_response';
+  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call';
   payload?: unknown;
 }
 
@@ -309,14 +309,6 @@ export interface OzwellToolCallMessage {
   tool_call_id: string;
   /** Tool arguments (parsed from function.arguments) */
   payload: Record<string, unknown>;
-}
-
-/**
- * Assistant response message payload
- */
-export interface AssistantResponsePayload {
-  message: string;
-  hadToolCalls: boolean;
 }
 
 /**
