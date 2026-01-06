@@ -583,26 +583,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Bold button
-  document.getElementById('bold-btn')?.addEventListener('click', () => {
+  document.getElementById('bold-btn')?.addEventListener('click', async () => {
     if (!editor) return;
     editor.chain().toggleStrong().run();
-    updateMarkdownPreview();
+    await updateMarkdownPreview();
     logEvent('info', 'Toggle bold');
   });
 
   // Italic button
-  document.getElementById('italic-btn')?.addEventListener('click', () => {
+  document.getElementById('italic-btn')?.addEventListener('click', async () => {
     if (!editor) return;
     editor.chain().toggleItalic().run();
-    updateMarkdownPreview();
+    await updateMarkdownPreview();
     logEvent('info', 'Toggle italic');
   });
 
   // Heading button
-  document.getElementById('heading-btn')?.addEventListener('click', () => {
+  document.getElementById('heading-btn')?.addEventListener('click', async () => {
     if (!editor) return;
     editor.chain().setHeading1().run();
-    updateMarkdownPreview();
+    await updateMarkdownPreview();
     logEvent('info', 'Set heading 1');
   });
 });
