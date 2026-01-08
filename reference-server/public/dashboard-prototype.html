@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ozwell Dashboard - API Keys & Providers (Prototype)</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #475569;
+      --radius: 8px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    /* Layout */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .nav-section {
+      margin-bottom: 24px;
+    }
+
+    .nav-section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 0 8px;
+      margin-bottom: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      color: var(--text-secondary);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .nav-item.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .badge {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: var(--bg-tertiary);
+    }
+
+    .badge.coming-soon {
+      background: var(--warning);
+      color: black;
+    }
+
+    /* Main Content */
+    .main {
+      flex: 1;
+      margin-left: 260px;
+      padding: 32px 48px;
+      max-width: 1200px;
+    }
+
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .page-description {
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+
+    .tab {
+      padding: 12px 20px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .card-subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--border);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    /* Table */
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .table th,
+    .table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table th {
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .table td {
+      font-size: 14px;
+    }
+
+    .table tr:hover td {
+      background: var(--bg-tertiary);
+    }
+
+    /* Status badges */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .status-active {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--success);
+    }
+
+    .status-inactive {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .status-warning {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+    }
+
+    /* Key display */
+    .key-display {
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      background: var(--bg-tertiary);
+      padding: 6px 10px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .key-hidden {
+      color: var(--text-muted);
+    }
+
+    /* Form elements */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text-primary);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Checkbox/Tag selector */
+    .tag-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tag:hover {
+      border-color: var(--accent);
+    }
+
+    .tag.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .tag input {
+      display: none;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 560px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .modal-close:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Architecture Section */
+    .architecture-section {
+      margin-top: 48px;
+      padding-top: 48px;
+      border-top: 1px solid var(--border);
+    }
+
+    .architecture-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .architecture-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .arch-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .arch-card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    .arch-card-icon.database { background: rgba(99, 102, 241, 0.2); }
+    .arch-card-icon.auth { background: rgba(34, 197, 94, 0.2); }
+    .arch-card-icon.api { background: rgba(245, 158, 11, 0.2); }
+    .arch-card-icon.provider { background: rgba(236, 72, 153, 0.2); }
+
+    .arch-card h3 {
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .arch-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .arch-card ul {
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .arch-card li {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .arch-card li:last-child {
+      border-bottom: none;
+    }
+
+    .check {
+      color: var(--success);
+    }
+
+    .todo {
+      color: var(--warning);
+    }
+
+    /* Code block */
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 13px;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+
+    .code-block .comment {
+      color: var(--text-muted);
+    }
+
+    .code-block .keyword {
+      color: var(--accent);
+    }
+
+    .code-block .string {
+      color: var(--success);
+    }
+
+    .code-block .type {
+      color: var(--warning);
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin: 24px 0;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .flow-box {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      text-align: center;
+      min-width: 140px;
+    }
+
+    .flow-box.highlight {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+    }
+
+    .flow-box-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .flow-box-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .flow-arrow {
+      color: var(--text-muted);
+      font-size: 20px;
+    }
+
+    .flow-arrow-down {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 20px;
+      margin: 8px 0;
+    }
+
+    .flow-providers {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .flow-provider {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    /* Alert box */
+    .alert {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+    }
+
+    .alert-info {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--accent);
+    }
+
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+    }
+
+    .alert-icon {
+      font-size: 20px;
+    }
+
+    .alert-content {
+      flex: 1;
+    }
+
+    .alert-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .alert-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Hidden sections */
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .sidebar {
+        width: 220px;
+      }
+      .main {
+        margin-left: 220px;
+        padding: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">O</div>
+        <span class="logo-text">Ozwell</span>
+      </div>
+
+      <nav>
+        <div class="nav-section">
+          <div class="nav-section-title">Overview</div>
+          <a class="nav-item disabled">
+            <span class="nav-icon">&#9633;</span>
+            Dashboard
+            <span class="badge coming-soon">Soon</span>
+          </a>
+          <a class="nav-item disabled">
+            <span class="nav-icon">&#9650;</span>
+            Usage & Billing
+            <span class="badge coming-soon">Soon</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Configuration</div>
+          <a class="nav-item active" onclick="showSection('api-keys')">
+            <span class="nav-icon">&#128273;</span>
+            API Keys
+          </a>
+          <a class="nav-item" onclick="showSection('providers')">
+            <span class="nav-icon">&#9881;</span>
+            LLM Providers
+          </a>
+          <a class="nav-item disabled">
+            <span class="nav-icon">&#128101;</span>
+            Agents
+            <span class="badge coming-soon">Soon</span>
+          </a>
+          <a class="nav-item disabled">
+            <span class="nav-icon">&#128295;</span>
+            Tools
+            <span class="badge coming-soon">Soon</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Documentation</div>
+          <a class="nav-item" onclick="showSection('architecture')">
+            <span class="nav-icon">&#128218;</span>
+            Architecture Plan
+          </a>
+          <a class="nav-item" href="/docs" target="_blank">
+            <span class="nav-icon">&#128196;</span>
+            API Reference
+          </a>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- API Keys Section -->
+      <section id="section-api-keys" class="tab-content active">
+        <div class="page-header">
+          <h1 class="page-title">API Keys</h1>
+          <p class="page-description">Manage your API keys for accessing the Ozwell API. Create scoped keys for frontend use or general keys for server-side integrations.</p>
+        </div>
+
+        <div class="alert alert-warning">
+          <span class="alert-icon">&#9888;</span>
+          <div class="alert-content">
+            <div class="alert-title">Prototype Mode</div>
+            <div class="alert-text">This is a UI prototype demonstrating the planned API key management interface. The actual functionality requires implementing the backend authentication system described in the Architecture Plan section.</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this, 'all-keys')">All Keys</div>
+          <div class="tab" onclick="switchTab(this, 'general-keys')">General Purpose</div>
+          <div class="tab" onclick="switchTab(this, 'scoped-keys')">Scoped Keys</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Your API Keys</h2>
+              <p class="card-subtitle">Keys are only shown once when created. Store them securely.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('create-key-modal')">
+              + Create New Key
+            </button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Type</th>
+                <th>Permissions</th>
+                <th>Last Used</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Production Server</strong>
+                  <div style="color: var(--text-muted); font-size: 12px;">Created Dec 15, 2024</div>
+                </td>
+                <td>
+                  <span class="key-display">
+                    <span class="key-hidden">ozw_****************************7x9k</span>
+                    <button class="btn btn-sm btn-secondary" style="padding: 2px 8px;">Copy</button>
+                  </span>
+                </td>
+                <td><span class="status status-active">General</span></td>
+                <td>Full Access</td>
+                <td>2 hours ago</td>
+                <td><span class="status status-active">Active</span></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary">Edit</button>
+                  <button class="btn btn-sm btn-danger">Revoke</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Website Chat Widget</strong>
+                  <div style="color: var(--text-muted); font-size: 12px;">Created Dec 20, 2024</div>
+                </td>
+                <td>
+                  <span class="key-display">
+                    <span class="key-hidden">ozw_scoped_********************3f2a</span>
+                    <button class="btn btn-sm btn-secondary" style="padding: 2px 8px;">Copy</button>
+                  </span>
+                </td>
+                <td><span class="status status-warning">Scoped</span></td>
+                <td>
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">chat</span>
+                    <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">support-agent</span>
+                  </div>
+                </td>
+                <td>5 mins ago</td>
+                <td><span class="status status-active">Active</span></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary">Edit</button>
+                  <button class="btn btn-sm btn-danger">Revoke</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Mobile App</strong>
+                  <div style="color: var(--text-muted); font-size: 12px;">Created Dec 10, 2024</div>
+                </td>
+                <td>
+                  <span class="key-display">
+                    <span class="key-hidden">ozw_scoped_********************9d1c</span>
+                    <button class="btn btn-sm btn-secondary" style="padding: 2px 8px;">Copy</button>
+                  </span>
+                </td>
+                <td><span class="status status-warning">Scoped</span></td>
+                <td>
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">chat</span>
+                    <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">file-read</span>
+                  </div>
+                </td>
+                <td>1 day ago</td>
+                <td><span class="status status-inactive">Revoked</span></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary" disabled>Edit</button>
+                  <button class="btn btn-sm btn-secondary">Delete</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Key Type Explanation -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px;">
+          <div class="card">
+            <h3 style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--success);">&#9679;</span>
+              General Purpose Keys
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
+              Full-access keys for server-side integrations. These keys can access all API endpoints and models.
+            </p>
+            <ul style="list-style: none; font-size: 14px;">
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> Access all API endpoints
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> All models and capabilities
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> No agent restrictions
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px; color: var(--danger);">
+                <span>&#9888;</span> Never expose client-side
+              </li>
+            </ul>
+            <div class="code-block" style="margin-top: 16px;">
+              <span class="comment"># Server-side only</span><br>
+              <span class="keyword">export</span> OZWELL_API_KEY=<span class="string">"ozw_xxxx..."</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+              <span style="color: var(--warning);">&#9679;</span>
+              Scoped Keys
+            </h3>
+            <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
+              Restricted keys for client-side (frontend) integrations. Safe to use in browsers and mobile apps.
+            </p>
+            <ul style="list-style: none; font-size: 14px;">
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> Tied to specific agent(s)
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> Permission-limited (tools, models)
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> Domain restrictions available
+              </li>
+              <li style="padding: 6px 0; display: flex; align-items: center; gap: 8px;">
+                <span class="check">&#10003;</span> Safe for browser use
+              </li>
+            </ul>
+            <div class="code-block" style="margin-top: 16px;">
+              <span class="comment">// Safe for frontend</span><br>
+              <span class="keyword">const</span> apiKey = <span class="string">'ozw_scoped_xxxx...'</span>;
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LLM Providers Section -->
+      <section id="section-providers" class="tab-content">
+        <div class="page-header">
+          <h1 class="page-title">LLM Providers</h1>
+          <p class="page-description">Configure your AI model providers. Connect to OpenAI, Ollama, Anthropic, or any OpenAI-compatible endpoint.</p>
+        </div>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">&#128161;</span>
+          <div class="alert-content">
+            <div class="alert-title">Replacing the "ollama" API Key Hack</div>
+            <div class="alert-text">Instead of using "ollama" as a magic API key value, users will configure their LLM providers here. This provides proper credential management and supports multiple providers simultaneously.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Configured Providers</h2>
+              <p class="card-subtitle">Add and manage your LLM provider connections</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('add-provider-modal')">
+              + Add Provider
+            </button>
+          </div>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Base URL</th>
+                <th>Models</th>
+                <th>Status</th>
+                <th>Default</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; background: #10a37f; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">O</div>
+                    <div>
+                      <strong>OpenAI</strong>
+                      <div style="color: var(--text-muted); font-size: 12px;">API Key: sk-****...7x9k</div>
+                    </div>
+                  </div>
+                </td>
+                <td><code style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 12px;">https://api.openai.com/v1</code></td>
+                <td>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">gpt-4</span>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">gpt-3.5-turbo</span>
+                </td>
+                <td><span class="status status-active">Connected</span></td>
+                <td><input type="radio" name="default-provider" checked></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary">Edit</button>
+                  <button class="btn btn-sm btn-danger">Remove</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; background: #fff; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: black; font-size: 20px;">&#128046;</div>
+                    <div>
+                      <strong>Ollama (Local)</strong>
+                      <div style="color: var(--text-muted); font-size: 12px;">No API Key Required</div>
+                    </div>
+                  </div>
+                </td>
+                <td><code style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 12px;">http://localhost:11434</code></td>
+                <td>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">llama3.2</span>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">mistral</span>
+                </td>
+                <td><span class="status status-active">Connected</span></td>
+                <td><input type="radio" name="default-provider"></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary">Edit</button>
+                  <button class="btn btn-sm btn-danger">Remove</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; background: #d97706; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">A</div>
+                    <div>
+                      <strong>Anthropic</strong>
+                      <div style="color: var(--text-muted); font-size: 12px;">API Key: sk-ant-****...3f2a</div>
+                    </div>
+                  </div>
+                </td>
+                <td><code style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 12px;">https://api.anthropic.com/v1</code></td>
+                <td>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">claude-3-opus</span>
+                  <span class="tag selected" style="cursor: default; padding: 2px 8px; font-size: 11px;">claude-3-sonnet</span>
+                </td>
+                <td><span class="status status-inactive">Disconnected</span></td>
+                <td><input type="radio" name="default-provider"></td>
+                <td>
+                  <button class="btn btn-sm btn-secondary">Edit</button>
+                  <button class="btn btn-sm btn-danger">Remove</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Provider routing explanation -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">How Provider Routing Works</h3>
+          <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+            When a request comes in, Ozwell routes it to the appropriate provider based on the model requested:
+          </p>
+          <div class="code-block">
+<span class="comment">// Request</span>
+POST /v1/chat/completions
+{
+  <span class="string">"model"</span>: <span class="string">"gpt-4"</span>,           <span class="comment">// Routes to OpenAI</span>
+  <span class="string">"messages"</span>: [...]
+}
+
+<span class="comment">// Or</span>
+{
+  <span class="string">"model"</span>: <span class="string">"llama3.2"</span>,        <span class="comment">// Routes to Ollama</span>
+  <span class="string">"messages"</span>: [...]
+}
+
+<span class="comment">// Or specify provider explicitly</span>
+{
+  <span class="string">"model"</span>: <span class="string">"ollama/llama3.2"</span>, <span class="comment">// Explicit provider prefix</span>
+  <span class="string">"messages"</span>: [...]
+}
+          </div>
+        </div>
+      </section>
+
+      <!-- Architecture Plan Section -->
+      <section id="section-architecture" class="tab-content">
+        <div class="page-header">
+          <h1 class="page-title">Architecture Plan</h1>
+          <p class="page-description">Technical overview of what needs to be built to implement scoped API keys and multi-provider support.</p>
+        </div>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">&#128218;</span>
+          <div class="alert-content">
+            <div class="alert-title">GitHub Issue #37: Scoped API Keys</div>
+            <div class="alert-text">This document outlines the complete implementation plan for replacing the current "accept any token" authentication with proper scoped API keys as described in the documentation.</div>
+          </div>
+        </div>
+
+        <!-- Current vs Target State -->
+        <div class="card">
+          <h3 style="margin-bottom: 20px;">Current State vs Target State</h3>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: var(--radius); padding: 20px;">
+              <h4 style="color: var(--danger); margin-bottom: 12px;">&#10060; Current (Insecure)</h4>
+              <ul style="list-style: none; font-size: 14px; color: var(--text-secondary);">
+                <li style="padding: 6px 0;">&#8226; Any non-empty string accepted as API key</li>
+                <li style="padding: 6px 0;">&#8226; "ollama" is a magic keyword, not a real key</li>
+                <li style="padding: 6px 0;">&#8226; No user accounts or authentication</li>
+                <li style="padding: 6px 0;">&#8226; No rate limiting or permissions</li>
+                <li style="padding: 6px 0;">&#8226; Provider config hardcoded in env vars</li>
+              </ul>
+              <div class="code-block" style="margin-top: 12px; font-size: 12px;">
+<span class="comment">// Current "validation"</span>
+<span class="keyword">function</span> validateAuth(auth) {
+  <span class="keyword">return</span> token.length > <span class="type">0</span>; <span class="comment">// Accepts anything!</span>
+}
+              </div>
+            </div>
+
+            <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid var(--success); border-radius: var(--radius); padding: 20px;">
+              <h4 style="color: var(--success); margin-bottom: 12px;">&#10004; Target (Secure)</h4>
+              <ul style="list-style: none; font-size: 14px; color: var(--text-secondary);">
+                <li style="padding: 6px 0;">&#8226; Real API keys stored in database</li>
+                <li style="padding: 6px 0;">&#8226; Scoped keys with granular permissions</li>
+                <li style="padding: 6px 0;">&#8226; User accounts for dashboard access</li>
+                <li style="padding: 6px 0;">&#8226; Rate limiting per key</li>
+                <li style="padding: 6px 0;">&#8226; Multiple LLM providers configurable via UI</li>
+              </ul>
+              <div class="code-block" style="margin-top: 12px; font-size: 12px;">
+<span class="comment">// Target validation</span>
+<span class="keyword">async function</span> validateAuth(auth) {
+  <span class="keyword">const</span> key = <span class="keyword">await</span> db.apiKeys.findByHash(hash);
+  <span class="keyword">return</span> key && !key.revoked;
+}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Architecture Diagram -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 20px;">System Architecture</h3>
+
+          <div class="flow-diagram">
+            <div class="flow-row">
+              <div class="flow-box">
+                <div class="flow-box-title">Dashboard</div>
+                <div class="flow-box-subtitle">User Management</div>
+              </div>
+              <span class="flow-arrow">&#8594;</span>
+              <div class="flow-box highlight">
+                <div class="flow-box-title">Auth Service</div>
+                <div class="flow-box-subtitle">JWT + Sessions</div>
+              </div>
+            </div>
+
+            <div class="flow-arrow-down">&#8595;</div>
+
+            <div class="flow-row">
+              <div class="flow-box">
+                <div class="flow-box-title">Frontend App</div>
+                <div class="flow-box-subtitle">Scoped Key</div>
+              </div>
+              <span class="flow-arrow">&#8594;</span>
+              <div class="flow-box highlight">
+                <div class="flow-box-title">API Gateway</div>
+                <div class="flow-box-subtitle">Key Validation</div>
+              </div>
+              <span class="flow-arrow">&#8594;</span>
+              <div class="flow-box highlight">
+                <div class="flow-box-title">Permission Check</div>
+                <div class="flow-box-subtitle">Scope Enforcement</div>
+              </div>
+            </div>
+
+            <div class="flow-arrow-down">&#8595;</div>
+
+            <div class="flow-row">
+              <div class="flow-box highlight">
+                <div class="flow-box-title">Provider Router</div>
+                <div class="flow-box-subtitle">Model &#8594; Provider</div>
+              </div>
+            </div>
+
+            <div class="flow-arrow-down">&#8595;</div>
+
+            <div class="flow-providers">
+              <div class="flow-provider">OpenAI</div>
+              <div class="flow-provider">Ollama</div>
+              <div class="flow-provider">Anthropic</div>
+              <div class="flow-provider">Custom</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Implementation Components -->
+        <h2 style="margin: 40px 0 24px; font-size: 20px;">Implementation Components</h2>
+
+        <div class="architecture-grid">
+          <div class="arch-card">
+            <div class="arch-card-icon database">&#128450;</div>
+            <h3>1. Database Schema</h3>
+            <p>Add tables to store users, API keys, providers, and permissions.</p>
+            <ul>
+              <li><span class="todo">&#9744;</span> users (id, email, password_hash)</li>
+              <li><span class="todo">&#9744;</span> api_keys (id, user_id, key_hash, type, scopes)</li>
+              <li><span class="todo">&#9744;</span> providers (id, user_id, name, base_url, api_key_encrypted)</li>
+              <li><span class="todo">&#9744;</span> scoped_permissions (key_id, agents, tools, models, domains)</li>
+            </ul>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-icon auth">&#128274;</div>
+            <h3>2. Authentication System</h3>
+            <p>User login/registration for dashboard access.</p>
+            <ul>
+              <li><span class="todo">&#9744;</span> User registration endpoint</li>
+              <li><span class="todo">&#9744;</span> Login with JWT/session tokens</li>
+              <li><span class="todo">&#9744;</span> Password hashing (bcrypt/argon2)</li>
+              <li><span class="todo">&#9744;</span> Session management</li>
+            </ul>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-icon api">&#128273;</div>
+            <h3>3. API Key Management</h3>
+            <p>CRUD operations for API keys with scoping.</p>
+            <ul>
+              <li><span class="todo">&#9744;</span> Generate secure random keys</li>
+              <li><span class="todo">&#9744;</span> Store hashed (never plaintext)</li>
+              <li><span class="todo">&#9744;</span> Scope assignment (agents, tools, models)</li>
+              <li><span class="todo">&#9744;</span> Domain restrictions for scoped keys</li>
+              <li><span class="todo">&#9744;</span> Revocation without deletion</li>
+            </ul>
+          </div>
+
+          <div class="arch-card">
+            <div class="arch-card-icon provider">&#9881;</div>
+            <h3>4. Provider Management</h3>
+            <p>Configure multiple LLM providers per user.</p>
+            <ul>
+              <li><span class="todo">&#9744;</span> Add/edit/remove providers</li>
+              <li><span class="todo">&#9744;</span> Encrypt stored API keys</li>
+              <li><span class="todo">&#9744;</span> Connection testing</li>
+              <li><span class="todo">&#9744;</span> Model discovery per provider</li>
+              <li><span class="todo">&#9744;</span> Default provider selection</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Database Schema -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">Proposed Database Schema</h3>
+          <div class="code-block">
+<span class="comment">-- Users table (for dashboard access)</span>
+<span class="keyword">CREATE TABLE</span> <span class="type">users</span> (
+  id            <span class="type">UUID</span> PRIMARY KEY,
+  email         <span class="type">VARCHAR(255)</span> UNIQUE NOT NULL,
+  password_hash <span class="type">VARCHAR(255)</span> NOT NULL,
+  created_at    <span class="type">TIMESTAMP</span> DEFAULT NOW(),
+  updated_at    <span class="type">TIMESTAMP</span> DEFAULT NOW()
+);
+
+<span class="comment">-- API Keys table</span>
+<span class="keyword">CREATE TABLE</span> <span class="type">api_keys</span> (
+  id           <span class="type">UUID</span> PRIMARY KEY,
+  user_id      <span class="type">UUID</span> REFERENCES users(id),
+  name         <span class="type">VARCHAR(255)</span> NOT NULL,
+  key_prefix   <span class="type">VARCHAR(20)</span> NOT NULL,  <span class="comment">-- 'ozw_' or 'ozw_scoped_'</span>
+  key_hash     <span class="type">VARCHAR(255)</span> NOT NULL,  <span class="comment">-- SHA-256 hash of full key</span>
+  key_hint     <span class="type">VARCHAR(8)</span>,            <span class="comment">-- Last 4 chars for display</span>
+  type         <span class="type">VARCHAR(20)</span> NOT NULL,   <span class="comment">-- 'general' or 'scoped'</span>
+  created_at   <span class="type">TIMESTAMP</span> DEFAULT NOW(),
+  last_used_at <span class="type">TIMESTAMP</span>,
+  revoked_at   <span class="type">TIMESTAMP</span>,             <span class="comment">-- NULL if active</span>
+  rate_limit   <span class="type">INTEGER</span> DEFAULT 100    <span class="comment">-- requests per minute</span>
+);
+
+<span class="comment">-- Scoped Key Permissions (only for scoped keys)</span>
+<span class="keyword">CREATE TABLE</span> <span class="type">scoped_permissions</span> (
+  id              <span class="type">UUID</span> PRIMARY KEY,
+  api_key_id      <span class="type">UUID</span> REFERENCES api_keys(id),
+  allowed_agents  <span class="type">TEXT[]</span>,           <span class="comment">-- Array of agent IDs</span>
+  allowed_tools   <span class="type">TEXT[]</span>,           <span class="comment">-- Array of tool names</span>
+  allowed_models  <span class="type">TEXT[]</span>,           <span class="comment">-- Array of model names</span>
+  allowed_domains <span class="type">TEXT[]</span>            <span class="comment">-- Array of domains (e.g., '*.example.com')</span>
+);
+
+<span class="comment">-- LLM Providers</span>
+<span class="keyword">CREATE TABLE</span> <span class="type">providers</span> (
+  id                <span class="type">UUID</span> PRIMARY KEY,
+  user_id           <span class="type">UUID</span> REFERENCES users(id),
+  name              <span class="type">VARCHAR(100)</span> NOT NULL,  <span class="comment">-- 'OpenAI', 'Ollama', etc.</span>
+  base_url          <span class="type">VARCHAR(500)</span> NOT NULL,
+  api_key_encrypted <span class="type">TEXT</span>,                   <span class="comment">-- Encrypted with server key</span>
+  models            <span class="type">TEXT[]</span>,                  <span class="comment">-- Available models</span>
+  is_default        <span class="type">BOOLEAN</span> DEFAULT FALSE,
+  created_at        <span class="type">TIMESTAMP</span> DEFAULT NOW()
+);
+          </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">New API Endpoints Required</h3>
+
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>Method</th>
+                <th>Description</th>
+                <th>Auth</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>/auth/register</code></td>
+                <td>POST</td>
+                <td>Create new user account</td>
+                <td>None</td>
+              </tr>
+              <tr>
+                <td><code>/auth/login</code></td>
+                <td>POST</td>
+                <td>Login, returns JWT</td>
+                <td>None</td>
+              </tr>
+              <tr>
+                <td><code>/auth/logout</code></td>
+                <td>POST</td>
+                <td>Invalidate session</td>
+                <td>JWT</td>
+              </tr>
+              <tr style="background: var(--bg-tertiary);">
+                <td colspan="4" style="font-weight: 600;">API Key Management</td>
+              </tr>
+              <tr>
+                <td><code>/v1/api-keys</code></td>
+                <td>GET</td>
+                <td>List user's API keys</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/api-keys</code></td>
+                <td>POST</td>
+                <td>Create new API key</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/api-keys/:id</code></td>
+                <td>PATCH</td>
+                <td>Update key (name, scopes)</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/api-keys/:id/revoke</code></td>
+                <td>POST</td>
+                <td>Revoke API key</td>
+                <td>JWT</td>
+              </tr>
+              <tr style="background: var(--bg-tertiary);">
+                <td colspan="4" style="font-weight: 600;">Provider Management</td>
+              </tr>
+              <tr>
+                <td><code>/v1/providers</code></td>
+                <td>GET</td>
+                <td>List configured providers</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/providers</code></td>
+                <td>POST</td>
+                <td>Add new provider</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/providers/:id</code></td>
+                <td>PATCH</td>
+                <td>Update provider config</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/providers/:id</code></td>
+                <td>DELETE</td>
+                <td>Remove provider</td>
+                <td>JWT</td>
+              </tr>
+              <tr>
+                <td><code>/v1/providers/:id/test</code></td>
+                <td>POST</td>
+                <td>Test provider connection</td>
+                <td>JWT</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Middleware Flow -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">Authentication Middleware Flow</h3>
+          <div class="code-block">
+<span class="comment">// New authentication middleware</span>
+<span class="keyword">async function</span> authMiddleware(request, reply) {
+  <span class="keyword">const</span> authHeader = request.headers.authorization;
+
+  <span class="keyword">if</span> (!authHeader?.startsWith(<span class="string">'Bearer '</span>)) {
+    <span class="keyword">return</span> reply.code(<span class="type">401</span>).send({ error: <span class="string">'Missing API key'</span> });
+  }
+
+  <span class="keyword">const</span> token = authHeader.slice(<span class="type">7</span>);
+  <span class="keyword">const</span> keyHash = sha256(token);
+
+  <span class="comment">// Look up key in database</span>
+  <span class="keyword">const</span> apiKey = <span class="keyword">await</span> db.apiKeys.findByHash(keyHash);
+
+  <span class="keyword">if</span> (!apiKey) {
+    <span class="keyword">return</span> reply.code(<span class="type">401</span>).send({ error: <span class="string">'Invalid API key'</span> });
+  }
+
+  <span class="keyword">if</span> (apiKey.revoked_at) {
+    <span class="keyword">return</span> reply.code(<span class="type">401</span>).send({ error: <span class="string">'API key has been revoked'</span> });
+  }
+
+  <span class="comment">// Check rate limits</span>
+  <span class="keyword">const</span> withinLimit = <span class="keyword">await</span> rateLimiter.check(apiKey.id, apiKey.rate_limit);
+  <span class="keyword">if</span> (!withinLimit) {
+    <span class="keyword">return</span> reply.code(<span class="type">429</span>).send({ error: <span class="string">'Rate limit exceeded'</span> });
+  }
+
+  <span class="comment">// For scoped keys, load permissions</span>
+  <span class="keyword">if</span> (apiKey.type === <span class="string">'scoped'</span>) {
+    apiKey.permissions = <span class="keyword">await</span> db.scopedPermissions.findByKeyId(apiKey.id);
+
+    <span class="comment">// Check domain restriction</span>
+    <span class="keyword">const</span> origin = request.headers.origin;
+    <span class="keyword">if</span> (!matchesDomain(origin, apiKey.permissions.allowed_domains)) {
+      <span class="keyword">return</span> reply.code(<span class="type">403</span>).send({ error: <span class="string">'Domain not allowed'</span> });
+    }
+  }
+
+  <span class="comment">// Attach to request for downstream use</span>
+  request.apiKey = apiKey;
+
+  <span class="comment">// Update last_used_at (async, don't wait)</span>
+  db.apiKeys.updateLastUsed(apiKey.id);
+}
+
+<span class="comment">// Permission check for specific operations</span>
+<span class="keyword">function</span> requirePermission(permission) {
+  <span class="keyword">return</span> <span class="keyword">async</span> (request, reply) => {
+    <span class="keyword">const</span> { apiKey } = request;
+
+    <span class="comment">// General keys have all permissions</span>
+    <span class="keyword">if</span> (apiKey.type === <span class="string">'general'</span>) <span class="keyword">return</span>;
+
+    <span class="comment">// Check if scoped key has this permission</span>
+    <span class="keyword">const</span> { permissions } = apiKey;
+
+    <span class="keyword">if</span> (permission === <span class="string">'tool'</span>) {
+      <span class="keyword">const</span> requestedTool = request.body?.tool;
+      <span class="keyword">if</span> (!permissions.allowed_tools.includes(requestedTool)) {
+        <span class="keyword">return</span> reply.code(<span class="type">403</span>).send({
+          error: <span class="string">`Tool '${requestedTool}' not allowed for this key`</span>
+        });
+      }
+    }
+
+    <span class="comment">// Similar checks for models, agents, etc.</span>
+  };
+}
+          </div>
+        </div>
+
+        <!-- Implementation Order -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">Recommended Implementation Order</h3>
+
+          <ol style="list-style: decimal; padding-left: 24px; font-size: 14px;">
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Choose and set up database</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">SQLite for simplicity (single file, no server), or PostgreSQL for production scale. Create the schema.</p>
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Implement user authentication</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Registration, login, JWT generation. Consider using a library like @fastify/jwt or lucia-auth.</p>
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Build API key generation and storage</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Generate secure random keys, hash before storing, implement CRUD endpoints.</p>
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Replace validateAuth with real middleware</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Look up keys in database, check revocation status, load scopes.</p>
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Add scoped key permission checks</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Enforce tool, model, and agent restrictions for scoped keys.</p>
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid var(--border);">
+              <strong>Implement provider management</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Replace hardcoded Ollama logic with configurable providers. Remove "ollama" magic keyword.</p>
+            </li>
+            <li style="padding: 12px 0;">
+              <strong>Build the dashboard UI</strong>
+              <p style="color: var(--text-secondary); margin-top: 4px;">Based on this prototype. Can be a separate React/Vue app or server-rendered pages.</p>
+            </li>
+          </ol>
+        </div>
+
+        <!-- Tech Stack Recommendations -->
+        <div class="card" style="margin-top: 24px;">
+          <h3 style="margin-bottom: 16px;">Technology Recommendations</h3>
+
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+            <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius);">
+              <h4 style="font-size: 14px; margin-bottom: 8px;">Database</h4>
+              <p style="color: var(--text-secondary); font-size: 13px;">
+                <strong>SQLite + better-sqlite3</strong> for dev/small deployments<br>
+                <strong>PostgreSQL + pg</strong> for production
+              </p>
+            </div>
+            <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius);">
+              <h4 style="font-size: 14px; margin-bottom: 8px;">Authentication</h4>
+              <p style="color: var(--text-secondary); font-size: 13px;">
+                <strong>@fastify/jwt</strong> for API tokens<br>
+                <strong>argon2</strong> for password hashing
+              </p>
+            </div>
+            <div style="background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius);">
+              <h4 style="font-size: 14px; margin-bottom: 8px;">Key Generation</h4>
+              <p style="color: var(--text-secondary); font-size: 13px;">
+                <strong>crypto.randomBytes(32)</strong> for secure random keys<br>
+                <strong>crypto.createHash('sha256')</strong> for hashing
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Create API Key Modal -->
+  <div id="create-key-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Create New API Key</h3>
+        <button class="modal-close" onclick="closeModal('create-key-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Key Name</label>
+          <input type="text" class="form-input" placeholder="e.g., Production Server, Website Widget">
+          <p class="form-hint">A descriptive name to identify this key</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Key Type</label>
+          <select class="form-select" onchange="toggleScopedOptions(this.value)">
+            <option value="general">General Purpose (Full Access)</option>
+            <option value="scoped">Scoped (Limited Access)</option>
+          </select>
+          <p class="form-hint">Scoped keys are safe for client-side use</p>
+        </div>
+
+        <div id="scoped-options" class="hidden">
+          <div class="form-group">
+            <label class="form-label">Allowed Tools</label>
+            <div class="tag-selector">
+              <label class="tag"><input type="checkbox" checked><span>chat</span></label>
+              <label class="tag"><input type="checkbox"><span>file-read</span></label>
+              <label class="tag"><input type="checkbox"><span>file-write</span></label>
+              <label class="tag"><input type="checkbox"><span>embeddings</span></label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Allowed Models</label>
+            <div class="tag-selector">
+              <label class="tag"><input type="checkbox" checked><span>gpt-4</span></label>
+              <label class="tag"><input type="checkbox" checked><span>gpt-3.5-turbo</span></label>
+              <label class="tag"><input type="checkbox"><span>llama3.2</span></label>
+              <label class="tag"><input type="checkbox"><span>claude-3</span></label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Allowed Agents</label>
+            <div class="tag-selector">
+              <label class="tag"><input type="checkbox" checked><span>support-agent</span></label>
+              <label class="tag"><input type="checkbox"><span>sales-agent</span></label>
+              <label class="tag"><input type="checkbox"><span>docs-agent</span></label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Domain Restrictions (Optional)</label>
+            <input type="text" class="form-input" placeholder="example.com, *.example.com">
+            <p class="form-hint">Comma-separated list of allowed domains. Leave empty for no restriction.</p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Rate Limit (requests/minute)</label>
+            <input type="number" class="form-input" value="100" min="1" max="10000">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('create-key-modal')">Cancel</button>
+        <button class="btn btn-primary">Create Key</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Provider Modal -->
+  <div id="add-provider-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add LLM Provider</h3>
+        <button class="modal-close" onclick="closeModal('add-provider-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Provider Type</label>
+          <select class="form-select" onchange="updateProviderDefaults(this.value)">
+            <option value="openai">OpenAI</option>
+            <option value="ollama">Ollama (Local)</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="azure">Azure OpenAI</option>
+            <option value="custom">Custom (OpenAI-compatible)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Base URL</label>
+          <input type="text" class="form-input" id="provider-base-url" value="https://api.openai.com/v1">
+          <p class="form-hint">The API endpoint for this provider</p>
+        </div>
+
+        <div class="form-group" id="provider-api-key-group">
+          <label class="form-label">API Key</label>
+          <input type="password" class="form-input" placeholder="sk-...">
+          <p class="form-hint">Your API key for this provider (stored encrypted)</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Available Models</label>
+          <input type="text" class="form-input" placeholder="gpt-4, gpt-3.5-turbo">
+          <p class="form-hint">Comma-separated list of models, or leave empty to auto-detect</p>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            <input type="checkbox"> Set as default provider
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('add-provider-modal')">Cancel</button>
+        <button class="btn btn-secondary">Test Connection</button>
+        <button class="btn btn-primary">Add Provider</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Navigation
+    function showSection(sectionId) {
+      // Hide all sections
+      document.querySelectorAll('.tab-content').forEach(section => {
+        section.classList.remove('active');
+      });
+
+      // Show selected section
+      document.getElementById('section-' + sectionId).classList.add('active');
+
+      // Update nav items
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      event.currentTarget.classList.add('active');
+    }
+
+    // Tabs
+    function switchTab(tabElement, tabId) {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      tabElement.classList.add('active');
+    }
+
+    // Modal
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    // Close modal on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.add('hidden');
+        }
+      });
+    });
+
+    // Toggle scoped options
+    function toggleScopedOptions(value) {
+      const scopedOptions = document.getElementById('scoped-options');
+      if (value === 'scoped') {
+        scopedOptions.classList.remove('hidden');
+      } else {
+        scopedOptions.classList.add('hidden');
+      }
+    }
+
+    // Tag selection
+    document.querySelectorAll('.tag-selector .tag').forEach(tag => {
+      tag.addEventListener('click', () => {
+        const checkbox = tag.querySelector('input');
+        checkbox.checked = !checkbox.checked;
+        tag.classList.toggle('selected', checkbox.checked);
+      });
+
+      // Initialize selected state
+      const checkbox = tag.querySelector('input');
+      if (checkbox && checkbox.checked) {
+        tag.classList.add('selected');
+      }
+    });
+
+    // Provider defaults
+    function updateProviderDefaults(provider) {
+      const baseUrlInput = document.getElementById('provider-base-url');
+      const apiKeyGroup = document.getElementById('provider-api-key-group');
+
+      const defaults = {
+        openai: { url: 'https://api.openai.com/v1', needsKey: true },
+        ollama: { url: 'http://localhost:11434', needsKey: false },
+        anthropic: { url: 'https://api.anthropic.com/v1', needsKey: true },
+        azure: { url: 'https://YOUR-RESOURCE.openai.azure.com', needsKey: true },
+        custom: { url: '', needsKey: true }
+      };
+
+      const config = defaults[provider];
+      baseUrlInput.value = config.url;
+
+      if (config.needsKey) {
+        apiKeyGroup.classList.remove('hidden');
+      } else {
+        apiKeyGroup.classList.add('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
