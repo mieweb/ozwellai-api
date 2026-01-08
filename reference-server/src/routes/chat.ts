@@ -1,8 +1,15 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel } from '../util';
+import { createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel } from '../util';
+import { apiKeyAuth } from '../auth/middleware';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
+
+// LLM Provider Configuration (server-side)
+// These are set by the server admin, not by the API user
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'ollama'; // 'ollama', 'openai', etc.
+const LLM_BASE_URL = process.env.LLM_BASE_URL || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+const LLM_API_KEY = process.env.LLM_API_KEY || ''; // Provider's API key (for OpenAI, Anthropic, etc.)
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -180,27 +187,35 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         required: ['messages']
       }
     },
+    preHandler: apiKeyAuth, // Use real API key validation
   }, async (request, reply) => {
-    // Validate authorization
-    if (!validateAuth(request.headers.authorization)) {
-      reply.code(401);
-      return createError('Invalid API key provided', 'invalid_request_error');
-    }
+    // API key is already validated by apiKeyAuth middleware
+    // request.apiKey contains the validated key with permissions
 
     const body = request.body as ChatCompletionRequestWithTools;
-    
-    // Check if Ollama is available as a backend (check early to determine default model)
-    const ollamaAvailable = await isOllamaAvailable();
-    
-    // Server-side default model - use Ollama-compatible model when Ollama is available
+
+    // Check if configured LLM provider is available
+    const providerAvailable = LLM_PROVIDER === 'ollama' ? await isOllamaAvailable() : true;
+
+    // Server-side default model based on provider
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
-    const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-    
+    const DEFAULT_MODEL = LLM_PROVIDER === 'ollama' && providerAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
+
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+
+    // Check model permissions for scoped keys
+    if (request.apiKey?.type === 'scoped' && request.apiKey.permissions?.allowed_models?.length) {
+      const allowedModels = request.apiKey.permissions.allowed_models;
+      if (requestedModel && !allowedModels.includes(requestedModel) && !allowedModels.includes('*')) {
+        reply.code(403);
+        return createError(`API key does not have access to model: ${requestedModel}`, 'permission_error', 'insufficient_permissions');
+      }
+    }
+
     // Use requested model if provided, otherwise use appropriate default
     const model = requestedModel || DEFAULT_MODEL;
-    
-    request.log.info({ ollamaAvailable, model, requestedModel }, 'Chat request model selection');
+
+    request.log.info({ provider: LLM_PROVIDER, providerAvailable, model, requestedModel }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
@@ -209,15 +224,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       name: m.name
     }));
 
-    // Extract API key from authorization header
-    const authHeader = request.headers.authorization || '';
-    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-    
-    // Use Ollama if: explicitly requested via 'ollama' API key, OR if available and no other backend
-    const useOllama = apiKey.toLowerCase() === 'ollama' || ollamaAvailable;
-    
+    // Use the server-configured LLM provider (no more "ollama" API key hack)
+    const useConfiguredProvider = providerAvailable;
+
     // If no backend is available, redirect to mock endpoint
-    if (!ollamaAvailable && apiKey.toLowerCase() !== 'ollama') {
+    if (!providerAvailable) {
       // Forward to mock chat endpoint
       const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
       try {
@@ -268,18 +279,19 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // Validate model (only if not using Ollama - Ollama accepts any model)
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
-    if (!useOllama && !supportedModels.includes(model)) {
+    if (LLM_PROVIDER !== 'ollama' && !supportedModels.includes(model)) {
       reply.code(400);
       return createError(`Model '${model}' not found`, 'invalid_request_error', 'model');
     }
 
-    // If using Ollama, proxy the request
-    if (useOllama) {
+    // If using configured LLM provider, proxy the request
+    if (useConfiguredProvider) {
       try {
-        const ollamaClient = new OzwellAI({
-          apiKey: 'ollama',
-          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-          timeout: 120000 // 2 minutes - reasonable timeout for Ollama requests
+        // Create client for the configured provider
+        const llmClient = new OzwellAI({
+          apiKey: LLM_API_KEY || 'ollama', // Use configured API key or 'ollama' for local
+          baseURL: LLM_BASE_URL,
+          timeout: 120000 // 2 minutes - reasonable timeout for LLM requests
         });
 
         // Pass through without preprocessing (client-side handles parsing)
@@ -338,7 +350,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
-            const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
+            const streamResponse = llmClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
             // Buffer map for accumulating assistant content per chat id
             const buffers: Record<string, string> = {};
@@ -428,7 +440,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };
-          const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
+          const response = await llmClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
           // If the model returned plain JSON as assistant content, try to convert it to tool_calls
           try {
             if (response && Array.isArray(response.choices)) {

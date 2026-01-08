@@ -761,6 +761,15 @@
         </div>
 
         <div class="nav-section">
+          <div class="nav-section-title">Try It</div>
+          <a class="nav-item" onclick="showSection('demo')">
+            <span class="nav-icon">&#9654;</span>
+            Live Demo
+            <span class="badge" style="background: #22c55e;">New</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
           <div class="nav-section-title">Documentation</div>
           <a class="nav-item" onclick="showSection('architecture')">
             <span class="nav-icon">&#128218;</span>
@@ -1549,6 +1558,125 @@ POST /v1/chat/completions
           </div>
         </div>
       </section>
+
+      <!-- Live Demo Section -->
+      <section id="section-demo" class="tab-content">
+        <div class="page-header">
+          <h1 class="page-title">Live Demo</h1>
+          <p class="page-description">Test the full API key authentication flow - register, create a key, and chat with the widget using real authentication.</p>
+        </div>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">&#10004;</span>
+          <div class="alert-content">
+            <div class="alert-title">Backend is Live!</div>
+            <div class="alert-text">The authentication system is now implemented. Follow the steps below to test the complete flow.</div>
+          </div>
+        </div>
+
+        <!-- Step 1: Register/Login -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Step 1: Authentication</h2>
+              <p class="card-subtitle">Register a new account or login to an existing one</p>
+            </div>
+            <span id="auth-status" class="status status-inactive">Not logged in</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-input" id="demo-email" value="demo@example.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-input" id="demo-password" value="demopass123">
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="demoRegister()">Register</button>
+            <button class="btn btn-secondary" onclick="demoLogin()">Login</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Create API Key -->
+        <div class="card" id="step-2-card" style="opacity: 0.5; pointer-events: none;">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Step 2: Create API Key</h2>
+              <p class="card-subtitle">Generate an API key for the chat widget</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">Key Name</label>
+              <input type="text" class="form-input" id="demo-key-name" value="Demo Widget Key">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Key Type</label>
+              <select class="form-select" id="demo-key-type">
+                <option value="general">General (Full Access)</option>
+                <option value="scoped">Scoped (Limited)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="demoCreateKey()">Create API Key</button>
+
+          <div id="created-key-display" style="display: none; margin-top: 20px;">
+            <label class="form-label">Your API Key (copy this!):</label>
+            <div class="key-display" style="width: 100%; display: flex; justify-content: space-between; padding: 12px 16px;">
+              <code id="demo-api-key" style="color: var(--success); word-break: break-all;"></code>
+              <button class="btn btn-sm btn-secondary" onclick="copyApiKey()">Copy</button>
+            </div>
+            <p class="form-hint" style="margin-top: 8px;">This key is only shown once. Store it securely!</p>
+          </div>
+        </div>
+
+        <!-- Step 3: Test API Key -->
+        <div class="card" id="step-3-card" style="opacity: 0.5; pointer-events: none;">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">Step 3: Test API Key</h2>
+              <p class="card-subtitle">Send a test request to verify your API key works</p>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">API Key</label>
+              <input type="text" class="form-input" id="demo-test-key" placeholder="Paste your API key">
+              <p class="form-hint">Edit to test with invalid keys</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Model</label>
+              <input type="text" class="form-input" id="demo-test-model" value="llama3.2:latest">
+              <p class="form-hint">Use a model available on your Ollama</p>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Test Query</label>
+            <input type="text" class="form-input" id="demo-test-query" value="Hello, can you hear me?" placeholder="Enter a test message">
+          </div>
+          <button class="btn btn-primary" onclick="demoTestApi()">Send Test Request</button>
+
+          <!-- Response Display -->
+          <div id="api-response-display" style="display: none; margin-top: 20px;">
+            <label class="form-label">API Response:</label>
+            <div id="api-response-status" style="margin-bottom: 8px; font-weight: 600;"></div>
+            <pre id="api-response-body" style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius); font-size: 12px; max-height: 300px; overflow: auto; white-space: pre-wrap; word-break: break-all;"></pre>
+          </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="card">
+          <h3 style="margin-bottom: 16px;">Activity Log</h3>
+          <div id="demo-log" style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius); font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;">
+            <div style="color: var(--text-muted);">Waiting for actions...</div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1764,6 +1892,230 @@ POST /v1/chat/completions
         apiKeyGroup.classList.remove('hidden');
       } else {
         apiKeyGroup.classList.add('hidden');
+      }
+    }
+
+    // ============================================
+    // LIVE DEMO FUNCTIONS
+    // ============================================
+
+    let demoSessionToken = null;
+
+    function demoLog(message, type = 'info') {
+      const logEl = document.getElementById('demo-log');
+      const colors = {
+        info: 'var(--text-secondary)',
+        success: 'var(--success)',
+        error: 'var(--danger)',
+        warning: 'var(--warning)'
+      };
+      const entry = document.createElement('div');
+      entry.style.color = colors[type] || colors.info;
+      entry.style.marginBottom = '4px';
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+
+      // Clear initial "waiting" message
+      if (logEl.children.length === 1 && logEl.children[0].textContent.includes('Waiting')) {
+        logEl.innerHTML = '';
+      }
+
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function enableStep(stepNum) {
+      const card = document.getElementById(`step-${stepNum}-card`);
+      if (card) {
+        card.style.opacity = '1';
+        card.style.pointerEvents = 'auto';
+      }
+    }
+
+    async function demoRegister() {
+      const email = document.getElementById('demo-email').value;
+      const password = document.getElementById('demo-password').value;
+
+      demoLog(`Registering: ${email}`);
+
+      try {
+        const res = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          demoSessionToken = data.token;
+          demoLog('Registration successful!', 'success');
+          document.getElementById('auth-status').textContent = 'Logged in';
+          document.getElementById('auth-status').className = 'status status-active';
+          enableStep(2);
+        } else {
+          if (data.error?.code === 'email_taken') {
+            demoLog('User already exists, trying login...', 'warning');
+            await demoLogin();
+          } else {
+            demoLog(`Error: ${data.error?.message || 'Unknown error'}`, 'error');
+          }
+        }
+      } catch (e) {
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    async function demoLogin() {
+      const email = document.getElementById('demo-email').value;
+      const password = document.getElementById('demo-password').value;
+
+      demoLog(`Logging in: ${email}`);
+
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          demoSessionToken = data.token;
+          demoLog('Login successful!', 'success');
+          document.getElementById('auth-status').textContent = 'Logged in';
+          document.getElementById('auth-status').className = 'status status-active';
+          enableStep(2);
+        } else {
+          demoLog(`Login failed: ${data.error?.message || 'Unknown error'}`, 'error');
+          document.getElementById('auth-status').textContent = 'Login failed';
+          document.getElementById('auth-status').className = 'status status-inactive';
+        }
+      } catch (e) {
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    async function demoCreateKey() {
+      if (!demoSessionToken) {
+        demoLog('Please login first', 'error');
+        return;
+      }
+
+      const name = document.getElementById('demo-key-name').value;
+      const type = document.getElementById('demo-key-type').value;
+
+      demoLog(`Creating ${type} API key: "${name}"`);
+
+      try {
+        const body = { name, type };
+        if (type === 'scoped') {
+          body.permissions = {
+            allowed_models: ['qwen2.5-coder:3b', 'gpt-4', 'llama3.2'],
+            allowed_tools: ['chat']
+          };
+        }
+
+        const res = await fetch('/v1/api-keys', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${demoSessionToken}`
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          demoLog(`API key created: ${data.key.substring(0, 20)}...${data.key_hint}`, 'success');
+
+          document.getElementById('created-key-display').style.display = 'block';
+          document.getElementById('demo-api-key').textContent = data.key;
+          document.getElementById('demo-test-key').value = data.key;
+
+          enableStep(3);
+        } else {
+          demoLog(`Error: ${data.error?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    function copyApiKey() {
+      const key = document.getElementById('demo-api-key').textContent;
+      navigator.clipboard.writeText(key).then(() => {
+        demoLog('API key copied to clipboard', 'success');
+      }).catch(() => {
+        demoLog('Failed to copy - please select and copy manually', 'warning');
+      });
+    }
+
+    async function demoTestApi() {
+      const apiKey = document.getElementById('demo-test-key').value;
+      const model = document.getElementById('demo-test-model').value;
+      const query = document.getElementById('demo-test-query').value;
+
+      if (!apiKey) {
+        demoLog('Please enter an API key', 'error');
+        return;
+      }
+
+      if (!query) {
+        demoLog('Please enter a test query', 'error');
+        return;
+      }
+
+      demoLog(`Testing API with key: ...${apiKey.slice(-4)}`);
+
+      // Show response area
+      const responseDisplay = document.getElementById('api-response-display');
+      const responseStatus = document.getElementById('api-response-status');
+      const responseBody = document.getElementById('api-response-body');
+
+      responseDisplay.style.display = 'block';
+      responseStatus.textContent = 'Sending request...';
+      responseStatus.style.color = 'var(--text-secondary)';
+      responseBody.textContent = '';
+
+      try {
+        const startTime = Date.now();
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: 'user', content: query }],
+            max_tokens: 150
+          })
+        });
+
+        const elapsed = Date.now() - startTime;
+        const data = await res.json();
+
+        if (res.ok) {
+          responseStatus.textContent = `200 OK (${elapsed}ms)`;
+          responseStatus.style.color = 'var(--success)';
+          demoLog(`API request successful (${elapsed}ms)`, 'success');
+
+          // Extract and display the assistant's response
+          const assistantMessage = data.choices?.[0]?.message?.content || '(no content)';
+          responseBody.textContent = `Assistant: ${assistantMessage}\n\n--- Full Response ---\n${JSON.stringify(data, null, 2)}`;
+        } else {
+          responseStatus.textContent = `${res.status} ${res.statusText}`;
+          responseStatus.style.color = 'var(--danger)';
+          demoLog(`API request failed: ${res.status} ${res.statusText}`, 'error');
+          responseBody.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (e) {
+        responseStatus.textContent = 'Network Error';
+        responseStatus.style.color = 'var(--danger)';
+        responseBody.textContent = e.message;
+        demoLog(`Network error: ${e.message}`, 'error');
       }
     }
   </script>
