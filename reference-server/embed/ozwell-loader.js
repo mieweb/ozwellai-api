@@ -262,13 +262,25 @@ class IframeSyncBroker {
     }
   }
 
-  // Auto-detect base URL from script location
+  // Auto-detect base URL from script location and read data attributes
   let autoDetectedBase = '';
+  let scriptDataConfig = {};
   try {
-    if (document.currentScript && document.currentScript.src) {
-      const scriptUrl = new URL(document.currentScript.src);
-      autoDetectedBase = `${scriptUrl.protocol}//${scriptUrl.host}`;
-      console.log('[OzwellChat] Auto-detected base URL:', autoDetectedBase);
+    if (document.currentScript) {
+      // Read data attributes from script tag (e.g., data-api-key, data-agent-id)
+      const script = document.currentScript;
+      if (script.dataset) {
+        // Convert dataset to config object (e.g., data-api-key -> apiKey)
+        scriptDataConfig = { ...script.dataset };
+        if (scriptDataConfig.apiKey) {
+          console.log('[OzwellChat] API key configured via data attribute');
+        }
+      }
+      if (script.src) {
+        const scriptUrl = new URL(script.src);
+        autoDetectedBase = `${scriptUrl.protocol}//${scriptUrl.host}`;
+        console.log('[OzwellChat] Auto-detected base URL:', autoDetectedBase);
+      }
     }
   } catch (e) {
     console.warn('[OzwellChat] Auto-detection failed, using relative paths:', e);
@@ -308,8 +320,9 @@ class IframeSyncBroker {
   function currentConfig() {
     return {
       ...DEFAULT_CONFIG,
-      ...readGlobalConfig(),
-      ...state.runtimeConfig,
+      ...scriptDataConfig,    // Config from data attributes (data-api-key, etc.)
+      ...readGlobalConfig(),  // Config from window.OzwellChatConfig
+      ...state.runtimeConfig, // Runtime overrides
     };
   }
 
