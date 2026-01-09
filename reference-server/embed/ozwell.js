@@ -1024,14 +1024,10 @@ async function sendMessageNonStreaming(text, tools) {
     };
 
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
-    // Supports both new 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
-    const apiKey = state.config.apiKey || state.config.openaiApiKey;
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      console.log('[widget.js] Using API key for authorization');
-    } else {
-      console.warn('[widget.js] No API key configured - requests may fail');
-    }
+    // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config
     if (state.config.headers) {
@@ -1267,12 +1263,9 @@ async function sendMessageStreaming(text, tools) {
     };
 
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
-    const apiKey = state.config.apiKey || state.config.openaiApiKey;
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    } else {
-      console.warn('[widget.js] No API key configured for streaming request');
-    }
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     if (state.config.headers) {
       Object.assign(headers, state.config.headers);
@@ -1564,14 +1557,10 @@ async function continueConversationWithToolResult(result) {
     };
 
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
-    // Supports both new 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
-    const apiKey = state.config.apiKey || state.config.openaiApiKey;
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      console.log('[widget.js] Using API key for authorization');
-    } else {
-      console.warn('[widget.js] No API key configured - requests may fail');
-    }
+    // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config
     if (state.config.headers) {

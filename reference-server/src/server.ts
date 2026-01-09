@@ -19,7 +19,7 @@ import apiKeysRoutes from './routes/api-keys';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 // Import database initialization
-import { initializeDatabase } from './db/database';
+import { initializeDatabase, seedDemoData } from './db/database';
 
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
@@ -131,8 +131,9 @@ async function buildServer() {
     }
   });
 
-  // Initialize database
+  // Initialize database and seed demo data
   initializeDatabase();
+  seedDemoData();
 
   // Register API routes
   await fastify.register(authRoutes);      // Dashboard auth (/auth/*)
