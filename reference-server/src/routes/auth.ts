@@ -4,7 +4,7 @@
  * Handles user registration and login for the dashboard.
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { userRepository } from '../db/repositories';
 import { generateSessionToken } from '../auth/crypto';
 
@@ -158,7 +158,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
    * POST /auth/logout
    * Clear session
    */
-  fastify.post('/auth/logout', async (request, reply) => {
+  fastify.post('/auth/logout', async (_request, reply) => {
     // Clear the session cookie
     reply.header('Set-Cookie', 'ozwell_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
     return { success: true };

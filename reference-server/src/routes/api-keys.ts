@@ -4,7 +4,7 @@
  * CRUD operations for API keys (as documented in api-authentication.md)
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { apiKeyRepository } from '../db/repositories';
 import { sessionAuth } from '../auth/middleware';
 import { ApiKeyType } from '../db/types';
@@ -82,7 +82,7 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (request) => {
       const keys = apiKeyRepository.listByUserId(request.userId!);
 
       return {

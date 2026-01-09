@@ -10,7 +10,8 @@ import path from 'path';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'ozwell.db');
-const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+// Schema file stays in src/, use path relative to cwd (reference-server/)
+const SCHEMA_PATH = path.join(process.cwd(), 'src', 'db', 'schema.sql');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {

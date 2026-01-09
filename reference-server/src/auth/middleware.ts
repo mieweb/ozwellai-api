@@ -4,9 +4,9 @@
  * Validates API keys and enforces scoped permissions.
  */
 
-import { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyRequest, FastifyReply } from 'fastify';
 import { apiKeyRepository, rateLimitRepository } from '../db/repositories';
-import { hashApiKey, verifySessionToken, getKeyPrefix } from './crypto';
+import { verifySessionToken, getKeyPrefix } from './crypto';
 import { ApiKeyWithPermissions } from '../db/types';
 
 // Extend FastifyRequest to include our auth data

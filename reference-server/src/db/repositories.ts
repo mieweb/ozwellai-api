@@ -8,7 +8,6 @@ import db from './database';
 import {
   User,
   ApiKey,
-  ScopedPermissions,
   ApiKeyWithPermissions,
   ApiKeyType,
   ApiKeyPrefix,
