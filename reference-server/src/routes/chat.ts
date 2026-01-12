@@ -201,7 +201,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = LLM_PROVIDER === 'ollama' && providerAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
 
-    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    const { model: requestedModel, messages, tools, stream = false, max_tokens = 2048, temperature = 0.7 } = body;
 
     // Check model permissions for scoped keys
     if (request.apiKey?.type === 'scoped' && request.apiKey.permissions?.allowed_models?.length) {

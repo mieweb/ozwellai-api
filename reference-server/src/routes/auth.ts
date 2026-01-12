@@ -7,6 +7,7 @@
 import { FastifyInstance } from 'fastify';
 import { userRepository } from '../db/repositories';
 import { generateSessionToken } from '../auth/crypto';
+import { apiKeyAuth } from '../auth/middleware';
 
 interface RegisterBody {
   email: string;
@@ -242,6 +243,76 @@ export default async function authRoutes(fastify: FastifyInstance) {
       return {
         id: user.id,
         email: user.email,
+      };
+    }
+  );
+
+  /**
+   * GET /v1/auth/verify
+   * Verify an API key and return key info (useful for debugging)
+   */
+  fastify.get(
+    '/v1/auth/verify',
+    {
+      preHandler: apiKeyAuth,
+      schema: {
+        description: 'Verify API key and return key info',
+        tags: ['Authentication'],
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              valid: { type: 'boolean' },
+              key: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  type: { type: 'string' },
+                  prefix: { type: 'string' },
+                  hint: { type: 'string' },
+                  rate_limit: { type: 'number' },
+                  created_at: { type: 'string' },
+                  last_used_at: { type: 'string', nullable: true },
+                },
+              },
+              permissions: {
+                type: 'object',
+                nullable: true,
+                properties: {
+                  allowed_agents: { type: 'array', items: { type: 'string' } },
+                  allowed_tools: { type: 'array', items: { type: 'string' } },
+                  allowed_models: { type: 'array', items: { type: 'string' } },
+                  allowed_domains: { type: 'array', items: { type: 'string' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const apiKey = request.apiKey!;
+
+      return {
+        valid: true,
+        key: {
+          id: apiKey.id,
+          name: apiKey.name,
+          type: apiKey.type,
+          prefix: apiKey.key_prefix,
+          hint: apiKey.key_hint,
+          rate_limit: apiKey.rate_limit,
+          created_at: apiKey.created_at,
+          last_used_at: apiKey.last_used_at,
+        },
+        permissions: apiKey.permissions ? {
+          allowed_agents: apiKey.permissions.allowed_agents,
+          allowed_tools: apiKey.permissions.allowed_tools,
+          allowed_models: apiKey.permissions.allowed_models,
+          allowed_domains: apiKey.permissions.allowed_domains,
+        } : null,
       };
     }
   );

@@ -1026,7 +1026,7 @@ async function sendMessageNonStreaming(text, tools) {
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
     // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
     // Falls back to demo key for local development
-    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
     headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config
@@ -1264,7 +1264,7 @@ async function sendMessageStreaming(text, tools) {
 
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
     // Falls back to demo key for local development
-    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
     headers['Authorization'] = `Bearer ${apiKey}`;
 
     if (state.config.headers) {
@@ -1559,7 +1559,7 @@ async function continueConversationWithToolResult(result) {
     // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
     // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
     // Falls back to demo key for local development
-    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_demo_local_testing';
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
     headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config

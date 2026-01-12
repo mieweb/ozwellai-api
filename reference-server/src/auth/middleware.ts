@@ -130,6 +130,13 @@ export async function apiKeyAuth(
   // Attach API key to request for downstream use
   request.apiKey = apiKey;
 
+  // Add rate limit headers to all responses
+  const remaining = rateLimitRepository.getRemaining(apiKey.id, apiKey.rate_limit);
+  const resetTime = Math.ceil(Date.now() / 60000) * 60; // Next minute boundary
+  reply.header('X-RateLimit-Limit', apiKey.rate_limit.toString());
+  reply.header('X-RateLimit-Remaining', remaining.toString());
+  reply.header('X-RateLimit-Reset', resetTime.toString());
+
   // Update last_used_at (fire and forget)
   setImmediate(() => {
     apiKeyRepository.updateLastUsed(apiKey.id);

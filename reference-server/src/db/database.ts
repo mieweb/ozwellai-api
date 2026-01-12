@@ -34,7 +34,7 @@ export function initializeDatabase(): void {
 
 // Demo API key for internal testing (landing page, tic-tac-toe, E2E tests)
 // Locked to localhost only via scoped permissions
-export const DEMO_API_KEY = 'ozw_demo_local_testing';
+export const DEMO_API_KEY = 'ozw_scoped_demo_local';
 
 /**
  * Seed demo data for development/testing
@@ -65,7 +65,7 @@ export function seedDemoData(): void {
   db.prepare(`
     INSERT INTO api_keys (id, user_id, name, key_prefix, key_hash, key_hint, type, created_at, rate_limit)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(demoKeyId, demoUserId, 'Demo (localhost only)', 'ozw_', keyHash, 'ting', 'scoped', now, 1000);
+  `).run(demoKeyId, demoUserId, 'Demo (localhost only)', 'ozw_scoped_', keyHash, 'ocal', 'scoped', now, 1000);
 
   // Lock to localhost domains only
   db.prepare(`
