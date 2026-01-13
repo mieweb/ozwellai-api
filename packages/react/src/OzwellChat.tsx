@@ -234,7 +234,7 @@ export function OzwellChat(props: OzwellChatProps) {
     }
   }, [isWidgetReady, context]);
 
-  // Listen for widget events via postMessage
+  // Listen for widget events via postMessage (single listener for all events)
   useEffect(() => {
     if (!isWidgetReady) {
       return;
@@ -256,7 +256,6 @@ export function OzwellChat(props: OzwellChatProps) {
           onClose?.();
           break;
 
-        // Future events
         case 'opened':
           onOpen?.();
           break;
@@ -268,6 +267,33 @@ export function OzwellChat(props: OzwellChatProps) {
         case 'error':
           onError?.(data.payload);
           break;
+
+        case 'tool_call':
+          if (onToolCall) {
+            const { tool, tool_call_id, payload: args } = data;
+
+            // Create sendResult function that handles postMessage internally
+            const sendResult = (result: unknown) => {
+              const iframe = window.OzwellChat?.iframe;
+
+              if (iframe?.contentWindow) {
+                iframe.contentWindow.postMessage(
+                  {
+                    source: 'ozwell-chat-parent',
+                    type: 'tool_result',
+                    tool_call_id,
+                    result,
+                  },
+                  '*'
+                );
+              } else {
+                console.error('[OzwellChat] Could not find widget iframe to send tool result');
+              }
+            };
+
+            onToolCall(tool, args || {}, sendResult);
+          }
+          break;
       }
     };
 
@@ -276,62 +302,7 @@ export function OzwellChat(props: OzwellChatProps) {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [isWidgetReady, onInsert, onClose, onOpen, onUserShare, onError]);
-
-  // Handle tool calls from widget - simplified API via onToolCall prop
-  useEffect(() => {
-    if (!isWidgetReady || !onToolCall) {
-      return;
-    }
-
-    const handleToolCall = (event: MessageEvent) => {
-      const data = event.data;
-
-      // Verify message is from Ozwell widget and is a tool call
-      if (
-        !data ||
-        typeof data !== 'object' ||
-        data.source !== 'ozwell-chat-widget' ||
-        data.type !== 'tool_call'
-      ) {
-        return;
-      }
-
-      // Extract tool call properties (at root level, not nested in payload)
-      const { tool, tool_call_id, payload: args } = data;
-
-      // Create sendResult function that handles postMessage internally
-      const sendResult = (result: unknown) => {
-        // Find the iframe by title (src is empty because it uses srcdoc)
-        const iframe = document.querySelector(
-          'iframe[title="Ozwell Assistant"]'
-        ) as HTMLIFrameElement | null;
-
-        if (iframe?.contentWindow) {
-          iframe.contentWindow.postMessage(
-            {
-              source: 'ozwell-chat-parent',
-              type: 'tool_result',
-              tool_call_id,
-              result,
-            },
-            '*'
-          );
-        } else {
-          console.error('[OzwellChat] Could not find widget iframe to send tool result');
-        }
-      };
-
-      // Call the user's handler with tool name, args, and sendResult function
-      onToolCall(tool, args || {}, sendResult);
-    };
-
-    window.addEventListener('message', handleToolCall);
-
-    return () => {
-      window.removeEventListener('message', handleToolCall);
-    };
-  }, [isWidgetReady, onToolCall]);
+  }, [isWidgetReady, onInsert, onClose, onOpen, onUserShare, onError, onToolCall]);
 
   // Render container div (only if not using default UI)
   if (defaultUI) {
