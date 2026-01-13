@@ -8,6 +8,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { apiKeyRepository, rateLimitRepository } from '../db/repositories';
 import { verifySessionToken, getKeyPrefix } from './crypto';
 import { ApiKeyWithPermissions } from '../db/types';
+import { createError } from '../util';
 
 // Extend FastifyRequest to include our auth data
 declare module 'fastify' {
@@ -15,19 +16,6 @@ declare module 'fastify' {
     apiKey?: ApiKeyWithPermissions;
     userId?: string;
   }
-}
-
-/**
- * Create OpenAI-compatible error response
- */
-function createError(message: string, type: string, code: string) {
-  return {
-    error: {
-      message,
-      type,
-      code,
-    },
-  };
 }
 
 /**
@@ -45,6 +33,7 @@ export async function apiKeyAuth(
     reply.code(401).send(createError(
       'API key is required',
       'authentication_error',
+      null,
       'missing_api_key'
     ));
     return;
@@ -55,6 +44,7 @@ export async function apiKeyAuth(
     reply.code(401).send(createError(
       'Invalid Authorization header format. Expected: Bearer <api_key>',
       'authentication_error',
+      null,
       'invalid_api_key'
     ));
     return;
@@ -68,6 +58,7 @@ export async function apiKeyAuth(
     reply.code(401).send(createError(
       'Invalid API key provided. Keys must start with ozw_ or ozw_scoped_',
       'authentication_error',
+      null,
       'invalid_api_key'
     ));
     return;
@@ -79,6 +70,7 @@ export async function apiKeyAuth(
     reply.code(401).send(createError(
       'Invalid API key provided',
       'authentication_error',
+      null,
       'invalid_api_key'
     ));
     return;
@@ -89,6 +81,7 @@ export async function apiKeyAuth(
     reply.code(401).send(createError(
       'API key has been revoked',
       'authentication_error',
+      null,
       'invalid_api_key'
     ));
     return;
@@ -109,6 +102,7 @@ export async function apiKeyAuth(
       .send(createError(
         'Rate limit exceeded. Please retry after 60 seconds.',
         'rate_limit_error',
+        null,
         'rate_limit_exceeded'
       ));
     return;
@@ -121,6 +115,7 @@ export async function apiKeyAuth(
       reply.code(403).send(createError(
         'API key is not authorized for this domain',
         'permission_error',
+        null,
         'domain_not_allowed'
       ));
       return;
@@ -190,6 +185,7 @@ export function requireTool(toolName: string) {
       reply.code(403).send(createError(
         `API key does not have access to tool: ${toolName}`,
         'permission_error',
+        null,
         'insufficient_permissions'
       ));
     }
@@ -212,6 +208,7 @@ export function requireModel(modelName: string) {
       reply.code(403).send(createError(
         `API key does not have access to model: ${modelName}`,
         'permission_error',
+        null,
         'insufficient_permissions'
       ));
     }
@@ -234,6 +231,7 @@ export function requireAgent(agentId: string) {
       reply.code(403).send(createError(
         `API key does not have access to agent: ${agentId}`,
         'permission_error',
+        null,
         'insufficient_permissions'
       ));
     }
@@ -266,6 +264,7 @@ export async function sessionAuth(
     reply.code(401).send(createError(
       'Authentication required',
       'authentication_error',
+      null,
       'missing_session'
     ));
     return;
@@ -276,6 +275,7 @@ export async function sessionAuth(
     reply.code(401).send(createError(
       'Invalid or expired session',
       'authentication_error',
+      null,
       'invalid_session'
     ));
     return;
@@ -287,7 +287,7 @@ export async function sessionAuth(
 /**
  * Simple cookie parser
  */
-function parseCookies(cookieHeader: string): Record<string, string> {
+export function parseCookies(cookieHeader: string): Record<string, string> {
   const cookies: Record<string, string> = {};
   cookieHeader.split(';').forEach((cookie) => {
     const [name, ...rest] = cookie.split('=');

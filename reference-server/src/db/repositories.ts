@@ -233,6 +233,41 @@ export const apiKeyRepository = {
   },
 
   /**
+   * Find a single API key by ID and user ID (efficient direct lookup)
+   */
+  findByIdAndUser(id: string, userId: string): ApiKeyListItem | null {
+    const stmt = db.prepare(`
+      SELECT ak.*, sp.allowed_agents, sp.allowed_tools, sp.allowed_models, sp.allowed_domains
+      FROM api_keys ak
+      LEFT JOIN scoped_permissions sp ON ak.id = sp.api_key_id
+      WHERE ak.id = ? AND ak.user_id = ?
+    `);
+    const row = stmt.get(id, userId) as any;
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      key_prefix: row.key_prefix,
+      key_hint: row.key_hint,
+      created_at: row.created_at,
+      last_used_at: row.last_used_at,
+      revoked_at: row.revoked_at,
+      rate_limit: row.rate_limit,
+      permissions: row.allowed_agents
+        ? {
+            allowed_agents: JSON.parse(row.allowed_agents || '[]'),
+            allowed_tools: JSON.parse(row.allowed_tools || '[]'),
+            allowed_models: JSON.parse(row.allowed_models || '[]'),
+            allowed_domains: JSON.parse(row.allowed_domains || '[]'),
+          }
+        : undefined,
+    };
+  },
+
+  /**
    * Revoke an API key
    */
   revoke(id: string, userId: string): boolean {

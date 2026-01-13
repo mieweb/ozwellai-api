@@ -190,8 +190,7 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const keys = apiKeyRepository.listByUserId(request.userId!);
-      const key = keys.find((k) => k.id === id);
+      const key = apiKeyRepository.findByIdAndUser(id, request.userId!);
 
       if (!key) {
         return reply.code(404).send({
@@ -246,8 +245,7 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
       const { permissions } = request.body;
 
       // Check key exists and belongs to user
-      const keys = apiKeyRepository.listByUserId(request.userId!);
-      const key = keys.find((k) => k.id === id);
+      const key = apiKeyRepository.findByIdAndUser(id, request.userId!);
 
       if (!key) {
         return reply.code(404).send({
@@ -283,9 +281,8 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Return updated key
-      const updatedKeys = apiKeyRepository.listByUserId(request.userId!);
-      return updatedKeys.find((k) => k.id === id);
+      // Return updated key (single efficient lookup)
+      return apiKeyRepository.findByIdAndUser(id, request.userId!);
     }
   );
 

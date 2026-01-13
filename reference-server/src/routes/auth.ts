@@ -7,7 +7,7 @@
 import { FastifyInstance } from 'fastify';
 import { userRepository } from '../db/repositories';
 import { generateSessionToken } from '../auth/crypto';
-import { apiKeyAuth } from '../auth/middleware';
+import { apiKeyAuth, parseCookies } from '../auth/middleware';
 
 interface RegisterBody {
   email: string;
@@ -195,11 +195,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         token = authHeader.slice(7);
       }
 
-      const cookies = (request.headers.cookie || '').split(';').reduce((acc, c) => {
-        const [key, val] = c.split('=').map((s) => s.trim());
-        if (key && val) acc[key] = val;
-        return acc;
-      }, {} as Record<string, string>);
+      const cookies = parseCookies(request.headers.cookie || '');
 
       if (!token && cookies['ozwell_session']) {
         token = cookies['ozwell_session'];
