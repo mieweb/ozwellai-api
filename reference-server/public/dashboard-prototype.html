@@ -1634,12 +1634,26 @@ POST /v1/chat/completions
           </div>
         </div>
 
+        <!-- My Keys Section -->
+        <div class="card" id="my-keys-card" style="opacity: 0.5; pointer-events: none;">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title">My API Keys</h2>
+              <p class="card-subtitle">Your created API keys (click to use in Step 3)</p>
+            </div>
+            <button class="btn btn-secondary" onclick="demoLoadKeys()">Refresh</button>
+          </div>
+          <div id="my-keys-list" style="max-height: 200px; overflow-y: auto;">
+            <div style="color: var(--text-muted); padding: 16px; text-align: center;">No keys yet. Create one above.</div>
+          </div>
+        </div>
+
         <!-- Step 3: Test API Key -->
         <div class="card" id="step-3-card" style="opacity: 0.5; pointer-events: none;">
           <div class="card-header">
             <div>
               <h2 class="card-title">Step 3: Test API Key</h2>
-              <p class="card-subtitle">Send a test request to verify your API key works</p>
+              <p class="card-subtitle">Verify and test your API key</p>
             </div>
           </div>
 
@@ -1655,6 +1669,17 @@ POST /v1/chat/completions
               <p class="form-hint">Use a model available on your Ollama</p>
             </div>
           </div>
+
+          <!-- Verify Key Section -->
+          <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button class="btn btn-secondary" onclick="demoVerifyKey()">Verify Key</button>
+            <span id="verify-status" style="display: flex; align-items: center; gap: 8px;"></span>
+          </div>
+          <div id="key-info-display" style="display: none; margin-bottom: 20px; background: var(--bg-tertiary); padding: 16px; border-radius: var(--radius);">
+            <h4 style="margin-bottom: 12px; font-size: 14px;">Key Information</h4>
+            <div id="key-info-content" style="font-size: 13px;"></div>
+          </div>
+
           <div class="form-group">
             <label class="form-label">Test Query</label>
             <input type="text" class="form-input" id="demo-test-query" value="Hello, can you hear me?" placeholder="Enter a test message">
@@ -1929,6 +1954,16 @@ POST /v1/chat/completions
         card.style.opacity = '1';
         card.style.pointerEvents = 'auto';
       }
+      // Also enable My Keys section when step 2 is enabled
+      if (stepNum === 2) {
+        const myKeysCard = document.getElementById('my-keys-card');
+        if (myKeysCard) {
+          myKeysCard.style.opacity = '1';
+          myKeysCard.style.pointerEvents = 'auto';
+        }
+        // Load existing keys
+        demoLoadKeys();
+      }
     }
 
     async function demoRegister() {
@@ -2035,6 +2070,9 @@ POST /v1/chat/completions
           document.getElementById('demo-test-key').value = data.key;
 
           enableStep(3);
+
+          // Refresh the keys list
+          await demoLoadKeys();
         } else {
           demoLog(`Error: ${data.error?.message || 'Unknown error'}`, 'error');
         }
@@ -2115,6 +2153,161 @@ POST /v1/chat/completions
         responseStatus.textContent = 'Network Error';
         responseStatus.style.color = 'var(--danger)';
         responseBody.textContent = e.message;
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    // ============================================
+    // VERIFY KEY FUNCTION
+    // ============================================
+
+    async function demoVerifyKey() {
+      const apiKey = document.getElementById('demo-test-key').value;
+      const verifyStatus = document.getElementById('verify-status');
+      const keyInfoDisplay = document.getElementById('key-info-display');
+      const keyInfoContent = document.getElementById('key-info-content');
+
+      if (!apiKey) {
+        demoLog('Please enter an API key to verify', 'error');
+        verifyStatus.innerHTML = '<span style="color: var(--danger);">No key entered</span>';
+        return;
+      }
+
+      demoLog(`Verifying API key: ...${apiKey.slice(-4)}`);
+      verifyStatus.innerHTML = '<span style="color: var(--text-secondary);">Verifying...</span>';
+
+      try {
+        const res = await fetch('/v1/auth/verify', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          verifyStatus.innerHTML = '<span class="status status-active">Valid</span>';
+          demoLog(`Key verified: ${data.key.name} (${data.key.type})`, 'success');
+
+          // Display key info
+          keyInfoDisplay.style.display = 'block';
+          let permissionsHtml = '';
+          if (data.permissions) {
+            const perms = [];
+            if (data.permissions.allowed_models?.length) perms.push(`Models: ${data.permissions.allowed_models.join(', ')}`);
+            if (data.permissions.allowed_tools?.length) perms.push(`Tools: ${data.permissions.allowed_tools.join(', ')}`);
+            if (data.permissions.allowed_agents?.length) perms.push(`Agents: ${data.permissions.allowed_agents.join(', ')}`);
+            if (data.permissions.allowed_domains?.length) perms.push(`Domains: ${data.permissions.allowed_domains.join(', ')}`);
+            permissionsHtml = perms.length > 0 ? `<div style="margin-top: 8px;"><strong>Permissions:</strong><br>${perms.join('<br>')}</div>` : '';
+          }
+
+          keyInfoContent.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div><strong>Name:</strong> ${data.key.name}</div>
+              <div><strong>Type:</strong> <span class="status ${data.key.type === 'general' ? 'status-active' : 'status-warning'}">${data.key.type}</span></div>
+              <div><strong>Rate Limit:</strong> ${data.key.rate_limit}/min</div>
+              <div><strong>Created:</strong> ${new Date(data.key.created_at).toLocaleDateString()}</div>
+            </div>
+            ${permissionsHtml}
+          `;
+        } else {
+          verifyStatus.innerHTML = '<span class="status status-inactive">Invalid</span>';
+          keyInfoDisplay.style.display = 'none';
+          demoLog(`Key verification failed: ${data.error?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        verifyStatus.innerHTML = '<span class="status status-inactive">Error</span>';
+        keyInfoDisplay.style.display = 'none';
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    // ============================================
+    // LOAD USER'S KEYS
+    // ============================================
+
+    async function demoLoadKeys() {
+      if (!demoSessionToken) {
+        demoLog('Please login first', 'error');
+        return;
+      }
+
+      demoLog('Loading your API keys...');
+
+      try {
+        const res = await fetch('/v1/api-keys', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${demoSessionToken}`
+          }
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const keysList = document.getElementById('my-keys-list');
+
+          if (data.data.length === 0) {
+            keysList.innerHTML = '<div style="color: var(--text-muted); padding: 16px; text-align: center;">No keys yet. Create one above.</div>';
+            demoLog('No keys found', 'info');
+            return;
+          }
+
+          keysList.innerHTML = data.data.map(key => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border);">
+              <div style="flex: 1;">
+                <strong>${key.name}</strong>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                  ${key.key_prefix}****${key.key_hint} &bull;
+                  <span class="status ${key.type === 'general' ? 'status-active' : 'status-warning'}" style="font-size: 10px; padding: 2px 6px;">${key.type}</span>
+                  ${key.revoked_at ? '<span class="status status-inactive" style="font-size: 10px; padding: 2px 6px; margin-left: 4px;">Revoked</span>' : ''}
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                ${!key.revoked_at ? `<button class="btn btn-sm btn-danger" onclick="demoRevokeKey('${key.id}', '${key.name}')">Revoke</button>` : ''}
+              </div>
+            </div>
+          `).join('');
+
+          demoLog(`Loaded ${data.data.length} key(s)`, 'success');
+        } else {
+          demoLog(`Error loading keys: ${data.error?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        demoLog(`Network error: ${e.message}`, 'error');
+      }
+    }
+
+    // ============================================
+    // REVOKE KEY
+    // ============================================
+
+    async function demoRevokeKey(keyId, keyName) {
+      if (!confirm(`Are you sure you want to revoke "${keyName}"? This cannot be undone.`)) {
+        return;
+      }
+
+      demoLog(`Revoking key: ${keyName}`);
+
+      try {
+        const res = await fetch(`/v1/api-keys/${keyId}/revoke`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${demoSessionToken}`
+          }
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          demoLog(`Key "${keyName}" revoked successfully`, 'success');
+          // Refresh the keys list
+          await demoLoadKeys();
+        } else {
+          demoLog(`Error revoking key: ${data.error?.message || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
         demoLog(`Network error: ${e.message}`, 'error');
       }
     }
