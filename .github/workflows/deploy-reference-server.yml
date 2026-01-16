@@ -10,12 +10,93 @@ on:
       - '.github/workflows/deploy-reference-server.yml'
 
 jobs:
-  deploy:
-    name: Deploy to ozwellai-reference-server
+  build:
+    name: Build Reference Server
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to container
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            spec/package-lock.json
+            clients/typescript/package-lock.json
+            reference-server/package-lock.json
+
+      # Build dependencies first (spec and typescript client)
+      - name: Install and build spec
+        working-directory: ./spec
+        run: npm ci && npm run build
+
+      - name: Install and build TypeScript client
+        working-directory: ./clients/typescript
+        run: npm ci && npm run build
+
+      # Build reference server
+      - name: Install reference server dependencies
+        working-directory: ./reference-server
+        run: npm ci
+
+      - name: Build reference server
+        working-directory: ./reference-server
+        run: npm run build
+
+      # Create deployment package
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy-package/reference-server
+          mkdir -p deploy-package/clients/typescript
+
+          # Copy reference server built files
+          cp -r reference-server/dist deploy-package/reference-server/
+          cp reference-server/package.json reference-server/package-lock.json deploy-package/reference-server/
+          cp -r reference-server/embed deploy-package/reference-server/ 2>/dev/null || true
+          cp -r reference-server/data deploy-package/reference-server/ 2>/dev/null || true
+
+          # Copy typescript client (needed as local dependency)
+          cp -r clients/typescript/dist deploy-package/clients/typescript/
+          cp clients/typescript/package.json deploy-package/clients/typescript/
+
+          # Create tarball
+          tar -czvf reference-server-build.tar.gz -C deploy-package .
+
+          echo "📦 Package contents:"
+          tar -tzvf reference-server-build.tar.gz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-server-build
+          path: reference-server-build.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to ozwellai-reference-server
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reference-server-build
+
+      - name: Upload to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.REFSERVER_HOST }}
+          port: 2240
+          username: ${{ secrets.REFSERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: reference-server-build.tar.gz
+          target: /tmp/
+
+      - name: Extract and restart service
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.REFSERVER_HOST }}
@@ -23,13 +104,24 @@ jobs:
           username: ${{ secrets.REFSERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             cd ~/ozwellai-api
-            git fetch origin
-            git checkout main
-            git reset --hard origin/main
+
+            # Extract the pre-built package
+            echo "📦 Extracting build package..."
+            tar -xzvf /tmp/reference-server-build.tar.gz
+
+            # Install production dependencies only (no build needed)
+            echo "📥 Installing production dependencies..."
             cd reference-server
-            npm ci
-            npm run build
+            npm ci --production --ignore-scripts
+
+            # Restart service
+            echo "🔄 Restarting service..."
             pm2 restart refserver
             pm2 save
+
+            # Cleanup
+            rm /tmp/reference-server-build.tar.gz
+
             echo "✅ Reference server deployed successfully!"
