@@ -8,6 +8,12 @@ description: Choose the right integration approach for your use case - widget, c
 
 Ozwell offers three primary integration approaches, each designed for different use cases and security requirements.
 
+## 🎬 See it Live First
+
+**[Try the Live Demo](./demo.md)** - Experience how Ozwell's widget integrates into a real application and see the privacy-first model in action.
+
+---
+
 ## Understanding Frontend vs Backend
 
 There are three main ways to integrate Ozwell:

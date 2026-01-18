@@ -9,11 +9,23 @@ description: Welcome to the Ozwell API documentation - privacy-first AI integrat
 
 Welcome to the Ozwell API documentation. Ozwell is a privacy-first AI platform that makes it easy to add intelligent conversational interfaces to your applications.
 
+## 🎬 See it in Action
+
+**[Try the Live Demo →](./demo.md)**
+
+Experience Ozwell's privacy-first chat widget in real applications, including a simple demo and a Tic-Tac-Toe game. See how conversations stay private and learn how the integration works.
+
+---
+
 ## What is Ozwell?
 
 **Ozwell is an AI integration platform that puts user privacy first.**
 
 Built by Medical Informatics Engineering, Ozwell provides AI-powered chat capabilities that you can embed in your applications while maintaining strong privacy guarantees for your users. Whether you need a ready-made chat widget or full programmatic API access, Ozwell gives you the tools to add AI to your products.
+
+### 🎬 See it in Action
+
+**[Try the Live Demo](./demo.md)** - Experience Ozwell's privacy-first chat widget in a real application.
 
 ### Core Principles
 
