@@ -8,6 +8,11 @@ description: Server-side integration with Ozwell's API for custom workflows and 
 
 This guide covers server-side integration with Ozwell's API, enabling programmatic access to AI capabilities for custom workflows, automation, and advanced use cases.
 
+> 💡 **Not sure if backend integration is right for you?** Check out our [Integration Paths Guide](../integration-paths.md) to compare all three integration options:
+> - **Option 1**: Ozwell Widget (frontend, pre-built UI)
+> - **Option 2**: Custom UI + Your Backend (build your own interface)
+> - **Option 3**: Backend API Only (automation, no UI)
+
 ## Key Concepts
 
 ```mermaid
