@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerebron Rich Text Editor - Ozwell AI Demo</title>
+  <link rel="stylesheet" href="/kerebron.css" />
+  <!-- Kerebron CSS from CDN -->
+  <style>
+    @import "https://cdn.jsdelivr.net/npm/@kerebron/lib-cdn@latest/dist/kerebron.css";
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <header class="header">
+      <div class="back-link-container">
+        <a href="/" class="back-link">← Back to Main Demo</a>
+      </div>
+      <h1 class="header-title">Kerebron Rich Text Editor with Ozwell AI</h1>
+      <p class="header-subtitle">
+        Edit documents using natural language via MCP tools
+      </p>
+    </header>
+
+    <div class="demo-content">
+      <!-- Left Side: Editor -->
+      <div class="demo-left">
+        <div class="editor-container">
+          <h3>Document Editor</h3>
+          <div class="editor-toolbar">
+            <button id="load-sample-btn" class="toolbar-btn" title="Load sample document">📄 Load Sample</button>
+            <button id="clear-btn" class="toolbar-btn" title="Clear document">🗑️ Clear</button>
+            <span class="toolbar-separator"></span>
+            <button id="bold-btn" class="toolbar-btn" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button id="italic-btn" class="toolbar-btn" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button id="heading-btn" class="toolbar-btn" title="Toggle Heading">H1</button>
+          </div>
+          <div id="editor" class="kb-component"></div>
+          <p class="editor-hint">Type directly or ask Ozwell to edit for you</p>
+        </div>
+      </div>
+
+      <!-- Right Side: Markdown Preview + Event Log -->
+      <div class="demo-right">
+        <!-- Markdown Preview -->
+        <div class="preview-container">
+          <h3>Markdown Preview</h3>
+          <pre id="markdown-preview" class="markdown-preview">Loading...</pre>
+        </div>
+
+        <!-- Event Log -->
+        <div class="event-log-container">
+          <h3>Live Event Log</h3>
+          <p class="event-log-hint">Watch AI editing commands in action</p>
+          <div id="event-log" class="event-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      Built with: Kerebron • Fastify • iframe-sync • postMessage • MCP Tools
+    </footer>
+  </div>
+
+  <script type="module">
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+    // Configure Ozwell chat widget
+    window.OzwellChatConfig = {
+      placeholder: 'Try: "make the title bold" or "add a paragraph about AI"',
+      // endpoint and widgetUrl auto-detected from script URL
+      system: `You are a helpful document editing assistant. You can read and modify the document using the available tools.
+
+IMPORTANT RULES:
+1. When the user asks about the document content, use get_document first
+2. When inserting or appending text, use insert_text with the appropriate position
+3. When replacing all content, use set_document
+4. For formatting, use format_text with the appropriate format type
+5. Always confirm what you did after making changes
+
+AVAILABLE FORMATS for format_text:
+- bold: Make selected text bold
+- italic: Make selected text italic
+- heading1-6: Convert to heading level 1-6
+- paragraph: Convert to normal paragraph
+
+POSITIONS for insert_text:
+- start: Insert at the beginning of the document
+- end: Append to the end of the document
+- cursor: Insert at current cursor position`,
+      welcomeMessage: 'Hi! I can help edit your document. Try asking me to add text, format content, or read what\'s in the document!',
+      debug: true,
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'get_document',
+            description: 'Get the current document content as markdown text. Use this when the user asks about what\'s in the document or wants to see the content.',
+            parameters: {
+              type: 'object',
+              properties: {},
+              required: []
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'set_document',
+            description: 'Replace the entire document content with new markdown text. Use this when the user wants to completely replace the document content.',
+            parameters: {
+              type: 'object',
+              properties: {
+                content: {
+                  type: 'string',
+                  description: 'The new markdown content for the document'
+                }
+              },
+              required: ['content']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'insert_text',
+            description: 'Insert text at a specific position in the document. Use this to add new content without replacing existing content.',
+            parameters: {
+              type: 'object',
+              properties: {
+                text: {
+                  type: 'string',
+                  description: 'The text to insert (can include markdown formatting)'
+                },
+                position: {
+                  type: 'string',
+                  enum: ['start', 'end', 'cursor'],
+                  description: 'Where to insert the text: "start" for beginning, "end" to append, "cursor" for current position'
+                }
+              },
+              required: ['text', 'position']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'format_text',
+            description: 'Apply formatting to the currently selected text or current line. User must have text selected for bold/italic to work.',
+            parameters: {
+              type: 'object',
+              properties: {
+                format: {
+                  type: 'string',
+                  enum: ['bold', 'italic', 'heading1', 'heading2', 'heading3', 'heading4', 'heading5', 'heading6', 'paragraph'],
+                  description: 'The format to apply'
+                }
+              },
+              required: ['format']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'find_and_replace',
+            description: 'Find text in the document and replace it with new text.',
+            parameters: {
+              type: 'object',
+              properties: {
+                find: {
+                  type: 'string',
+                  description: 'The text to find'
+                },
+                replace: {
+                  type: 'string',
+                  description: 'The text to replace it with'
+                },
+                replaceAll: {
+                  type: 'boolean',
+                  description: 'Whether to replace all occurrences (default: true)'
+                }
+              },
+              required: ['find', 'replace']
+            }
+          }
+        }
+      ]
+    };
+
+    // Load widget embed script
+    const loader = document.createElement('script');
+    loader.src = `${normalizedBase}/embed/ozwell-loader.js`;
+    loader.async = true;
+    document.head.appendChild(loader);
+  </script>
+
+  <!-- Local Kerebron app integration; Kerebron core is loaded from CDN inside kerebron-app.js -->
+  <script type="module" src="/kerebron-app.js"></script>
+</body>
+
+</html>
