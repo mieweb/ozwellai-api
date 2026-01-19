@@ -364,7 +364,9 @@ If you're unsure whether your use case complies with our trademark policy, pleas
 
 ## Next Steps
 
-1. **New to Ozwell?** Start with the [CDN integration](./frontend/cdn-embed.md) for the fastest path to a working demo.
+1. **See it in action?** Try the [live demo](https://ozwellai-embedtest.opensource.mieweb.org/) to experience Ozwell's chat widget.
+
+2. **New to Ozwell?** Start with the [CDN integration](./frontend/cdn-embed.md) for the fastest path to a working demo.
 
 2. **Building a production app?** Check the [Framework guides](./frontend/overview.md) for React, Vue, Svelte, and more.
 

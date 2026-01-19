@@ -8,6 +8,8 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 This guide covers how to integrate Ozwell's AI chat interface into your website or web application. All frontend integrations use **scoped API keys** that are restricted to specific agents and their assigned permissions, making them safe for client-side use.
 
+> **Try it live:** See Ozwell in action at the [demo site](https://ozwellai-embedtest.opensource.mieweb.org/).
+
 ## Integration Approaches
 
 ```mermaid
