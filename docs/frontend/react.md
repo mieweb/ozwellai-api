@@ -63,24 +63,35 @@ import { OzwellChat } from '@ozwell/react';
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `apiKey` | `string` | *required* | Scoped API key |
-| `agentId` | `string` | *required* | Agent ID |
-| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme |
-| `position` | `'bottom-right' \| 'bottom-left'` | `'bottom-right'` | Widget position |
-| `primaryColor` | `string` | `'#4f46e5'` | Accent color |
-| `width` | `string` | `'400px'` | Chat window width |
-| `height` | `string` | `'600px'` | Chat window height |
-| `autoOpen` | `boolean` | `false` | Open on mount |
+| `apiKey` | `string` | *required* | Scoped API key (coming soon) |
+| `agentId` | `string` | *required* | Agent ID (coming soon) |
+| `endpoint` | `string` | — | API endpoint URL |
+| `model` | `string` | — | Model name (optional, auto-selected if not specified) |
+| `system` | `string` | — | System prompt for the assistant |
+| `welcomeMessage` | `string` | — | Welcome message shown when chat opens |
+| `title` | `string` | — | Chat widget title |
+| `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme (coming soon) |
+| `position` | `'bottom-right' \| 'bottom-left'` | `'bottom-right'` | Widget position (coming soon) |
+| `primaryColor` | `string` | `'#4f46e5'` | Accent color (coming soon) |
+| `width` | `string \| number` | `360` | Chat window width |
+| `height` | `string \| number` | `420` | Chat window height |
+| `autoOpen` | `boolean` | `false` | Open on mount (coming soon) |
 | `greeting` | `string` | Agent default | Initial message |
 | `placeholder` | `string` | `'Type a message...'` | Input placeholder |
 | `context` | `Record<string, unknown>` | `{}` | Context data for agent |
 | `tools` | `OzwellTool[]` | `[]` | MCP tools available to the AI |
+| `debug` | `boolean` | `false` | Enable debug mode |
+| `openaiApiKey` | `string` | — | OpenAI API key (for direct OpenAI endpoint) |
+| `headers` | `Record<string, string>` | — | Custom HTTP headers |
+| `widgetUrl` | `string` | — | Widget URL (auto-detected by default) |
+| `defaultUI` | `boolean` | `true` | Enable default floating button UI |
 | `onReady` | `() => void` | — | Widget ready callback |
 | `onOpen` | `() => void` | — | Chat opened callback |
 | `onClose` | `() => void` | — | Chat closed callback |
+| `onInsert` | `(data: { text: string; close: boolean }) => void` | — | User inserts text to parent page |
 | `onToolCall` | `(tool, args, sendResult) => void` | — | Tool call handler (see below) |
-| `onUserShare` | `(data: unknown) => void` | — | User shared data callback (opt-in) |
-| `onError` | `(error: OzwellError) => void` | — | Error callback |
+| `onUserShare` | `(data: unknown) => void` | — | User shared data callback (coming soon) |
+| `onError` | `(error: OzwellError) => void` | — | Error callback (coming soon) |
 
 > **Privacy Note:** There is no `onMessage` callback. Conversation content is private between the user and Ozwell. The `onUserShare` callback only fires when the user explicitly chooses to share data with your site.
 
@@ -124,11 +135,13 @@ function App() {
 interface UseOzwellReturn {
   isReady: boolean;
   isOpen: boolean;
+  hasUnread: boolean;
   open: () => void;
   close: () => void;
   toggle: () => void;
   sendMessage: (content: string) => void;
   setContext: (context: Record<string, unknown>) => void;
+  iframe: HTMLIFrameElement | null;
 }
 ```
 
