@@ -305,11 +305,62 @@ class IframeSyncBroker {
     return {};
   }
 
+  /**
+   * Parse data-* attributes from the script tag.
+   * Converts kebab-case to camelCase (e.g., data-api-key -> apiKey)
+   * Handles boolean strings ("true"/"false") and preserves other values as-is.
+   */
+  function readDataAttributes() {
+    const script = document.currentScript;
+    if (!script) return {};
+
+    const config = {};
+    const dataset = script.dataset;
+
+    // Map of data attribute names to config property names
+    // Most follow simple kebab-to-camel conversion, but some need explicit mapping
+    const attributeMap = {
+      'apiKey': 'apiKey',
+      'agentId': 'agentId',
+      'theme': 'theme',
+      'position': 'position',
+      'primaryColor': 'primaryColor',
+      'width': 'width',
+      'height': 'height',
+      'autoOpen': 'autoOpen',
+      'greeting': 'welcomeMessage',  // data-greeting maps to welcomeMessage
+      'placeholder': 'placeholder',
+      'buttonIcon': 'buttonIcon',
+    };
+
+    for (const [dataKey, configKey] of Object.entries(attributeMap)) {
+      if (dataKey in dataset) {
+        let value = dataset[dataKey];
+
+        // Convert boolean strings
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+
+        config[configKey] = value;
+      }
+    }
+
+    if (Object.keys(config).length > 0) {
+      console.log('[OzwellChat] Parsed data attributes:', config);
+    }
+
+    return config;
+  }
+
+  // Parse data attributes once at load time (document.currentScript is only available during initial script execution)
+  const dataAttributeConfig = readDataAttributes();
+
   function currentConfig() {
     return {
       ...DEFAULT_CONFIG,
-      ...readGlobalConfig(),
-      ...state.runtimeConfig,
+      ...dataAttributeConfig,      // data-* attributes (lowest priority after defaults)
+      ...readGlobalConfig(),       // window.OzwellChatConfig (higher priority)
+      ...state.runtimeConfig,      // Runtime updates (highest priority)
     };
   }
 
