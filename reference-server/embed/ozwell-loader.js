@@ -1036,12 +1036,52 @@ class IframeSyncBroker {
 
   window.addEventListener('message', handleWidgetMessage);
 
+  /**
+   * Toggle the chat window open/closed.
+   */
+  function toggleChat() {
+    if (state.chatOpen) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  }
+
+  /**
+   * Send a message programmatically as if the user typed it.
+   * The message will appear in the chat and trigger an AI response.
+   *
+   * @param {string} text - The message text to send
+   */
+  function sendMessage(text) {
+    if (!text || typeof text !== 'string') {
+      console.warn('[OzwellChat] sendMessage requires a non-empty string');
+      return;
+    }
+
+    if (!state.iframe || !state.iframe.contentWindow) {
+      console.warn('[OzwellChat] Widget not mounted. Call mount() first or wait for ready()');
+      return;
+    }
+
+    state.iframe.contentWindow.postMessage({
+      source: 'ozwell-chat-parent',
+      type: 'ozwell:send-message',
+      payload: { content: text }
+    }, '*');
+
+    console.log('[OzwellChat] Sent message:', text);
+  }
+
   const api = {
     mount,
     configure,
-    updateContext, // New API for real-time context updates
+    updateContext, // Real-time context updates
+    setContext: updateContext, // Alias for updateContext (documented API name)
     open: openChat, // Programmatically open the chat window
     close: closeChat, // Programmatically close the chat window
+    toggle: toggleChat, // Toggle open/closed
+    sendMessage, // Send a message programmatically
     get iframe() {
       return state.iframe;
     },
