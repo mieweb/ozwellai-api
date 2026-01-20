@@ -612,6 +612,7 @@ class IframeSyncBroker {
   /**
    * Inject CSS styles for the default floating button and wrapper.
    * Only injects if defaultUI is enabled.
+   * Uses config values for theming (primaryColor, position).
    */
   function injectDefaultCSS() {
     const config = currentConfig();
@@ -620,6 +621,19 @@ class IframeSyncBroker {
     // Check if styles already injected
     if (document.getElementById('ozwell-default-ui-styles')) return;
 
+    // Get theme values from config
+    const primaryColor = config.primaryColor || '#0066ff';
+    const position = config.position || 'bottom-right';
+
+    // Position values
+    const isLeft = position === 'bottom-left';
+    const horizontalPos = isLeft ? 'left: 24px; right: auto;' : 'right: 24px; left: auto;';
+    const mobileHorizontalPos = isLeft ? 'left: 20px; right: auto;' : 'right: 20px; left: auto;';
+
+    // Generate shadow color from primary color (with opacity)
+    const shadowColor = primaryColor + '4d'; // ~30% opacity
+    const shadowColorHover = primaryColor + '66'; // ~40% opacity
+
     const style = document.createElement('style');
     style.id = 'ozwell-default-ui-styles';
     style.textContent = `
@@ -627,14 +641,14 @@ class IframeSyncBroker {
       .ozwell-chat-button {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: #0066ff;
+        background: ${primaryColor};
         border: none;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+        box-shadow: 0 4px 16px ${shadowColor};
         display: flex;
         align-items: center;
         justify-content: center;
@@ -647,7 +661,7 @@ class IframeSyncBroker {
 
       .ozwell-chat-button:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+        box-shadow: 0 6px 20px ${shadowColorHover};
       }
 
       .ozwell-chat-button.hidden {
@@ -695,7 +709,7 @@ class IframeSyncBroker {
       .ozwell-chat-wrapper {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 380px;
         height: 520px;
         max-height: calc(100vh - 48px);
@@ -727,7 +741,7 @@ class IframeSyncBroker {
         justify-content: space-between;
         align-items: center;
         padding: 16px;
-        background: #0066ff;
+        background: ${primaryColor};
         color: white;
         user-select: none;
       }
@@ -785,7 +799,7 @@ class IframeSyncBroker {
         }
         .ozwell-chat-button {
           bottom: calc(20px + env(safe-area-inset-bottom));
-          right: 20px;
+          ${mobileHorizontalPos}
           width: 56px;
           height: 56px;
           font-size: 24px;
@@ -867,7 +881,8 @@ class IframeSyncBroker {
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    const buttonIcon = config.buttonIcon || '/favicon.ico';
+    button.innerHTML = `<img src="${buttonIcon}" alt="Chat" class="ozwell-chat-icon" />`;
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
