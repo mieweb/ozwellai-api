@@ -7,14 +7,16 @@ The fastest way to add Ozwell to any website. No build step, no framework requir
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
+<script
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"
   data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
   data-agent-id="agent_xxxxxxxx"
 ></script>
 ```
 
 That's it! A chat widget will appear in the bottom-right corner of your page.
+
+> **Note:** The `ozwellai-reference-server.opensource.mieweb.org` URL is the test/development server. For production deployments, use the official Ozwell domains (`cdn.ozwell.ai`, etc.) once configured.
 
 ---
 
@@ -39,11 +41,28 @@ That's it! A chat widget will appear in the bottom-right corner of your page.
 
 ## Configuration Options
 
+Customize the widget using `data-*` attributes on the script tag.
+
+Alternatively, you can use `window.OzwellChatConfig` with the same options in camelCase (e.g., `data-api-key` becomes `apiKey`, `data-greeting` becomes `greeting`):
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'ozw_scoped_xxxxxxxxxxxxxxxx',
+    agentId: 'agent_xxxxxxxx',
+    greeting: 'Hi! How can I help you today?'
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+### Data Attributes
+
 Customize the widget using `data-*` attributes:
 
 ```html
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
+<script
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"
   data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
   data-agent-id="agent_xxxxxxxx"
   data-theme="dark"
@@ -74,32 +93,77 @@ Customize the widget using `data-*` attributes:
 
 ## JavaScript API
 
-The embed script exposes a global `Ozwell` object for programmatic control:
+The embed script exposes a global `OzwellChat` object for programmatic control:
 
 ### Open/Close the Widget
 
 ```javascript
 // Open the chat window
-Ozwell.open();
+OzwellChat.open();
 
 // Close the chat window
-Ozwell.close();
+OzwellChat.close();
 
 // Toggle open/closed
-Ozwell.toggle();
+OzwellChat.toggle();
 ```
 
 ### Send Messages
 
 ```javascript
 // Send a message as the user
-Ozwell.sendMessage('Hello, I need help with...');
+OzwellChat.sendMessage('Hello, I need help with...');
 
 // Set context data (passed to the agent)
-Ozwell.setContext({
+OzwellChat.setContext({
   userId: 'user_123',
   page: window.location.pathname,
   customData: { ... }
+});
+
+// Alternative: updateContext() does the same thing
+OzwellChat.updateContext({
+  formData: { name: 'Alice', email: 'alice@example.com' }
+});
+```
+
+### Widget State
+
+```javascript
+// Wait for widget to be ready
+await OzwellChat.ready();
+
+// Check if chat window is open
+console.log(OzwellChat.isOpen); // true or false
+
+// Check if there are unread messages
+console.log(OzwellChat.hasUnread); // true or false
+
+// Access the iframe element directly
+console.log(OzwellChat.iframe);
+```
+
+### Runtime Configuration
+
+```javascript
+// Update configuration after widget is mounted
+OzwellChat.configure({
+  model: 'llama3.1',
+  system: 'You are a helpful coding assistant.'
+});
+```
+
+### Manual Mounting
+
+```javascript
+// Disable auto-mount
+window.OzwellChatConfig = { autoMount: false };
+
+// Mount manually later
+OzwellChat.mount({
+  containerId: 'my-chat-container',
+  width: 400,
+  height: 500
 });
 ```
 
@@ -130,7 +194,86 @@ window.addEventListener('ozwell:user-share', (event) => {
 });
 ```
 
-⚠️ **No message content events:** `ozwell:message` and `ozwell:user-message` do not exist. Conversation content is private between the user and Ozwell.
+⚠️ **No message content events:** `ozwell:message` and `ozwell:user-message` do not exist. Conversation content is private between the user and OzwellChat.
+
+---
+
+## MCP Tools
+
+Enable page interactions using MCP tools (OpenAI function calling format):
+
+```html
+<input id="user-email" type="email" placeholder="Enter email">
+
+<script>
+  window.OzwellChatConfig = {
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'update_email',
+          description: 'Updates the email field',
+          parameters: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', description: 'Email address' }
+            },
+            required: ['email']
+          }
+        }
+      }
+    ]
+  };
+
+  // Handle tool calls from widget
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    if (!data || data.source !== 'ozwell-chat-widget') return;
+
+    if (data.type === 'tool_call') {
+      const { tool, tool_call_id, payload } = data;
+
+      if (tool === 'update_email') {
+        document.getElementById('user-email').value = payload.email;
+
+        // Send result back to widget (MUST include tool_call_id)
+        OzwellChat.iframe.contentWindow.postMessage({
+          source: 'ozwell-chat-parent',
+          type: 'tool_result',
+          tool_call_id: tool_call_id,
+          result: { success: true, message: 'Email updated successfully' }
+        }, '*');
+      }
+    }
+  });
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+### Debug Mode
+
+Enable debug mode to visualize tool executions with clickable pills showing arguments and results:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    debug: true,
+    tools: [...]
+  };
+</script>
+```
+
+---
+
+## Message Queuing
+
+Users can send messages while the AI is still responding:
+
+1. Message appears as a queued bubble (dotted outline)
+2. User can edit or cancel the queued message
+3. When AI finishes, the queued message is automatically sent
+
+This enables smooth back-and-forth conversations without waiting.
 
 ---
 
@@ -150,7 +293,7 @@ window.addEventListener('ozwell:user-share', (event) => {
   
   <!-- Ozwell Chat Widget -->
   <script 
-    src="https://cdn.ozwell.ai/embed.js" 
+    src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js" 
     data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
     data-agent-id="agent_xxxxxxxx"
   ></script>
@@ -162,7 +305,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 ```html
 <script 
-  src="https://cdn.ozwell.ai/embed.js" 
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js" 
   data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
   data-agent-id="agent_xxxxxxxx"
   data-theme="dark"
@@ -175,7 +318,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 ```html
 <script 
-  src="https://cdn.ozwell.ai/embed.js" 
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js" 
   data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
   data-agent-id="agent_xxxxxxxx"
   data-auto-open="true"
@@ -186,10 +329,10 @@ window.addEventListener('ozwell:user-share', (event) => {
 ### Triggered by Button Click
 
 ```html
-<button onclick="Ozwell.open()">Chat with Us</button>
+<button onclick="OzwellChat.open()">Chat with Us</button>
 
 <script 
-  src="https://cdn.ozwell.ai/embed.js" 
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js" 
   data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
   data-agent-id="agent_xxxxxxxx"
 ></script>
@@ -201,7 +344,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 ### Conversation Privacy
 
-🔐 **Conversations are private by default.** The dialogue between users and Ozwell is never shared with the host site. Users can ask any question—even ones they might feel are "dumb"—knowing their conversation stays between them and Ozwell.
+🔐 **Conversations are private by default.** The dialogue between users and Ozwell is never shared with the host site. Users can ask any question—even ones they might feel are "dumb"—knowing their conversation stays between them and OzwellChat.
 
 Sharing is always opt-in: only when a user explicitly chooses to share information does it become visible to the host site.
 
