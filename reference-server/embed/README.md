@@ -14,6 +14,28 @@ The chat button appears automatically in the bottom-right corner.
 
 **How it works:** The widget auto-detects where the script was loaded from and uses that as the base URL for the chat endpoint and widget files. Works with any hosting setup!
 
+## With API Key
+
+Pass your scoped API key via data attribute or config:
+
+```html
+<!-- Via data attribute -->
+<script
+  src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"
+  data-api-key="ozw_scoped_xxxxxxxx"
+></script>
+
+<!-- Or via config -->
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'ozw_scoped_xxxxxxxx'
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+For local development, the widget falls back to a demo key that only works on localhost.
+
 ## With Configuration
 
 Customize the widget with `window.OzwellChatConfig`:
@@ -178,7 +200,8 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `placeholder` | string | `'Ask a question...'` | Input field placeholder text |
 | `title` | string | `'Ozwell Assistant'` | Widget header title |
 | `headers` | object | `{}` | Custom HTTP headers for API requests |
-| `openaiApiKey` | string | (none) | API key for Authorization header |
+| `apiKey` | string | (none) | Ozwell API key for Authorization header (e.g., `ozw_scoped_xxx`). Falls back to demo key for localhost. |
+| `openaiApiKey` | string | (none) | Legacy alias for `apiKey` |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 | `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
@@ -325,6 +348,21 @@ Route requests to your Ollama instance using custom headers:
 ```
 
 The reference server detects `Authorization: Bearer ollama` and proxies to Ollama automatically.
+
+### With Ozwell API Key
+
+Use a scoped API key to authenticate with the Ozwell API:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'ozw_scoped_xxxxxxxx'  // Your scoped API key
+  };
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+For local development, the widget falls back to a demo key (`ozw_scoped_demo_local`) that only works on localhost.
 
 ### Custom Authentication
 
