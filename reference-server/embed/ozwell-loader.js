@@ -450,9 +450,7 @@ class IframeSyncBroker {
         state.ready = true;
         flushPending();
         sendConfig();
-        // Dispatch both new and old event names (old names deprecated)
         document.dispatchEvent(new CustomEvent('ozwell:ready'));
-        document.dispatchEvent(new CustomEvent('ozwell-chat-ready')); // deprecated
         break;
       case 'request-config':
         sendConfig();
@@ -466,9 +464,7 @@ class IframeSyncBroker {
         break;
       }
       case 'closed':
-        // Dispatch both new and old event names (old names deprecated)
         document.dispatchEvent(new CustomEvent('ozwell:close'));
-        document.dispatchEvent(new CustomEvent('ozwell-chat-closed')); // deprecated
         break;
       case 'assistant_response':
         // AI responded with text (not a tool call) - handle notification
