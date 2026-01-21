@@ -451,6 +451,10 @@ class IframeSyncBroker {
         flushPending();
         sendConfig();
         document.dispatchEvent(new CustomEvent('ozwell:ready'));
+        // Auto-open on page load if configured
+        if (config.autoOpen === true || config.autoOpen === 'true') {
+          openChat();
+        }
         break;
       case 'request-config':
         sendConfig();

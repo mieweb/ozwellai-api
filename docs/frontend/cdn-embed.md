@@ -395,7 +395,7 @@ The widget renders in an iframe, so styling conflicts are rare. If you need to a
 
 ```css
 /* Adjust the widget container position */
-#ozwell-widget-container {
+#ozwell-chat-container {
   z-index: 9999 !important;
 }
 ```
