@@ -59,6 +59,12 @@ export function useOzwell(): UseOzwellReturn {
     }
 
     const handleMessage = (event: MessageEvent) => {
+      // Validate message comes from our widget iframe
+      const widgetIframe = window.OzwellChat?.iframe;
+      if (widgetIframe && event.source !== widgetIframe.contentWindow) {
+        return;
+      }
+
       const data = event.data;
 
       if (!data || typeof data !== 'object' || data.source !== 'ozwell-chat-widget') {
@@ -90,6 +96,7 @@ export function useOzwell(): UseOzwellReturn {
 
   /**
    * Open the chat widget programmatically
+   * State is updated via 'opened' event from widget, not optimistically
    */
   const open = useCallback(() => {
     if (!isReady) {
@@ -98,11 +105,11 @@ export function useOzwell(): UseOzwellReturn {
     }
 
     window.OzwellChat?.open?.();
-    setIsOpen(true);
   }, [isReady]);
 
   /**
    * Close the chat widget programmatically
+   * State is updated via 'closed' event from widget, not optimistically
    */
   const close = useCallback(() => {
     if (!isReady) {
@@ -111,7 +118,6 @@ export function useOzwell(): UseOzwellReturn {
     }
 
     window.OzwellChat?.close?.();
-    setIsOpen(false);
   }, [isReady]);
 
   /**
