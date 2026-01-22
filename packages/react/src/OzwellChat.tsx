@@ -7,6 +7,10 @@ import type { OzwellChatProps, ScriptLoadStatus } from './types';
  * This component loads the vanilla Ozwell widget and provides a React-friendly API.
  * It wraps the existing ozwell-loader.js implementation rather than reimplementing it.
  *
+ * IMPORTANT: Only render one OzwellChat component per page. Multiple instances
+ * will share global configuration (window.OzwellChatConfig) and may cause
+ * unexpected behavior. Use conditional rendering for different configurations.
+ *
  * @example
  * ```tsx
  * <OzwellChat
@@ -37,6 +41,7 @@ export function OzwellChat(props: OzwellChatProps) {
     headers,
     widgetUrl,
     context,
+    autoOpenOnReply,
 
     // Future props (not yet implemented in vanilla widget)
     // These are accepted but ignored until backend support is added
@@ -77,15 +82,27 @@ export function OzwellChat(props: OzwellChatProps) {
       return;
     }
 
+    // Handlers stored for cleanup
+    const handleLoad = () => setScriptStatus('ready');
+    const handleError = () => {
+      setScriptStatus('error');
+      console.error('[OzwellChat] Failed to load ozwell-loader.js');
+    };
+
     // Check if script is already being loaded
     const existingScript = document.querySelector(
       'script[src*="ozwell-loader.js"]'
-    );
+    ) as HTMLScriptElement | null;
+
     if (existingScript) {
       setScriptStatus('loading');
-      existingScript.addEventListener('load', () => setScriptStatus('ready'));
-      existingScript.addEventListener('error', () => setScriptStatus('error'));
-      return;
+      existingScript.addEventListener('load', handleLoad);
+      existingScript.addEventListener('error', handleError);
+
+      return () => {
+        existingScript.removeEventListener('load', handleLoad);
+        existingScript.removeEventListener('error', handleError);
+      };
     }
 
     // Load script
@@ -101,19 +118,15 @@ export function OzwellChat(props: OzwellChatProps) {
     script.src = scriptSrc;
     script.async = true;
 
-    script.onload = () => {
-      setScriptStatus('ready');
-    };
-
-    script.onerror = () => {
-      setScriptStatus('error');
-      console.error('[OzwellChat] Failed to load ozwell-loader.js');
-    };
+    script.addEventListener('load', handleLoad);
+    script.addEventListener('error', handleError);
 
     document.head.appendChild(script);
 
     return () => {
-      // Don't remove script on unmount - might be used by other instances
+      // Clean up listeners but don't remove script - might be used by other instances
+      script.removeEventListener('load', handleLoad);
+      script.removeEventListener('error', handleError);
     };
   }, [widgetUrl]);
 
@@ -141,6 +154,7 @@ export function OzwellChat(props: OzwellChatProps) {
       // Layout config
       defaultUI,
       autoMount: false, // Prevent auto-mount, we'll mount manually
+      autoOpenOnReply,
 
       // Future props (will be ignored by vanilla widget until implemented)
       apiKey,
@@ -213,6 +227,7 @@ export function OzwellChat(props: OzwellChatProps) {
     headers,
     widgetUrl,
     defaultUI,
+    autoOpenOnReply,
     width,
     height,
     apiKey,
@@ -241,6 +256,12 @@ export function OzwellChat(props: OzwellChatProps) {
     }
 
     const handleMessage = (event: MessageEvent) => {
+      // Validate message comes from our widget iframe
+      const iframe = window.OzwellChat?.iframe;
+      if (iframe && event.source !== iframe.contentWindow) {
+        return;
+      }
+
       const data = event.data;
 
       if (!data || typeof data !== 'object' || data.source !== 'ozwell-chat-widget') {
@@ -277,6 +298,8 @@ export function OzwellChat(props: OzwellChatProps) {
               const iframe = window.OzwellChat?.iframe;
 
               if (iframe?.contentWindow) {
+                // Use specific origin instead of wildcard for security
+                const targetOrigin = iframe.src ? new URL(iframe.src).origin : '*';
                 iframe.contentWindow.postMessage(
                   {
                     source: 'ozwell-chat-parent',
@@ -284,7 +307,7 @@ export function OzwellChat(props: OzwellChatProps) {
                     tool_call_id,
                     result,
                   },
-                  '*'
+                  targetOrigin
                 );
               } else {
                 console.error('[OzwellChat] Could not find widget iframe to send tool result');

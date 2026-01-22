@@ -63,8 +63,8 @@ import { OzwellChat } from '@ozwell/react';
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `apiKey` | `string` | *required* | Scoped API key (coming soon) |
-| `agentId` | `string` | *required* | Agent ID (coming soon) |
+| `apiKey` | `string` | — | Scoped API key (coming soon, will be required) |
+| `agentId` | `string` | — | Agent ID (coming soon, will be required) |
 | `endpoint` | `string` | — | API endpoint URL |
 | `model` | `string` | — | Model name (optional, auto-selected if not specified) |
 | `system` | `string` | — | System prompt for the assistant |
@@ -257,7 +257,7 @@ function App() {
     <div>
       {/* App content */}
       {showChat && (
-        <OzwellChat apiKey="..." agentId="..." />
+        <OzwellChat endpoint="/v1/chat/completions" />
       )}
     </div>
   );
@@ -320,8 +320,7 @@ const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> =
 function App() {
   return (
     <OzwellChat
-      apiKey="ozw_scoped_xxxxxxxx"
-      agentId="agent_xxxxxxxx"
+      endpoint="/v1/chat/completions"
       tools={tools}
       onToolCall={(tool, args, sendResult) => {
         const handler = toolHandlers[tool];
