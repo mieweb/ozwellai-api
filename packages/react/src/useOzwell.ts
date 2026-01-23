@@ -149,7 +149,6 @@ export function useOzwell(): UseOzwellReturn {
 
     // Placeholder for future implementation
     console.warn('[useOzwell] sendMessage() not yet implemented in vanilla widget');
-    console.log('[useOzwell] Would send message:', content);
 
     // Future implementation:
     // window.OzwellChat?.sendMessage?.(content);

@@ -292,7 +292,7 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call';
+  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call' | 'user-share' | 'error';
   payload?: unknown;
 }
 
