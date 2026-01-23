@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { OzwellChatProps, ScriptLoadStatus } from './types';
+import type { OzwellChatProps, OzwellConfig, ScriptLoadStatus } from './types';
 
 /**
  * OzwellChat - React component wrapper for Ozwell chat widget
@@ -65,7 +65,6 @@ export function OzwellChat(props: OzwellChatProps) {
     children,
   } = props;
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const [scriptStatus, setScriptStatus] = useState<ScriptLoadStatus>('idle');
   const [isWidgetReady, setIsWidgetReady] = useState(false);
 
@@ -137,7 +136,7 @@ export function OzwellChat(props: OzwellChatProps) {
     }
 
     // Build configuration object
-    const config: Record<string, unknown> = {
+    const config: Partial<OzwellConfig> = {
       // Core config
       endpoint,
       model,
@@ -156,7 +155,8 @@ export function OzwellChat(props: OzwellChatProps) {
       autoMount: false, // Prevent auto-mount, we'll mount manually
       autoOpenOnReply,
 
-      // Future props (will be ignored by vanilla widget until implemented)
+      // Future props - passed to widget for forward compatibility
+      // When scoped API keys land (PR #53), these will work without React package changes
       apiKey,
       agentId,
     };
@@ -336,7 +336,6 @@ export function OzwellChat(props: OzwellChatProps) {
   // Custom container mode
   return (
     <div
-      ref={containerRef}
       id={instanceContainerId.current}
       style={{
         width: typeof width === 'number' ? `${width}px` : width,

@@ -47,13 +47,16 @@ function App() {
 ### Currently Available
 - Custom endpoints (`endpoint` prop)
 - Model selection (`model` prop)
-- MCP tool/function calling (`tools` prop)
+- MCP tool/function calling (`tools` prop, `onToolCall` callback)
 - Context updates (`context` prop)
 - System prompts (`system` prop)
 - Welcome messages (`welcomeMessage` prop)
 - Debug mode (`debug` prop)
 - OpenAI API compatibility (`openaiApiKey` prop)
 - Custom headers (`headers` prop)
+- Auto-open on AI reply (`autoOpenOnReply` prop)
+- Lifecycle callbacks (`onReady`, `onOpen`, `onClose`, `onInsert`)
+- Error callback for mount errors (`onError` - partial)
 
 ### Coming Soon
 - Scoped API keys (`apiKey` prop)
@@ -61,8 +64,8 @@ function App() {
 - Theme customization (`theme`, `primaryColor` props)
 - Position control (`position` prop)
 - Auto-open behavior (`autoOpen` prop)
-- User share callbacks (`onUserShare`)
-- Error callbacks (`onError`)
+- User share callbacks (`onUserShare` - requires widget support)
+- Full error callback support (`onError` - additional error types)
 
 ## Using Tools (MCP Function Calling)
 
