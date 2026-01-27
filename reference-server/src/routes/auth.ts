@@ -7,7 +7,8 @@
 import { FastifyInstance } from 'fastify';
 import { userRepository } from '../db/repositories';
 import { generateSessionToken } from '../auth/crypto';
-import { apiKeyAuth, parseCookies } from '../auth/middleware';
+import { apiKeyAuth, sessionAuth } from '../auth/middleware';
+import { createError } from '../util';
 
 interface RegisterBody {
   email: string;
@@ -61,13 +62,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
       // Check if user already exists
       const existingUser = userRepository.findByEmail(email);
       if (existingUser) {
-        return reply.code(400).send({
-          error: {
-            message: 'An account with this email already exists',
-            type: 'validation_error',
-            code: 'email_taken',
-          },
-        });
+        return reply.code(400).send(createError(
+          'An account with this email already exists',
+          'validation_error',
+          null,
+          'email_taken'
+        ));
       }
 
       // Create user
@@ -130,13 +130,12 @@ export default async function authRoutes(fastify: FastifyInstance) {
       // Verify credentials
       const user = userRepository.verifyCredentials(email, password);
       if (!user) {
-        return reply.code(401).send({
-          error: {
-            message: 'Invalid email or password',
-            type: 'authentication_error',
-            code: 'invalid_credentials',
-          },
-        });
+        return reply.code(401).send(createError(
+          'Invalid email or password',
+          'authentication_error',
+          null,
+          'invalid_credentials'
+        ));
       }
 
       // Generate session token
@@ -172,9 +171,11 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/auth/me',
     {
+      preHandler: sessionAuth,
       schema: {
         description: 'Get current user info',
         tags: ['Authentication'],
+        security: [{ bearerAuth: [] }],
         response: {
           200: {
             type: 'object',
@@ -187,53 +188,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      // Parse session from cookie or header
-      let token: string | undefined;
-
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        token = authHeader.slice(7);
-      }
-
-      const cookies = parseCookies(request.headers.cookie || '');
-
-      if (!token && cookies['ozwell_session']) {
-        token = cookies['ozwell_session'];
-      }
-
-      if (!token) {
-        return reply.code(401).send({
-          error: {
-            message: 'Not authenticated',
-            type: 'authentication_error',
-            code: 'missing_session',
-          },
-        });
-      }
-
-      // Import here to avoid circular dependency
-      const { verifySessionToken } = await import('../auth/crypto');
-      const payload = verifySessionToken(token);
-
-      if (!payload) {
-        return reply.code(401).send({
-          error: {
-            message: 'Invalid or expired session',
-            type: 'authentication_error',
-            code: 'invalid_session',
-          },
-        });
-      }
-
-      const user = userRepository.findById(payload.user_id);
+      const user = userRepository.findById(request.userId!);
       if (!user) {
-        return reply.code(401).send({
-          error: {
-            message: 'User not found',
-            type: 'authentication_error',
-            code: 'user_not_found',
-          },
-        });
+        return reply.code(401).send(createError(
+          'User not found',
+          'authentication_error',
+          null,
+          'user_not_found'
+        ));
       }
 
       return {

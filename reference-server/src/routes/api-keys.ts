@@ -8,6 +8,7 @@ import { FastifyInstance } from 'fastify';
 import { apiKeyRepository } from '../db/repositories';
 import { sessionAuth } from '../auth/middleware';
 import { ApiKeyType } from '../db/types';
+import { createError } from '../util';
 
 interface CreateKeyBody {
   name: string;
@@ -141,13 +142,12 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
 
       // Validate: scoped keys should have permissions
       if (type === 'scoped' && !permissions) {
-        return reply.code(400).send({
-          error: {
-            message: 'Scoped keys require permissions to be specified',
-            type: 'validation_error',
-            code: 'missing_permissions',
-          },
-        });
+        return reply.code(400).send(createError(
+          'Scoped keys require permissions to be specified',
+          'validation_error',
+          null,
+          'missing_permissions'
+        ));
       }
 
       const { apiKey, fullKey } = apiKeyRepository.create(
@@ -193,13 +193,12 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
       const key = apiKeyRepository.findByIdAndUser(id, request.userId!);
 
       if (!key) {
-        return reply.code(404).send({
-          error: {
-            message: 'API key not found',
-            type: 'not_found_error',
-            code: 'key_not_found',
-          },
-        });
+        return reply.code(404).send(createError(
+          'API key not found',
+          'not_found_error',
+          null,
+          'key_not_found'
+        ));
       }
 
       return key;
@@ -248,36 +247,33 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
       const key = apiKeyRepository.findByIdAndUser(id, request.userId!);
 
       if (!key) {
-        return reply.code(404).send({
-          error: {
-            message: 'API key not found',
-            type: 'not_found_error',
-            code: 'key_not_found',
-          },
-        });
+        return reply.code(404).send(createError(
+          'API key not found',
+          'not_found_error',
+          null,
+          'key_not_found'
+        ));
       }
 
       // Update permissions if provided (only for scoped keys)
       if (permissions) {
         if (key.type !== 'scoped') {
-          return reply.code(400).send({
-            error: {
-              message: 'Cannot set permissions on a general-purpose key',
-              type: 'validation_error',
-              code: 'invalid_operation',
-            },
-          });
+          return reply.code(400).send(createError(
+            'Cannot set permissions on a general-purpose key',
+            'validation_error',
+            null,
+            'invalid_operation'
+          ));
         }
 
         const updated = apiKeyRepository.updatePermissions(id, request.userId!, permissions);
         if (!updated) {
-          return reply.code(500).send({
-            error: {
-              message: 'Failed to update permissions',
-              type: 'server_error',
-              code: 'update_failed',
-            },
-          });
+          return reply.code(500).send(createError(
+            'Failed to update permissions',
+            'server_error',
+            null,
+            'update_failed'
+          ));
         }
       }
 
@@ -311,13 +307,12 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
       const revoked = apiKeyRepository.revoke(id, request.userId!);
 
       if (!revoked) {
-        return reply.code(404).send({
-          error: {
-            message: 'API key not found or already revoked',
-            type: 'not_found_error',
-            code: 'key_not_found',
-          },
-        });
+        return reply.code(404).send(createError(
+          'API key not found or already revoked',
+          'not_found_error',
+          null,
+          'key_not_found'
+        ));
       }
 
       return { success: true, message: 'API key revoked' };
@@ -349,13 +344,12 @@ export default async function apiKeysRoutes(fastify: FastifyInstance) {
       const deleted = apiKeyRepository.delete(id, request.userId!);
 
       if (!deleted) {
-        return reply.code(404).send({
-          error: {
-            message: 'API key not found',
-            type: 'not_found_error',
-            code: 'key_not_found',
-          },
-        });
+        return reply.code(404).send(createError(
+          'API key not found',
+          'not_found_error',
+          null,
+          'key_not_found'
+        ));
       }
 
       return { success: true, message: 'API key deleted' };
