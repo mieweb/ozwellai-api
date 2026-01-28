@@ -43,14 +43,14 @@ That's it! A chat widget will appear in the bottom-right corner of your page.
 
 Customize the widget using `data-*` attributes on the script tag.
 
-Alternatively, you can use `window.OzwellChatConfig` with the same options in camelCase (e.g., `data-api-key` becomes `apiKey`, `data-greeting` becomes `greeting`):
+Alternatively, you can use `window.OzwellChatConfig` with the same options in camelCase (e.g., `data-api-key` becomes `apiKey`, `data-greeting` becomes `welcomeMessage`):
 
 ```html
 <script>
   window.OzwellChatConfig = {
     apiKey: 'ozw_scoped_xxxxxxxxxxxxxxxx',
     agentId: 'agent_xxxxxxxx',
-    greeting: 'Hi! How can I help you today?'
+    welcomeMessage: 'Hi! How can I help you today?'
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
@@ -226,7 +226,13 @@ Enable page interactions using MCP tools (OpenAI function calling format):
   };
 
   // Handle tool calls from widget
+  // IMPORTANT: Validate origin to prevent malicious iframes from triggering tool calls
+  const WIDGET_ORIGIN = 'https://ozwellai-reference-server.opensource.mieweb.org';
+
   window.addEventListener('message', (event) => {
+    // Security: Only accept messages from the widget origin
+    if (event.origin !== WIDGET_ORIGIN) return;
+
     const data = event.data;
     if (!data || data.source !== 'ozwell-chat-widget') return;
 
@@ -242,7 +248,7 @@ Enable page interactions using MCP tools (OpenAI function calling format):
           type: 'tool_result',
           tool_call_id: tool_call_id,
           result: { success: true, message: 'Email updated successfully' }
-        }, '*');
+        }, WIDGET_ORIGIN);
       }
     }
   });

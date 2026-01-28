@@ -714,7 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Chat auto-opens via autoOpen: true in OzwellChatConfig
+  // Chat auto-open behavior controlled by autoOpen in OzwellChatConfig
 });
 
 console.log('Tic-tac-toe app loaded');

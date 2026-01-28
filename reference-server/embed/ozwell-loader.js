@@ -325,8 +325,6 @@ class IframeSyncBroker {
       'theme': 'theme',
       'position': 'position',
       'primaryColor': 'primaryColor',
-      'width': 'width',
-      'height': 'height',
       'autoOpen': 'autoOpen',
       'greeting': 'welcomeMessage',  // data-greeting maps to welcomeMessage
       'placeholder': 'placeholder',
@@ -346,7 +344,10 @@ class IframeSyncBroker {
     }
 
     if (Object.keys(config).length > 0) {
-      console.log('[OzwellChat] Parsed data attributes:', config);
+      // Redact sensitive fields before logging
+      const redacted = { ...config };
+      if ('apiKey' in redacted) redacted.apiKey = '[REDACTED]';
+      console.log('[OzwellChat] Parsed data attributes:', redacted);
     }
 
     return config;
@@ -450,9 +451,10 @@ class IframeSyncBroker {
         state.ready = true;
         flushPending();
         sendConfig();
-        document.dispatchEvent(new CustomEvent('ozwell:ready'));
+        document.dispatchEvent(new CustomEvent('ozwell:ready', { bubbles: true }));
         // Auto-open on page load if configured
-        if (config.autoOpen === true || config.autoOpen === 'true') {
+        const cfg = currentConfig();
+        if (cfg.autoOpen === true || cfg.autoOpen === 'true') {
           openChat();
         }
         break;
@@ -464,11 +466,11 @@ class IframeSyncBroker {
           text: data.payload?.text || '',
           close: Boolean(data.payload?.close),
         };
-        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail }));
+        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail, bubbles: true }));
         break;
       }
       case 'closed':
-        document.dispatchEvent(new CustomEvent('ozwell:close'));
+        document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
         break;
       case 'assistant_response':
         // AI responded with text (not a tool call) - handle notification
@@ -594,7 +596,7 @@ class IframeSyncBroker {
     clearUnreadNotification();
 
     // Dispatch open event
-    document.dispatchEvent(new CustomEvent('ozwell:open'));
+    document.dispatchEvent(new CustomEvent('ozwell:open', { bubbles: true }));
 
     console.log('[OzwellChat] Chat opened');
   }
@@ -612,6 +614,9 @@ class IframeSyncBroker {
     wrapper.classList.add('hidden');
     button.classList.remove('hidden');
     state.chatOpen = false;
+
+    // Dispatch close event
+    document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
 
     console.log('[OzwellChat] Chat closed');
   }
@@ -638,8 +643,10 @@ class IframeSyncBroker {
     const mobileHorizontalPos = isLeft ? 'left: 20px; right: auto;' : 'right: 20px; left: auto;';
 
     // Generate shadow color from primary color (with opacity)
-    const shadowColor = primaryColor + '4d'; // ~30% opacity
-    const shadowColorHover = primaryColor + '66'; // ~40% opacity
+    // Only append alpha if primaryColor is a valid 6-digit hex, otherwise use neutral fallback
+    const isValidHex = /^#[0-9a-fA-F]{6}$/.test(primaryColor);
+    const shadowColor = isValidHex ? primaryColor + '4d' : 'rgba(0, 0, 0, 0.3)'; // ~30% opacity
+    const shadowColorHover = isValidHex ? primaryColor + '66' : 'rgba(0, 0, 0, 0.4)'; // ~40% opacity
 
     const style = document.createElement('style');
     style.id = 'ozwell-default-ui-styles';
@@ -889,7 +896,11 @@ class IframeSyncBroker {
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
     const buttonIcon = config.buttonIcon || '/favicon.ico';
-    button.innerHTML = `<img src="${buttonIcon}" alt="Chat" class="ozwell-chat-icon" />`;
+    const buttonImg = document.createElement('img');
+    buttonImg.src = buttonIcon;
+    buttonImg.alt = 'Chat';
+    buttonImg.className = 'ozwell-chat-icon';
+    button.appendChild(buttonImg);
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
@@ -1081,22 +1092,52 @@ class IframeSyncBroker {
       return;
     }
 
-    if (!state.iframe || !state.iframe.contentWindow) {
-      console.warn('[OzwellChat] Widget not mounted. Call mount() first or wait for ready()');
-      return;
-    }
-
-    state.iframe.contentWindow.postMessage({
-      source: 'ozwell-chat-parent',
+    // Use postToWidget for consistent message handling and queue behavior
+    postToWidget({
       type: 'ozwell:send-message',
       payload: { content: text }
-    }, '*');
+    });
 
-    console.log('[OzwellChat] Sent message:', text);
+    // Don't log message content for privacy
+    console.log('[OzwellChat] Sent message programmatically');
+  }
+
+  /**
+   * Unmount the widget and clean up all resources.
+   * Useful for React components that need to tear down on unmount.
+   */
+  function unmount() {
+    // Remove message listener
+    window.removeEventListener('message', handleWidgetMessage);
+
+    // Remove default UI elements if they exist
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+    const styles = document.getElementById('ozwell-default-ui-styles');
+
+    if (button) button.remove();
+    if (wrapper) wrapper.remove();
+    if (styles) styles.remove();
+
+    // Remove iframe if not in default UI (custom container)
+    if (state.iframe && state.iframe.parentNode) {
+      state.iframe.remove();
+    }
+
+    // Reset state
+    state.iframe = null;
+    state.ready = false;
+    state.chatOpen = false;
+    state.hasUnread = false;
+    state.pendingMessages = [];
+    state.runtimeConfig = {};
+
+    console.log('[OzwellChat] Widget unmounted');
   }
 
   const api = {
     mount,
+    unmount, // Clean up and remove widget
     configure,
     updateContext, // Real-time context updates
     setContext: updateContext, // Alias for updateContext (documented API name)
