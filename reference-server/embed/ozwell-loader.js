@@ -305,11 +305,63 @@ class IframeSyncBroker {
     return {};
   }
 
+  /**
+   * Parse data-* attributes from the script tag.
+   * Converts kebab-case to camelCase (e.g., data-api-key -> apiKey)
+   * Handles boolean strings ("true"/"false") and preserves other values as-is.
+   */
+  function readDataAttributes() {
+    const script = document.currentScript;
+    if (!script) return {};
+
+    const config = {};
+    const dataset = script.dataset;
+
+    // Map of data attribute names to config property names
+    // Most follow simple kebab-to-camel conversion, but some need explicit mapping
+    const attributeMap = {
+      'apiKey': 'apiKey',
+      'agentId': 'agentId',
+      'theme': 'theme',
+      'position': 'position',
+      'primaryColor': 'primaryColor',
+      'autoOpen': 'autoOpen',
+      'greeting': 'welcomeMessage',  // data-greeting maps to welcomeMessage
+      'placeholder': 'placeholder',
+      'buttonIcon': 'buttonIcon',
+    };
+
+    for (const [dataKey, configKey] of Object.entries(attributeMap)) {
+      if (dataKey in dataset) {
+        let value = dataset[dataKey];
+
+        // Convert boolean strings
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+
+        config[configKey] = value;
+      }
+    }
+
+    if (Object.keys(config).length > 0) {
+      // Redact sensitive fields before logging
+      const redacted = { ...config };
+      if ('apiKey' in redacted) redacted.apiKey = '[REDACTED]';
+      console.log('[OzwellChat] Parsed data attributes:', redacted);
+    }
+
+    return config;
+  }
+
+  // Parse data attributes once at load time (document.currentScript is only available during initial script execution)
+  const dataAttributeConfig = readDataAttributes();
+
   function currentConfig() {
     return {
       ...DEFAULT_CONFIG,
-      ...readGlobalConfig(),
-      ...state.runtimeConfig,
+      ...dataAttributeConfig,      // data-* attributes (lowest priority after defaults)
+      ...readGlobalConfig(),       // window.OzwellChatConfig (higher priority)
+      ...state.runtimeConfig,      // Runtime updates (highest priority)
     };
   }
 
@@ -399,7 +451,12 @@ class IframeSyncBroker {
         state.ready = true;
         flushPending();
         sendConfig();
-        document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        document.dispatchEvent(new CustomEvent('ozwell:ready', { bubbles: true }));
+        // Auto-open on page load if configured
+        const cfg = currentConfig();
+        if (cfg.autoOpen === true || cfg.autoOpen === 'true') {
+          openChat();
+        }
         break;
       case 'request-config':
         sendConfig();
@@ -409,11 +466,11 @@ class IframeSyncBroker {
           text: data.payload?.text || '',
           close: Boolean(data.payload?.close),
         };
-        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail }));
+        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail, bubbles: true }));
         break;
       }
       case 'closed':
-        document.dispatchEvent(new CustomEvent('ozwell-chat-closed'));
+        document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
         break;
       case 'assistant_response':
         // AI responded with text (not a tool call) - handle notification
@@ -538,6 +595,9 @@ class IframeSyncBroker {
     // Clear any unread notifications when chat opens
     clearUnreadNotification();
 
+    // Dispatch open event
+    document.dispatchEvent(new CustomEvent('ozwell:open', { bubbles: true }));
+
     console.log('[OzwellChat] Chat opened');
   }
 
@@ -555,12 +615,16 @@ class IframeSyncBroker {
     button.classList.remove('hidden');
     state.chatOpen = false;
 
+    // Dispatch close event
+    document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
+
     console.log('[OzwellChat] Chat closed');
   }
 
   /**
    * Inject CSS styles for the default floating button and wrapper.
    * Only injects if defaultUI is enabled.
+   * Uses config values for theming (primaryColor, position).
    */
   function injectDefaultCSS() {
     const config = currentConfig();
@@ -569,6 +633,21 @@ class IframeSyncBroker {
     // Check if styles already injected
     if (document.getElementById('ozwell-default-ui-styles')) return;
 
+    // Get theme values from config
+    const primaryColor = config.primaryColor || '#0066ff';
+    const position = config.position || 'bottom-right';
+
+    // Position values
+    const isLeft = position === 'bottom-left';
+    const horizontalPos = isLeft ? 'left: 24px; right: auto;' : 'right: 24px; left: auto;';
+    const mobileHorizontalPos = isLeft ? 'left: 20px; right: auto;' : 'right: 20px; left: auto;';
+
+    // Generate shadow color from primary color (with opacity)
+    // Only append alpha if primaryColor is a valid 6-digit hex, otherwise use neutral fallback
+    const isValidHex = /^#[0-9a-fA-F]{6}$/.test(primaryColor);
+    const shadowColor = isValidHex ? primaryColor + '4d' : 'rgba(0, 0, 0, 0.3)'; // ~30% opacity
+    const shadowColorHover = isValidHex ? primaryColor + '66' : 'rgba(0, 0, 0, 0.4)'; // ~40% opacity
+
     const style = document.createElement('style');
     style.id = 'ozwell-default-ui-styles';
     style.textContent = `
@@ -576,14 +655,14 @@ class IframeSyncBroker {
       .ozwell-chat-button {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: #0066ff;
+        background: ${primaryColor};
         border: none;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+        box-shadow: 0 4px 16px ${shadowColor};
         display: flex;
         align-items: center;
         justify-content: center;
@@ -596,7 +675,7 @@ class IframeSyncBroker {
 
       .ozwell-chat-button:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+        box-shadow: 0 6px 20px ${shadowColorHover};
       }
 
       .ozwell-chat-button.hidden {
@@ -644,7 +723,7 @@ class IframeSyncBroker {
       .ozwell-chat-wrapper {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 380px;
         height: 520px;
         max-height: calc(100vh - 48px);
@@ -676,7 +755,7 @@ class IframeSyncBroker {
         justify-content: space-between;
         align-items: center;
         padding: 16px;
-        background: #0066ff;
+        background: ${primaryColor};
         color: white;
         user-select: none;
       }
@@ -734,7 +813,7 @@ class IframeSyncBroker {
         }
         .ozwell-chat-button {
           bottom: calc(20px + env(safe-area-inset-bottom));
-          right: 20px;
+          ${mobileHorizontalPos}
           width: 56px;
           height: 56px;
           font-size: 24px;
@@ -816,7 +895,12 @@ class IframeSyncBroker {
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    const buttonIcon = config.buttonIcon || '/favicon.ico';
+    const buttonImg = document.createElement('img');
+    buttonImg.src = buttonIcon;
+    buttonImg.alt = 'Chat';
+    buttonImg.className = 'ozwell-chat-icon';
+    button.appendChild(buttonImg);
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
@@ -985,12 +1069,82 @@ class IframeSyncBroker {
 
   window.addEventListener('message', handleWidgetMessage);
 
+  /**
+   * Toggle the chat window open/closed.
+   */
+  function toggleChat() {
+    if (state.chatOpen) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  }
+
+  /**
+   * Send a message programmatically as if the user typed it.
+   * The message will appear in the chat and trigger an AI response.
+   *
+   * @param {string} text - The message text to send
+   */
+  function sendMessage(text) {
+    if (!text || typeof text !== 'string') {
+      console.warn('[OzwellChat] sendMessage requires a non-empty string');
+      return;
+    }
+
+    // Use postToWidget for consistent message handling and queue behavior
+    postToWidget({
+      type: 'ozwell:send-message',
+      payload: { content: text }
+    });
+
+    // Don't log message content for privacy
+    console.log('[OzwellChat] Sent message programmatically');
+  }
+
+  /**
+   * Unmount the widget and clean up all resources.
+   * Useful for React components that need to tear down on unmount.
+   */
+  function unmount() {
+    // Remove message listener
+    window.removeEventListener('message', handleWidgetMessage);
+
+    // Remove default UI elements if they exist
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+    const styles = document.getElementById('ozwell-default-ui-styles');
+
+    if (button) button.remove();
+    if (wrapper) wrapper.remove();
+    if (styles) styles.remove();
+
+    // Remove iframe if not in default UI (custom container)
+    if (state.iframe && state.iframe.parentNode) {
+      state.iframe.remove();
+    }
+
+    // Reset state
+    state.iframe = null;
+    state.ready = false;
+    state.chatOpen = false;
+    state.hasUnread = false;
+    state.pendingMessages = [];
+    state.runtimeConfig = {};
+
+    console.log('[OzwellChat] Widget unmounted');
+  }
+
   const api = {
     mount,
+    unmount, // Clean up and remove widget
     configure,
-    updateContext, // New API for real-time context updates
+    updateContext, // Real-time context updates
+    setContext: updateContext, // Alias for updateContext (documented API name)
     open: openChat, // Programmatically open the chat window
     close: closeChat, // Programmatically close the chat window
+    toggle: toggleChat, // Toggle open/closed
+    sendMessage, // Send a message programmatically
     get iframe() {
       return state.iframe;
     },
@@ -1004,10 +1158,10 @@ class IframeSyncBroker {
       if (state.ready) return Promise.resolve();
       return new Promise((resolve) => {
         const listener = () => {
-          document.removeEventListener('ozwell-chat-ready', listener);
+          document.removeEventListener('ozwell:ready', listener);
           resolve();
         };
-        document.addEventListener('ozwell-chat-ready', listener);
+        document.addEventListener('ozwell:ready', listener);
       });
     },
   };
