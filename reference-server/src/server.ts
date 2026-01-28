@@ -14,8 +14,12 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
+import authRoutes from './routes/auth';
+import apiKeysRoutes from './routes/api-keys';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
+// Import database initialization
+import { initializeDatabase, seedDemoData } from './db/database';
 
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
@@ -127,7 +131,13 @@ async function buildServer() {
     }
   });
 
+  // Initialize database and seed demo data
+  initializeDatabase();
+  seedDemoData();
+
   // Register API routes
+  await fastify.register(authRoutes);      // Dashboard auth (/auth/*)
+  await fastify.register(apiKeysRoutes);   // API key management (/v1/api-keys)
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);
