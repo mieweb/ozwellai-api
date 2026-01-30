@@ -4,74 +4,14 @@
  * ============================================
  *
  * This file bundles everything needed for the widget:
- * - IframeSyncClient (for state synchronization)
  * - CSS styles (inlined)
  * - HTML structure (dynamically injected)
  * - Widget logic
  *
  * No separate HTML or CSS files needed!
- */
-
-/**
- * ============================================
- * IFRAME-SYNC CLIENT (Bundled)
- * ============================================
  *
- * IframeSyncClient allows this widget iframe to receive state updates from the parent page.
- * This is bundled here to eliminate the need for a separate iframe-sync.js script tag.
- *
- * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
+ * State updates from parent are received via postMessage (STATE_UPDATE type).
  */
-class IframeSyncClient {
-  #channel;
-  #recv;
-  #clientName;
-
-  constructor(clientName, recv) {
-    this.#recv = recv;
-    this.#channel = 'IframeSync';
-    this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-
-    if (!window) {
-      return;
-    }
-    window.addEventListener('message', (event) => {
-      if (!event.data || event.data.channel !== this.#channel) {
-        return;
-      }
-
-      const isOwnMessage = event.data.sourceClientName === this.#clientName;
-      const isReadyReceived = event.data.type === 'readyReceived';
-
-      if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-        this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-      }
-    });
-  }
-
-  ready() {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'ready',
-      sourceClientName: this.#clientName
-    }, '*');
-  }
-
-  stateChange(update) {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'stateChange',
-      sourceClientName: this.#clientName,
-      payload: update
-    }, '*');
-  }
-}
 
 /**
  * ============================================
@@ -1810,25 +1750,5 @@ saveButton?.addEventListener('click', handleSave);
 // Don't show initial system message - keep it clean
 setStatus('', false);
 
-// Initialize IframeSyncClient
-if (typeof IframeSyncClient !== 'undefined') {
-  console.log('[widget.js] Initializing IframeSyncClient...');
-
-  const iframeClient = new IframeSyncClient('ozwell-widget', function (payload, isOwnMessage, isReadyReceived) {
-    console.log('[widget.js] Received state from broker:', { payload, isOwnMessage, isReadyReceived });
-
-    if (payload && payload.formData) {
-      state.formData = payload.formData;
-      console.log('[widget.js] Form data updated:', state.formData);
-    }
-  });
-
-  // Register with broker
-  iframeClient.ready();
-  console.log('[widget.js] IframeSyncClient registered with broker');
-} else {
-  console.warn('[widget.js] IframeSyncClient not available');
-}
-
-// Legacy ready notification for embed system
+// Ready notification for embed system
 notifyReady();
