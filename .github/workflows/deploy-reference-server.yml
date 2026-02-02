@@ -7,7 +7,12 @@ on:
     paths:
       - 'reference-server/**'
       - 'clients/typescript/**'
+      - 'spec/**'
       - '.github/workflows/deploy-reference-server.yml'
+
+concurrency:
+  group: deploy-reference-server
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,7 +33,6 @@ jobs:
             clients/typescript/package-lock.json
             reference-server/package-lock.json
 
-      # Build dependencies first (spec and typescript client)
       - name: Install and build spec
         working-directory: ./spec
         run: npm ci && npm run build
@@ -37,36 +41,12 @@ jobs:
         working-directory: ./clients/typescript
         run: npm ci && npm run build
 
-      # Build reference server
-      - name: Install reference server dependencies
+      - name: Install and build reference server
         working-directory: ./reference-server
-        run: npm ci
+        run: npm ci && npm run build
 
-      - name: Build reference server
-        working-directory: ./reference-server
-        run: npm run build
-
-      # Create deployment package
       - name: Create deployment package
-        run: |
-          mkdir -p deploy-package/reference-server
-          mkdir -p deploy-package/clients/typescript
-
-          # Copy reference server built files
-          cp -r reference-server/dist deploy-package/reference-server/
-          cp reference-server/package.json reference-server/package-lock.json deploy-package/reference-server/
-          cp -r reference-server/embed deploy-package/reference-server/ 2>/dev/null || true
-          cp -r reference-server/data deploy-package/reference-server/ 2>/dev/null || true
-
-          # Copy typescript client (needed as local dependency)
-          cp -r clients/typescript/dist deploy-package/clients/typescript/
-          cp clients/typescript/package.json deploy-package/clients/typescript/
-
-          # Create tarball
-          tar -czvf reference-server-build.tar.gz -C deploy-package .
-
-          echo "📦 Package contents:"
-          tar -tzvf reference-server-build.tar.gz
+        run: ./scripts/build-deploy-package.sh
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -86,8 +66,9 @@ jobs:
         with:
           name: reference-server-build
 
+      # v0.1.7
       - name: Upload to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
         with:
           host: ${{ secrets.REFSERVER_HOST }}
           port: 2240
@@ -96,8 +77,9 @@ jobs:
           source: reference-server-build.tar.gz
           target: /tmp/
 
+      # v1.0.0
       - name: Extract and restart service
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
         with:
           host: ${{ secrets.REFSERVER_HOST }}
           port: 2240
@@ -106,6 +88,10 @@ jobs:
           script: |
             set -e
             cd ~/ozwellai-api
+
+            # Clean old build outputs to prevent stale files
+            echo "🧹 Cleaning old build outputs..."
+            rm -rf reference-server/dist clients/typescript/dist spec/dist
 
             # Extract the pre-built package
             echo "📦 Extracting build package..."
