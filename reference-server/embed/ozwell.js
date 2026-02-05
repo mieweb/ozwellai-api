@@ -270,6 +270,134 @@ body {
   color: #9ca3af;
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.privacy-info-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: color 0.2s, background 0.2s;
+}
+
+.privacy-info-btn:hover {
+  color: #6b7280;
+  background: #e5e7eb;
+}
+
+.privacy-info-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Privacy Modal */
+.privacy-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.privacy-modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.privacy-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 320px;
+  margin: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform: scale(0.95);
+  transition: transform 0.2s;
+}
+
+.privacy-modal-overlay.visible .privacy-modal {
+  transform: scale(1);
+}
+
+.privacy-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.privacy-modal-header svg {
+  width: 20px;
+  height: 20px;
+  color: #059669;
+}
+
+.privacy-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.privacy-modal-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+  margin-bottom: 16px;
+}
+
+.privacy-modal-content p {
+  margin: 0 0 10px 0;
+}
+
+.privacy-modal-content p:last-child {
+  margin-bottom: 0;
+}
+
+.privacy-modal-link {
+  color: #0066ff;
+  text-decoration: none;
+}
+
+.privacy-modal-link:hover {
+  text-decoration: underline;
+}
+
+.privacy-modal-close {
+  width: 100%;
+  padding: 10px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.privacy-modal-close:hover {
+  background: #e5e7eb;
 }
 
 /* Tool Pills (Debug Mode) */
@@ -384,7 +512,34 @@ body {
         <button type="submit" class="chat-submit">Send</button>
       </form>
       <button type="button" id="save-button" class="chat-save" disabled>Save & Close</button>
-      <div class="chat-footer">Powered by Ozwell</div>
+      <div class="chat-footer">
+        <span>Powered by Ozwell</span>
+        <button type="button" id="privacy-info-btn" class="privacy-info-btn" title="Privacy information">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Privacy Modal -->
+    <div id="privacy-modal-overlay" class="privacy-modal-overlay">
+      <div class="privacy-modal">
+        <div class="privacy-modal-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="privacy-modal-title">Your Privacy</span>
+        </div>
+        <div class="privacy-modal-content">
+          <p><strong>Your conversation is private.</strong> You are talking directly with Ozwell. The website hosting this chat cannot see your messages.</p>
+          <p>Only information you explicitly choose to share will be visible to the host site.</p>
+          <p><a href="https://github.com/mieweb/ozwellai-api/blob/main/docs/overview.md#privacy-first-why-it-matters" target="_blank" rel="noopener noreferrer" class="privacy-modal-link">Learn more about Ozwell's privacy model</a></p>
+        </div>
+        <button type="button" id="privacy-modal-close" class="privacy-modal-close">Got it</button>
+      </div>
     </div>
   `;
 })();
@@ -1746,6 +1901,34 @@ function handleSave() {
 window.addEventListener('message', handleParentMessage);
 formEl?.addEventListener('submit', handleSubmit);
 saveButton?.addEventListener('click', handleSave);
+
+// Privacy modal handling
+const privacyInfoBtn = document.getElementById('privacy-info-btn');
+const privacyModalOverlay = document.getElementById('privacy-modal-overlay');
+const privacyModalClose = document.getElementById('privacy-modal-close');
+
+function openPrivacyModal() {
+  privacyModalOverlay?.classList.add('visible');
+}
+
+function closePrivacyModal() {
+  privacyModalOverlay?.classList.remove('visible');
+}
+
+privacyInfoBtn?.addEventListener('click', openPrivacyModal);
+privacyModalClose?.addEventListener('click', closePrivacyModal);
+privacyModalOverlay?.addEventListener('click', (e) => {
+  if (e.target === privacyModalOverlay) {
+    closePrivacyModal();
+  }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && privacyModalOverlay?.classList.contains('visible')) {
+    closePrivacyModal();
+  }
+});
 
 // Don't show initial system message - keep it clean
 setStatus('', false);
