@@ -208,6 +208,42 @@ npm run test -w clients/typescript
 
 ---
 
+## How Ozwell Differs from Other AI Proxies
+
+While tools like [LiteLLM](https://github.com/BerriAI/litellm) provide excellent unified API proxies for multiple LLM providers, Ozwell takes a fundamentally different approach:
+
+| Aspect | LiteLLM & Similar Proxies | Ozwell |
+|--------|---------------------------|--------|
+| **Primary Purpose** | Unified API gateway to BAA Privacy LLM providers | Privacy-first embeddable AI assistant |
+| **Architecture** | Backend proxy service | Full-stack: API + embeddable frontend widget |
+| **Privacy Model** | Provider-focused routing | User-centric: conversations are private by default |
+| **Frontend** | None (API-only) | Secure iframe-isolated chat widget |
+| **Data Sharing** | Transparent passthrough | Opt-in only—users control what's shared with host sites |
+| **Use Case** | Swap LLM providers without code changes | Deploy AI assistants users can trust |
+
+### Key Differentiators
+
+🔒 **Privacy by Design**  
+Ozwell never shares conversation content with host sites unless the user explicitly consents. This creates a safe space where users can ask questions—even ones they might consider "dumb"—knowing their dialogue stays private.
+
+� **HIPAA-Ready with BAA Coverage**  
+Ozwell exclusively uses AI models from providers that offer Business Associate Agreements (BAA) for HIPAA compliance. This makes Ozwell suitable for healthcare and other regulated industries where data protection isn't optional.
+
+�🎯 **Embeddable-First**  
+Built for embedding in any website with iframe isolation, postMessage communication, and lifecycle events. Not just an API—a complete frontend integration solution.
+
+🤝 **User Empowerment**  
+Unlike passthrough proxies, Ozwell is designed around user trust. The AI helps inform users; users control what happens with that information.
+
+🔧 **MCP Tool Calling**  
+Native support for [Model Context Protocol](https://modelcontextprotocol.io/) enables secure tool calling between the embedded widget and host applications.
+
+**When to use Ozwell:** You want to deploy an AI assistant that users can trust, with built-in privacy controls and frontend embedding.
+
+**When to use LiteLLM:** You need a backend proxy to unify multiple LLM providers behind a single API.
+
+---
+
 ## Philosophy
 
 This public repository for Ozwell API is the canonical reference for the API, enabling both internal and external teams to build against a stable, well-documented contract.
