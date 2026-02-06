@@ -714,17 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Auto-open the chat window on page load (using default floating UI)
-  setTimeout(() => {
-    const wrapper = document.getElementById('ozwell-chat-wrapper');
-    const button = document.getElementById('ozwell-chat-button');
-    if (wrapper && button) {
-      wrapper.classList.remove('hidden');
-      wrapper.classList.add('visible');
-      button.classList.add('hidden');
-      console.log('[tictactoe-app.js] Chat auto-opened');
-    }
-  }, 800); // Wait for widget to fully initialize
+  // Chat auto-open behavior controlled by autoOpen in OzwellChatConfig
 });
 
 console.log('Tic-tac-toe app loaded');

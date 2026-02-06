@@ -1,245 +1,5 @@
 /**
  * ============================================
- * IFRAME-SYNC LIBRARY (Bundled - Internal Use)
- * ============================================
- *
- * This library provides state synchronization between parent pages and iframes
- * using the postMessage API. It's bundled here for convenience and kept private.
- *
- * DO NOT use IframeSyncBroker/IframeSyncClient directly - use OzwellChat.updateContext() instead.
- *
- * Architecture:
- * - IframeSyncBroker: Lives in parent page, manages state and broadcasts to clients
- * - IframeSyncClient: Lives in iframes, receives state updates from broker
- *
- * Communication Flow:
- * 1. Parent calls broker.stateChange({ data }) or OzwellChat.updateContext({ data })
- * 2. Broker broadcasts state to all registered iframe clients via postMessage
- * 3. Each client receives state update and calls their callback function
- *
- * Why bundled: Simplifies integration - one script tag instead of two.
- * Why private: Clean API - developers use OzwellChat.updateContext() instead.
- */
-
-/**
- * Class representing an IframeSyncClient.
- * Browser iframes that want to participate in state synchronization should instantiate this class.
- *
- * This is used internally by the Ozwell widget to receive context updates from the parent page.
- */
-class IframeSyncClient {
-    #channel;
-    #recv;
-    #clientName;
-
-    /**
-     * Create an IframeSyncClient.
-     * @param {string} [clientName] - A unique client name. If not provided, one will be generated randomly.
-     * @param {function} recv - A callback function to receive state updates.
-     */
-    constructor(clientName, recv) {
-        this.#recv = recv;
-        this.#channel = 'IframeSync';
-        this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-
-        if (!window) {
-          return;
-        }
-        window.addEventListener('message', (event) => {
-            if (!event.data || event.data.channel !== this.#channel) {
-                return;
-            }
-
-            const isOwnMessage = event.data.sourceClientName === this.#clientName;
-            const isReadyReceived = event.data.type === 'readyReceived';
-
-            if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-                this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-            }
-        });
-    }
-
-    /**
-     * Notify the parent window that this client is ready to receive state updates.
-     */
-    ready() {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'ready',
-            sourceClientName: this.#clientName
-        }, '*');
-    }
-
-    /**
-     * Send a state update to the broker, which will broadcast it to all other clients.
-     * Partial updates are OK, as the broker will merge the update into the current state.
-     * @param {Object} update - The state update to send.
-     */
-    stateChange(update) {
-        if (!window || !window.parent) {
-          return;
-        }
-        window.parent.postMessage({
-            channel: this.#channel,
-            type: 'stateChange',
-            sourceClientName: this.#clientName,
-            payload: update
-        }, '*');
-    }
-}
-
-/**
- * Class representing an IframeSyncBroker.
- *
- * This manages state in the parent page and broadcasts updates to all iframe clients.
- * The Ozwell widget uses this internally - parent pages should use OzwellChat.updateContext() instead.
- */
-class IframeSyncBroker {
-    #channel;
-    #state;
-    #clientIframes;
-    #debugMode;
-
-    /**
-     * Create an IframeSyncBroker.
-     */
-    constructor() {
-        this.#channel = 'IframeSync';
-        this.#state = {};
-        this.#clientIframes = new Set();
-        this.#debugMode = false;
-
-        if (!window) {
-          return;
-        }
-        window.addEventListener('message', (event) => this.#handleMessage(event));
-    }
-
-    /**
-     * Handle incoming messages from iframe clients.
-     * @param {MessageEvent} event - The message event.
-     * @private
-     */
-    #handleMessage(event) {
-        const { data, source: clientIframe } = event;
-        if (!data || data.channel !== this.#channel) {
-            return;
-        }
-
-        if (data.type === 'ready') {
-            this.#clientIframes.add(clientIframe);
-            this.#sendReadyReceived(clientIframe);
-        } else if (data.type === 'stateChange' && data.payload) {
-            this.#updateState(data.payload, data.sourceClientName);
-        }
-    }
-
-    /**
-     * Update the state with the provided update and broadcast to all clients.
-     * @param {Object} update - The state update.
-     * @param {string} sourceClientName - The name of the client that sent the update.
-     * @private
-     */
-    #updateState(update, sourceClientName) {
-        const prevState = JSON.stringify(this.#state);
-        Object.assign(this.#state, update);
-        const newState = JSON.stringify(this.#state);
-
-        if (prevState !== newState) {
-            this.#debug();
-            this.#broadcastState(sourceClientName);
-        }
-    }
-
-    /**
-     * Send the current state to a specific client iframe.
-     * @param {Window} clientIframe - The client iframe to send the state to.
-     * @param {string} sourceClientName - The name of the client that requested the state.
-     * @private
-     */
-    #sendSyncState(clientIframe, sourceClientName) {
-        if (clientIframe && typeof clientIframe.postMessage === 'function') {
-            clientIframe.postMessage({
-                channel: this.#channel,
-                type: 'syncState',
-                sourceClientName: sourceClientName, // Pass through the source
-                payload: this.#state,
-            }, '*');
-        }
-    }
-
-    /**
-     * Notify a client that it has been registered and send initial state.
-     * @param {Window} clientIframe - The client iframe to notify.
-     * @private
-     */
-    #sendReadyReceived(clientIframe) {
-        if (clientIframe && typeof clientIframe.postMessage === 'function') {
-            clientIframe.postMessage({
-                channel: this.#channel,
-                type: 'readyReceived',
-                payload: this.#state,
-            }, '*');
-        }
-    }
-
-    /**
-     * Broadcast the current state to all client iframes.
-     * @param {string} sourceClientName - The name of the client that sent the update.
-     * @private
-     */
-    #broadcastState(sourceClientName) {
-        this.#clientIframes.forEach((clientIframe) =>
-            this.#sendSyncState(clientIframe, sourceClientName)
-        );
-    }
-
-    /**
-     * Log a debug message (internal debugging tool).
-     * @private
-     */
-    #debug() {
-        if (this.#debugMode === false) {
-            return; // noop by default
-        }
-
-        const stateJson = JSON.stringify(this.#state, null, 2);
-        if (this.#debugMode === true) {
-            console.log('IframeSyncBroker state change', stateJson);
-        } else if (typeof this.#debugMode === 'function') {
-            this.#debugMode(stateJson);
-        } else if (this.#debugMode instanceof HTMLElement) {
-            this.#debugMode.innerText = stateJson;
-        }
-    }
-
-    /**
-     * Control debug behavior.
-     * @param {boolean|Function|HTMLElement} mode - The debug mode.
-     *   * false (default): no debug
-     *   * true: console.log
-     *   * function: call a provided function
-     *   * HTML element: set the text of an element
-     */
-    setDebugMode(mode) {
-        this.#debugMode = mode;
-    }
-
-    /**
-     * Manually trigger a state update.
-     * This is the main API for parent pages to send context to the widget.
-     * @param {Object} update - State update to broadcast to all iframe clients.
-     */
-    stateChange(update) {
-        this.#updateState(update, 'parent');
-    }
-}
-
-/**
- * ============================================
  * OZWELL CHAT WIDGET LOADER
  * ============================================
  *
@@ -292,7 +52,6 @@ class IframeSyncBroker {
     ready: false,
     pendingMessages: [],
     runtimeConfig: {},
-    broker: null, // Internal iframe-sync broker for state updates
     hasUnread: false, // Track unread messages when chat is closed
     chatOpen: false, // Track if chat window is currently open
   };
@@ -305,11 +64,63 @@ class IframeSyncBroker {
     return {};
   }
 
+  /**
+   * Parse data-* attributes from the script tag.
+   * Converts kebab-case to camelCase (e.g., data-api-key -> apiKey)
+   * Handles boolean strings ("true"/"false") and preserves other values as-is.
+   */
+  function readDataAttributes() {
+    const script = document.currentScript;
+    if (!script) return {};
+
+    const config = {};
+    const dataset = script.dataset;
+
+    // Map of data attribute names to config property names
+    // Most follow simple kebab-to-camel conversion, but some need explicit mapping
+    const attributeMap = {
+      'apiKey': 'apiKey',
+      'agentId': 'agentId',
+      'theme': 'theme',
+      'position': 'position',
+      'primaryColor': 'primaryColor',
+      'autoOpen': 'autoOpen',
+      'greeting': 'welcomeMessage',  // data-greeting maps to welcomeMessage
+      'placeholder': 'placeholder',
+      'buttonIcon': 'buttonIcon',
+    };
+
+    for (const [dataKey, configKey] of Object.entries(attributeMap)) {
+      if (dataKey in dataset) {
+        let value = dataset[dataKey];
+
+        // Convert boolean strings
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+
+        config[configKey] = value;
+      }
+    }
+
+    if (Object.keys(config).length > 0) {
+      // Redact sensitive fields before logging
+      const redacted = { ...config };
+      if ('apiKey' in redacted) redacted.apiKey = '[REDACTED]';
+      console.log('[OzwellChat] Parsed data attributes:', redacted);
+    }
+
+    return config;
+  }
+
+  // Parse data attributes once at load time (document.currentScript is only available during initial script execution)
+  const dataAttributeConfig = readDataAttributes();
+
   function currentConfig() {
     return {
       ...DEFAULT_CONFIG,
-      ...readGlobalConfig(),
-      ...state.runtimeConfig,
+      ...dataAttributeConfig,      // data-* attributes (lowest priority after defaults)
+      ...readGlobalConfig(),       // window.OzwellChatConfig (higher priority)
+      ...state.runtimeConfig,      // Runtime updates (highest priority)
     };
   }
 
@@ -399,7 +210,12 @@ class IframeSyncBroker {
         state.ready = true;
         flushPending();
         sendConfig();
-        document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        document.dispatchEvent(new CustomEvent('ozwell:ready', { bubbles: true }));
+        // Auto-open on page load if configured
+        const cfg = currentConfig();
+        if (cfg.autoOpen === true || cfg.autoOpen === 'true') {
+          openChat();
+        }
         break;
       case 'request-config':
         sendConfig();
@@ -409,11 +225,11 @@ class IframeSyncBroker {
           text: data.payload?.text || '',
           close: Boolean(data.payload?.close),
         };
-        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail }));
+        document.dispatchEvent(new CustomEvent('ozwell-chat-insert', { detail, bubbles: true }));
         break;
       }
       case 'closed':
-        document.dispatchEvent(new CustomEvent('ozwell-chat-closed'));
+        document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
         break;
       case 'assistant_response':
         // AI responded with text (not a tool call) - handle notification
@@ -538,6 +354,9 @@ class IframeSyncBroker {
     // Clear any unread notifications when chat opens
     clearUnreadNotification();
 
+    // Dispatch open event
+    document.dispatchEvent(new CustomEvent('ozwell:open', { bubbles: true }));
+
     console.log('[OzwellChat] Chat opened');
   }
 
@@ -555,12 +374,16 @@ class IframeSyncBroker {
     button.classList.remove('hidden');
     state.chatOpen = false;
 
+    // Dispatch close event
+    document.dispatchEvent(new CustomEvent('ozwell:close', { bubbles: true }));
+
     console.log('[OzwellChat] Chat closed');
   }
 
   /**
    * Inject CSS styles for the default floating button and wrapper.
    * Only injects if defaultUI is enabled.
+   * Uses config values for theming (primaryColor, position).
    */
   function injectDefaultCSS() {
     const config = currentConfig();
@@ -569,6 +392,21 @@ class IframeSyncBroker {
     // Check if styles already injected
     if (document.getElementById('ozwell-default-ui-styles')) return;
 
+    // Get theme values from config
+    const primaryColor = config.primaryColor || '#0066ff';
+    const position = config.position || 'bottom-right';
+
+    // Position values
+    const isLeft = position === 'bottom-left';
+    const horizontalPos = isLeft ? 'left: 24px; right: auto;' : 'right: 24px; left: auto;';
+    const mobileHorizontalPos = isLeft ? 'left: 20px; right: auto;' : 'right: 20px; left: auto;';
+
+    // Generate shadow color from primary color (with opacity)
+    // Only append alpha if primaryColor is a valid 6-digit hex, otherwise use neutral fallback
+    const isValidHex = /^#[0-9a-fA-F]{6}$/.test(primaryColor);
+    const shadowColor = isValidHex ? primaryColor + '4d' : 'rgba(0, 0, 0, 0.3)'; // ~30% opacity
+    const shadowColorHover = isValidHex ? primaryColor + '66' : 'rgba(0, 0, 0, 0.4)'; // ~40% opacity
+
     const style = document.createElement('style');
     style.id = 'ozwell-default-ui-styles';
     style.textContent = `
@@ -576,14 +414,14 @@ class IframeSyncBroker {
       .ozwell-chat-button {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: #0066ff;
+        background: ${primaryColor};
         border: none;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+        box-shadow: 0 4px 16px ${shadowColor};
         display: flex;
         align-items: center;
         justify-content: center;
@@ -596,7 +434,7 @@ class IframeSyncBroker {
 
       .ozwell-chat-button:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+        box-shadow: 0 6px 20px ${shadowColorHover};
       }
 
       .ozwell-chat-button.hidden {
@@ -644,7 +482,7 @@ class IframeSyncBroker {
       .ozwell-chat-wrapper {
         position: fixed;
         bottom: 24px;
-        right: 24px;
+        ${horizontalPos}
         width: 380px;
         height: 520px;
         max-height: calc(100vh - 48px);
@@ -676,7 +514,7 @@ class IframeSyncBroker {
         justify-content: space-between;
         align-items: center;
         padding: 16px;
-        background: #0066ff;
+        background: ${primaryColor};
         color: white;
         user-select: none;
       }
@@ -734,7 +572,7 @@ class IframeSyncBroker {
         }
         .ozwell-chat-button {
           bottom: calc(20px + env(safe-area-inset-bottom));
-          right: 20px;
+          ${mobileHorizontalPos}
           width: 56px;
           height: 56px;
           font-size: 24px;
@@ -816,7 +654,12 @@ class IframeSyncBroker {
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    const buttonIcon = config.buttonIcon || '/favicon.ico';
+    const buttonImg = document.createElement('img');
+    buttonImg.src = buttonIcon;
+    buttonImg.alt = 'Chat';
+    buttonImg.className = 'ozwell-chat-icon';
+    button.appendChild(buttonImg);
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
@@ -889,7 +732,7 @@ class IframeSyncBroker {
 
   /**
    * Mount the Ozwell chat widget iframe.
-   * Creates the iframe element and initializes the internal state sync broker.
+   * Creates the iframe element and sets up the widget.
    *
    * @param {Object} options - Mounting options
    * @param {string} [options.containerId] - DOM element ID to mount in (defaults to body)
@@ -917,13 +760,6 @@ class IframeSyncBroker {
       // Widget notifies us when it is ready.
     });
 
-    // Initialize iframe-sync broker for real-time state updates
-    // This allows parent page to send context to widget via updateContext()
-    if (!state.broker) {
-      state.broker = new IframeSyncBroker();
-      console.log('[OzwellChat] State sync broker initialized');
-    }
-
     return iframe;
   }
 
@@ -947,7 +783,7 @@ class IframeSyncBroker {
 
   /**
    * Update the widget's context/state in real-time.
-   * Sends data to the widget iframe via iframe-sync, which the widget can use
+   * Sends data to the widget iframe via postMessage, which the widget can use
    * to provide context-aware responses.
    *
    * Example: Send form data to widget so it knows current values
@@ -974,23 +810,96 @@ class IframeSyncBroker {
    * });
    */
   function updateContext(data) {
-    if (!state.broker) {
-      console.warn('[OzwellChat] Broker not initialized. Call mount() before updateContext()');
+    if (!state.iframe?.contentWindow) {
+      console.warn('[OzwellChat] Widget not mounted. Call mount() before updateContext()');
       return;
     }
 
-    // Send context update to widget via iframe-sync
-    state.broker.stateChange(data);
+    // Send context update to widget via postMessage
+    state.iframe.contentWindow.postMessage({
+      type: 'STATE_UPDATE',
+      state: data
+    }, '*');
   }
 
   window.addEventListener('message', handleWidgetMessage);
 
+  /**
+   * Toggle the chat window open/closed.
+   */
+  function toggleChat() {
+    if (state.chatOpen) {
+      closeChat();
+    } else {
+      openChat();
+    }
+  }
+
+  /**
+   * Send a message programmatically as if the user typed it.
+   * The message will appear in the chat and trigger an AI response.
+   *
+   * @param {string} text - The message text to send
+   */
+  function sendMessage(text) {
+    if (!text || typeof text !== 'string') {
+      console.warn('[OzwellChat] sendMessage requires a non-empty string');
+      return;
+    }
+
+    // Use postToWidget for consistent message handling and queue behavior
+    postToWidget({
+      type: 'ozwell:send-message',
+      payload: { content: text }
+    });
+
+    // Don't log message content for privacy
+    console.log('[OzwellChat] Sent message programmatically');
+  }
+
+  /**
+   * Unmount the widget and clean up all resources.
+   * Useful for React components that need to tear down on unmount.
+   */
+  function unmount() {
+    // Remove message listener
+    window.removeEventListener('message', handleWidgetMessage);
+
+    // Remove default UI elements if they exist
+    const button = document.getElementById('ozwell-chat-button');
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+    const styles = document.getElementById('ozwell-default-ui-styles');
+
+    if (button) button.remove();
+    if (wrapper) wrapper.remove();
+    if (styles) styles.remove();
+
+    // Remove iframe if not in default UI (custom container)
+    if (state.iframe && state.iframe.parentNode) {
+      state.iframe.remove();
+    }
+
+    // Reset state
+    state.iframe = null;
+    state.ready = false;
+    state.chatOpen = false;
+    state.hasUnread = false;
+    state.pendingMessages = [];
+    state.runtimeConfig = {};
+
+    console.log('[OzwellChat] Widget unmounted');
+  }
+
   const api = {
     mount,
+    unmount, // Clean up and remove widget
     configure,
-    updateContext, // New API for real-time context updates
+    updateContext, // Real-time context updates
+    setContext: updateContext, // Alias for updateContext (documented API name)
     open: openChat, // Programmatically open the chat window
     close: closeChat, // Programmatically close the chat window
+    toggle: toggleChat, // Toggle open/closed
+    sendMessage, // Send a message programmatically
     get iframe() {
       return state.iframe;
     },
@@ -1004,16 +913,15 @@ class IframeSyncBroker {
       if (state.ready) return Promise.resolve();
       return new Promise((resolve) => {
         const listener = () => {
-          document.removeEventListener('ozwell-chat-ready', listener);
+          document.removeEventListener('ozwell:ready', listener);
           resolve();
         };
-        document.addEventListener('ozwell-chat-ready', listener);
+        document.addEventListener('ozwell:ready', listener);
       });
     },
   };
 
   // Export API for manual initialization
-  // Note: IframeSyncBroker/Client are NOT exposed - use updateContext() instead
   window.OzwellChat = api;
 
   // Auto-mount widget unless explicitly disabled

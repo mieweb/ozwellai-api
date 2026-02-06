@@ -135,17 +135,10 @@ async function buildServer() {
   await fastify.register(filesRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
 
-  // Serve public assets (documentation, misc)
-  await fastify.register(fastifyStatic, {
-    root: path.join(rootDir, 'public'),
-    prefix: '/',
-  });
-
-  // Serve embed assets from dedicated directory
+  // Serve embed assets (widget files)
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'embed'),
     prefix: '/embed/',
-    decorateReply: false,
   });
 
   // 404 handler
