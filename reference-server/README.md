@@ -309,6 +309,123 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 - Interactive docs: `http://localhost:3000/docs`
 - JSON spec: `http://localhost:3000/openapi.json`
 
+## Extensibility
+
+The reference server is designed to be extended by downstream implementations. You can import and customize it as a library:
+
+### Installation as a Library
+
+```bash
+npm install @mieweb/ozwellai-reference
+```
+
+### Custom Server Example
+
+```typescript
+import buildServer from '@mieweb/ozwellai-reference';
+import type { ServerOptions, AuthHandler, AuthResult } from '@mieweb/ozwellai-reference/types';
+
+// Custom JWT-based authentication
+const customAuth: AuthHandler = async (request) => {
+  const token = request.headers.authorization?.replace('Bearer ', '');
+  if (!token) {
+    return { valid: false, error: 'No token provided' };
+  }
+  
+  // Your auth logic here (JWT verification, API key lookup, etc.)
+  const user = await verifyToken(token);
+  return {
+    valid: true,
+    userId: user.id,
+    orgId: user.orgId,
+    context: { permissions: user.permissions }
+  };
+};
+
+const server = await buildServer({
+  // Custom authentication handler
+  authHandler: customAuth,
+  
+  // Routes that skip authentication
+  publicRoutes: ['/health', '/docs', '/openapi.json', '/webhooks'],
+  
+  // Add a prefix to all API routes
+  routePrefix: '/api',
+  
+  // Customize OpenAPI documentation
+  swagger: {
+    title: 'My Custom API',
+    description: 'Extended OzwellAI API',
+    version: '2.0.0',
+    servers: [{ url: 'https://api.example.com', description: 'Production' }],
+  },
+  
+  // Register middleware before routes
+  onBeforeRoutes: async (fastify) => {
+    // Add custom plugins, decorators, or middleware
+    fastify.decorate('myService', new MyService());
+  },
+  
+  // Register additional routes after default routes
+  onAfterRoutes: async (fastify) => {
+    fastify.get('/custom-endpoint', async (request, reply) => {
+      return { custom: 'response' };
+    });
+  },
+  
+  // Disable features you don't need
+  registerDefaultRoutes: true,  // Set false to register routes manually
+  serveStatic: false,           // Disable static file serving
+  enableDocs: true,             // Enable Swagger UI
+});
+
+await server.listen({ port: 3000 });
+```
+
+### Importing Individual Routes
+
+You can import individual route plugins to register them manually:
+
+```typescript
+import buildServer from '@mieweb/ozwellai-reference';
+import { chatRoute, modelsRoute } from '@mieweb/ozwellai-reference';
+
+const server = await buildServer({
+  registerDefaultRoutes: false,  // Don't auto-register routes
+});
+
+// Register only the routes you need
+await server.register(modelsRoute, { prefix: '/v1' });
+await server.register(chatRoute, { prefix: '/v1' });
+```
+
+### Server Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `authHandler` | `AuthHandler` | Accepts any Bearer token | Custom authentication function |
+| `publicRoutes` | `string[]` | `['/health', '/docs', '/openapi.json', '/embed/', '/public/']` | Routes that skip auth |
+| `routePrefix` | `string` | `''` | Prefix for all API routes |
+| `onBeforeRoutes` | `(server) => void` | - | Hook called before routes are registered |
+| `onAfterRoutes` | `(server) => void` | - | Hook called after routes are registered |
+| `swagger` | `SwaggerOptions` | - | OpenAPI documentation config |
+| `registerDefaultRoutes` | `boolean` | `true` | Whether to register default API routes |
+| `serveStatic` | `boolean` | `true` | Whether to serve static files |
+| `enableDocs` | `boolean` | `true` | Whether to enable Swagger UI at /docs |
+| `fastifyOptions` | `object` | `{ logger: true }` | Options passed to Fastify constructor |
+| `rootDir` | `string` | `process.cwd()` | Root directory for static files |
+
+### Auth Context
+
+The `AuthResult` from your auth handler is available on requests:
+
+```typescript
+fastify.get('/my-route', async (request, reply) => {
+  const { userId, orgId, context } = request.authContext || {};
+  // Use auth context in your route handlers
+});
+```
+
 ## Configuration
 
 Environment variables:
