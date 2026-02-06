@@ -1,0 +1,113 @@
+name: Deploy Reference Server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'reference-server/**'
+      - 'clients/typescript/**'
+      - 'spec/**'
+      - '.github/workflows/deploy-reference-server.yml'
+
+concurrency:
+  group: deploy-reference-server
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Reference Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            spec/package-lock.json
+            clients/typescript/package-lock.json
+            reference-server/package-lock.json
+
+      - name: Install and build spec
+        working-directory: ./spec
+        run: npm ci && npm run build
+
+      - name: Install and build TypeScript client
+        working-directory: ./clients/typescript
+        run: npm ci && npm run build
+
+      - name: Install and build reference server
+        working-directory: ./reference-server
+        run: npm ci && npm run build
+
+      - name: Create deployment package
+        run: ./scripts/build-deploy-package.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-server-build
+          path: reference-server-build.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to ozwellai-reference-server
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reference-server-build
+
+      # v0.1.7
+      - name: Upload to server
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
+        with:
+          host: ${{ secrets.REFSERVER_HOST }}
+          port: 2240
+          username: ${{ secrets.REFSERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: reference-server-build.tar.gz
+          target: /tmp/
+
+      # v1.0.0
+      - name: Extract and restart service
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
+        with:
+          host: ${{ secrets.REFSERVER_HOST }}
+          port: 2240
+          username: ${{ secrets.REFSERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/ozwellai-api
+
+            # Clean old build outputs to prevent stale files
+            echo "🧹 Cleaning old build outputs..."
+            rm -rf reference-server/dist clients/typescript/dist spec/dist
+
+            # Extract the pre-built package
+            echo "📦 Extracting build package..."
+            tar -xzvf /tmp/reference-server-build.tar.gz
+
+            # Install production dependencies only (no build needed)
+            echo "📥 Installing production dependencies..."
+            cd reference-server
+            npm ci --production --ignore-scripts
+
+            # Restart service
+            echo "🔄 Restarting service..."
+            pm2 restart refserver
+            pm2 save
+
+            # Cleanup
+            rm /tmp/reference-server-build.tar.gz
+
+            echo "✅ Reference server deployed successfully!"
