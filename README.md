@@ -221,6 +221,14 @@ The Ozwell API specification project is an open and reliable source of truth for
 - **Canonical Testing Implementation:** A Fastify server stub provides a reference implementation for testing, returning hard-coded responses for all endpoints.
 - **Extensible:** Enhanced features and new endpoints are added in a transparent, community-driven manner.
 
+## Type Lifecycle and Source of Truth
+
+**📋 [Read the complete Type Lifecycle documentation](TYPE_LIFECYCLE.md)**
+
+The canonical source of truth for all API types is `/spec/index.ts`, which contains Zod schema definitions. These schemas serve as runtime validation, type generation source, and API contract specification.
+
+For modifying types, always start with the Zod schemas in `/spec/index.ts`, then build and update all consumers.
+
 ---
 
 ## Repository Structure
