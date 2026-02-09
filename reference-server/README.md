@@ -391,7 +391,7 @@ src/
 embed/                  # Embeddable chat widget files
 ├── ozwell-loader.js    # Widget loader script to be embedded in parent pages
 ├── ozwell.html         # Widget iframe entry point (minimal HTML loader)
-└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and IframeSyncClient
+└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and widget logic
 ```
 
 ### Adding New Endpoints

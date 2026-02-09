@@ -4,74 +4,14 @@
  * ============================================
  *
  * This file bundles everything needed for the widget:
- * - IframeSyncClient (for state synchronization)
  * - CSS styles (inlined)
  * - HTML structure (dynamically injected)
  * - Widget logic
  *
  * No separate HTML or CSS files needed!
- */
-
-/**
- * ============================================
- * IFRAME-SYNC CLIENT (Bundled)
- * ============================================
  *
- * IframeSyncClient allows this widget iframe to receive state updates from the parent page.
- * This is bundled here to eliminate the need for a separate iframe-sync.js script tag.
- *
- * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
+ * State updates from parent are received via postMessage (STATE_UPDATE type).
  */
-class IframeSyncClient {
-  #channel;
-  #recv;
-  #clientName;
-
-  constructor(clientName, recv) {
-    this.#recv = recv;
-    this.#channel = 'IframeSync';
-    this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-
-    if (!window) {
-      return;
-    }
-    window.addEventListener('message', (event) => {
-      if (!event.data || event.data.channel !== this.#channel) {
-        return;
-      }
-
-      const isOwnMessage = event.data.sourceClientName === this.#clientName;
-      const isReadyReceived = event.data.type === 'readyReceived';
-
-      if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-        this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-      }
-    });
-  }
-
-  ready() {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'ready',
-      sourceClientName: this.#clientName
-    }, '*');
-  }
-
-  stateChange(update) {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'stateChange',
-      sourceClientName: this.#clientName,
-      payload: update
-    }, '*');
-  }
-}
 
 /**
  * ============================================
@@ -330,6 +270,134 @@ body {
   color: #9ca3af;
   border-top: 1px solid #e5e7eb;
   background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.privacy-info-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: color 0.2s, background 0.2s;
+}
+
+.privacy-info-btn:hover {
+  color: #6b7280;
+  background: #e5e7eb;
+}
+
+.privacy-info-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Privacy Modal */
+.privacy-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.privacy-modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.privacy-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 320px;
+  margin: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform: scale(0.95);
+  transition: transform 0.2s;
+}
+
+.privacy-modal-overlay.visible .privacy-modal {
+  transform: scale(1);
+}
+
+.privacy-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.privacy-modal-header svg {
+  width: 20px;
+  height: 20px;
+  color: #059669;
+}
+
+.privacy-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.privacy-modal-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4b5563;
+  margin-bottom: 16px;
+}
+
+.privacy-modal-content p {
+  margin: 0 0 10px 0;
+}
+
+.privacy-modal-content p:last-child {
+  margin-bottom: 0;
+}
+
+.privacy-modal-link {
+  color: #0066ff;
+  text-decoration: none;
+}
+
+.privacy-modal-link:hover {
+  text-decoration: underline;
+}
+
+.privacy-modal-close {
+  width: 100%;
+  padding: 10px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.privacy-modal-close:hover {
+  background: #e5e7eb;
 }
 
 /* Tool Pills (Debug Mode) */
@@ -425,6 +493,183 @@ body {
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* ============================================
+   DARK THEME
+   ============================================ */
+.theme-dark body,
+.theme-dark .chat-container {
+  background: #1a1a1a;
+  color: #e5e7eb;
+}
+
+.theme-dark .status {
+  background: #262626;
+  border-bottom-color: #374151;
+}
+
+.theme-dark .status.status--processing {
+  color: #9ca3af;
+}
+
+.theme-dark .messages {
+  background: #1a1a1a;
+}
+
+.theme-dark .message.assistant {
+  background: #262626;
+  color: #e5e7eb;
+}
+
+.theme-dark .message.system {
+  background: #422006;
+  color: #fbbf24;
+}
+
+.theme-dark .message.welcome {
+  background: #262626;
+  color: #9ca3af;
+  border-color: #374151;
+}
+
+.theme-dark .message.queued {
+  color: #60a5fa;
+  border-color: #60a5fa;
+}
+
+.theme-dark .message.queued.editing {
+  background: #1e3a5f;
+  border-color: #60a5fa;
+}
+
+.theme-dark .queued-input {
+  background: #1e3a5f;
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.theme-dark .queued-action-btn:hover {
+  background: #374151;
+}
+
+.theme-dark .queued-action-btn svg {
+  stroke: #9ca3af;
+}
+
+.theme-dark .queued-action-btn:hover svg {
+  stroke: #e5e7eb;
+}
+
+.theme-dark .queued-action-btn.confirm:hover {
+  background: #064e3b;
+}
+
+.theme-dark .queued-action-btn.cancel:hover {
+  background: #7f1d1d;
+}
+
+.theme-dark .chat-form {
+  background: #262626;
+  border-top-color: #374151;
+}
+
+.theme-dark .chat-input {
+  background: #1a1a1a;
+  border-color: #374151;
+  color: #e5e7eb;
+}
+
+.theme-dark .chat-input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.theme-dark .chat-submit {
+  background: #2563eb;
+}
+
+.theme-dark .chat-submit:hover {
+  background: #1d4ed8;
+}
+
+.theme-dark .chat-submit:disabled {
+  background: #4b5563;
+}
+
+.theme-dark .chat-footer {
+  background: #262626;
+  border-top-color: #374151;
+  color: #6b7280;
+}
+
+.theme-dark .privacy-info-btn {
+  color: #6b7280;
+}
+
+.theme-dark .privacy-info-btn:hover {
+  color: #9ca3af;
+  background: #374151;
+}
+
+.theme-dark .privacy-modal {
+  background: #262626;
+}
+
+.theme-dark .privacy-modal-title {
+  color: #e5e7eb;
+}
+
+.theme-dark .privacy-modal-content {
+  color: #9ca3af;
+}
+
+.theme-dark .privacy-modal-link {
+  color: #60a5fa;
+}
+
+.theme-dark .privacy-modal-close {
+  background: #374151;
+  color: #e5e7eb;
+}
+
+.theme-dark .privacy-modal-close:hover {
+  background: #4b5563;
+}
+
+.theme-dark .tool-pill {
+  background: #312e81;
+  color: #a5b4fc;
+  border-color: #4338ca;
+}
+
+.theme-dark .tool-pill:hover,
+.theme-dark .tool-pill.expanded {
+  background: #3730a3;
+}
+
+.theme-dark .tool-details {
+  background: #262626;
+  border-color: #374151;
+}
+
+.theme-dark .tool-details-header {
+  background: #1a1a1a;
+  border-bottom-color: #374151;
+  color: #e5e7eb;
+}
+
+.theme-dark .tool-details-section {
+  border-bottom-color: #374151;
+}
+
+.theme-dark .tool-details-label {
+  color: #9ca3af;
+}
+
+.theme-dark .tool-details-content {
+  background: #1a1a1a;
+  color: #e5e7eb;
+}
   `;
   document.head.appendChild(style);
 
@@ -444,7 +689,34 @@ body {
         <button type="submit" class="chat-submit">Send</button>
       </form>
       <button type="button" id="save-button" class="chat-save" disabled>Save & Close</button>
-      <div class="chat-footer">Powered by Ozwell</div>
+      <div class="chat-footer">
+        <span>Powered by Ozwell</span>
+        <button type="button" id="privacy-info-btn" class="privacy-info-btn" title="Privacy information">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Privacy Modal -->
+    <div id="privacy-modal-overlay" class="privacy-modal-overlay">
+      <div class="privacy-modal">
+        <div class="privacy-modal-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span class="privacy-modal-title">Your Privacy</span>
+        </div>
+        <div class="privacy-modal-content">
+          <p><strong>Your conversation is private.</strong> You are talking directly with Ozwell. The website hosting this chat cannot see your messages.</p>
+          <p>Only information you explicitly choose to share will be visible to the host site.</p>
+          <p><a href="https://github.com/mieweb/ozwellai-api/blob/main/docs/overview.md#privacy-first-why-it-matters" target="_blank" rel="noopener noreferrer" class="privacy-modal-link">Learn more about Ozwell's privacy model</a></p>
+        </div>
+        <button type="button" id="privacy-modal-close" class="privacy-modal-close">Got it</button>
+      </div>
     </div>
   `;
 })();
@@ -729,6 +1001,30 @@ function sendQueuedMessage() {
   sendMessage(text);
 }
 
+/**
+ * Apply theme to the widget.
+ * @param {string} theme - 'light', 'dark', or 'auto'
+ */
+function applyTheme(theme) {
+  const root = document.documentElement;
+
+  // Handle 'auto' - use system preference
+  if (theme === 'auto' || !theme) {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    theme = prefersDark ? 'dark' : 'light';
+  }
+
+  if (theme === 'dark') {
+    root.classList.add('theme-dark');
+    root.classList.remove('theme-light');
+    console.log('[widget.js] Applied dark theme');
+  } else {
+    root.classList.add('theme-light');
+    root.classList.remove('theme-dark');
+    console.log('[widget.js] Applied light theme');
+  }
+}
+
 function applyConfig(config) {
   state.config = {
     ...state.config,
@@ -737,6 +1033,11 @@ function applyConfig(config) {
 
   if (inputEl) {
     inputEl.placeholder = state.config.placeholder || 'Type a message...';
+  }
+
+  // Apply theme if provided
+  if (config.theme) {
+    applyTheme(config.theme);
   }
 
   // Show welcome message if provided and chat is empty
@@ -1807,28 +2108,36 @@ window.addEventListener('message', handleParentMessage);
 formEl?.addEventListener('submit', handleSubmit);
 saveButton?.addEventListener('click', handleSave);
 
+// Privacy modal handling
+const privacyInfoBtn = document.getElementById('privacy-info-btn');
+const privacyModalOverlay = document.getElementById('privacy-modal-overlay');
+const privacyModalClose = document.getElementById('privacy-modal-close');
+
+function openPrivacyModal() {
+  privacyModalOverlay?.classList.add('visible');
+}
+
+function closePrivacyModal() {
+  privacyModalOverlay?.classList.remove('visible');
+}
+
+privacyInfoBtn?.addEventListener('click', openPrivacyModal);
+privacyModalClose?.addEventListener('click', closePrivacyModal);
+privacyModalOverlay?.addEventListener('click', (e) => {
+  if (e.target === privacyModalOverlay) {
+    closePrivacyModal();
+  }
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && privacyModalOverlay?.classList.contains('visible')) {
+    closePrivacyModal();
+  }
+});
+
 // Don't show initial system message - keep it clean
 setStatus('', false);
 
-// Initialize IframeSyncClient
-if (typeof IframeSyncClient !== 'undefined') {
-  console.log('[widget.js] Initializing IframeSyncClient...');
-
-  const iframeClient = new IframeSyncClient('ozwell-widget', function (payload, isOwnMessage, isReadyReceived) {
-    console.log('[widget.js] Received state from broker:', { payload, isOwnMessage, isReadyReceived });
-
-    if (payload && payload.formData) {
-      state.formData = payload.formData;
-      console.log('[widget.js] Form data updated:', state.formData);
-    }
-  });
-
-  // Register with broker
-  iframeClient.ready();
-  console.log('[widget.js] IframeSyncClient registered with broker');
-} else {
-  console.warn('[widget.js] IframeSyncClient not available');
-}
-
-// Legacy ready notification for embed system
+// Ready notification for embed system
 notifyReady();

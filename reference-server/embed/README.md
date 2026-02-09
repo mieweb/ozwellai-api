@@ -570,6 +570,15 @@ The widget handles all mobile optimizations automatically.
 - **Demo:** https://ozwellai-embedtest.opensource.mieweb.org
 - **Reference Server:** https://ozwellai-reference-server.opensource.mieweb.org
 
+![Demo page showing host page and Ozwell widget](./annotated-ss-demo-page.png)
+
+**Key boundaries:**
+
+- **Yellow (Host Page)** - Your website with forms, content, and the sequence diagram showing how the widget communicates
+- **Red outline (Ozwell iframe)** - The Ozwell Assistant chat widget running in an isolated iframe
+
+The chat widget communicates with your page via `postMessage` for tool calls, but **conversation content stays private** within the iframe boundary. The host page cannot access message content.
+
 ## Local Development
 
 ```bash

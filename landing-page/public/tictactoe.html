@@ -90,6 +90,7 @@
       system: 'You are a tic-tac-toe AI playing as O against the human (X).\n\n=== RULES ===\n1. When user CLICKS: You see "It\'s your turn as O" → call ai_move\n2. When user TYPES like "play center": call make_move → then IMMEDIATELY call ai_move\n\n=== CRITICAL ===\nAfter make_move returns with currentPlayer:"O", you MUST call ai_move next. Two tool calls in sequence.\n\n=== EXAMPLES ===\nUser clicks: "I played X at index 1. It\'s your turn as O." → call ai_move\nUser types: "play top right" → call make_move(2) → then call ai_move',
       welcomeMessage: 'Click any square to play, or type moves like "play center". I\'m O, you\'re X!',
       debug: false, // Disable debug mode for clean game experience
+      autoOpen: false, // Keep chat closed on page load (user clicks to open)
       tools: [
         {
           type: 'function',
