@@ -172,6 +172,41 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 export type ChatCompletionResponse = z.infer<typeof ChatCompletionResponseSchema>;
+// Agent registration schemas
+export const AgentSpendingLimitsSchema = z.object({
+  daily_usd: z.number().min(0).optional(),
+  monthly_usd: z.number().min(0).optional(),
+});
+
+export const AgentFootnoteDbConfigSchema = z.object({
+  enabled: z.boolean(),
+  db_name: z.string().optional(),
+});
+
+export const AgentRegistrationRequestSchema = z.object({
+  markdown: z.string(),
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+  footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
+});
+
+export const AgentRegistrationResponseSchema = z.object({
+  agent_id: z.string(),
+  agent_key: z.string(),
+  parent_key: z.string(),
+  created_at: z.number(),
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+});
+
+export const AgentMetadataSchema = z.object({
+  agent_id: z.string(),
+  agent_key: z.string(),
+  parent_key: z.string(),
+  created_at: z.number(),
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+  footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
+  filename: z.string(),
+});
+
 export type ResponseRequest = z.infer<typeof ResponseRequestSchema>;
 export type Response = z.infer<typeof ResponseSchema>;
 export type EmbeddingRequest = z.infer<typeof EmbeddingRequestSchema>;
@@ -180,3 +215,8 @@ export type FileObject = z.infer<typeof FileObjectSchema>;
 export type FileListResponse = z.infer<typeof FileListResponseSchema>;
 export type ModelsListResponse = z.infer<typeof ModelsListResponseSchema>;
 export type ChatCompletionChunk = z.infer<typeof ChatCompletionChunkSchema>;
+export type AgentSpendingLimits = z.infer<typeof AgentSpendingLimitsSchema>;
+export type AgentFootnoteDbConfig = z.infer<typeof AgentFootnoteDbConfigSchema>;
+export type AgentRegistrationRequest = z.infer<typeof AgentRegistrationRequestSchema>;
+export type AgentRegistrationResponse = z.infer<typeof AgentRegistrationResponseSchema>;
+export type AgentMetadata = z.infer<typeof AgentMetadataSchema>;
