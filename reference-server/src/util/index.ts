@@ -60,7 +60,7 @@ export class SimpleTextGenerator {
     while (response.length < targetLength * 0.7) {
       const contIndex = Math.floor(rng() * this.CONTINUATIONS.length);
       response += this.CONTINUATIONS[contIndex];
-      
+
       // Add some varied content
       const words = prompt.toLowerCase().split(' ').filter(w => w.length > 3);
       if (words.length > 0) {
@@ -86,7 +86,7 @@ export class SimpleTextGenerator {
   static *generateStream(prompt: string, maxTokens: number = 150): Generator<string> {
     const fullResponse = this.generate(prompt, maxTokens);
     const words = fullResponse.split(' ');
-    
+
     // Yield words one by one to simulate streaming
     let current = '';
     for (const word of words) {
@@ -106,7 +106,7 @@ export class SimpleTextGenerator {
   }
 
   private static seededRandom(seed: number): () => number {
-    return function() {
+    return function () {
       seed = (seed * 9301 + 49297) % 233280;
       return seed / 233280;
     };
@@ -125,20 +125,20 @@ export function generateEmbedding(text: string, dimensions: number = 1536): numb
     hash = hash & hash; // Convert to 32-bit integer
   }
   const seed = Math.abs(hash);
-  
+
   // Seeded random number generator
   let currentSeed = seed;
   const rng = () => {
     currentSeed = (currentSeed * 9301 + 49297) % 233280;
     return currentSeed / 233280;
   };
-  
+
   const embedding = new Array(dimensions);
   for (let i = 0; i < dimensions; i++) {
     // Generate values in a reasonable range for embeddings (-1 to 1)
     embedding[i] = (rng() - 0.5) * 2;
   }
-  
+
   // Normalize the vector
   const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
   if (magnitude === 0) {
@@ -191,6 +191,23 @@ export function validateAuth(authorization: string | undefined): boolean {
 }
 
 /**
+ * Check if a bearer token is an agent key
+ */
+export function isAgentKey(authorization: string | undefined): boolean {
+  if (!authorization) return false;
+  const token = authorization.replace('Bearer ', '');
+  return token.startsWith('agnt_');
+}
+
+/**
+ * Extract the raw token from an authorization header
+ */
+export function extractToken(authorization: string | undefined): string {
+  if (!authorization) return '';
+  return authorization.replace('Bearer ', '');
+}
+
+/**
  * Check if Ollama backend is available
  * Caches result to avoid repeated checks
  */
@@ -201,26 +218,26 @@ const OLLAMA_CHECK_INTERVAL = 30000; // Re-check every 30 seconds
 
 export async function isOllamaAvailable(): Promise<boolean> {
   const now = Date.now();
-  
+
   // Return cached result if recent
   if (ollamaAvailable !== null && (now - lastOllamaCheck) < OLLAMA_CHECK_INTERVAL) {
     return ollamaAvailable;
   }
-  
+
   const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
-    
+
     const response = await fetch(`${ollamaUrl}/api/tags`, {
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
     ollamaAvailable = response.ok;
     lastOllamaCheck = now;
-    
+
     // Cache available models
     if (response.ok) {
       try {
@@ -230,7 +247,7 @@ export async function isOllamaAvailable(): Promise<boolean> {
         ollamaModels = [];
       }
     }
-    
+
     return ollamaAvailable;
   } catch {
     ollamaAvailable = false;
@@ -247,27 +264,27 @@ export function getOllamaDefaultModel(): string {
   // Prefer models in this order - llama3.x and gpt-oss have better tool calling support
   const preferredModels = [
     'llama3.2:latest',
-    'llama3.1:latest', 
+    'llama3.1:latest',
     'llama3:latest',
     'gpt-oss:latest',
     'gpt-oss:20b',
     'mistral:latest',
-    'llama2:latest', 
+    'llama2:latest',
     'qwen2.5-coder:3b'
   ];
-  
+
   // Check if any preferred model is available
   for (const model of preferredModels) {
     if (ollamaModels.includes(model)) {
       return model;
     }
   }
-  
+
   // Return first available model, or fallback
   if (ollamaModels.length > 0) {
     return ollamaModels[0];
   }
-  
+
   // Fallback if no models cached yet
   return process.env.OLLAMA_MODEL || 'llama3.2:latest';
 }
