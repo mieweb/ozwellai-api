@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ozwell Agent Demo</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e5e5e5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: #111;
+            border-bottom: 1px solid #222;
+            flex-shrink: 0;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        header h1 span {
+            color: #3b82f6;
+        }
+
+        .header-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: #1c1c1c;
+            border: 1px solid #333;
+        }
+
+        .header-status.connected {
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+
+        .header-status.disconnected {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+
+        /* ── Main Layout ── */
+        .main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── Left Panel ── */
+        .panel-left {
+            width: 380px;
+            min-width: 380px;
+            background: #111;
+            border-right: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .section {
+            padding: 16px;
+            border-bottom: 1px solid #1a1a1a;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        textarea {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e5e5e5;
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: #3b82f6;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .field {
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #333;
+            background: #1a1a1a;
+            color: #e5e5e5;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: #252525;
+            border-color: #555;
+        }
+
+        button.primary {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+        }
+
+        button.primary:hover {
+            background: #2563eb;
+        }
+
+        button.primary:disabled {
+            background: #1e3a5f;
+            border-color: #1e3a5f;
+            color: #6b7280;
+            cursor: not-allowed;
+        }
+
+        .agent-key-display {
+            background: #0d1f17;
+            border: 1px solid #166534;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .agent-key-display.visible {
+            display: block;
+        }
+
+        .agent-key-display .key-label {
+            font-size: 11px;
+            color: #22c55e;
+            margin-bottom: 4px;
+        }
+
+        .agent-key-display .key-value {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            color: #4ade80;
+            word-break: break-all;
+        }
+
+        .tool-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .tool-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border: 1px solid #262626;
+        }
+
+        .tool-item input[type="checkbox"] {
+            accent-color: #3b82f6;
+        }
+
+        .tool-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #e5e5e5;
+        }
+
+        .tool-desc {
+            font-size: 11px;
+            color: #888;
+        }
+
+        /* ── Right Panel ── */
+        .panel-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Chat Area */
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .msg {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .msg.user {
+            align-self: flex-end;
+            background: #1d4ed8;
+            color: #fff;
+            border-bottom-right-radius: 2px;
+        }
+
+        .msg.assistant {
+            align-self: flex-start;
+            background: #1a1a1a;
+            border: 1px solid #262626;
+            border-bottom-left-radius: 2px;
+        }
+
+        .msg.tool-trace {
+            align-self: center;
+            background: #0c0c0c;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: #a78bfa;
+            max-width: 95%;
+            padding: 8px 12px;
+        }
+
+        .msg.tool-trace .trace-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #7c3aed;
+            margin-bottom: 4px;
+        }
+
+        .msg.tool-trace .trace-fn {
+            color: #c084fc;
+        }
+
+        .msg.tool-trace .trace-args {
+            color: #94a3b8;
+        }
+
+        .msg.tool-trace .trace-result {
+            color: #34d399;
+            margin-top: 4px;
+        }
+
+        .msg.error-trace {
+            align-self: center;
+            background: #1a0a0a;
+            border: 1px solid #7f1d1d;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #f87171;
+            max-width: 95%;
+            padding: 8px 12px;
+        }
+
+        .typing-indicator {
+            align-self: flex-start;
+            padding: 10px 14px;
+            background: #1a1a1a;
+            border: 1px solid #262626;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #888;
+            display: none;
+        }
+
+        .typing-indicator.visible {
+            display: block;
+        }
+
+        .typing-indicator span {
+            animation: blink 1.4s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            gap: 8px;
+        }
+
+        .empty-state .icon {
+            font-size: 40px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Chat Input */
+        .chat-input-area {
+            padding: 12px 20px 16px;
+            border-top: 1px solid #222;
+            background: #111;
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input-row input {
+            flex: 1;
+        }
+
+        /* ── Event Log ── */
+        .log-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 20px;
+            background: #0d0d0d;
+            border-top: 1px solid #222;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .log-toggle span {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+        }
+
+        .log-toggle .arrow {
+            font-size: 12px;
+            color: #666;
+            transition: transform 0.2s;
+        }
+
+        .log-toggle.open .arrow {
+            transform: rotate(180deg);
+        }
+
+        .event-log {
+            height: 0;
+            overflow-y: auto;
+            background: #080808;
+            border-top: 1px solid #1a1a1a;
+            transition: height 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .event-log.open {
+            height: 240px;
+        }
+
+        .log-entry {
+            padding: 8px 16px;
+            border-bottom: 1px solid #111;
+            font-size: 11px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            cursor: pointer;
+        }
+
+        .log-entry:hover {
+            background: #111;
+        }
+
+        .log-entry .log-method {
+            display: inline-block;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 6px;
+        }
+
+        .log-entry .log-method.post {
+            background: #1e3a5f;
+            color: #60a5fa;
+        }
+
+        .log-entry .log-path {
+            color: #999;
+        }
+
+        .log-entry .log-status {
+            float: right;
+        }
+
+        .log-entry .log-status.ok {
+            color: #22c55e;
+        }
+
+        .log-entry .log-status.err {
+            color: #ef4444;
+        }
+
+        .log-entry .log-detail {
+            display: none;
+            margin-top: 6px;
+            padding: 8px;
+            background: #0a0a0a;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #777;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .log-entry.expanded .log-detail {
+            display: block;
+        }
+
+        /* scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1><span>Ozwell</span> Agent Demo</h1>
+        <div class="header-status disconnected" id="status">No agent</div>
+    </header>
+
+    <div class="main">
+        <!-- Left Panel -->
+        <div class="panel-left">
+
+            <!-- Configuration -->
+            <div class="section">
+                <div class="section-title">Configuration</div>
+                <div class="field">
+                    <label>Ozwell API URL</label>
+                    <input type="text" id="apiUrl" value="http://localhost:3000">
+                </div>
+                <div class="field">
+                    <label>Parent API Key</label>
+                    <input type="password" id="parentKey" placeholder="e.g. test-key-123">
+                </div>
+                <div class="field">
+                    <label>OpenWeatherMap API Key <span style="color:#555">(for weather tool)</span></label>
+                    <input type="password" id="weatherKey" placeholder="Paste your key here">
+                </div>
+            </div>
+
+            <!-- Agent Setup -->
+            <div class="section">
+                <div class="section-title">Create Agent</div>
+                <div class="field">
+                    <label>Agent Name</label>
+                    <input type="text" id="agentName" value="Weather Assistant">
+                </div>
+                <div class="field">
+                    <label>Instructions</label>
+                    <textarea
+                        id="agentInstructions">You are a helpful weather assistant. When asked about weather, always use the get_weather tool to get real data. Present the information clearly with temperature, conditions, and humidity. You can also do math with the calculate tool and check times with get_time.</textarea>
+                </div>
+                <button class="primary" id="createAgentBtn" style="width:100%">Create Agent</button>
+                <div class="agent-key-display" id="agentKeyDisplay">
+                    <div class="key-label">Agent Key (using this for chat)</div>
+                    <div class="key-value" id="agentKeyValue"></div>
+                </div>
+            </div>
+
+            <!-- Tools -->
+            <div class="section">
+                <div class="section-title">Available Tools</div>
+                <div class="tool-list">
+                    <label class="tool-item">
+                        <input type="checkbox" checked data-tool="get_weather">
+                        <div>
+                            <div class="tool-name">get_weather</div>
+                            <div class="tool-desc">Real weather data via OpenWeatherMap</div>
+                        </div>
+                    </label>
+                    <label class="tool-item">
+                        <input type="checkbox" checked data-tool="calculate">
+                        <div>
+                            <div class="tool-name">calculate</div>
+                            <div class="tool-desc">Evaluate math expressions</div>
+                        </div>
+                    </label>
+                    <label class="tool-item">
+                        <input type="checkbox" checked data-tool="get_time">
+                        <div>
+                            <div class="tool-name">get_time</div>
+                            <div class="tool-desc">Current time in any timezone</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Presets -->
+            <div class="section">
+                <div class="section-title">Quick Prompts</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                    <button class="quick-prompt" data-prompt="What's the weather like in Miami right now?">Weather in
+                        Miami</button>
+                    <button class="quick-prompt"
+                        data-prompt="What's the weather in Tokyo and what time is it there?">Tokyo weather +
+                        time</button>
+                    <button class="quick-prompt"
+                        data-prompt="What is the square root of 144 plus the cube root of 27?">Math calculation</button>
+                    <button class="quick-prompt"
+                        data-prompt="Compare the weather in New York and London right now.">Compare two cities</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="panel-right">
+            <div class="chat-area" id="chatArea">
+                <div class="empty-state" id="emptyState">
+                    <div class="icon">&#x1F916;</div>
+                    <p>Create an agent and start chatting</p>
+                    <p style="font-size:12px;color:#444">The agent will automatically call tools and reason over results
+                    </p>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                Agent is thinking<span>.</span><span>.</span><span>.</span>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="chat-input-row">
+                    <input type="text" id="chatInput" placeholder="Send a message..." disabled>
+                    <button class="primary" id="sendBtn" disabled>Send</button>
+                </div>
+            </div>
+
+            <!-- Event Log -->
+            <div class="log-toggle" id="logToggle">
+                <span>Event Log (<span id="logCount">0</span>)</span>
+                <span class="arrow">&#9650;</span>
+            </div>
+            <div class="event-log" id="eventLog"></div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // ── State ──
+            let agentKey = null;
+            let conversationMessages = [];
+            let logEntries = 0;
+
+            // ── DOM ──
+            const $ = (sel) => document.querySelector(sel);
+            const apiUrl = () => $('#apiUrl').value.replace(/\/$/, '');
+            const parentKey = () => $('#parentKey').value.trim();
+            const weatherApiKey = () => $('#weatherKey').value.trim();
+
+            // Restore from localStorage
+            if (localStorage.getItem('ozwell_apiUrl')) $('#apiUrl').value = localStorage.getItem('ozwell_apiUrl');
+            if (localStorage.getItem('ozwell_parentKey')) $('#parentKey').value = localStorage.getItem('ozwell_parentKey');
+            if (localStorage.getItem('ozwell_weatherKey')) $('#weatherKey').value = localStorage.getItem('ozwell_weatherKey');
+
+            // Save on change
+            ['apiUrl', 'parentKey', 'weatherKey'].forEach(id => {
+                $(`#${id}`).addEventListener('input', () => {
+                    localStorage.setItem(`ozwell_${id}`, $(`#${id}`).value);
+                });
+            });
+
+            // ── Tool Definitions (OpenAI format, sent to server) ──
+            const TOOL_DEFS = {
+                get_weather: {
+                    type: 'function',
+                    function: {
+                        name: 'get_weather',
+                        description: 'Get current weather for a city. Returns temperature (F), conditions, humidity, and wind speed.',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                location: { type: 'string', description: 'City name, e.g. "Miami" or "London,UK"' }
+                            },
+                            required: ['location']
+                        }
+                    }
+                },
+                calculate: {
+                    type: 'function',
+                    function: {
+                        name: 'calculate',
+                        description: 'Evaluate a mathematical expression. Supports +, -, *, /, sqrt(), pow(), sin(), cos(), tan(), log(), abs(), ceil(), floor(), round(), PI, E.',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                expression: { type: 'string', description: 'Math expression to evaluate, e.g. "sqrt(144) + 5"' }
+                            },
+                            required: ['expression']
+                        }
+                    }
+                },
+                get_time: {
+                    type: 'function',
+                    function: {
+                        name: 'get_time',
+                        description: 'Get the current date and time in a given timezone.',
+                        parameters: {
+                            type: 'object',
+                            properties: {
+                                timezone: { type: 'string', description: 'IANA timezone, e.g. "America/New_York", "Asia/Tokyo", "Europe/London"' }
+                            },
+                            required: ['timezone']
+                        }
+                    }
+                }
+            };
+
+            // ── Argument cleanup ──
+            // Small models (llama3.2) sometimes pass JSON schema as argument values
+            // e.g. {"location":{"description":"Miami","type":"string"}} instead of {"location":"Miami"}
+            function cleanArgs(args) {
+                const cleaned = {};
+                for (const [key, val] of Object.entries(args)) {
+                    if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        // If it looks like a schema fragment, extract the description or first string value
+                        if (val.description && typeof val.description === 'string') {
+                            cleaned[key] = val.description;
+                        } else if (val.default !== undefined) {
+                            cleaned[key] = val.default;
+                        } else {
+                            // Try to find any string value in the object
+                            const strVal = Object.values(val).find(v => typeof v === 'string' && v !== 'string' && v !== 'number' && v !== 'object');
+                            cleaned[key] = strVal || JSON.stringify(val);
+                        }
+                    } else {
+                        cleaned[key] = val;
+                    }
+                }
+                return cleaned;
+            }
+
+            // ── Tool Executors (real implementations) ──
+            const TOOL_EXECUTORS = {
+                async get_weather(args) {
+                    args = cleanArgs(args);
+                    const key = weatherApiKey();
+                    if (!key) return JSON.stringify({ error: 'No OpenWeatherMap API key configured' });
+                    const loc = args.location || 'Miami';
+                    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(loc)}&appid=${key}&units=imperial`;
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        const errBody = await res.text();
+                        return JSON.stringify({ error: `Weather API error (${res.status}): ${errBody}` });
+                    }
+                    const data = await res.json();
+                    return JSON.stringify({
+                        location: data.name,
+                        country: data.sys?.country,
+                        temperature_f: Math.round(data.main?.temp),
+                        feels_like_f: Math.round(data.main?.feels_like),
+                        condition: data.weather?.[0]?.description,
+                        humidity: data.main?.humidity,
+                        wind_mph: Math.round(data.wind?.speed),
+                    });
+                },
+
+                async calculate(args) {
+                    args = cleanArgs(args);
+                    const expr = args.expression || '';
+                    try {
+                        // Safe math evaluation — replace common math functions
+                        const sanitized = expr
+                            .replace(/\bcbrt\b/g, 'Math.cbrt')
+                            .replace(/\bsqrt\b/g, 'Math.sqrt')
+                            .replace(/\bpow\b/g, 'Math.pow')
+                            .replace(/\bsin\b/g, 'Math.sin')
+                            .replace(/\bcos\b/g, 'Math.cos')
+                            .replace(/\btan\b/g, 'Math.tan')
+                            .replace(/\blog\b/g, 'Math.log')
+                            .replace(/\blog2\b/g, 'Math.log2')
+                            .replace(/\blog10\b/g, 'Math.log10')
+                            .replace(/\babs\b/g, 'Math.abs')
+                            .replace(/\bceil\b/g, 'Math.ceil')
+                            .replace(/\bfloor\b/g, 'Math.floor')
+                            .replace(/\bround\b/g, 'Math.round')
+                            .replace(/\bmin\b/g, 'Math.min')
+                            .replace(/\bmax\b/g, 'Math.max')
+                            .replace(/\bPI\b/g, 'Math.PI')
+                            .replace(/\bE\b/g, 'Math.E');
+                        // Only allow Math.xxx calls, numbers, operators, parens, commas, spaces
+                        if (/[^0-9+\-*/().,%\s Math.a-z]/.test(sanitized)) {
+                            return JSON.stringify({ error: 'Invalid expression' });
+                        }
+                        const result = new Function(`"use strict"; return (${sanitized})`)();
+                        return JSON.stringify({ expression: expr, result: result });
+                    } catch (e) {
+                        return JSON.stringify({ error: `Calculation error: ${e.message}` });
+                    }
+                },
+
+                async get_time(args) {
+                    args = cleanArgs(args);
+                    const tz = args.timezone || 'UTC';
+                    try {
+                        const now = new Date();
+                        const formatted = new Intl.DateTimeFormat('en-US', {
+                            timeZone: tz,
+                            dateStyle: 'full',
+                            timeStyle: 'long',
+                        }).format(now);
+                        return JSON.stringify({ timezone: tz, datetime: formatted });
+                    } catch (e) {
+                        return JSON.stringify({ error: `Invalid timezone: ${tz}` });
+                    }
+                }
+            };
+
+            // ── Get enabled tools ──
+            function getEnabledTools() {
+                const tools = [];
+                document.querySelectorAll('.tool-item input[type="checkbox"]').forEach(cb => {
+                    if (cb.checked && TOOL_DEFS[cb.dataset.tool]) {
+                        tools.push(TOOL_DEFS[cb.dataset.tool]);
+                    }
+                });
+                return tools;
+            }
+
+            // ── Logging ──
+            function addLogEntry(method, path, status, detail) {
+                logEntries++;
+                $('#logCount').textContent = logEntries;
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                const statusClass = status >= 200 && status < 300 ? 'ok' : 'err';
+                entry.innerHTML = `
+      <span class="log-method post">${method}</span>
+      <span class="log-path">${path}</span>
+      <span class="log-status ${statusClass}">${status}</span>
+      <div class="log-detail">${escapeHtml(typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2))}</div>
+    `;
+                entry.addEventListener('click', () => entry.classList.toggle('expanded'));
+                const log = $('#eventLog');
+                log.prepend(entry);
+            }
+
+            // ── Chat UI helpers ──
+            function addChatMessage(role, content) {
+                const emptyState = $('#emptyState');
+                if (emptyState) emptyState.remove();
+
+                const div = document.createElement('div');
+                div.className = `msg ${role}`;
+                div.textContent = content;
+                $('#chatArea').appendChild(div);
+                $('#chatArea').scrollTop = $('#chatArea').scrollHeight;
+            }
+
+            function addToolTrace(fnName, args, result) {
+                const emptyState = $('#emptyState');
+                if (emptyState) emptyState.remove();
+
+                const div = document.createElement('div');
+                div.className = 'msg tool-trace';
+                div.innerHTML = `
+      <div class="trace-label">Tool Execution</div>
+      <div><span class="trace-fn">${escapeHtml(fnName)}</span>(<span class="trace-args">${escapeHtml(JSON.stringify(args))}</span>)</div>
+      <div class="trace-result">&rarr; ${escapeHtml(truncate(result, 200))}</div>
+    `;
+                $('#chatArea').appendChild(div);
+                $('#chatArea').scrollTop = $('#chatArea').scrollHeight;
+            }
+
+            function addErrorTrace(msg) {
+                const div = document.createElement('div');
+                div.className = 'msg error-trace';
+                div.textContent = msg;
+                $('#chatArea').appendChild(div);
+                $('#chatArea').scrollTop = $('#chatArea').scrollHeight;
+            }
+
+            function showTyping(show) {
+                $('#typingIndicator').classList.toggle('visible', show);
+            }
+
+            function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            function truncate(str, max) {
+                return str.length > max ? str.slice(0, max) + '...' : str;
+            }
+
+            // ── API call helper ──
+            async function apiCall(path, body, bearerToken) {
+                const url = `${apiUrl()}${path}`;
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${bearerToken}`
+                };
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body)
+                });
+
+                const data = await res.json();
+
+                addLogEntry('POST', path, res.status, {
+                    request: body,
+                    response: data
+                });
+
+                if (!res.ok) {
+                    throw new Error(data?.error?.message || `API error ${res.status}`);
+                }
+
+                return data;
+            }
+
+            // ── Create Agent ──
+            $('#createAgentBtn').addEventListener('click', async () => {
+                const name = $('#agentName').value.trim();
+                const instructions = $('#agentInstructions').value.trim();
+                const pKey = parentKey();
+
+                if (!pKey) return alert('Enter a Parent API Key first');
+                if (!name) return alert('Enter an agent name');
+                if (!instructions) return alert('Enter agent instructions');
+
+                $('#createAgentBtn').disabled = true;
+                $('#createAgentBtn').textContent = 'Creating...';
+
+                try {
+                    const data = await apiCall('/v1/agents', {
+                        definition: { name, instructions }
+                    }, pKey);
+
+                    agentKey = data.agent_key;
+                    conversationMessages = [];
+
+                    $('#agentKeyValue').textContent = agentKey;
+                    $('#agentKeyDisplay').classList.add('visible');
+                    $('#chatInput').disabled = false;
+                    $('#sendBtn').disabled = false;
+                    $('#status').textContent = `Agent: ${name}`;
+                    $('#status').className = 'header-status connected';
+
+                    // Clear chat
+                    $('#chatArea').innerHTML = '';
+                    addChatMessage('assistant', `Agent "${name}" created. Ready to chat. Try asking about weather, math, or time.`);
+                } catch (e) {
+                    alert(`Failed to create agent: ${e.message}`);
+                } finally {
+                    $('#createAgentBtn').disabled = false;
+                    $('#createAgentBtn').textContent = 'Create Agent';
+                }
+            });
+
+            // ── Send Message (with automatic tool loop) ──
+            async function sendMessage(text) {
+                if (!agentKey) return;
+
+                addChatMessage('user', text);
+                conversationMessages.push({ role: 'user', content: text });
+
+                $('#chatInput').value = '';
+                $('#chatInput').disabled = true;
+                $('#sendBtn').disabled = true;
+                showTyping(true);
+
+                const tools = getEnabledTools();
+                const MAX_TOOL_ROUNDS = 10; // safety limit
+
+                try {
+                    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+                        // Call chat completions
+                        const requestBody = {
+                            messages: conversationMessages,
+                        };
+                        if (tools.length > 0) requestBody.tools = tools;
+
+                        const data = await apiCall('/v1/chat/completions', requestBody, agentKey);
+                        const choice = data.choices?.[0];
+
+                        if (!choice) {
+                            addErrorTrace('No response from agent');
+                            break;
+                        }
+
+                        const msg = choice.message;
+
+                        // If the LLM wants to call tools
+                        if (msg.tool_calls && msg.tool_calls.length > 0) {
+                            // Add assistant message (with tool_calls) to conversation
+                            conversationMessages.push({
+                                role: 'assistant',
+                                content: msg.content || '',
+                                tool_calls: msg.tool_calls
+                            });
+
+                            // Execute each tool
+                            for (const tc of msg.tool_calls) {
+                                const fnName = tc.function?.name;
+                                const fnArgs = (() => {
+                                    try { return JSON.parse(tc.function?.arguments || '{}'); }
+                                    catch { return {}; }
+                                })();
+
+                                let result;
+                                if (TOOL_EXECUTORS[fnName]) {
+                                    try {
+                                        result = await TOOL_EXECUTORS[fnName](fnArgs);
+                                    } catch (e) {
+                                        result = JSON.stringify({ error: e.message });
+                                    }
+                                } else {
+                                    result = JSON.stringify({ error: `Unknown tool: ${fnName}` });
+                                }
+
+                                addToolTrace(fnName, fnArgs, result);
+
+                                // Add tool result to conversation
+                                conversationMessages.push({
+                                    role: 'tool',
+                                    content: result,
+                                    tool_call_id: tc.id
+                                });
+                            }
+
+                            // Continue loop — send results back to LLM
+                            continue;
+                        }
+
+                        // No tool calls — this is the final answer
+                        if (msg.content) {
+                            addChatMessage('assistant', msg.content);
+                            conversationMessages.push({ role: 'assistant', content: msg.content });
+                        }
+                        break;
+                    }
+                } catch (e) {
+                    addErrorTrace(`Error: ${e.message}`);
+                } finally {
+                    showTyping(false);
+                    $('#chatInput').disabled = false;
+                    $('#sendBtn').disabled = false;
+                    $('#chatInput').focus();
+                }
+            }
+
+            // ── Input handlers ──
+            $('#sendBtn').addEventListener('click', () => {
+                const text = $('#chatInput').value.trim();
+                if (text) sendMessage(text);
+            });
+
+            $('#chatInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const text = $('#chatInput').value.trim();
+                    if (text) sendMessage(text);
+                }
+            });
+
+            // Quick prompts
+            document.querySelectorAll('.quick-prompt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (!agentKey) return alert('Create an agent first');
+                    sendMessage(btn.dataset.prompt);
+                });
+            });
+
+            // ── Event Log toggle ──
+            $('#logToggle').addEventListener('click', () => {
+                $('#logToggle').classList.toggle('open');
+                $('#eventLog').classList.toggle('open');
+            });
+
+        })();
+    </script>
+
+</body>
+
+</html>

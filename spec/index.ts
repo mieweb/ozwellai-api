@@ -172,7 +172,26 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 export type ChatCompletionResponse = z.infer<typeof ChatCompletionResponseSchema>;
-// Agent registration schemas
+
+// Agent behavior schema (VS Code-style agent capabilities)
+export const AgentBehaviorSchema = z.object({
+  tone: z.string().optional(),
+  language: z.string().optional(),
+  rules: z.array(z.string()).optional(),
+});
+
+// Agent definition schema (structured input - users don't write markdown)
+export const AgentDefinitionSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  tools: z.array(z.string()).optional(),
+  behavior: AgentBehaviorSchema.optional(),
+  instructions: z.string().optional(),
+});
+
+// Agent spending limits
 export const AgentSpendingLimitsSchema = z.object({
   daily_usd: z.number().min(0).optional(),
   monthly_usd: z.number().min(0).optional(),
@@ -183,11 +202,19 @@ export const AgentFootnoteDbConfigSchema = z.object({
   db_name: z.string().optional(),
 });
 
+// Agent registration request - accepts EITHER markdown OR structured definition
 export const AgentRegistrationRequestSchema = z.object({
-  markdown: z.string(),
+  // Option 1: Raw markdown with YAML/JSON front matter
+  markdown: z.string().optional(),
+  // Option 2: Structured definition (preferred for UI)
+  definition: AgentDefinitionSchema.optional(),
+  // Common fields
   spending_limits: AgentSpendingLimitsSchema.optional(),
   footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
-});
+}).refine(
+  (data) => data.markdown || data.definition,
+  { message: "Either 'markdown' or 'definition' must be provided" }
+);
 
 export const AgentRegistrationResponseSchema = z.object({
   agent_id: z.string(),
@@ -215,6 +242,8 @@ export type FileObject = z.infer<typeof FileObjectSchema>;
 export type FileListResponse = z.infer<typeof FileListResponseSchema>;
 export type ModelsListResponse = z.infer<typeof ModelsListResponseSchema>;
 export type ChatCompletionChunk = z.infer<typeof ChatCompletionChunkSchema>;
+export type AgentBehavior = z.infer<typeof AgentBehaviorSchema>;
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 export type AgentSpendingLimits = z.infer<typeof AgentSpendingLimitsSchema>;
 export type AgentFootnoteDbConfig = z.infer<typeof AgentFootnoteDbConfigSchema>;
 export type AgentRegistrationRequest = z.infer<typeof AgentRegistrationRequestSchema>;
