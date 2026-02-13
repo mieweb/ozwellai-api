@@ -202,18 +202,20 @@ export const AgentFootnoteDbConfigSchema = z.object({
   db_name: z.string().optional(),
 });
 
-// Agent registration request - accepts EITHER markdown OR structured definition
+// Agent registration request - accepts YAML, markdown, OR structured definition
 export const AgentRegistrationRequestSchema = z.object({
-  // Option 1: Raw markdown with YAML/JSON front matter
+  // Option 1: YAML string
+  yaml: z.string().optional(),
+  // Option 2: Raw markdown with YAML/JSON front matter
   markdown: z.string().optional(),
-  // Option 2: Structured definition (preferred for UI)
+  // Option 3: Structured definition (preferred for UI)
   definition: AgentDefinitionSchema.optional(),
   // Common fields
   spending_limits: AgentSpendingLimitsSchema.optional(),
   footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
 }).refine(
-  (data) => data.markdown || data.definition,
-  { message: "Either 'markdown' or 'definition' must be provided" }
+  (data) => data.yaml || data.markdown || data.definition,
+  { message: "One of 'yaml', 'markdown', or 'definition' must be provided" }
 );
 
 export const AgentRegistrationResponseSchema = z.object({
@@ -228,10 +230,10 @@ export const AgentMetadataSchema = z.object({
   agent_id: z.string(),
   agent_key: z.string(),
   parent_key: z.string(),
+  name: z.string(),
   created_at: z.number(),
   spending_limits: AgentSpendingLimitsSchema.optional(),
   footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
-  filename: z.string(),
 });
 
 export type ResponseRequest = z.infer<typeof ResponseRequestSchema>;

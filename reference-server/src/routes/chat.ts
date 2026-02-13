@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
-import { getAgentByKey, getAgentMarkdown, parseMarkdownFrontMatter } from './agents';
+import { agentStore } from '../storage/agents';
+import { parseMarkdownFrontMatter } from './agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -196,22 +197,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
-      const agent = await getAgentByKey(agentKey);
+      const agent = agentStore.getByKey(agentKey);
       if (!agent) {
         reply.code(401);
         return createError('Invalid agent key', 'invalid_request_error');
       }
 
-      // Load agent markdown and parse it
-      const markdown = await getAgentMarkdown(agent.agent_id);
-      if (markdown) {
-        const { frontMatter, content } = parseMarkdownFrontMatter(markdown);
-        // Use the markdown body as system prompt
-        agentSystemPrompt = content;
-        // Extract allowed tools from front matter
-        if (frontMatter && Array.isArray(frontMatter.tools)) {
-          agentAllowedTools = frontMatter.tools as string[];
-        }
+      // Use agent instructions as system prompt
+      agentSystemPrompt = agent.instructions;
+
+      // Extract allowed tools from agent
+      if (agent.tools && Array.isArray(agent.tools)) {
+        agentAllowedTools = agent.tools;
       }
     }
 
