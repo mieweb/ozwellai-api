@@ -15,6 +15,9 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
 import agentsRoute from './routes/agents';
+import authRoute from './routes/auth';
+// Import auth initialization
+import { getDatabase, initializeAuthTables, seedDemoData } from './db/init-auth';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -129,6 +132,7 @@ async function buildServer() {
   });
 
   // Register API routes
+  await fastify.register(authRoute);  // ✅ Auth routes (register, login, API keys)
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);
@@ -196,6 +200,12 @@ async function buildServer() {
 if (require.main === module) {
   const start = async () => {
     try {
+      // ✅ Initialize auth tables in existing database
+      const db = getDatabase();
+      initializeAuthTables(db);
+      seedDemoData(db);
+      console.log('✅ Auth system initialized');
+
       const server = await buildServer();
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';

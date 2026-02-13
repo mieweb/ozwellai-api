@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
-import { getAgentByKey, getAgentMarkdown, parseMarkdownFrontMatter } from './agents';
+import { agentStore } from '../storage/agents';
+import { parseMarkdownFrontMatter } from './agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -196,22 +197,36 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
-      const agent = await getAgentByKey(agentKey);
+      const agent = agentStore.getByKey(agentKey);
       if (!agent) {
         reply.code(401);
         return createError('Invalid agent key', 'invalid_request_error');
       }
 
-      // Load agent markdown and parse it
-      const markdown = await getAgentMarkdown(agent.agent_id);
-      if (markdown) {
-        const { frontMatter, content } = parseMarkdownFrontMatter(markdown);
-        // Use the markdown body as system prompt
-        agentSystemPrompt = content;
-        // Extract allowed tools from front matter
-        if (frontMatter && Array.isArray(frontMatter.tools)) {
-          agentAllowedTools = frontMatter.tools as string[];
+      // Use agent instructions as system prompt, enriched with behavior metadata
+      let systemPrompt = agent.instructions || '';
+
+      // Incorporate behavior settings into the system prompt
+      if (agent.behavior && typeof agent.behavior === 'object') {
+        const behaviorParts: string[] = [];
+        const b = agent.behavior as Record<string, unknown>;
+        if (b.tone) behaviorParts.push(`Respond with a ${b.tone} tone.`);
+        if (b.language && b.language !== 'en') behaviorParts.push(`Respond in ${b.language}.`);
+        if (Array.isArray(b.rules)) {
+          b.rules.forEach((rule: unknown) => {
+            if (typeof rule === 'string') behaviorParts.push(rule);
+          });
         }
+        if (behaviorParts.length > 0) {
+          systemPrompt = behaviorParts.join(' ') + '\n\n' + systemPrompt;
+        }
+      }
+
+      agentSystemPrompt = systemPrompt;
+
+      // Extract allowed tools from agent
+      if (agent.tools && Array.isArray(agent.tools)) {
+        agentAllowedTools = agent.tools;
       }
     }
 
