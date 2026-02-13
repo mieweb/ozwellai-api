@@ -172,6 +172,70 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 export type ChatCompletionResponse = z.infer<typeof ChatCompletionResponseSchema>;
+
+// Agent behavior schema (VS Code-style agent capabilities)
+export const AgentBehaviorSchema = z.object({
+  tone: z.string().optional(),
+  language: z.string().optional(),
+  rules: z.array(z.string()).optional(),
+});
+
+// Agent definition schema (structured input - users don't write markdown)
+export const AgentDefinitionSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  tools: z.array(z.string()).optional(),
+  behavior: AgentBehaviorSchema.optional(),
+  instructions: z.string().optional(),
+});
+
+// Agent spending limits
+export const AgentSpendingLimitsSchema = z.object({
+  daily_usd: z.number().min(0).optional(),
+  monthly_usd: z.number().min(0).optional(),
+});
+
+export const AgentFootnoteDbConfigSchema = z.object({
+  enabled: z.boolean(),
+  db_name: z.string().optional(),
+});
+
+// Agent registration request - accepts YAML, markdown, OR structured definition
+export const AgentRegistrationRequestSchema = z.object({
+  // Option 1: YAML string
+  yaml: z.string().optional(),
+  // Option 2: Raw markdown with YAML/JSON front matter
+  markdown: z.string().optional(),
+  // Option 3: Structured definition (preferred for UI)
+  definition: AgentDefinitionSchema.optional(),
+  // Common fields
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+  footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
+}).refine(
+  (data) => data.yaml || data.markdown || data.definition,
+  { message: "One of 'yaml', 'markdown', or 'definition' must be provided" }
+);
+
+export const AgentRegistrationResponseSchema = z.object({
+  agent_id: z.string(),
+  agent_key: z.string(),
+  parent_key: z.string(),
+  created_at: z.number(),
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+});
+
+export const AgentMetadataSchema = z.object({
+  agent_id: z.string(),
+  agent_key: z.string(),
+  parent_key: z.string(),
+  name: z.string(),
+  created_at: z.number(),
+  spending_limits: AgentSpendingLimitsSchema.optional(),
+  footnote_db_config: AgentFootnoteDbConfigSchema.optional(),
+});
+
 export type ResponseRequest = z.infer<typeof ResponseRequestSchema>;
 export type Response = z.infer<typeof ResponseSchema>;
 export type EmbeddingRequest = z.infer<typeof EmbeddingRequestSchema>;
@@ -180,3 +244,10 @@ export type FileObject = z.infer<typeof FileObjectSchema>;
 export type FileListResponse = z.infer<typeof FileListResponseSchema>;
 export type ModelsListResponse = z.infer<typeof ModelsListResponseSchema>;
 export type ChatCompletionChunk = z.infer<typeof ChatCompletionChunkSchema>;
+export type AgentBehavior = z.infer<typeof AgentBehaviorSchema>;
+export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
+export type AgentSpendingLimits = z.infer<typeof AgentSpendingLimitsSchema>;
+export type AgentFootnoteDbConfig = z.infer<typeof AgentFootnoteDbConfigSchema>;
+export type AgentRegistrationRequest = z.infer<typeof AgentRegistrationRequestSchema>;
+export type AgentRegistrationResponse = z.infer<typeof AgentRegistrationResponseSchema>;
+export type AgentMetadata = z.infer<typeof AgentMetadataSchema>;

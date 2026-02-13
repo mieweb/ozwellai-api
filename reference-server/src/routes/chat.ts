@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
+import { agentStore } from '../storage/agents';
+import { parseMarkdownFrontMatter } from './agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -188,18 +190,39 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
-    
+
+    // --- Agent key resolution ---
+    let agentSystemPrompt: string | null = null;
+    let agentAllowedTools: string[] | null = null;
+
+    if (isAgentKey(request.headers.authorization)) {
+      const agentKey = extractToken(request.headers.authorization);
+      const agent = agentStore.getByKey(agentKey);
+      if (!agent) {
+        reply.code(401);
+        return createError('Invalid agent key', 'invalid_request_error');
+      }
+
+      // Use agent instructions as system prompt
+      agentSystemPrompt = agent.instructions;
+
+      // Extract allowed tools from agent
+      if (agent.tools && Array.isArray(agent.tools)) {
+        agentAllowedTools = agent.tools;
+      }
+    }
+
     // Check if Ollama is available as a backend (check early to determine default model)
     const ollamaAvailable = await isOllamaAvailable();
-    
+
     // Server-side default model - use Ollama-compatible model when Ollama is available
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-    
+
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
     // Use requested model if provided, otherwise use appropriate default
     const model = requestedModel || DEFAULT_MODEL;
-    
+
     request.log.info({ ollamaAvailable, model, requestedModel }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
@@ -209,13 +232,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       name: m.name
     }));
 
+    // --- Agent: inject system prompt ---
+    if (agentSystemPrompt) {
+      // Prepend agent instructions as the first system message
+      normalizedMessages.unshift({
+        role: 'system',
+        content: agentSystemPrompt,
+      });
+    }
+
+    // --- Agent: filter tools by allowed list ---
+    let filteredTools = tools;
+    if (agentAllowedTools && tools) {
+      filteredTools = tools.filter(t => agentAllowedTools!.includes(t.function.name));
+    }
+
     // Extract API key from authorization header
     const authHeader = request.headers.authorization || '';
     const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-    
+
     // Use Ollama if: explicitly requested via 'ollama' API key, OR if available and no other backend
     const useOllama = apiKey.toLowerCase() === 'ollama' || ollamaAvailable;
-    
+
     // If no backend is available, redirect to mock endpoint
     if (!ollamaAvailable && apiKey.toLowerCase() !== 'ollama') {
       // Forward to mock chat endpoint
@@ -229,7 +267,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           body: JSON.stringify(body)
         });
-        
+
         if (stream) {
           // Forward SSE stream from mock
           reply.raw.writeHead(mockResponse.status, {
@@ -239,7 +277,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-origin': request.headers.origin || '*',
             'access-control-allow-credentials': 'true',
           });
-          
+
           if (mockResponse.body) {
             const reader = mockResponse.body.getReader();
             try {
@@ -290,9 +328,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           ...(temperature !== undefined && { temperature }),
         };
 
-        // Include tools if provided
-        if (tools && tools.length > 0) {
-          requestOptions.tools = tools as ToolDef[];
+        // Include tools if provided (use filtered tools for agent policy)
+        if (filteredTools && filteredTools.length > 0) {
+          requestOptions.tools = filteredTools as ToolDef[];
         }
 
         // (Parsing helper is defined at module scope)
@@ -335,7 +373,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               messages: requestOptions.messages as ChatCompletionRequest['messages'],
               ...(max_tokens && { max_tokens }),
               ...(temperature !== undefined && { temperature }),
-              ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
+              ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
             const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
@@ -425,7 +463,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             messages: requestOptions.messages as ChatCompletionRequest['messages'],
             ...(max_tokens && { max_tokens }),
             ...(temperature !== undefined && { temperature }),
-            ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
+            ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };
           const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);

@@ -14,6 +14,7 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
+import agentsRoute from './routes/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -133,6 +134,7 @@ async function buildServer() {
   await fastify.register(responsesRoute);
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
+  await fastify.register(agentsRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
 
   // Serve public assets (documentation, misc)
@@ -163,7 +165,7 @@ async function buildServer() {
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
-    
+
     // Handle validation errors
     if (error.validation) {
       return reply.code(400).send({
@@ -198,7 +200,7 @@ if (require.main === module) {
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';
       const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-      
+
       await server.listen({ port, host });
       console.log(`🚀 OzwellAI Reference Server running at http://${displayHost}:${port}`);
       console.log(`📖 API Documentation available at http://${displayHost}:${port}/docs`);
