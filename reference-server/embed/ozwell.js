@@ -1023,14 +1023,11 @@ async function sendMessageNonStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
+    // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
+    // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config
     if (state.config.headers) {
@@ -1265,13 +1262,10 @@ async function sendMessageStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
+    // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     if (state.config.headers) {
       Object.assign(headers, state.config.headers);
@@ -1562,14 +1556,11 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
+    // Add Authorization header - use Ozwell API key (ozw_ or ozw_scoped_)
+    // Supports 'apiKey' config and legacy 'openaiApiKey' for backwards compatibility
+    // Falls back to demo key for local development
+    const apiKey = state.config.apiKey || state.config.openaiApiKey || 'ozw_scoped_demo_local';
+    headers['Authorization'] = `Bearer ${apiKey}`;
 
     // Merge in any custom headers from config
     if (state.config.headers) {
