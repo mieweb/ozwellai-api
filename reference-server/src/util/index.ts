@@ -271,6 +271,50 @@ export async function isOllamaAvailable(): Promise<boolean> {
 }
 
 /**
+ * Check if Portkey Gateway is configured and reachable
+ * Caches result to avoid repeated checks
+ */
+let gatewayAvailable: boolean | null = null;
+let lastGatewayCheck = 0;
+const GATEWAY_CHECK_INTERVAL = 30000; // Re-check every 30 seconds
+
+export function isGatewayConfigured(): boolean {
+  return !!process.env.PORTKEY_GATEWAY_URL;
+}
+
+export async function isGatewayAvailable(): Promise<boolean> {
+  if (!isGatewayConfigured()) return false;
+
+  const now = Date.now();
+
+  // Return cached result if recent
+  if (gatewayAvailable !== null && (now - lastGatewayCheck) < GATEWAY_CHECK_INTERVAL) {
+    return gatewayAvailable;
+  }
+
+  const gatewayUrl = process.env.PORTKEY_GATEWAY_URL!;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`${gatewayUrl}/v1/health`, {
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    // Accept any non-error response (gateway may return 200 or 404 for /health, either means it's reachable)
+    gatewayAvailable = response.status < 500;
+    lastGatewayCheck = now;
+    return gatewayAvailable;
+  } catch {
+    gatewayAvailable = false;
+    lastGatewayCheck = now;
+    return false;
+  }
+}
+
+/**
  * Get the first available Ollama model, or a fallback
  */
 export function getOllamaDefaultModel(): string {

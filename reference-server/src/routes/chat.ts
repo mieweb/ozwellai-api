@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isGatewayAvailable } from '../util';
 import { agentStore } from '../storage/agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
@@ -357,20 +357,36 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Check if Ollama is available as a backend (check early to determine default model)
+    // Check backend availability
     const ollamaAvailable = await isOllamaAvailable();
-    
-    // Server-side default model - use Ollama-compatible model when Ollama is available
+    const gatewayAvailable = await isGatewayAvailable();
+
+    // Extract API key from authorization header
+    const authHeader = request.headers.authorization || '';
+    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+    // Backend selection priority:
+    // 1. If client sends apiKey="ollama" → use Ollama (explicit request)
+    // 2. If gateway is configured and available → use gateway (primary backend)
+    // 3. If Ollama is available → use Ollama (fallback)
+    // 4. Otherwise → mock/simple generator
+    const explicitOllama = apiKey.toLowerCase() === 'ollama';
+    const useGateway = !explicitOllama && gatewayAvailable;
+    const useOllama = explicitOllama || (!useGateway && ollamaAvailable);
+    const backend = useGateway ? 'gateway' : useOllama ? 'ollama' : 'fallback';
+
+    // Determine default model based on backend
+    const GATEWAY_MODEL = process.env.PORTKEY_MODEL || 'gpt-4o-mini';
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
-    const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-    
+    const DEFAULT_MODEL = useGateway ? GATEWAY_MODEL : ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
+
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Agent-configured model takes precedence, then client request, then server default
     const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
-    
-    request.log.info({ ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request model selection');
+
+    request.log.info({ backend, gatewayAvailable, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
@@ -415,11 +431,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       );
     }
 
-    // Use Ollama if available (checked independently of auth token)
-    const useOllama = ollamaAvailable;
-    
-    // If no backend is available, redirect to mock endpoint
-    if (!ollamaAvailable) {
+    // If no real backend is available, redirect to mock endpoint
+    if (backend === 'fallback') {
       // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
       const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
       const mockBody = { ...body, messages: normalizedMessages, ...(filteredTools ? { tools: filteredTools } : {}) };
@@ -432,7 +445,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           body: JSON.stringify(mockBody)
         });
-        
+
         if (stream) {
           // Forward SSE stream from mock
           reply.raw.writeHead(mockResponse.status, {
@@ -442,7 +455,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-origin': request.headers.origin || '*',
             'access-control-allow-credentials': 'true',
           });
-          
+
           if (mockResponse.body) {
             const reader = mockResponse.body.getReader();
             try {
@@ -469,21 +482,25 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Validate model (only if not using Ollama - Ollama accepts any model)
-    const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
-    if (!useOllama && !supportedModels.includes(model)) {
-      reply.code(400);
-      return createError(`Model '${model}' not found`, 'invalid_request_error', 'model');
-    }
-
-    // If using Ollama, proxy the request
-    if (useOllama) {
+    // Use a real LLM backend (gateway or Ollama)
+    if (useGateway || useOllama) {
       try {
-        const ollamaClient = new OzwellAI({
-          apiKey: 'ollama',
-          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-          timeout: 120000 // 2 minutes - reasonable timeout for Ollama requests
-        });
+        // Create the appropriate client based on backend
+        const llmClient = useGateway
+          ? new OzwellAI({
+              apiKey: 'gateway',
+              baseURL: process.env.PORTKEY_GATEWAY_URL!,
+              timeout: 120000,
+              defaultHeaders: {
+                'x-portkey-provider': process.env.PORTKEY_PROVIDER || 'openai',
+                'Authorization': '', // omit auth so gateway uses its own stored provider keys
+              },
+            })
+          : new OzwellAI({
+              apiKey: 'ollama',
+              baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+              timeout: 120000,
+            });
 
         // Pass through without preprocessing (client-side handles parsing)
         const requestOptions: ChatCompletionRequestWithTools = {
@@ -543,7 +560,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
-            const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
+            const streamResponse = llmClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
             // Buffer map for accumulating assistant content per chat id
             const buffers: Record<string, string> = {};
@@ -616,7 +633,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             return;
           } catch (streamError: unknown) {
             const errToLog = streamError instanceof Error ? streamError : new Error(String(streamError));
-            request.log.error({ err: errToLog }, 'Ollama streaming failed after headers sent');
+            request.log.error({ err: errToLog, backend }, 'LLM streaming failed after headers sent');
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -639,7 +656,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };
-          const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
+          const response = await llmClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
           // Normalize thinking tokens and extract tool calls from non-streaming response
           try {
             if (response && Array.isArray(response.choices)) {
@@ -666,7 +683,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
       } catch (error: unknown) {
         const errToLog = error instanceof Error ? error : new Error(String(error));
-        request.log.error({ err: errToLog }, 'Ollama request failed, falling back to local generator');
+        request.log.error({ err: errToLog, backend }, 'LLM request failed, falling back to local generator');
         // Only fall through if headers haven't been sent yet
         if (reply.raw.headersSent) {
           return;
