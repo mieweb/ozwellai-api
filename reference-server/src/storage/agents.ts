@@ -88,6 +88,40 @@ export class AgentStore {
         return rows.map(row => this.deserialize(row));
     }
 
+    updateAgent(agentId: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior' | 'markdown'>>): Agent | null {
+        const existing = this.getById(agentId);
+        if (!existing) return null;
+
+        const merged = {
+            name: updates.name ?? existing.name,
+            instructions: updates.instructions ?? existing.instructions,
+            model: updates.model ?? existing.model,
+            temperature: updates.temperature ?? existing.temperature,
+            tools: updates.tools ?? existing.tools,
+            behavior: updates.behavior ?? existing.behavior,
+            markdown: updates.markdown ?? existing.markdown,
+        };
+
+        const stmt = this.db.prepare(`
+      UPDATE agents SET name = @name, instructions = @instructions, model = @model,
+        temperature = @temperature, tools = @tools, behavior = @behavior, markdown = @markdown
+      WHERE id = @id
+    `);
+
+        stmt.run({
+            id: agentId,
+            name: merged.name,
+            instructions: merged.instructions,
+            model: merged.model || null,
+            temperature: merged.temperature || null,
+            tools: merged.tools ? JSON.stringify(merged.tools) : null,
+            behavior: merged.behavior ? JSON.stringify(merged.behavior) : null,
+            markdown: merged.markdown,
+        });
+
+        return this.getById(agentId);
+    }
+
     getMarkdown(agentId: string): string | null {
         const stmt = this.db.prepare('SELECT markdown FROM agents WHERE id = ?');
         const row = stmt.get(agentId) as any;

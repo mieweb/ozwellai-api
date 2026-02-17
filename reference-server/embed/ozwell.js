@@ -539,6 +539,22 @@ const state = {
   isEditingQueued: false, // Whether user is editing the queued message
 };
 
+// Read OZWELL_CONFIG from window (set by embedding page before widget loads)
+if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
+  const extConf = window.OZWELL_CONFIG;
+  if (extConf.endpoint) state.config.endpoint = extConf.endpoint;
+  if (extConf.apiKey) state.config.apiKey = extConf.apiKey;
+  if (extConf.openaiApiKey) state.config.openaiApiKey = extConf.openaiApiKey;
+  if (extConf.title) state.config.title = extConf.title;
+  if (extConf.placeholder) state.config.placeholder = extConf.placeholder;
+  if (extConf.model) state.config.model = extConf.model;
+  if (extConf.system) state.config.system = extConf.system;
+  if (extConf.tools) state.config.tools = extConf.tools;
+  if (extConf.debug !== undefined) state.config.debug = extConf.debug;
+  if (extConf.welcomeMessage) state.config.welcomeMessage = extConf.welcomeMessage;
+  console.log('[widget.js] Applied OZWELL_CONFIG:', Object.keys(extConf));
+}
+
 console.log('[widget.js] Widget initializing...');
 console.log('[widget.js] Type OzwellDebug.help() in console for debug commands');
 
@@ -1023,10 +1039,11 @@ async function sendMessageNonStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
+    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    const authKey = state.config.apiKey || state.config.openaiApiKey;
+    if (authKey) {
+      headers['Authorization'] = `Bearer ${authKey}`;
+      console.log('[widget.js] Using API key for authorization');
     } else {
       // Default to 'ollama' - server will route to Ollama if available, or mock if not
       headers['Authorization'] = 'Bearer ollama';
@@ -1265,9 +1282,10 @@ async function sendMessageStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
+    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    const authKey = state.config.apiKey || state.config.openaiApiKey;
+    if (authKey) {
+      headers['Authorization'] = `Bearer ${authKey}`;
     } else {
       // Default to 'ollama' - server will route to Ollama if available, or mock if not
       headers['Authorization'] = 'Bearer ollama';
@@ -1562,10 +1580,11 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
+    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    const authKey3 = state.config.apiKey || state.config.openaiApiKey;
+    if (authKey3) {
+      headers['Authorization'] = `Bearer ${authKey3}`;
+      console.log('[widget.js] Using API key for authorization');
     } else {
       // Default to 'ollama' - server will route to Ollama if available, or mock if not
       headers['Authorization'] = 'Bearer ollama';
@@ -1574,7 +1593,6 @@ async function continueConversationWithToolResult(result) {
     // Merge in any custom headers from config
     if (state.config.headers) {
       Object.assign(headers, state.config.headers);
-      console.log('[widget.js] Added custom headers from config:', state.config.headers);
     }
 
     // Build messages for request (OpenAI format: system message in messages array)
