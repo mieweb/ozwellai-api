@@ -357,9 +357,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Check backend availability
-    const ollamaAvailable = await isOllamaAvailable();
+    // Check backend availability — check gateway first (instant), only probe Ollama if needed
     const gatewayAvailable = await isGatewayAvailable();
+    const ollamaAvailable = gatewayAvailable ? false : await isOllamaAvailable();
 
     // Extract API key from authorization header
     const authHeader = request.headers.authorization || '';
@@ -493,6 +493,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               timeout: 120000,
               defaultHeaders: {
                 'x-portkey-provider': process.env.PORTKEY_PROVIDER || 'openai',
+                'x-gateway-api-key': process.env.PORTKEY_GATEWAY_API_KEY || '',
                 'Authorization': '', // omit auth so gateway uses its own stored provider keys
               },
             })
