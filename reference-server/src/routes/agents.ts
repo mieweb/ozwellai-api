@@ -110,7 +110,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         const parentKey = request.apiKey!.id;
 
         try {
-            const { yaml: yamlInput, markdown, definition, spending_limits, footnote_db_config } = request.body;
+            const { yaml: yamlInput, markdown, definition, spending_limits } = request.body;
 
             // Validate: one of yaml, markdown, or definition must be provided
             if (!yamlInput && !markdown && !definition) {

@@ -8,7 +8,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { generateApiKey, hashApiKey, getKeyHint, hashPassword } from '../auth/crypto';
+import { hashApiKey, getKeyHint } from '../auth/crypto';
 
 const DB_PATH = path.join(process.cwd(), 'data', 'ozwell.db');
 const SCHEMA_PATH = path.join(process.cwd(), 'src', 'db', 'schema.sql');

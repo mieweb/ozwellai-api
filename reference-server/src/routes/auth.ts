@@ -8,6 +8,21 @@ import { getDatabase } from '../db/init-auth';
 import { generateId, hashPassword, verifyPassword, generateSessionToken, generateApiKey, hashApiKey, getKeyHint } from '../auth/crypto';
 import { sessionAuth } from '../auth/middleware';
 
+interface UserRow {
+    id: string;
+    email: string;
+    password_hash: string;
+}
+
+interface ApiKeyListRow {
+    id: string;
+    name: string;
+    key_hint: string;
+    created_at: string;
+    last_used_at: string | null;
+    revoked_at: string | null;
+}
+
 interface RegisterBody {
     email: string;
     password: string;
@@ -73,7 +88,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
             return reply.code(400).send({ error: { message: 'Email and password required', code: 'validation_error' } });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as any;
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as UserRow | undefined;
 
         if (!user || !verifyPassword(password, user.password_hash)) {
             return reply.code(401).send({ error: { message: 'Invalid credentials', code: 'invalid_credentials' } });
@@ -134,7 +149,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
       FROM api_keys
       WHERE user_id = ?
       ORDER BY created_at DESC
-    `).all(request.userId!) as any[];
+    `).all(request.userId!) as ApiKeyListRow[];
 
         return {
             object: 'list',
@@ -170,7 +185,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
         preHandler: sessionAuth
     }, async (request) => {
         // Look up user info
-        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(request.userId!) as any;
+        const user = db.prepare('SELECT id, email FROM users WHERE id = ?').get(request.userId!) as UserRow | undefined;
         return {
             valid: true,
             user: user ? { id: user.id, email: user.email } : null

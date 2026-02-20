@@ -42,6 +42,7 @@ async function buildServer() {
   });
 
   // Register Swagger for OpenAPI documentation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await fastify.register(swagger as any, {
     openapi: {
       openapi: '3.1.0',
@@ -103,24 +104,24 @@ async function buildServer() {
       deepLinking: false,
     },
     uiHooks: {
-      onRequest: function (request, reply, next) { next(); },
-      preHandler: function (request, reply, next) { next(); },
+      onRequest: function (_request, _reply, next) { next(); },
+      preHandler: function (_request, _reply, next) { next(); },
     },
     staticCSP: true,
     transformStaticCSP: (header) => header,
-    transformSpecification: (swaggerObject, request, reply) => {
+    transformSpecification: (swaggerObject, _request, _reply) => {
       return swaggerObject;
     },
     transformSpecificationClone: true,
   });
 
   // Health check endpoint
-  fastify.get('/health', async (request, reply) => {
+  fastify.get('/health', async (_request, _reply) => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
   // OpenAPI spec endpoint
-  fastify.get('/openapi.json', async (request, reply) => {
+  fastify.get('/openapi.json', async (_request, _reply) => {
     return fastify.swagger();
   });
 

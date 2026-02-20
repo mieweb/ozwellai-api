@@ -10,6 +10,13 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getDatabase } from '../db/init-auth';
 import { hashApiKey, isValidApiKey, verifySessionToken } from './crypto';
 
+interface ApiKeyRow {
+    id: string;
+    user_id: string;
+    name: string;
+    revoked_at: string | null;
+}
+
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
     interface FastifyRequest {
@@ -54,7 +61,7 @@ export async function apiKeyAuth(
     SELECT id, user_id, name, revoked_at 
     FROM api_keys 
     WHERE key_hash = ?
-  `).get(keyHash) as any;
+  `).get(keyHash) as ApiKeyRow | undefined;
 
     if (!apiKey) {
         reply.code(401).send({ error: { message: 'Invalid API key', code: 'invalid_api_key' } });

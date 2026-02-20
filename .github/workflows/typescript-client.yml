@@ -30,7 +30,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         runtime:
-          - { name: 'Node.js 18', version: '18' }
           - { name: 'Node.js 20', version: '20' }
           - { name: 'Node.js 22', version: '22' }
           - { name: 'Deno', version: 'v1.x' }

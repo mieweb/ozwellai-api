@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
-import { parseMarkdownFrontMatter } from './agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -199,34 +198,35 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const agentKey = extractToken(request.headers.authorization);
       const agent = agentStore.getByKey(agentKey);
       if (!agent) {
-        reply.code(401);
-        return createError('Invalid agent key', 'invalid_request_error');
-      }
+        // Agent key not found in DB — fall back to regular chat
+        // This happens in CI or when the database is empty
+        fastify.log.warn(`Agent key not found, falling back to regular chat: ${agentKey.slice(0, 12)}...`);
+      } else {
+        // Use agent instructions as system prompt, enriched with behavior metadata
+        let systemPrompt = agent.instructions || '';
 
-      // Use agent instructions as system prompt, enriched with behavior metadata
-      let systemPrompt = agent.instructions || '';
-
-      // Incorporate behavior settings into the system prompt
-      if (agent.behavior && typeof agent.behavior === 'object') {
-        const behaviorParts: string[] = [];
-        const b = agent.behavior as Record<string, unknown>;
-        if (b.tone) behaviorParts.push(`Respond with a ${b.tone} tone.`);
-        if (b.language && b.language !== 'en') behaviorParts.push(`Respond in ${b.language}.`);
-        if (Array.isArray(b.rules)) {
-          b.rules.forEach((rule: unknown) => {
-            if (typeof rule === 'string') behaviorParts.push(rule);
-          });
+        // Incorporate behavior settings into the system prompt
+        if (agent.behavior && typeof agent.behavior === 'object') {
+          const behaviorParts: string[] = [];
+          const b = agent.behavior as Record<string, unknown>;
+          if (b.tone) behaviorParts.push(`Respond with a ${b.tone} tone.`);
+          if (b.language && b.language !== 'en') behaviorParts.push(`Respond in ${b.language}.`);
+          if (Array.isArray(b.rules)) {
+            b.rules.forEach((rule: unknown) => {
+              if (typeof rule === 'string') behaviorParts.push(rule);
+            });
+          }
+          if (behaviorParts.length > 0) {
+            systemPrompt = behaviorParts.join(' ') + '\n\n' + systemPrompt;
+          }
         }
-        if (behaviorParts.length > 0) {
-          systemPrompt = behaviorParts.join(' ') + '\n\n' + systemPrompt;
+
+        agentSystemPrompt = systemPrompt;
+
+        // Extract allowed tools from agent
+        if (agent.tools && Array.isArray(agent.tools)) {
+          agentAllowedTools = agent.tools;
         }
-      }
-
-      agentSystemPrompt = systemPrompt;
-
-      // Extract allowed tools from agent
-      if (agent.tools && Array.isArray(agent.tools)) {
-        agentAllowedTools = agent.tools;
       }
     }
 

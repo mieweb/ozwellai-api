@@ -1,6 +1,19 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { AgentMetadata } from '../../../spec/index';
+
+interface DbAgentRow {
+    id: string;
+    agent_key: string;
+    parent_key: string;
+    name: string;
+    instructions: string;
+    model: string | null;
+    temperature: number | null;
+    tools: string | null;
+    behavior: string | null;
+    markdown: string;
+    created_at: number;
+}
 
 const DB_PATH = path.join(process.cwd(), 'data', 'ozwell.db');
 
@@ -72,19 +85,19 @@ export class AgentStore {
 
     getByKey(agentKey: string): Agent | null {
         const stmt = this.db.prepare('SELECT * FROM agents WHERE agent_key = ?');
-        const row = stmt.get(agentKey) as any;
+        const row = stmt.get(agentKey) as DbAgentRow | undefined;
         return row ? this.deserialize(row) : null;
     }
 
     getById(agentId: string): Agent | null {
         const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?');
-        const row = stmt.get(agentId) as any;
+        const row = stmt.get(agentId) as DbAgentRow | undefined;
         return row ? this.deserialize(row) : null;
     }
 
     listByParent(parentKey: string): Agent[] {
         const stmt = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
-        const rows = stmt.all(parentKey) as any[];
+        const rows = stmt.all(parentKey) as DbAgentRow[];
         return rows.map(row => this.deserialize(row));
     }
 
@@ -124,11 +137,11 @@ export class AgentStore {
 
     getMarkdown(agentId: string): string | null {
         const stmt = this.db.prepare('SELECT markdown FROM agents WHERE id = ?');
-        const row = stmt.get(agentId) as any;
+        const row = stmt.get(agentId) as DbAgentRow | undefined;
         return row ? row.markdown : null;
     }
 
-    private deserialize(row: any): Agent {
+    private deserialize(row: DbAgentRow): Agent {
         return {
             id: row.id,
             agent_key: row.agent_key,
