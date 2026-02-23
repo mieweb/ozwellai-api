@@ -204,9 +204,16 @@ if (require.main === module) {
       // ✅ Initialize auth tables in existing database
       const db = getDatabase();
       initializeAuthTables(db);
-      seedDemoData(db);
-      console.log('✅ Auth system initialized');
 
+      const demoModeEnabled =
+        process.env.OZWELL_DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
+
+      if (demoModeEnabled) {
+        seedDemoData(db);
+        console.log('✅ Auth system initialized (demo data seeded)');
+      } else {
+        console.log('✅ Auth system initialized (no demo data seeded; production mode)');
+      }
       const server = await buildServer();
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';

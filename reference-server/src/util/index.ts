@@ -181,30 +181,35 @@ export function createError(message: string, type: string, param: string | null 
 }
 
 /**
- * Validate bearer token
+ * Validate bearer token.
+ * Only two token types are accepted:
+ *   - Agent keys: agnt_key-... (scoped to a specific agent)
+ *   - Parent API keys: ozw_... (full completions access)
  */
 export function validateAuth(authorization: string | undefined): boolean {
   if (!authorization) return false;
-  if (!authorization.startsWith('Bearer ')) return false;
-  const token = authorization.substring(7);
-  return token.length > 0; // Accept any non-empty token for testing
+  const token = extractToken(authorization);
+  if (!token) return false;
+  return token.startsWith('agnt_key-') || token.startsWith('ozw_');
 }
 
 /**
  * Check if a bearer token is an agent key
+ * Handles case-insensitive "Bearer" prefix and extra whitespace
  */
 export function isAgentKey(authorization: string | undefined): boolean {
   if (!authorization) return false;
-  const token = authorization.replace('Bearer ', '');
+  const token = authorization.replace(/^bearer\s+/i, '').trim();
   return token.startsWith('agnt_');
 }
 
 /**
  * Extract the raw token from an authorization header
+ * Handles case-insensitive "Bearer" prefix and extra whitespace
  */
 export function extractToken(authorization: string | undefined): string {
   if (!authorization) return '';
-  return authorization.replace('Bearer ', '');
+  return authorization.replace(/^bearer\s+/i, '').trim();
 }
 
 /**

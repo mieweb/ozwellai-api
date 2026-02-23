@@ -161,7 +161,7 @@ Enable page interactions using MCP tools (OpenAI function calling format):
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-Now users can type: "update my email to john@example.com" and the field updates automatically.
+Now users can type: "update my email to <john@example.com>" and the field updates automatically.
 
 ## Configuration Options
 
@@ -279,6 +279,7 @@ if (OzwellChat.hasUnread) {
 ### Manual Mount
 
 Disable auto-mount and control when/where the widget appears. Useful for:
+
 - **SPAs (React/Vue/Angular):** Mount after your component renders
 - **Lazy loading:** Improve initial page load performance
 - **Conditional display:** Show chat only to logged-in users
@@ -309,22 +310,18 @@ Disable auto-mount and control when/where the widget appears. Useful for:
 
 ### Using with Ollama
 
-Route requests to your Ollama instance using custom headers:
+The reference server automatically detects and routes to Ollama when it's available at `OLLAMA_BASE_URL`. Use an agent key or parent API key for authentication:
 
 ```html
 <script>
   window.OzwellChatConfig = {
-    model: 'llama3.1',
-    endpoint: 'https://your-server.com/v1/chat/completions',
-    headers: {
-      'Authorization': 'Bearer ollama'
-    }
+    apiKey: 'agnt_key-your-agent-key'  // or 'ozw_your-parent-key'
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-The reference server detects `Authorization: Bearer ollama` and proxies to Ollama automatically.
+The server routes to Ollama automatically when available — no special header needed.
 
 ### Custom Authentication
 
@@ -358,13 +355,13 @@ Or use custom headers for any authentication scheme:
 
 ## MCP Tool Flow
 
-1. User sends message: "update my email to test@example.com"
+1. User sends message: "update my email to <test@example.com>"
 2. LLM responds with `tool_calls` in response
 3. Widget sends `tool_call` event to parent via postMessage (includes `tool_call_id`)
 4. Parent executes tool (updates input field)
 5. Parent sends `tool_result` back to widget (MUST include same `tool_call_id`)
 6. Widget sends result to LLM with `tool_call_id` for tracking
-7. LLM responds: "Done! I've updated your email to test@example.com"
+7. LLM responds: "Done! I've updated your email to <test@example.com>"
 
 **Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
 
@@ -386,6 +383,7 @@ Messages sent from the parent page to the widget iframe. All messages require `s
 #### Sending a Message Programmatically
 
 Use `ozwell:send-message` to inject messages as if the user typed them. This is useful for:
+
 - Triggering AI responses based on page events
 - Automating conversations
 - Building game AI that responds to user actions
@@ -546,6 +544,7 @@ Enable debug mode during development to visualize tool executions:
 ```
 
 **How it works:** Clickable tool pills appear before AI responses. Click a pill to expand and see:
+
 - Tool name and arguments sent
 - Result data returned from parent page
 - Complete execution timeline
@@ -567,8 +566,8 @@ The widget handles all mobile optimizations automatically.
 
 ## Live Demo
 
-- **Demo:** https://ozwellai-embedtest.opensource.mieweb.org
-- **Reference Server:** https://ozwellai-reference-server.opensource.mieweb.org
+- **Demo:** <https://ozwellai-embedtest.opensource.mieweb.org>
+- **Reference Server:** <https://ozwellai-reference-server.opensource.mieweb.org>
 
 ## Local Development
 

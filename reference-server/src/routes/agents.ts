@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, generateId } from '../util';
+import { createError, generateId } from '../util';
 import * as yaml from 'yaml';
 import type { AgentRegistrationRequest, AgentDefinition } from '../../../spec/index';
 import { agentStore } from '../storage/agents';
@@ -23,7 +23,9 @@ function definitionToMarkdown(definition: AgentDefinition): string {
     return `---\n${yamlStr}---\n\n${instructions}`;
 }
 
-// Parse markdown to extract front matter (YAML or JSON)
+// Parse markdown to extract front matter (YAML) or a fenced JSON code block.
+// YAML front matter: delimited by --- ... ---
+// JSON block: delimited by ```json ... ``` (not true front matter, but a convenience for JSON-based definitions)
 export function parseMarkdownFrontMatter(markdown: string): { frontMatter: Record<string, unknown> | null; content: string } {
     const yamlMatch = markdown.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
     if (yamlMatch) {
@@ -99,7 +101,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         properties: {
                             enabled: { type: 'boolean' },
                             db_name: { type: 'string' }
-                        }
+                        },
+                        required: ['enabled']
                     }
                 }
             }
@@ -266,15 +269,15 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 required: ['agent_id']
             }
         },
+        preHandler: apiKeyAuth,
     }, async (request, reply) => {
-        // Validate authorization
-        const authHeader = request.headers.authorization;
-        if (!validateAuth(authHeader)) {
+        const apiKey = request.apiKey;
+        if (!apiKey) {
             reply.code(401);
-            return createError('Invalid API key provided', 'invalid_request_error');
+            return createError('API key authentication required', 'authentication_error');
         }
 
-        const parentKey = authHeader?.replace('Bearer ', '') || '';
+        const parentKey = apiKey.id;
         const { agent_id } = request.params;
 
         try {

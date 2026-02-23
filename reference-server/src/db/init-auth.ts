@@ -2,7 +2,7 @@
  * Initialize Auth Tables in Existing Database
  * 
  * Adds users and api_keys tables to the existing ozwell.db.
- * Agent keys (agnt_key_) are managed in the agents table.
+ * Agent keys (agnt_key-...) are managed in the agents table.
  */
 
 import Database from 'better-sqlite3';

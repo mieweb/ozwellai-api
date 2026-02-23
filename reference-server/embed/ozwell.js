@@ -999,6 +999,13 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
+  // Require an API key or agent key to be configured
+  const authKey = state.config.apiKey || state.config.openaiApiKey;
+  if (!authKey) {
+    addMessage('system', 'Error: No API key configured. Please provide an agent key (agnt_key-...) or parent API key (ozw_...) in your OzwellChatConfig.');
+    return;
+  }
+
   // Build MCP tools from parent config (dynamic, not hardcoded)
   let tools = [];
 
@@ -1039,14 +1046,11 @@ async function sendMessageNonStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    // Add Authorization header
     const authKey = state.config.apiKey || state.config.openaiApiKey;
     if (authKey) {
       headers['Authorization'] = `Bearer ${authKey}`;
       console.log('[widget.js] Using API key for authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config
@@ -1282,13 +1286,10 @@ async function sendMessageStreaming(text, tools) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    // Add Authorization header
     const authKey = state.config.apiKey || state.config.openaiApiKey;
     if (authKey) {
       headers['Authorization'] = `Bearer ${authKey}`;
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
     }
 
     if (state.config.headers) {
@@ -1580,14 +1581,11 @@ async function continueConversationWithToolResult(result) {
       'Content-Type': 'application/json',
     };
 
-    // Add Authorization header - use apiKey, openaiApiKey, or default to 'ollama'
+    // Add Authorization header
     const authKey3 = state.config.apiKey || state.config.openaiApiKey;
     if (authKey3) {
       headers['Authorization'] = `Bearer ${authKey3}`;
       console.log('[widget.js] Using API key for authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
     }
 
     // Merge in any custom headers from config

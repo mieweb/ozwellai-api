@@ -40,77 +40,101 @@
       <button id="integration-close-btn" class="integration-close-btn">×</button>
     </div>
     <div class="integration-panel-content">
+      <!-- Overview -->
+      <div class="integration-step">
+        <p>Add an AI chat widget to any webpage in 3 steps. The widget runs inside a
+          private iframe &mdash; your page only sees tool calls, never conversation content.</p>
+      </div>
+
       <!-- Step 1 -->
       <div class="integration-step">
-        <h3>1. Add the Widget Script</h3>
-        <pre
-          class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
-        <p>That's it for basic chat! Add config for more features:</p>
+        <h3>1. Add the Widget &amp; Your Agent Key</h3>
+        <p>Paste this into your HTML. Replace the key with the one from your agent dashboard.</p>
+        <pre class="code-block"><code>&lt;!-- Load the Ozwell chat widget --&gt;
+&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;
+
+&lt;!-- Configure it with your agent key --&gt;
+&lt;script&gt;
+  window.OzwellChatConfig = {
+    apiKey: 'agnt_key-your-agent-key-here'
+  };
+&lt;/script&gt;</code></pre>
+        <p>That's it for a basic chatbot! The agent key tells Ozwell which personality,
+          model, and tools to use &mdash; all configured on the server when you create the agent.</p>
       </div>
 
       <!-- Step 2 -->
       <div class="integration-step">
-        <h3>2. Define MCP Tools (Optional)</h3>
-        <p>Tell the widget what actions are available:</p>
-        <pre class="code-block"><code>&lt;script&gt;
-  // Documentation example - shows configuration options
-  window.OzwellChatConfig = {
-    debug: true,  // Shows tool execution details (set false for production)
-    tools: [{
-      type: 'function',
-      function: {
-        name: 'update_form_data',
-        description: 'Updates user profile information',
-        parameters: {
-          type: 'object',
-          properties: {
-            name: { type: 'string', description: 'New name (optional)' },
-            address: { type: 'string', description: 'New address (optional)' },
-            zipCode: { type: 'string', description: 'New zip code (optional)' }
-          },
-          required: []
-        }
+        <h3>2. Define Your Tools (if your agent uses them)</h3>
+        <p>If your agent has tools (like reading form fields or updating the page), you
+          need to tell the widget <em>what those tools look like</em> so the AI knows how
+          to call them. Add a <code>tools</code> array to your config:</p>
+        <pre class="code-block"><code>window.OzwellChatConfig = {
+  apiKey: 'agnt_key-...',
+  tools: [{
+    type: 'function',
+    function: {
+      name: 'get_form_data',
+      description: 'Read the current form values',
+      parameters: {
+        type: 'object',
+        properties: {}
       }
-    }]
-  };
-&lt;/script&gt;</code></pre>
+    }
+  }]
+};</code></pre>
+        <p><strong>No tools?</strong> Skip this step entirely &mdash; Step 1 is all you need.</p>
       </div>
 
       <!-- Step 3 -->
       <div class="integration-step">
-        <h3>3. Implement Tool Handlers (Your Code)</h3>
-        <p>Write code to execute tools when AI calls them:</p>
-        <pre class="code-block"><code>window.addEventListener('message', (e) => {
-  if (e.data.source === 'ozwell-chat-widget' &&
-      e.data.type === 'tool_call') {
+        <h3>3. Handle Tool Calls on Your Page</h3>
+        <p>When the AI decides to use a tool, the widget sends a message to your page.
+          You run the tool and send the result back:</p>
+        <pre class="code-block"><code>window.addEventListener('message', (e) =&gt; {
+  // Only handle messages from the Ozwell widget
+  if (e.data.source !== 'ozwell-chat-widget' ||
+      e.data.type !== 'tool_call') return;
 
-    // Execute the tool on YOUR page
-    if (e.data.tool === 'update_form_data') {
-      if (e.data.payload.name) nameInput.value = e.data.payload.name;
-      if (e.data.payload.address) addressInput.value = e.data.payload.address;
-      if (e.data.payload.zipCode) zipInput.value = e.data.payload.zipCode;
-    }
+  let result = {};
 
-    // Send result back to widget
-    OzwellChat.iframe.contentWindow.postMessage({
-      source: 'ozwell-chat-parent',
-      type: 'tool_result',
-      result: { success: true }
-    }, '*');
+  if (e.data.tool === 'get_form_data') {
+    // Read values from your page
+    result = {
+      name: document.getElementById('name').value,
+      email: document.getElementById('email').value
+    };
   }
+
+  // Send the result back to the widget
+  OzwellChat.iframe.contentWindow.postMessage({
+    source: 'ozwell-chat-parent',
+    type: 'tool_result',
+    result: result
+  }, '*');
 });</code></pre>
+        <p><strong>No tools?</strong> Skip this step too.</p>
       </div>
 
-      <!-- How It Works -->
+      <!-- Privacy Note -->
       <div class="integration-step">
-        <h3>How It Works</h3>
-        <ul class="how-it-works-list">
-          <li>Widget auto-mounts and auto-detects endpoint</li>
-          <li>LLM calls tools when user requests actions</li>
-          <li>Tool calls sent to parent via postMessage</li>
-          <li>Parent executes and sends result back</li>
-          <li>Widget shows natural confirmation</li>
-        </ul>
+        <h3>🔒 Privacy by Design</h3>
+        <p>The chat lives in an iframe. Your page <strong>never</strong> sees what the user types or
+          what the AI says. The only data that crosses the iframe boundary is tool calls
+          &mdash; and only when the AI decides to use one.</p>
+      </div>
+
+      <!-- Alternative: Parent API Key -->
+      <div class="integration-step">
+        <h3>Advanced: Use a Parent API Key Instead</h3>
+        <p>Don't want to create an agent? Use a parent key (<code>ozw_...</code>) and
+          configure everything directly in your HTML:</p>
+        <pre class="code-block"><code>window.OzwellChatConfig = {
+  apiKey: 'ozw_your-parent-key',
+  system: 'You are a helpful assistant.',
+  model: 'llama3.2:latest',
+  tools: [...]
+};</code></pre>
       </div>
     </div>
   </div>
@@ -126,6 +150,9 @@
       <div class="demo-links">
         <a href="https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48" target="_blank" class="demo-link">
           Watch Demo Video →
+        </a>
+        <a href="https://youtube.com/shorts/u4DhC69JUfw?si=4MyaQnVTfNWXA8wW" target="_blank" class="demo-link">
+          Watch Agent Flow Demo →
         </a>
         <a href="/tictactoe.html" class="demo-link">
           Play Tic-Tac-Toe Demo →
@@ -159,7 +186,7 @@
             Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
             Widget->>Widget: User types message
             Widget->>Ozwell: POST /v1/chat/completions<br />(stream=true)
-            Note over Widget,Ozwell: Authorization: Bearer ollama
+            Note over Widget,Ozwell: Authorization: Bearer agnt_key-...
 
             Ozwell->>Ollama: Forward to Ollama API<br />(qwen2.5-coder:3b)
             Note over Ozwell,Ollama: Internal IP: 10.15.123.17:8080
@@ -246,7 +273,7 @@
       // widgetUrl auto-detected from script source
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       // system prompt is now managed by the agent definition (server-side)
-      apiKey: 'agnt_key-mltvhme222d2f986fb753f65', // Landing Page Assistant agent key
+      apiKey: '__LANDING_AGENT_KEY__', // injected from LANDING_AGENT_KEY env var
       debug: true, // Shows tool execution pills for developers (set false for production)
       tools: [
         {

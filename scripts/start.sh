@@ -93,7 +93,7 @@ echo -e "Embed widget:     ${YELLOW}http://localhost:$REFERENCE_PORT/embed/ozwel
 echo ""
 if [ "$OLLAMA_AVAILABLE" = true ]; then
     echo -e "${GREEN}Ollama:           ✓ Connected at $OLLAMA_BASE_URL${NC}"
-    echo -e "${BLUE}  Tip: Use 'Authorization: Bearer ollama' header to proxy to Ollama${NC}"
+    echo -e "${BLUE}  Tip: Use an agent key (agnt_key-...) or parent key (ozw_...) to authenticate${NC}"
 else
     echo -e "${YELLOW}Ollama:           ✗ Not running (mock responses enabled)${NC}"
     echo -e "${BLUE}  Tip: Start Ollama with 'ollama serve' for real AI responses${NC}"

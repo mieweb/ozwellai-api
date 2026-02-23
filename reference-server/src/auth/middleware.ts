@@ -3,7 +3,7 @@
  * Only two auth paths:
  *   1. Session tokens - for dashboard (managing keys & agents)
  *   2. API keys (ozw_) - for agent operations
- * Agent keys (agnt_key_) bypass this middleware entirely via validateAuth in chat route.
+ * Agent keys (agnt_key-) bypass this middleware entirely via validateAuth in chat route.
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';

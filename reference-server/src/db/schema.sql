@@ -1,5 +1,5 @@
 -- Ozwell Auth Database Schema (Simplified for Agent PoC)
--- Only two key types: parent keys (ozw_) and agent keys (agnt_key_)
+-- Only two key types: parent keys (ozw_) and agent keys (agnt_key-)
 -- Agent keys ARE the scoped keys - scoping happens in the agents table.
 
 -- Users table (for dashboard access)

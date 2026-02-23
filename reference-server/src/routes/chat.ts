@@ -182,10 +182,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     },
   }, async (request, reply) => {
-    // Validate authorization
+    // Validate authorization — only agent keys (agnt_key-) and parent keys (ozw_) accepted
     if (!validateAuth(request.headers.authorization)) {
       reply.code(401);
-      return createError('Invalid API key provided', 'invalid_request_error');
+      return createError('Invalid or missing API key. Use an agent key (agnt_key-...) or parent API key (ozw_...).', 'invalid_request_error');
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
@@ -193,31 +193,36 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // --- Agent key resolution ---
     let agentSystemPrompt: string | null = null;
     let agentAllowedTools: string[] | null = null;
+    let agentModel: string | null = null;
+    let agentTemperature: number | null = null;
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
       const agent = agentStore.getByKey(agentKey);
       if (!agent) {
-        // Agent key not found in DB — fall back to regular chat
-        // This happens in CI or when the database is empty
-        fastify.log.warn(`Agent key not found, falling back to regular chat: ${agentKey.slice(0, 12)}...`);
+        reply.code(401);
+        return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
       } else {
-        // Use agent instructions as system prompt, enriched with behavior metadata
+        // Use agent instructions as the system prompt
         let systemPrompt = agent.instructions || '';
 
-        // Incorporate behavior settings into the system prompt
+        // Append behavior metadata (tone, language, rules) as a structured
+        // supplement AFTER the instructions so they don't dilute or compete
+        // with the primary prompt.  Rules are formatted as bullet points for
+        // clarity, and only non-instruction metadata (tone/language) plus
+        // explicit rules are included.
         if (agent.behavior && typeof agent.behavior === 'object') {
-          const behaviorParts: string[] = [];
           const b = agent.behavior as Record<string, unknown>;
-          if (b.tone) behaviorParts.push(`Respond with a ${b.tone} tone.`);
-          if (b.language && b.language !== 'en') behaviorParts.push(`Respond in ${b.language}.`);
-          if (Array.isArray(b.rules)) {
-            b.rules.forEach((rule: unknown) => {
-              if (typeof rule === 'string') behaviorParts.push(rule);
-            });
+          const extras: string[] = [];
+          if (b.tone) extras.push(`- Respond with a ${b.tone} tone.`);
+          if (b.language && b.language !== 'en') extras.push(`- Respond in ${b.language}.`);
+          if (Array.isArray(b.rules) && b.rules.length > 0) {
+            for (const rule of b.rules) {
+              if (typeof rule === 'string') extras.push(`- ${rule}`);
+            }
           }
-          if (behaviorParts.length > 0) {
-            systemPrompt = behaviorParts.join(' ') + '\n\n' + systemPrompt;
+          if (extras.length > 0) {
+            systemPrompt = systemPrompt.trimEnd() + '\n\n=== ADDITIONAL RULES ===\n' + extras.join('\n');
           }
         }
 
@@ -226,6 +231,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         // Extract allowed tools from agent
         if (agent.tools && Array.isArray(agent.tools)) {
           agentAllowedTools = agent.tools;
+        }
+
+        // Extract model and temperature overrides from agent definition
+        if (agent.model) {
+          agentModel = agent.model;
+        }
+        if (agent.temperature !== undefined && agent.temperature !== null) {
+          agentTemperature = agent.temperature;
         }
       }
     }
@@ -237,11 +250,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
 
-    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
-    // Use requested model if provided, otherwise use appropriate default
-    const model = requestedModel || DEFAULT_MODEL;
+    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7 } = body;
+    // Use requested model if provided, then agent model, then server default
+    const model = requestedModel || agentModel || DEFAULT_MODEL;
+    // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
+    const temperature = agentTemperature ?? requestedTemperature;
 
-    request.log.info({ ollamaAvailable, model, requestedModel }, 'Chat request model selection');
+    request.log.info({ ollamaAvailable, model, requestedModel, agentModel, agentTemperature }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
@@ -262,20 +277,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // --- Agent: filter tools by allowed list ---
     let filteredTools = tools;
     if (agentAllowedTools && tools) {
-      filteredTools = tools.filter(t => agentAllowedTools!.includes(t.function.name));
+      filteredTools = tools.filter(
+        (t) =>
+          t &&
+          t.type === 'function' &&
+          t.function &&
+          typeof t.function.name === 'string' &&
+          agentAllowedTools!.includes(t.function.name)
+      );
     }
 
-    // Extract API key from authorization header
-    const authHeader = request.headers.authorization || '';
-    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    // Use Ollama if: explicitly requested via 'ollama' API key, OR if available and no other backend
-    const useOllama = apiKey.toLowerCase() === 'ollama' || ollamaAvailable;
+    // Use Ollama if available (checked independently of auth token)
+    const useOllama = ollamaAvailable;
 
     // If no backend is available, redirect to mock endpoint
-    if (!ollamaAvailable && apiKey.toLowerCase() !== 'ollama') {
-      // Forward to mock chat endpoint
+    if (!ollamaAvailable) {
+      // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
       const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
+      const mockBody = { ...body, messages: normalizedMessages, ...(filteredTools ? { tools: filteredTools } : {}) };
       try {
         const mockResponse = await fetch(mockUrl, {
           method: 'POST',
@@ -283,7 +302,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'Content-Type': 'application/json',
             'Authorization': request.headers.authorization || 'Bearer mock'
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(mockBody)
         });
 
         if (stream) {

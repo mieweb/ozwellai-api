@@ -68,7 +68,11 @@ export function verifyPassword(password: string, storedHash: string): boolean {
   const [salt, hash] = storedHash.split(':');
   if (!salt || !hash) return false;
   const computedHash = crypto.createHash('sha256').update(salt + password).digest('hex');
-  return hash === computedHash;
+  // Use constant-time comparison to prevent timing attacks
+  const hashBuf = Buffer.from(hash, 'hex');
+  const computedBuf = Buffer.from(computedHash, 'hex');
+  if (hashBuf.length !== computedBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, computedBuf);
 }
 
 /**
@@ -101,7 +105,17 @@ export function verifySessionToken(token: string): { user_id: string; iat: numbe
   const [encoded, signature] = parts;
   const expectedSig = crypto.createHmac('sha256', getSessionSecret()).update(encoded).digest('base64url');
 
-  if (signature !== expectedSig) return null;
+  // Use constant-time comparison for HMAC signatures to prevent timing attacks
+  let signatureBuf: Buffer;
+  let expectedSigBuf: Buffer;
+  try {
+    signatureBuf = Buffer.from(signature, 'base64url');
+    expectedSigBuf = Buffer.from(expectedSig, 'base64url');
+  } catch {
+    return null;
+  }
+  if (signatureBuf.length !== expectedSigBuf.length) return null;
+  if (!crypto.timingSafeEqual(signatureBuf, expectedSigBuf)) return null;
 
   try {
     const json = Buffer.from(encoded, 'base64url').toString('utf-8');
