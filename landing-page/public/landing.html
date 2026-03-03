@@ -42,14 +42,14 @@
     <div class="integration-panel-content">
       <!-- Overview -->
       <div class="integration-step">
-        <p>Add an AI chat widget to any webpage in 3 steps. The widget runs inside a
-          private iframe &mdash; your page only sees tool calls, never conversation content.</p>
+        <p>Add an AI chat widget to any webpage in 3 steps. Conversations stay
+          private inside an iframe &mdash; your page only sees tool calls.</p>
       </div>
 
       <!-- Step 1 -->
       <div class="integration-step">
         <h3>1. Add the Widget &amp; Your Agent Key</h3>
-        <p>Paste this into your HTML. Replace the key with the one from your agent dashboard.</p>
+        <p>Paste this into your HTML. Replace the key with the one from the API.</p>
         <pre class="code-block"><code>&lt;!-- Load the Ozwell chat widget --&gt;
 &lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;
 
@@ -116,26 +116,7 @@
         <p><strong>No tools?</strong> Skip this step too.</p>
       </div>
 
-      <!-- Privacy Note -->
-      <div class="integration-step">
-        <h3>🔒 Privacy by Design</h3>
-        <p>The chat lives in an iframe. Your page <strong>never</strong> sees what the user types or
-          what the AI says. The only data that crosses the iframe boundary is tool calls
-          &mdash; and only when the AI decides to use one.</p>
-      </div>
 
-      <!-- Alternative: Parent API Key -->
-      <div class="integration-step">
-        <h3>Advanced: Use a Parent API Key Instead</h3>
-        <p>Don't want to create an agent? Use a parent key (<code>ozw_...</code>) and
-          configure everything directly in your HTML:</p>
-        <pre class="code-block"><code>window.OzwellChatConfig = {
-  apiKey: 'ozw_your-parent-key',
-  system: 'You are a helpful assistant.',
-  model: 'llama3.2:latest',
-  tools: [...]
-};</code></pre>
-      </div>
     </div>
   </div>
 
@@ -150,9 +131,6 @@
       <div class="demo-links">
         <a href="https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48" target="_blank" class="demo-link">
           Watch Demo Video →
-        </a>
-        <a href="https://youtube.com/shorts/u4DhC69JUfw?si=4MyaQnVTfNWXA8wW" target="_blank" class="demo-link">
-          Watch Agent Flow Demo →
         </a>
         <a href="/tictactoe.html" class="demo-link">
           Play Tic-Tac-Toe Demo →

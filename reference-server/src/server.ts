@@ -15,8 +15,6 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
 import agentsRoute from './routes/agents';
-import authRoute from './routes/auth';
-// Import auth initialization
 import { getDatabase, initializeAuthTables, seedDemoData } from './db/init-auth';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
@@ -133,14 +131,13 @@ async function buildServer() {
   });
 
   // Register API routes
-  await fastify.register(authRoute);  // ✅ Auth routes (register, login, API keys)
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
-  await fastify.register(agentsRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
+  await fastify.register(agentsRoute);  // Agent registration CRUD
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {
@@ -201,23 +198,19 @@ async function buildServer() {
 if (require.main === module) {
   const start = async () => {
     try {
-      // ✅ Initialize auth tables in existing database
-      const db = getDatabase();
-      initializeAuthTables(db);
-
-      const demoModeEnabled =
-        process.env.OZWELL_DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
-
-      if (demoModeEnabled) {
-        seedDemoData(db);
-        console.log('✅ Auth system initialized (demo data seeded)');
-      } else {
-        console.log('✅ Auth system initialized (no demo data seeded; production mode)');
-      }
       const server = await buildServer();
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';
       const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+
+      // Initialize auth database and seed demo data
+      const db = getDatabase();
+      initializeAuthTables(db);
+      try {
+        seedDemoData(db);
+      } catch (_e) {
+        // Seeding may fail on repeated starts — that's fine
+      }
 
       await server.listen({ port, host });
       console.log(`🚀 OzwellAI Reference Server running at http://${displayHost}:${port}`);

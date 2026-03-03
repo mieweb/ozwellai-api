@@ -72,6 +72,6 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`Using reference server base URL: ${referenceBaseUrl}`);
   console.log(`Agent keys: landing=${landingAgentKey ? '✅ set' : '⚠️  not set'}, tictactoe=${tictactoeAgentKey ? '✅ set' : '⚠️  not set'}`);
   if (!landingAgentKey || !tictactoeAgentKey) {
-    console.log(`  → Set LANDING_AGENT_KEY / TICTACTOE_AGENT_KEY in .env (see .env.example)`);
+    console.log(`  → Set LANDING_AGENT_KEY / TICTACTOE_AGENT_KEY in .env`);
   }
 });

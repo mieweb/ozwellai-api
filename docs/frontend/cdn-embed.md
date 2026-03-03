@@ -247,7 +247,7 @@ Content-Security-Policy:
 
 1. **Check the error message** in the chat widget — it will show the specific auth error
 2. **Verify your API key** starts with `agnt_key-` or `ozw_`
-3. **Check the agent exists** in the dashboard if using an agent key
+3. **Verify the agent key** exists via `curl GET /v1/agents` if using an agent key
 4. **Review network tab** for 401 responses
 
 ### Styling Conflicts

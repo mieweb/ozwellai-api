@@ -1,31 +1,58 @@
-import { FastifyPluginAsync } from 'fastify';
-import { createError, generateId } from '../util';
+import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { createError, generateId, isValidApiKey } from '../util';
 import * as yaml from 'yaml';
-import type { AgentRegistrationRequest, AgentDefinition } from '../../../spec/index';
 import { agentStore } from '../storage/agents';
-import { apiKeyAuth } from '../auth/middleware';
+import { getDatabase } from '../db/init-auth';
 
-// Convert structured definition to markdown with YAML front matter
-function definitionToMarkdown(definition: AgentDefinition): string {
-    const frontMatter: Record<string, unknown> = {
-        name: definition.name,
-    };
-
-    if (definition.description) frontMatter.description = definition.description;
-    if (definition.model) frontMatter.model = definition.model;
-    if (definition.temperature !== undefined) frontMatter.temperature = definition.temperature;
-    if (definition.tools?.length) frontMatter.tools = definition.tools;
-    if (definition.behavior) frontMatter.behavior = definition.behavior;
-
-    const yamlStr = yaml.stringify(frontMatter);
-    const instructions = definition.instructions || `You are ${definition.name}.${definition.description ? ' ' + definition.description : ''}`;
-
-    return `---\n${yamlStr}---\n\n${instructions}`;
+// Extend FastifyRequest to include auth data
+declare module 'fastify' {
+    interface FastifyRequest {
+        apiKey?: {
+            id: string;
+            name: string;
+        };
+    }
 }
 
-// Parse markdown to extract front matter (YAML) or a fenced JSON code block.
-// YAML front matter: delimited by --- ... ---
-// JSON block: delimited by ```json ... ``` (not true front matter, but a convenience for JSON-based definitions)
+interface ApiKeyRow {
+    id: string;
+    name: string;
+}
+
+/**
+ * API Key authentication preHandler
+ * Validates parent keys (ozw_ prefix) via plaintext lookup.
+ */
+async function apiKeyAuth(
+    request: FastifyRequest,
+    reply: FastifyReply
+): Promise<void> {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader?.startsWith('Bearer ')) {
+        reply.code(401).send({ error: { message: 'Missing API key', code: 'missing_api_key' } });
+        return;
+    }
+
+    const token = authHeader.slice(7);
+
+    if (!isValidApiKey(token)) {
+        reply.code(401).send({ error: { message: 'Invalid API key format', code: 'invalid_api_key' } });
+        return;
+    }
+
+    const db = getDatabase();
+    const apiKey = db.prepare('SELECT id, name FROM api_keys WHERE key = ?').get(token) as ApiKeyRow | undefined;
+
+    if (!apiKey) {
+        reply.code(401).send({ error: { message: 'Invalid API key', code: 'invalid_api_key' } });
+        return;
+    }
+
+    request.apiKey = apiKey;
+}
+
+// Parse markdown to extract YAML front matter
 export function parseMarkdownFrontMatter(markdown: string): { frontMatter: Record<string, unknown> | null; content: string } {
     const yamlMatch = markdown.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
     if (yamlMatch) {
@@ -35,16 +62,6 @@ export function parseMarkdownFrontMatter(markdown: string): { frontMatter: Recor
             return { frontMatter: null, content: markdown };
         }
     }
-
-    const jsonMatch = markdown.match(/^```json\n([\s\S]*?)\n```\n?([\s\S]*)$/);
-    if (jsonMatch) {
-        try {
-            return { frontMatter: JSON.parse(jsonMatch[1]), content: jsonMatch[2].trim() };
-        } catch {
-            return { frontMatter: null, content: markdown };
-        }
-    }
-
     return { frontMatter: null, content: markdown };
 }
 
@@ -53,157 +70,87 @@ function generateAgentKey(): string {
     return `agnt_${generateId('key')}`;
 }
 
+// Parse YAML input into structured fields and markdown with front matter
+function parseYamlInput(yamlInput: string, fallbackName?: string) {
+    const parsed = yaml.parse(yamlInput);
+    const name = parsed.name || fallbackName || 'Unnamed Agent';
+    const instructions = parsed.instructions || '';
+    const model = parsed.model as string | undefined;
+    const temperature = parsed.temperature as number | undefined;
+    const tools = parsed.tools as string[] | undefined;
+    const behavior = parsed.behavior as Record<string, unknown> | undefined;
+
+    // Construct markdown with YAML front matter
+    const frontMatter: Record<string, unknown> = { name };
+    if (parsed.description) frontMatter.description = parsed.description;
+    if (model) frontMatter.model = model;
+    if (temperature !== undefined) frontMatter.temperature = temperature;
+    if (tools) frontMatter.tools = tools;
+    if (behavior) frontMatter.behavior = behavior;
+
+    const yamlStr = yaml.stringify(frontMatter);
+    const markdown = `---\n${yamlStr}---\n\n${instructions}`;
+
+    return { name, instructions, model, temperature, tools, behavior, markdown };
+}
+
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
+    const authHeaders = {
+        type: 'object',
+        properties: { authorization: { type: 'string' } },
+        required: ['authorization']
+    };
+
+    const agentIdParam = {
+        type: 'object',
+        properties: { agent_id: { type: 'string' } },
+        required: ['agent_id']
+    };
+
+    const yamlBody = {
+        type: 'object',
+        properties: { yaml: { type: 'string' } },
+        required: ['yaml']
+    };
+
     // POST /v1/agents (register agent)
-    fastify.post<{ Body: AgentRegistrationRequest }>('/v1/agents', {
-        schema: {
-            headers: {
-                type: 'object',
-                properties: {
-                    authorization: { type: 'string' }
-                },
-                required: ['authorization']
-            },
-            body: {
-                type: 'object',
-                properties: {
-                    yaml: { type: 'string' },
-                    markdown: { type: 'string' },
-                    definition: {
-                        type: 'object',
-                        properties: {
-                            name: { type: 'string' },
-                            description: { type: 'string' },
-                            model: { type: 'string' },
-                            temperature: { type: 'number' },
-                            tools: { type: 'array', items: { type: 'string' } },
-                            behavior: {
-                                type: 'object',
-                                properties: {
-                                    tone: { type: 'string' },
-                                    language: { type: 'string' },
-                                    rules: { type: 'array', items: { type: 'string' } }
-                                }
-                            },
-                            instructions: { type: 'string' }
-                        },
-                        required: ['name']
-                    },
-                    spending_limits: {
-                        type: 'object',
-                        properties: {
-                            daily_usd: { type: 'number' },
-                            monthly_usd: { type: 'number' }
-                        }
-                    },
-                    footnote_db_config: {
-                        type: 'object',
-                        properties: {
-                            enabled: { type: 'boolean' },
-                            db_name: { type: 'string' }
-                        },
-                        required: ['enabled']
-                    }
-                }
-            }
-        },
-        preHandler: apiKeyAuth  // ✅ Validate API key via middleware
+    fastify.post<{ Body: { yaml: string } }>('/v1/agents', {
+        schema: { headers: authHeaders, body: yamlBody },
+        preHandler: apiKeyAuth
     }, async (request, reply) => {
-        // Use API key ID as parent key (foreign key to api_keys table)
         const parentKey = request.apiKey!.id;
 
         try {
-            const { yaml: yamlInput, markdown, definition, spending_limits } = request.body;
+            const { yaml: yamlInput } = request.body;
 
-            // Validate: one of yaml, markdown, or definition must be provided
-            if (!yamlInput && !markdown && !definition) {
+            if (!yamlInput?.trim()) {
                 reply.code(400);
-                return createError("One of 'yaml', 'markdown', or 'definition' must be provided", 'invalid_request_error');
+                return createError("'yaml' field is required", 'invalid_request_error');
             }
 
-            // Convert definition to markdown if provided, otherwise use raw markdown or yaml
-            let finalMarkdown: string;
-            let name: string;
-            let instructions: string;
-            let model: string | undefined;
-            let temperature: number | undefined;
-            let tools: string[] | undefined;
-            let behavior: Record<string, unknown> | undefined;
+            let agent;
+            try {
+                const fields = parseYamlInput(yamlInput);
+                const agentId = generateId('agent');
+                const agentKey = generateAgentKey();
 
-            if (yamlInput && yamlInput.trim()) {
-                // Parse YAML input
-                try {
-                    const parsed = yaml.parse(yamlInput);
-                    name = parsed.name || 'Unnamed Agent';
-                    instructions = parsed.instructions || '';
-                    model = parsed.model;
-                    temperature = parsed.temperature;
-                    tools = parsed.tools;
-                    behavior = parsed.behavior;
-
-                    // Construct markdown with YAML front matter
-                    const frontMatter: Record<string, unknown> = { name };
-                    if (parsed.description) frontMatter.description = parsed.description;
-                    if (model) frontMatter.model = model;
-                    if (temperature !== undefined) frontMatter.temperature = temperature;
-                    if (tools) frontMatter.tools = tools;
-                    if (behavior) frontMatter.behavior = behavior;
-
-                    const yamlStr = yaml.stringify(frontMatter);
-                    finalMarkdown = `---\n${yamlStr}---\n\n${instructions}`;
-                } catch (e) {
-                    reply.code(400);
-                    return createError('Invalid YAML format', 'invalid_request_error');
-                }
-            } else if (definition) {
-                finalMarkdown = definitionToMarkdown(definition);
-                name = definition.name;
-                instructions = definition.instructions || `You are ${definition.name}.${definition.description ? ' ' + definition.description : ''}`;
-                model = definition.model;
-                temperature = definition.temperature;
-                tools = definition.tools;
-                behavior = definition.behavior;
-            } else if (markdown && markdown.trim()) {
-                finalMarkdown = markdown;
-                // Parse markdown to extract structured fields
-                const { frontMatter, content } = parseMarkdownFrontMatter(markdown);
-                name = frontMatter?.name as string || 'Unnamed Agent';
-                instructions = content;
-                model = frontMatter?.model as string | undefined;
-                temperature = frontMatter?.temperature as number | undefined;
-                tools = frontMatter?.tools as string[] | undefined;
-                behavior = frontMatter?.behavior as Record<string, unknown> | undefined;
-            } else {
+                agent = agentStore.createAgent({
+                    id: agentId,
+                    agent_key: agentKey,
+                    parent_key: parentKey,
+                    ...fields,
+                });
+            } catch {
                 reply.code(400);
-                return createError('Agent content cannot be empty', 'invalid_request_error');
+                return createError('Invalid YAML format', 'invalid_request_error');
             }
 
-            // Generate agent ID and key
-            const agentId = generateId('agent');
-            const agentKey = generateAgentKey();
-
-            // Create agent in database
-            const agent = agentStore.createAgent({
-                id: agentId,
-                agent_key: agentKey,
-                parent_key: parentKey,
-                name,
-                instructions,
-                model,
-                temperature,
-                tools,
-                behavior,
-                markdown: finalMarkdown
-            });
-
-            // Return response
             reply.code(201);
             return {
                 agent_id: agent.id,
                 agent_key: agent.agent_key,
                 parent_key: agent.parent_key,
                 created_at: agent.created_at,
-                spending_limits,
             };
         } catch (error) {
             fastify.log.error(error);
@@ -212,20 +159,11 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         }
     });
 
-    // GET /v1/agents (list agents for authenticated user)
+    // GET /v1/agents (list agents)
     fastify.get('/v1/agents', {
-        schema: {
-            headers: {
-                type: 'object',
-                properties: {
-                    authorization: { type: 'string' }
-                },
-                required: ['authorization']
-            }
-        },
-        preHandler: apiKeyAuth  // ✅ Validate API key via middleware
+        schema: { headers: authHeaders },
+        preHandler: apiKeyAuth
     }, async (request, reply) => {
-        // Use API key ID to filter agents
         const parentKey = request.apiKey!.id;
 
         try {
@@ -253,31 +191,10 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // GET /v1/agents/:agent_id (get specific agent)
     fastify.get<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
-        schema: {
-            headers: {
-                type: 'object',
-                properties: {
-                    authorization: { type: 'string' }
-                },
-                required: ['authorization']
-            },
-            params: {
-                type: 'object',
-                properties: {
-                    agent_id: { type: 'string' }
-                },
-                required: ['agent_id']
-            }
-        },
+        schema: { headers: authHeaders, params: agentIdParam },
         preHandler: apiKeyAuth,
     }, async (request, reply) => {
-        const apiKey = request.apiKey;
-        if (!apiKey) {
-            reply.code(401);
-            return createError('API key authentication required', 'authentication_error');
-        }
-
-        const parentKey = apiKey.id;
+        const parentKey = request.apiKey!.id;
         const { agent_id } = request.params;
 
         try {
@@ -288,7 +205,6 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            // Parse front matter for structured response
             const { frontMatter, content } = parseMarkdownFrontMatter(agent.markdown);
 
             return {
@@ -307,132 +223,35 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // PUT /v1/agents/:agent_id (update agent)
-    fastify.put<{ Params: { agent_id: string }; Body: AgentRegistrationRequest }>('/v1/agents/:agent_id', {
-        schema: {
-            headers: {
-                type: 'object',
-                properties: {
-                    authorization: { type: 'string' }
-                },
-                required: ['authorization']
-            },
-            params: {
-                type: 'object',
-                properties: {
-                    agent_id: { type: 'string' }
-                },
-                required: ['agent_id']
-            },
-            body: {
-                type: 'object',
-                properties: {
-                    yaml: { type: 'string' },
-                    markdown: { type: 'string' },
-                    definition: {
-                        type: 'object',
-                        properties: {
-                            name: { type: 'string' },
-                            description: { type: 'string' },
-                            model: { type: 'string' },
-                            temperature: { type: 'number' },
-                            tools: { type: 'array', items: { type: 'string' } },
-                            behavior: {
-                                type: 'object',
-                                properties: {
-                                    tone: { type: 'string' },
-                                    language: { type: 'string' },
-                                    rules: { type: 'array', items: { type: 'string' } }
-                                }
-                            },
-                            instructions: { type: 'string' }
-                        },
-                        required: ['name']
-                    }
-                }
-            }
-        },
+    fastify.put<{ Params: { agent_id: string }; Body: { yaml: string } }>('/v1/agents/:agent_id', {
+        schema: { headers: authHeaders, params: agentIdParam, body: yamlBody },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
         const { agent_id } = request.params;
 
         try {
-            // Verify the agent exists and belongs to this user
             const existing = agentStore.getById(agent_id);
             if (!existing || existing.parent_key !== parentKey) {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            const { yaml: yamlInput, markdown: mdInput, definition } = request.body;
+            const { yaml: yamlInput } = request.body;
 
-            if (!yamlInput && !mdInput && !definition) {
+            if (!yamlInput?.trim()) {
                 reply.code(400);
-                return createError("One of 'yaml', 'markdown', or 'definition' must be provided", 'invalid_request_error');
+                return createError("'yaml' field is required", 'invalid_request_error');
             }
 
-            let finalMarkdown: string;
-            let name: string;
-            let instructions: string;
-            let model: string | undefined;
-            let temperature: number | undefined;
-            let tools: string[] | undefined;
-            let behavior: Record<string, unknown> | undefined;
-
-            if (yamlInput && yamlInput.trim()) {
-                try {
-                    const parsed = yaml.parse(yamlInput);
-                    name = parsed.name || existing.name;
-                    instructions = parsed.instructions || '';
-                    model = parsed.model;
-                    temperature = parsed.temperature;
-                    tools = parsed.tools;
-                    behavior = parsed.behavior;
-
-                    const frontMatter: Record<string, unknown> = { name };
-                    if (parsed.description) frontMatter.description = parsed.description;
-                    if (model) frontMatter.model = model;
-                    if (temperature !== undefined) frontMatter.temperature = temperature;
-                    if (tools) frontMatter.tools = tools;
-                    if (behavior) frontMatter.behavior = behavior;
-
-                    const yamlStr = yaml.stringify(frontMatter);
-                    finalMarkdown = `---\n${yamlStr}---\n\n${instructions}`;
-                } catch (e) {
-                    reply.code(400);
-                    return createError('Invalid YAML format', 'invalid_request_error');
-                }
-            } else if (definition) {
-                finalMarkdown = definitionToMarkdown(definition);
-                name = definition.name;
-                instructions = definition.instructions || `You are ${definition.name}.${definition.description ? ' ' + definition.description : ''}`;
-                model = definition.model;
-                temperature = definition.temperature;
-                tools = definition.tools;
-                behavior = definition.behavior;
-            } else if (mdInput && mdInput.trim()) {
-                finalMarkdown = mdInput;
-                const { frontMatter, content } = parseMarkdownFrontMatter(mdInput);
-                name = frontMatter?.name as string || existing.name;
-                instructions = content;
-                model = frontMatter?.model as string | undefined;
-                temperature = frontMatter?.temperature as number | undefined;
-                tools = frontMatter?.tools as string[] | undefined;
-                behavior = frontMatter?.behavior as Record<string, unknown> | undefined;
-            } else {
+            let updated;
+            try {
+                const fields = parseYamlInput(yamlInput, existing.name);
+                updated = agentStore.updateAgent(agent_id, fields);
+            } catch {
                 reply.code(400);
-                return createError('Agent content cannot be empty', 'invalid_request_error');
+                return createError('Invalid YAML format', 'invalid_request_error');
             }
-
-            const updated = agentStore.updateAgent(agent_id, {
-                name,
-                instructions,
-                model,
-                temperature,
-                tools,
-                behavior,
-                markdown: finalMarkdown,
-            });
 
             if (!updated) {
                 reply.code(500);
@@ -453,6 +272,36 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             fastify.log.error(error);
             reply.code(500);
             return createError('Agent update failed', 'server_error');
+        }
+    });
+
+    // DELETE /v1/agents/:agent_id (delete agent)
+    fastify.delete<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
+        schema: { headers: authHeaders, params: agentIdParam },
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        try {
+            const existing = agentStore.getById(agent_id);
+            if (!existing || existing.parent_key !== parentKey) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error');
+            }
+
+            const deleted = agentStore.deleteAgent(agent_id);
+            if (!deleted) {
+                reply.code(500);
+                return createError('Failed to delete agent', 'server_error');
+            }
+
+            reply.code(200);
+            return { id: agent_id, deleted: true };
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent deletion failed', 'server_error');
         }
     });
 };

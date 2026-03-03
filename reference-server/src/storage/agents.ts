@@ -135,10 +135,9 @@ export class AgentStore {
         return this.getById(agentId);
     }
 
-    getMarkdown(agentId: string): string | null {
-        const stmt = this.db.prepare('SELECT markdown FROM agents WHERE id = ?');
-        const row = stmt.get(agentId) as DbAgentRow | undefined;
-        return row ? row.markdown : null;
+    deleteAgent(agentId: string): boolean {
+        const result = this.db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
+        return result.changes > 0;
     }
 
     private deserialize(row: DbAgentRow): Agent {
@@ -148,8 +147,8 @@ export class AgentStore {
             parent_key: row.parent_key,
             name: row.name,
             instructions: row.instructions,
-            model: row.model || undefined,
-            temperature: row.temperature || undefined,
+            model: row.model ?? undefined,
+            temperature: row.temperature ?? undefined,
             tools: row.tools ? JSON.parse(row.tools) : undefined,
             behavior: row.behavior ? JSON.parse(row.behavior) : undefined,
             markdown: row.markdown,
@@ -157,9 +156,6 @@ export class AgentStore {
         };
     }
 
-    close() {
-        this.db.close();
-    }
 }
 
 // Singleton instance

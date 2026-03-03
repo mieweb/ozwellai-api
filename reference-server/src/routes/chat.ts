@@ -20,7 +20,7 @@ type ToolFunction = {
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
-type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name'] };
+type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
 type JSONSchemaParameters = {
@@ -176,7 +176,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           stream: { type: 'boolean' },
           max_tokens: { type: 'number' },
-          temperature: { type: 'number' }
+          temperature: { type: 'number' },
+          response_format: { type: 'object', properties: { type: { type: 'string' } } }
         },
         required: ['messages']
       }
@@ -250,7 +251,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
 
-    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7 } = body;
+    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Use requested model if provided, then agent model, then server default
     const model = requestedModel || agentModel || DEFAULT_MODEL;
     // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
@@ -259,11 +260,25 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     request.log.info({ ollamaAvailable, model, requestedModel, agentModel, agentTemperature }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
-    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
-      role: m.role,
-      content: m.content ?? '',
-      name: m.name
-    }));
+    // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
+    // so Ollama can correctly associate tool results with the calls that produced them
+    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => {
+      const msg: NonNullableMessage = {
+        role: m.role,
+        content: m.content ?? '',
+        name: m.name
+      };
+      // Preserve tool_calls on assistant messages
+      const raw = m as Record<string, unknown>;
+      if (raw.tool_calls && Array.isArray(raw.tool_calls)) {
+        msg.tool_calls = raw.tool_calls as ToolCall[];
+      }
+      // Preserve tool_call_id on tool result messages
+      if (typeof raw.tool_call_id === 'string') {
+        msg.tool_call_id = raw.tool_call_id;
+      }
+      return msg;
+    });
 
     // --- Agent: inject system prompt ---
     if (agentSystemPrompt) {
@@ -363,6 +378,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
+          ...(response_format && { response_format }),
         };
 
         // Include tools if provided (use filtered tools for agent policy)
@@ -410,6 +426,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               messages: requestOptions.messages as ChatCompletionRequest['messages'],
               ...(max_tokens && { max_tokens }),
               ...(temperature !== undefined && { temperature }),
+              ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
@@ -500,6 +517,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             messages: requestOptions.messages as ChatCompletionRequest['messages'],
             ...(max_tokens && { max_tokens }),
             ...(temperature !== undefined && { temperature }),
+            ...(response_format && { response_format }),
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };

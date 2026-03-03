@@ -1,5 +1,18 @@
 import * as crypto from 'crypto';
 
+// Key prefix for parent API keys
+export const KEY_PREFIX = 'ozw_';
+
+/** Get the hint (last 4 chars) for display */
+export function getKeyHint(key: string): string {
+  return key.slice(-4);
+}
+
+/** Check if a key has a valid parent key prefix */
+export function isValidApiKey(key: string): boolean {
+  return key.startsWith(KEY_PREFIX);
+}
+
 /**
  * Simple deterministic text generator for predictable testing
  * Uses a basic Markov chain approach with predefined patterns
@@ -193,20 +206,14 @@ export function validateAuth(authorization: string | undefined): boolean {
   return token.startsWith('agnt_key-') || token.startsWith('ozw_');
 }
 
-/**
- * Check if a bearer token is an agent key
- * Handles case-insensitive "Bearer" prefix and extra whitespace
- */
+/** Check if a bearer token is an agent key */
 export function isAgentKey(authorization: string | undefined): boolean {
   if (!authorization) return false;
   const token = authorization.replace(/^bearer\s+/i, '').trim();
   return token.startsWith('agnt_');
 }
 
-/**
- * Extract the raw token from an authorization header
- * Handles case-insensitive "Bearer" prefix and extra whitespace
- */
+/** Extract the raw token from an authorization header */
 export function extractToken(authorization: string | undefined): string {
   if (!authorization) return '';
   return authorization.replace(/^bearer\s+/i, '').trim();

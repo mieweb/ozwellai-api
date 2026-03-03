@@ -542,16 +542,10 @@ const state = {
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
   const extConf = window.OZWELL_CONFIG;
-  if (extConf.endpoint) state.config.endpoint = extConf.endpoint;
-  if (extConf.apiKey) state.config.apiKey = extConf.apiKey;
-  if (extConf.openaiApiKey) state.config.openaiApiKey = extConf.openaiApiKey;
-  if (extConf.title) state.config.title = extConf.title;
-  if (extConf.placeholder) state.config.placeholder = extConf.placeholder;
-  if (extConf.model) state.config.model = extConf.model;
-  if (extConf.system) state.config.system = extConf.system;
-  if (extConf.tools) state.config.tools = extConf.tools;
-  if (extConf.debug !== undefined) state.config.debug = extConf.debug;
-  if (extConf.welcomeMessage) state.config.welcomeMessage = extConf.welcomeMessage;
+  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage'];
+  for (const k of keys) {
+    if (extConf[k] !== undefined) state.config[k] = extConf[k];
+  }
   console.log('[widget.js] Applied OZWELL_CONFIG:', Object.keys(extConf));
 }
 
@@ -803,6 +797,19 @@ You have access to tools. Use them wisely:
   return systemPrompt;
 }
 
+/** Build request headers with auth + any custom headers */
+function getRequestHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const authKey = state.config.apiKey || state.config.openaiApiKey;
+  if (authKey) {
+    headers['Authorization'] = `Bearer ${authKey}`;
+  }
+  if (state.config.headers) {
+    Object.assign(headers, state.config.headers);
+  }
+  return headers;
+}
+
 /**
  * Create and render tool pills (debug mode only)
  * @param {Array} toolCalls - Array of tool call objects
@@ -1041,23 +1048,7 @@ async function sendMessageNonStreaming(text, tools) {
   const systemPrompt = buildSystemPrompt();
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header
-    const authKey = state.config.apiKey || state.config.openaiApiKey;
-    if (authKey) {
-      headers['Authorization'] = `Bearer ${authKey}`;
-      console.log('[widget.js] Using API key for authorization');
-    }
-
-    // Merge in any custom headers from config
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-      console.log('[widget.js] Added custom headers from config:', state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
@@ -1281,20 +1272,7 @@ async function sendMessageStreaming(text, tools) {
   messagesEl?.appendChild(assistantMsgEl);
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header
-    const authKey = state.config.apiKey || state.config.openaiApiKey;
-    if (authKey) {
-      headers['Authorization'] = `Bearer ${authKey}`;
-    }
-
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request
     const requestMessages = buildMessages();
@@ -1576,22 +1554,7 @@ async function continueConversationWithToolResult(result) {
   const systemPrompt = buildSystemPrompt();
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header
-    const authKey3 = state.config.apiKey || state.config.openaiApiKey;
-    if (authKey3) {
-      headers['Authorization'] = `Bearer ${authKey3}`;
-      console.log('[widget.js] Using API key for authorization');
-    }
-
-    // Merge in any custom headers from config
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();

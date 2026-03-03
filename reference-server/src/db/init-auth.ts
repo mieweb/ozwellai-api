@@ -1,19 +1,19 @@
 /**
- * Initialize Auth Tables in Existing Database
- * 
- * Adds users and api_keys tables to the existing ozwell.db.
+ * Initialize Auth Tables (PoC — plaintext keys, no users)
+ *
+ * Adds api_keys table to the existing ozwell.db.
  * Agent keys (agnt_key-...) are managed in the agents table.
  */
 
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { hashApiKey, getKeyHint } from '../auth/crypto';
+import { getKeyHint } from '../util';
 
 const DB_PATH = path.join(process.cwd(), 'data', 'ozwell.db');
 const SCHEMA_PATH = path.join(process.cwd(), 'src', 'db', 'schema.sql');
 
-// Demo parent API key (generated fresh on first seed)
+// Demo parent API key
 export const DEMO_API_KEY = 'ozw_demo_localhost_key_for_testing';
 
 /**
@@ -26,13 +26,11 @@ export function initializeAuthTables(db: Database.Database): void {
 }
 
 /**
- * Seed demo user and parent API key for testing
+ * Seed demo API key for testing
  */
 export function seedDemoData(db: Database.Database): void {
-    const demoUserId = 'demo-user';
     const demoKeyId = 'demo-key';
 
-    // Check if demo key exists
     const existing = db.prepare('SELECT id FROM api_keys WHERE id = ?').get(demoKeyId);
     if (existing) {
         console.log('[auth] Demo data already exists');
@@ -40,25 +38,19 @@ export function seedDemoData(db: Database.Database): void {
     }
 
     const now = new Date().toISOString();
-
-    // Create demo user
-    db.prepare(`
-    INSERT OR IGNORE INTO users (id, email, password_hash, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(demoUserId, 'demo@localhost', 'not-a-real-password', now, now);
-
-    // Create demo parent API key
-    const keyHash = hashApiKey(DEMO_API_KEY);
     const keyHint = getKeyHint(DEMO_API_KEY);
 
     db.prepare(`
-    INSERT INTO api_keys (id, user_id, name, key_hash, key_hint, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(demoKeyId, demoUserId, 'Demo Key', keyHash, keyHint, now);
+    INSERT INTO api_keys (id, name, key, key_hint, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(demoKeyId, 'Demo Key', DEMO_API_KEY, keyHint, now);
 
-    console.log('[auth] Demo parent API key seeded');
+    console.log('[auth] Demo API key seeded');
 }
 
+let _db: Database.Database | null = null;
+
 export function getDatabase(): Database.Database {
-    return new Database(DB_PATH);
+    if (!_db) _db = new Database(DB_PATH);
+    return _db;
 }

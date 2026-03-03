@@ -181,43 +181,24 @@ behavior:
 You are a helpful assistant on the demo landing page.
 ```
 
-#### Agent Dashboard
-
-A built-in dashboard at `/agents.html` provides a UI for:
-
-- Logging in and managing API keys
-- Registering and editing agents
-- Viewing agent definitions in YAML, JSON, or Markdown format
-- Testing agent chat in the embedded widget
-
 #### Example: Register and Chat with an Agent
 
+**Prerequisite:** You need a parent API key (`ozw_...`). In dev mode, a demo key is seeded automatically: `ozw_demo_localhost_key_for_testing`.
+
 ```bash
-# 1. Login and get a session
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "password"}'
-
-# 2. Create a parent API key
-curl -X POST http://localhost:3000/v1/api-keys \
-  -H "Authorization: Bearer <session_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "My Key"}'
-# Returns: { "key": "ozw_abc..." }
-
-# 3. Register an agent
+# 1. Register an agent (YAML config)
 curl -X POST http://localhost:3000/v1/agents \
-  -H "Authorization: Bearer ozw_abc..." \
+  -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
   -H "Content-Type: application/json" \
-  -d '{"definition": {"name": "Helper", "tools": ["get_form_data"], "behavior": {"tone": "friendly"}}}'
+  -d '{"yaml": "name: Helper\nmodel: llama3.2:latest\ntemperature: 0.7\ntools:\n  - get_form_data\nbehavior:\n  tone: friendly\ninstructions: You help visitors navigate the site."}'
 # Returns: { "agent_key": "agnt_key-xyz..." }
 
-# 4. Chat using the agent key
+# 2. Chat using the agent key
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer agnt_key-xyz..." \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
-# Response uses the agent's system prompt, tone, and tool allowlist
+# Response uses the agent's system prompt, model, temperature, and tool allowlist
 ```
 
 #### Privacy & Agent Mode
