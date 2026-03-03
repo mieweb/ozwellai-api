@@ -271,16 +271,18 @@ export async function isOllamaAvailable(): Promise<boolean> {
 }
 
 /**
- * Check if Portkey Gateway is configured and reachable
- * Caches result to avoid repeated checks
+ * Check if Portkey Gateway URL is set in env.
  */
 export function isGatewayConfigured(): boolean {
   return !!process.env.PORTKEY_GATEWAY_URL;
 }
 
+/**
+ * Check if Portkey Gateway is configured (URL + API key present).
+ * This only validates configuration; it does not perform a network probe
+ * because the gateway requires provider headers on all endpoints.
+ */
 export async function isGatewayAvailable(): Promise<boolean> {
-  // If gateway URL and API key are configured, trust the config — no health probe needed.
-  // The gateway requires provider headers on all endpoints, so there's no lightweight health check.
   return isGatewayConfigured() && !!process.env.PORTKEY_GATEWAY_API_KEY;
 }
 

@@ -357,20 +357,21 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Check backend availability — check gateway first (instant), only probe Ollama if needed
-    const gatewayAvailable = await isGatewayAvailable();
-    const ollamaAvailable = gatewayAvailable ? false : await isOllamaAvailable();
-
-    // Extract API key from authorization header
+    // Extract API key from authorization header (needed before backend selection)
     const authHeader = request.headers.authorization || '';
     const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const explicitOllama = apiKey.toLowerCase() === 'ollama';
+
+    // Check backend availability — parse auth first so explicit Ollama requests
+    // always probe Ollama, even when gateway is configured.
+    const gatewayAvailable = await isGatewayAvailable();
+    const ollamaAvailable = (explicitOllama || !gatewayAvailable) ? await isOllamaAvailable() : false;
 
     // Backend selection priority:
     // 1. If client sends apiKey="ollama" → use Ollama (explicit request)
     // 2. If gateway is configured and available → use gateway (primary backend)
     // 3. If Ollama is available → use Ollama (fallback)
     // 4. Otherwise → mock/simple generator
-    const explicitOllama = apiKey.toLowerCase() === 'ollama';
     const useGateway = !explicitOllama && gatewayAvailable;
     const useOllama = explicitOllama || (!useGateway && ollamaAvailable);
     const backend = useGateway ? 'gateway' : useOllama ? 'ollama' : 'fallback';
@@ -488,13 +489,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         // Create the appropriate client based on backend
         const llmClient = useGateway
           ? new OzwellAI({
-              apiKey: 'gateway',
               baseURL: process.env.PORTKEY_GATEWAY_URL!,
               timeout: 120000,
               defaultHeaders: {
                 'x-portkey-provider': process.env.PORTKEY_PROVIDER || 'openai',
                 'x-gateway-api-key': process.env.PORTKEY_GATEWAY_API_KEY || '',
-                'Authorization': '', // omit auth so gateway uses its own stored provider keys
               },
             })
           : new OzwellAI({

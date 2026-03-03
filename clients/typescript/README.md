@@ -36,14 +36,16 @@ const client = new OzwellAI({
 
 ```typescript
 const client = new OzwellAI({
-  apiKey: 'your-api-key',
+  apiKey: 'your-api-key',        // optional — omit to skip the Authorization header
   baseURL: 'https://api.ozwell.ai', // optional, defaults to official API
-  timeout: 30000, // optional, defaults to 30 seconds
-  defaultHeaders: { // optional
+  timeout: 30000,                // optional, defaults to 30 seconds
+  defaultHeaders: {              // optional
     'X-Custom-Header': 'value'
   }
 });
 ```
+
+> **Note:** `apiKey` is optional. When omitted, no `Authorization` header is sent. This is useful when connecting through a gateway or proxy that handles authentication separately (see [Gateway / Proxy Usage](#gateway--proxy-usage)).
 
 ### Ollama Integration
 
@@ -71,6 +73,27 @@ The client will automatically use `http://localhost:11434` as the base URL when 
 3. Ensure Ollama is running: `ollama serve` (usually starts automatically)
 
 See [`examples/ollama-example.ts`](./examples/ollama-example.ts) for a complete working example.
+
+### Gateway / Proxy Usage
+
+When connecting through an API gateway (e.g. [Portkey AI Gateway](https://github.com/portkey-ai/gateway)) that manages provider API keys server-side, omit `apiKey` so no `Authorization` header is sent. Use `defaultHeaders` to pass any gateway-specific headers:
+
+```typescript
+const gatewayClient = new OzwellAI({
+  baseURL: 'https://your-gateway-host.example.com',
+  defaultHeaders: {
+    'x-portkey-provider': 'openai',       // which LLM provider to route to
+    'x-gateway-api-key': 'your-gateway-key', // gateway authentication
+  },
+});
+
+const response = await gatewayClient.createChatCompletion({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello from the gateway!' }],
+});
+```
+
+Since `apiKey` is omitted, the client sends no `Authorization` header — the gateway injects its own stored provider keys before forwarding the request.
 
 ### Chat Completions
 

@@ -477,6 +477,12 @@ Environment variables:
 - `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
+- `PORTKEY_GATEWAY_URL` - Portkey AI Gateway base URL (e.g. `https://gateway-api.example.com`). Do not include `/v1` or endpoint paths.
+- `PORTKEY_GATEWAY_API_KEY` - API key for authenticating with the gateway
+- `PORTKEY_PROVIDER` - LLM provider to route through the gateway: `openai`, `anthropic`, `ollama` (default: openai)
+- `PORTKEY_MODEL` - Default model when using the gateway (default: gpt-4o-mini)
+
+See `reference-server/.env.example` for a complete example configuration.
 
 ### Model Selection
 
@@ -494,11 +500,12 @@ The server intelligently selects the best available model:
 
 ### Backend Routing
 
-The server automatically routes requests based on available backends:
+The server automatically routes requests based on available backends, with the following priority:
 
-1. **Check Ollama availability** at startup and periodically (cached for 30 seconds)
-2. **Route to Ollama** if available
-3. **Fall back to mock** if no backend is available
+1. **Explicit Ollama** — If the client sends `Authorization: Bearer ollama`, the request is routed directly to Ollama regardless of gateway config
+2. **Portkey Gateway** — If `PORTKEY_GATEWAY_URL` and `PORTKEY_GATEWAY_API_KEY` are configured, all other requests are routed through the gateway. The gateway manages provider API keys server-side so clients don't need them.
+3. **Ollama fallback** — If no gateway is configured but Ollama is reachable, requests are routed to Ollama (availability is cached for 30 seconds)
+4. **Mock fallback** — If no backend is available, requests are forwarded to `/mock/chat` for demos
 
 ## Error Handling
 

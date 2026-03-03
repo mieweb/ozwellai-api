@@ -15,11 +15,12 @@ import type {
  * Configuration options for the OzwellAI client.
  */
 export interface OzwellAIConfig {
-  /** 
-   * Your API key for authentication. 
-   * Special value: Use "ollama" to automatically connect to Ollama on localhost:11434
+  /**
+   * Your API key for authentication.
+   * Special value: Use "ollama" to automatically connect to Ollama on localhost:11434.
+   * Omit to skip the Authorization header (e.g. when using a gateway that handles auth separately).
    */
-  apiKey: string;
+  apiKey?: string;
   /** Base URL for the API (defaults to OzwellAI endpoint, or http://localhost:11434 for Ollama) */
   baseURL?: string;
   /** Request timeout in milliseconds */
@@ -56,7 +57,7 @@ export interface OzwellAIConfig {
  * ```
  */
 export class OzwellAI {
-  private apiKey: string;
+  private apiKey: string | undefined;
   private baseURL: string;
   private timeout: number;
   private defaultHeaders: Record<string, string>;
@@ -65,7 +66,7 @@ export class OzwellAI {
     this.apiKey = config.apiKey;
     
     // Use Ollama localhost endpoint if apiKey is "ollama"
-    if (config.apiKey.toLowerCase() === 'ollama') {
+    if (config.apiKey?.toLowerCase() === 'ollama') {
       this.baseURL = config.baseURL || 'http://localhost:11434';
     } else {
       this.baseURL = config.baseURL || 'https://api.ozwell.ai';
@@ -74,7 +75,7 @@ export class OzwellAI {
     this.timeout = config.timeout || 30000;
     this.defaultHeaders = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`,
+      ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
       'User-Agent': 'ozwellai-typescript/1.0.0',
       ...config.defaultHeaders,
     };
@@ -244,7 +245,7 @@ export class OzwellAI {
       method: 'POST',
       body: formData,
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
         // Don't set Content-Type, let browser set it with boundary for FormData
       },
     });
