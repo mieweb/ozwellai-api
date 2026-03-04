@@ -150,11 +150,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             type: 'array',
             items: {
               type: 'object',
+              // Allow additional properties so Fastify's removeAdditional:true
+              // does not strip tool_calls and tool_call_id from messages.
+              // These fields are required for OpenAI-compatible tool continuation.
+              additionalProperties: true,
               properties: {
                 role: { type: 'string' },
-                content: { type: 'string' }
+                content: { type: 'string' },
+                tool_calls: { type: 'array' },
+                tool_call_id: { type: 'string' }
               },
-              required: ['role', 'content']
+              required: ['role']
             }
           },
           tools: {
@@ -190,7 +196,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
-
+    
     // --- Agent key resolution ---
     let agentSystemPrompt: string | null = null;
     let agentAllowedTools: string[] | null = null;
@@ -246,17 +252,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // Check if Ollama is available as a backend (check early to determine default model)
     const ollamaAvailable = await isOllamaAvailable();
-
+    
     // Server-side default model - use Ollama-compatible model when Ollama is available
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-
+    
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Use requested model if provided, then agent model, then server default
     const model = requestedModel || agentModel || DEFAULT_MODEL;
     // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
     const temperature = agentTemperature ?? requestedTemperature;
-
+    
     request.log.info({ ollamaAvailable, model, requestedModel, agentModel, agentTemperature }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
@@ -304,7 +310,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // Use Ollama if available (checked independently of auth token)
     const useOllama = ollamaAvailable;
-
+    
     // If no backend is available, redirect to mock endpoint
     if (!ollamaAvailable) {
       // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
@@ -319,7 +325,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           body: JSON.stringify(mockBody)
         });
-
+        
         if (stream) {
           // Forward SSE stream from mock
           reply.raw.writeHead(mockResponse.status, {
@@ -329,7 +335,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-origin': request.headers.origin || '*',
             'access-control-allow-credentials': 'true',
           });
-
+          
           if (mockResponse.body) {
             const reader = mockResponse.body.getReader();
             try {

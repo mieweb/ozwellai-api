@@ -167,7 +167,7 @@ async function buildServer() {
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
-
+    
     // Handle validation errors
     if (error.validation) {
       return reply.code(400).send({
@@ -202,7 +202,7 @@ if (require.main === module) {
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';
       const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-
+      
       // Initialize auth database and seed demo data
       const db = getDatabase();
       initializeAuthTables(db);
