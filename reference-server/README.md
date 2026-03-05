@@ -485,26 +485,31 @@ Environment variables:
 - `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
-- `PORTKEY_GATEWAY_URL` - Portkey AI Gateway base URL (e.g. `https://gateway-api.example.com`). Do not include `/v1` or endpoint paths.
-- `PORTKEY_GATEWAY_API_KEY` - API key for authenticating with the gateway
-- `PORTKEY_PROVIDER` - LLM provider to route through the gateway: `openai`, `anthropic`, `ollama` (default: openai)
-- `PORTKEY_MODEL` - Default model when using the gateway (default: gpt-4o-mini)
 
 See `reference-server/.env.example` for a complete example configuration.
 
 ### Model Selection
 
-The server intelligently selects the best available model:
+If the client sends a `model` field in the request, it is used as-is. Otherwise the server picks a default based on the active backend:
 
-1. **Client-specified model**: If the request includes a `model` parameter, that model is used
-2. **Ollama auto-detection**: If Ollama is running, the server queries available models and prefers:
-   - `llama3.2:latest`
-   - `llama3.1:latest`
-   - `llama3:latest`
-   - `gpt-oss:latest`
-   - `mistral:latest`
-   - First available model as fallback
-3. **Mock fallback**: If no backend is available, routes to `/mock/chat` for demos
+| Backend | Env var         | Default        | Example values                                       |
+|---------|-----------------|----------------|------------------------------------------------------|
+| Gateway | `PORTKEY_MODEL` | `gpt-4o-mini`  | `gpt-4o`, `gpt-4-turbo`, `claude-sonnet-4-20250514` |
+| Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
+| Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
+
+**Note:** When a Portkey Gateway is configured (`PORTKEY_GATEWAY_URL` is set), it takes priority over Ollama. Direct Ollama is only used when no gateway is configured, or when the client explicitly sends `Authorization: Bearer ollama`.
+
+**Ollama auto-detection:** When `OLLAMA_MODEL` is not set, the server queries Ollama for installed models and picks the best available one, preferring in order:
+
+- `llama3.2:latest`
+- `llama3.1:latest`
+- `llama3:latest`
+- `gpt-oss:latest`
+- `mistral:latest`
+- First available model as fallback
+
+If `OLLAMA_MODEL` is set, it is used directly and auto-detection is skipped.
 
 ## Error Handling
 

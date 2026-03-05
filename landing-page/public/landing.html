@@ -187,7 +187,7 @@ instructions: |
             sequenceDiagram
             participant Browser
             participant Ozwell as Reference Server
-            participant Ollama as Ollama Container
+            participant LLM as LLM Backend<br />(Gateway or Ollama)
             participant Widget as Widget (iframe)
             participant Handler as Tool Handler
 
@@ -199,24 +199,22 @@ instructions: |
             Note over Widget: Chat widget loads
 
             rect rgb(255, 243, 205)
-            Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
+            Note over Widget: SECURE BOUNDARY<br />All chat messages stay in iframe
             Widget->>Widget: User types message
             Widget->>Ozwell: POST /v1/chat/completions<br />(stream=true)
             Note over Widget,Ozwell: Authorization: Bearer agnt_key-...
 
-            Ozwell->>Ollama: Forward to Ollama API<br />(qwen2.5-coder:3b)
-            Note over Ozwell,Ollama: Internal IP: 10.15.123.17:8080
+            Ozwell->>LLM: Forward request
+            Note over Ozwell,LLM: Gateway or Ollama<br />(based on config)
 
             rect rgb(230, 255, 230)
-            Note over Ozwell,Widget: 🔄 SSE STREAMING
-            Ollama-->>Ozwell: Stream: chunk 1
+            Note over Ozwell,Widget: SSE STREAMING
+            LLM-->>Ozwell: Stream: chunk 1
             Ozwell-->>Widget: data: {"delta":{"content":"Hello"}}
-            Ollama-->>Ozwell: Stream: chunk 2
+            LLM-->>Ozwell: Stream: chunk 2
             Ozwell-->>Widget: data: {"delta":{"content":"!"}}
-            Note over Ozwell: ❤️ Heartbeat every 25s<br />: heartbeat
-            Ollama-->>Ozwell: Stream: chunk N
-            Ozwell-->>Widget: data: {"delta":{"content":"..."}}
-            Ollama-->>Ozwell: Stream: finish_reason=stop
+            Note over Ozwell: Heartbeat every 25s<br />: heartbeat
+            LLM-->>Ozwell: Stream: finish_reason=stop
             Ozwell-->>Widget: data: [DONE]
             end
 

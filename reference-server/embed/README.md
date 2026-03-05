@@ -21,7 +21,6 @@ Customize the widget with `window.OzwellChatConfig`:
 ```html
 <script>
   window.OzwellChatConfig = {
-    model: 'llama3',
     welcomeMessage: 'Hi! How can I help you today?',
     system: 'You are a helpful assistant.'
   };
@@ -58,7 +57,7 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
 <textarea id="my-note">Write something...</textarea>
 
 <script>
-  window.OzwellChatConfig = { model: 'llama3' };
+  window.OzwellChatConfig = {};
 
   // Listen for Save & Close button
   document.addEventListener('ozwell-chat-insert', (event) => {
@@ -71,6 +70,43 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
 **How it works:** User asks AI to improve their text, clicks "Save & Close" in widget, and the AI's response gets inserted into the textarea.
 
 **Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
+
+## Providing Page Context
+
+Send page data to the widget so the AI can answer questions about current state:
+
+```html
+<input id="user-name" value="Alice">
+<input id="user-email" value="alice@example.com">
+
+<script>
+  window.OzwellChatConfig = {};
+
+  // Send context when inputs change
+  function updateContext() {
+    OzwellChat.updateContext({
+      formData: {
+        name: document.getElementById('user-name').value,
+        email: document.getElementById('user-email').value
+      }
+    });
+  }
+
+  // Wait for widget to load, then send initial context and listen for changes
+  document.addEventListener('DOMContentLoaded', () => {
+    OzwellChat.ready().then(() => {
+      updateContext();
+      document.getElementById('user-name').addEventListener('input', updateContext);
+      document.getElementById('user-email').addEventListener('input', updateContext);
+    });
+  });
+</script>
+<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
+
+**How it works:** Context is included in the system prompt for every message, so the AI always sees current page state.
 
 ## With MCP Tools
 
@@ -129,7 +165,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `placeholder` | string | `'Ask a question...'` | Input field placeholder text |
 | `title` | string | `'Ozwell Assistant'` | Widget header title |
 | `headers` | object | `{}` | Custom HTTP headers for API requests |
-| `openaiApiKey` | string | (none) | API key for Authorization header |
+| `openaiApiKey` | string | `'default'` | Bearer token for Authorization header. Set to `'ollama'` to force Ollama backend |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 | `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
@@ -154,7 +190,6 @@ Update configuration at runtime. Applies immediately to mounted widget.
 
 ```javascript
 OzwellChat.configure({
-  model: 'llama3.1',
   system: 'You are a helpful coding assistant.'
 });
 ```
@@ -228,8 +263,7 @@ Disable auto-mount and control when/where the widget appears. Useful for:
 
 <script>
   window.OzwellChatConfig = {
-    autoMount: false,
-    model: 'llama3'
+    autoMount: false
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
@@ -248,18 +282,19 @@ Disable auto-mount and control when/where the widget appears. Useful for:
 
 ### Using with Ollama
 
-The reference server automatically detects and routes to Ollama when it's available at `OLLAMA_BASE_URL`. Use an agent key or parent API key for authentication:
+The reference server automatically detects and routes to the best available backend. Use an agent key or parent API key for authentication. To force Ollama instead of the gateway, use `openaiApiKey: 'ollama'`:
 
 ```html
 <script>
   window.OzwellChatConfig = {
     apiKey: 'agnt_key-your-agent-key'  // or 'ozw_your-parent-key'
+    // To force Ollama: openaiApiKey: 'ollama'
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-The server routes to Ollama automatically when available — no special header needed.
+The server routes to the gateway when configured, or Ollama when available. Sending `Authorization: Bearer ollama` bypasses the gateway. Model is auto-detected from Ollama's installed models (or set `OLLAMA_MODEL` in the server's `.env`).
 
 ### Custom Authentication
 

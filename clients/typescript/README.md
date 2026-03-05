@@ -58,7 +58,7 @@ const ollamaClient = new OzwellAI({
 
 // Use any model you have installed in Ollama
 const response = await ollamaClient.createChatCompletion({
-  model: 'llama2', // or any model installed in your Ollama
+  model: 'llama3.1', // or any model installed in your Ollama
   messages: [
     { role: 'user', content: 'Hello from Ollama!' }
   ]
@@ -69,7 +69,7 @@ The client will automatically use `http://localhost:11434` as the base URL when 
 
 **Prerequisites for Ollama:**
 1. Install Ollama from [https://ollama.ai](https://ollama.ai) 
-2. Pull at least one model: `ollama pull llama2`
+2. Pull at least one model: `ollama pull llama3.1`
 3. Ensure Ollama is running: `ollama serve` (usually starts automatically)
 
 See [`examples/ollama-example.ts`](./examples/ollama-example.ts) for a complete working example.

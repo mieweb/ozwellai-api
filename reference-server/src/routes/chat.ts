@@ -393,23 +393,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
     // so Ollama can correctly associate tool results with the calls that produced them
-    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => {
-      const msg: NonNullableMessage = {
-        role: m.role,
-        content: m.content ?? '',
-        name: m.name
-      };
-      // Preserve tool_calls on assistant messages
-      const raw = m as Record<string, unknown>;
-      if (raw.tool_calls && Array.isArray(raw.tool_calls)) {
-        msg.tool_calls = raw.tool_calls as ToolCall[];
-      }
-      // Preserve tool_call_id on tool result messages
-      if (typeof raw.tool_call_id === 'string') {
-        msg.tool_call_id = raw.tool_call_id;
-      }
-      return msg;
-    });
+    const normalizedMessages: NonNullableMessage[] = (messages as (Message & { tool_calls?: ToolCall[]; tool_call_id?: string })[]).map((m) => ({
+      role: m.role,
+      content: m.content ?? '',
+      name: m.name,
+      ...(m.tool_calls && { tool_calls: m.tool_calls }),
+      ...(m.tool_call_id && { tool_call_id: m.tool_call_id }),
+    }));
 
     // --- Agent: inject system prompt ---
     if (agentConfig?.systemPrompt) {
