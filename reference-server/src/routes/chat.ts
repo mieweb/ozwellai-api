@@ -381,6 +381,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = useGateway ? GATEWAY_MODEL : ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
 
+
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Agent-configured model takes precedence, then client request, then server default
     const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
@@ -446,7 +447,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           body: JSON.stringify(mockBody)
         });
-
+        
         if (stream) {
           // Forward SSE stream from mock
           reply.raw.writeHead(mockResponse.status, {
@@ -456,7 +457,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'access-control-allow-origin': request.headers.origin || '*',
             'access-control-allow-credentials': 'true',
           });
-
+          
           if (mockResponse.body) {
             const reader = mockResponse.body.getReader();
             try {
