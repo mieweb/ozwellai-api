@@ -4,13 +4,26 @@ The fastest way to add Ozwell to any website. No build step, no framework requir
 
 ## Quick Start
 
+:::info Getting an Agent Key
+To get an API key and create an agent, see the [Agent Registration API](../backend/agents.md) or contact **`adamerla@mieweb.com`**.
+:::
+
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
+<!-- Development server (current) -->
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script>
+  OzwellChat.init({ apiKey: 'agnt_key-your-agent-key' });
+</script>
+
+<!-- Production (coming soon) -->
+<!--
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
   data-api-key="agnt_key-your-agent-key"
 ></script>
+-->
 ```
 
 That's it! A chat widget will appear in the bottom-right corner of your page.
@@ -25,19 +38,19 @@ Ozwell supports two authentication modes:
 
 Agent keys connect to a server-side agent definition that manages the system prompt, model, temperature, and allowed tools.
 
-1. Log in to your Ozwell dashboard
-2. Navigate to **Agents** and create or select an agent
-3. Configure the agent's persona, model, tools, and behavior
-4. Copy the **Agent Key** (starts with `agnt_key-`)
+1. Get an API key (`ozw_` prefix) — contact **`adamerla@mieweb.com`** or **`dhorner@mieweb.com`**
+2. Create an agent via the [Agent Registration API](../backend/agents.md)
+3. Copy the **Agent Key** from the response (starts with `agnt_key-`)
+4. Use it in the embed config
 
 ### Option B: Parent API Key
 
 Parent keys give you raw completions access — you provide the system prompt, model, and tools inline in your client config.
 
-1. Log in to your Ozwell dashboard
-2. Navigate to **Settings → API Keys**
-3. Click **Create API Key**
-4. Copy the generated key (starts with `ozw_`)
+1. Contact **`adamerla@mieweb.com`** or **`dhorner@mieweb.com`** for an API key
+2. Use the key directly (starts with `ozw_`)
+
+*Self-service key creation via the [Ozwell Dashboard](https://dashboard.ozwell.ai) is coming soon.*
 
 ---
 
@@ -212,11 +225,11 @@ Sharing is always opt-in: only when a user explicitly chooses to share informati
 
 The widget will display a clear error if no key is configured.
 
-### Domain Restrictions
+### Domain Restrictions *(Coming Soon)*
 
 For additional security, configure domain restrictions for your scoped key:
 
-1. Go to **Settings → API Keys** in your dashboard
+1. Go to **Settings → API Keys** in your dashboard *(coming soon)*
 2. Edit your scoped key
 3. Add allowed domains under **Domain Restrictions**
 4. Only requests from listed domains will be accepted

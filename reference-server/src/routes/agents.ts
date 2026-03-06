@@ -115,7 +115,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // POST /v1/agents (register agent)
     fastify.post<{ Body: { yaml: string } }>('/v1/agents', {
-        schema: { headers: authHeaders, body: yamlBody },
+        schema: { headers: authHeaders, body: yamlBody, tags: ['Agents'], summary: 'Create a new agent' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
@@ -161,7 +161,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // GET /v1/agents (list agents)
     fastify.get('/v1/agents', {
-        schema: { headers: authHeaders },
+        schema: { headers: authHeaders, tags: ['Agents'], summary: 'List all agents' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
@@ -191,7 +191,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // GET /v1/agents/:agent_id (get specific agent)
     fastify.get<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
-        schema: { headers: authHeaders, params: agentIdParam },
+        schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Get agent details' },
         preHandler: apiKeyAuth,
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
@@ -224,7 +224,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // PUT /v1/agents/:agent_id (update agent)
     fastify.put<{ Params: { agent_id: string }; Body: { yaml: string } }>('/v1/agents/:agent_id', {
-        schema: { headers: authHeaders, params: agentIdParam, body: yamlBody },
+        schema: { headers: authHeaders, params: agentIdParam, body: yamlBody, tags: ['Agents'], summary: 'Update an agent' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
@@ -277,7 +277,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // DELETE /v1/agents/:agent_id (delete agent)
     fastify.delete<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
-        schema: { headers: authHeaders, params: agentIdParam },
+        schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Delete an agent' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
