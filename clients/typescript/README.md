@@ -82,7 +82,7 @@ If your server sits behind an API gateway (e.g. [Portkey AI Gateway](https://git
 const gatewayClient = new OzwellAI({
   baseURL: 'https://your-gateway-host.example.com',
   defaultHeaders: {
-    'x-portkey-provider': 'openai',          // tell the gateway which LLM provider to use
+    'x-portkey-provider': 'openai',          // 'openai', 'anthropic', or 'ollama'
     'x-gateway-api-key': 'your-gateway-key', // authenticate with the gateway itself
   },
 });

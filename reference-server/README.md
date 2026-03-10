@@ -23,7 +23,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 The server doesn't require any particular LLM provider. On each request it checks what's available and picks the best option:
 
 1. **Ollama (explicit)** — Client sends `Authorization: Bearer ollama`. Always routes to Ollama, even if a gateway is configured.
-2. **Portkey Gateway** — `PORTKEY_GATEWAY_URL` and `PORTKEY_GATEWAY_API_KEY` are set in `.env`. The gateway manages provider API keys (OpenAI, Anthropic, etc.) so clients don't need them.
+2. **Portkey Gateway** — `PORTKEY_GATEWAY_URL` and `PORTKEY_GATEWAY_API_KEY` are set in `.env`. The gateway manages provider API keys (OpenAI, Anthropic, Ollama, etc.) so clients don't need them.
 3. **Ollama (fallback)** — No gateway configured, but Ollama is reachable on the network.
 4. **Mock** — Nothing else is available. Returns canned responses for demos.
 
@@ -494,7 +494,7 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 
 | Backend | Env var         | Default        | Example values                                       |
 |---------|-----------------|----------------|------------------------------------------------------|
-| Gateway | `PORTKEY_MODEL` | `gpt-4o-mini`  | `gpt-4o`, `gpt-4-turbo`, `claude-sonnet-4-20250514` |
+| Gateway | `PORTKEY_MODEL` | `gpt-4o-mini`  | `gpt-4o`, `claude-sonnet-4-20250514`, `llama3.2`     |
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
 | Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
 
