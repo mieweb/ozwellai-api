@@ -95,6 +95,11 @@ function parseYamlInput(yamlInput: string, fallbackName?: string) {
 }
 
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
+    // Accept raw YAML bodies (application/yaml, text/yaml)
+    fastify.addContentTypeParser(['application/yaml', 'text/yaml'], { parseAs: 'string' }, (_req, body, done) => {
+        done(null, body);
+    });
+
     const authHeaders = {
         type: 'object',
         properties: { authorization: { type: 'string' } },
@@ -114,14 +119,14 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     };
 
     // POST /v1/agents (register agent)
-    fastify.post<{ Body: { yaml: string } }>('/v1/agents', {
-        schema: { headers: authHeaders, body: yamlBody, tags: ['Agents'], summary: 'Create a new agent' },
+    fastify.post<{ Body: string | { yaml: string } }>('/v1/agents', {
+        schema: { headers: authHeaders, tags: ['Agents'], summary: 'Create a new agent' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
 
         try {
-            const { yaml: yamlInput } = request.body;
+            const yamlInput = typeof request.body === 'string' ? request.body : request.body?.yaml;
 
             if (!yamlInput?.trim()) {
                 reply.code(400);
@@ -223,8 +228,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // PUT /v1/agents/:agent_id (update agent)
-    fastify.put<{ Params: { agent_id: string }; Body: { yaml: string } }>('/v1/agents/:agent_id', {
-        schema: { headers: authHeaders, params: agentIdParam, body: yamlBody, tags: ['Agents'], summary: 'Update an agent' },
+    fastify.put<{ Params: { agent_id: string }; Body: string | { yaml: string } }>('/v1/agents/:agent_id', {
+        schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Update an agent' },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
@@ -237,7 +242,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            const { yaml: yamlInput } = request.body;
+            const yamlInput = typeof request.body === 'string' ? request.body : request.body?.yaml;
 
             if (!yamlInput?.trim()) {
                 reply.code(400);

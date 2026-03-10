@@ -35,12 +35,40 @@ AUTH="Authorization: Bearer ozw_your_api_key_here"
 
 ### Step 2 — Create an agent
 
+Send raw YAML directly with `Content-Type: application/yaml`:
+
+```bash
+curl -s -X POST "$BASE/v1/agents" \
+  -H "$AUTH" \
+  -H "Content-Type: application/yaml" \
+  -d '
+name: My Agent
+instructions: You are a helpful assistant.
+model: llama3.1:latest
+temperature: 0.7
+' | jq .
+```
+
+Or from a file:
+
+```bash
+curl -s -X POST "$BASE/v1/agents" \
+  -H "$AUTH" \
+  -H "Content-Type: application/yaml" \
+  -d @my-agent.yaml | jq .
+```
+
+<details>
+<summary>Alternative: JSON-wrapped YAML</summary>
+
 ```bash
 curl -s -X POST "$BASE/v1/agents" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
   -d '{"yaml": "name: My Agent\ninstructions: You are a helpful assistant.\nmodel: llama3.1:latest\ntemperature: 0.7\n"}' | jq .
 ```
+
+</details>
 
 ### Step 3 — Grab the `agent_key` from the response
 
@@ -56,10 +84,10 @@ curl -s -X POST "$BASE/v1/agents" \
 ### Step 4 — Use the agent key in your embed
 
 ```html
-<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 <script>
-  OzwellChat.init({ apiKey: 'agnt_key-abc123...' });
+  window.OzwellChatConfig = { apiKey: 'agnt_key-abc123...' };
 </script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 That's it — 4 steps: set credentials, create agent, copy the key, embed it.

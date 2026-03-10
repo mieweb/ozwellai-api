@@ -5,8 +5,8 @@ Ozwell uses API keys to authenticate requests. This guide covers key types, secu
 :::info Getting an API Key Now
 The Ozwell Dashboard for self-service key provisioning is **coming soon**. In the meantime, to get an API key, contact:
 
-- **`adamerla@mieweb.com`** (Aditya Damerla)
-- **`dhorner@mieweb.com`** (Doug Horner)
+- **`adamerla128@gmail.com`** (Aditya Damerla)
+- **`horner@mieweb.com`** (Doug Horner)
 :::
 
 ## API Key Types
@@ -64,8 +64,8 @@ const apiKey = 'agnt_key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 API key provisioning is currently manual. Contact the team to get a key:
 
-- **`adamerla@mieweb.com`** (Aditya Damerla)
-- **`dhorner@mieweb.com`** (Doug Horner)
+- **`adamerla128@gmail.com`** (Aditya Damerla)
+- **`horner@mieweb.com`** (Doug Horner)
 
 ### Via Dashboard *(Coming Soon)*
 

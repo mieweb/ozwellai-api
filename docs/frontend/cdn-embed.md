@@ -5,17 +5,17 @@ The fastest way to add Ozwell to any website. No build step, no framework requir
 ## Quick Start
 
 :::info Getting an Agent Key
-To get an API key and create an agent, see the [Agent Registration API](../backend/agents.md) or contact **`adamerla@mieweb.com`**.
+To get an API key and create an agent, see the [Agent Registration API](../backend/agents.md) or contact **`adamerla128@gmail.com`**.
 :::
 
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
 <!-- Development server (current) -->
-<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 <script>
-  OzwellChat.init({ apiKey: 'agnt_key-your-agent-key' });
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 
 <!-- Production (coming soon) -->
 <!--
@@ -38,7 +38,7 @@ Ozwell supports two authentication modes:
 
 Agent keys connect to a server-side agent definition that manages the system prompt, model, temperature, and allowed tools.
 
-1. Get an API key (`ozw_` prefix) — contact **`adamerla@mieweb.com`** or **`dhorner@mieweb.com`**
+1. Get an API key (`ozw_` prefix) — contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`**
 2. Create an agent via the [Agent Registration API](../backend/agents.md)
 3. Copy the **Agent Key** from the response (starts with `agnt_key-`)
 4. Use it in the embed config
@@ -47,7 +47,7 @@ Agent keys connect to a server-side agent definition that manages the system pro
 
 Parent keys give you raw completions access — you provide the system prompt, model, and tools inline in your client config.
 
-1. Contact **`adamerla@mieweb.com`** or **`dhorner@mieweb.com`** for an API key
+1. Contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`** for an API key
 2. Use the key directly (starts with `ozw_`)
 
 *Self-service key creation via the [Ozwell Dashboard](https://dashboard.ozwell.ai) is coming soon.*
@@ -55,6 +55,10 @@ Parent keys give you raw completions access — you provide the system prompt, m
 ---
 
 ## Configuration Options
+
+:::caution Coming Soon
+The `data-*` attribute configuration method is not yet supported. Use `window.OzwellChatConfig` (shown above) for now.
+:::
 
 Customize the widget using `data-*` attributes:
 
@@ -89,33 +93,33 @@ Customize the widget using `data-*` attributes:
 
 ## JavaScript API
 
-The embed script exposes a global `Ozwell` object for programmatic control:
+The embed script exposes a global `OzwellChat` object for programmatic control:
 
 ### Open/Close the Widget
 
 ```javascript
 // Open the chat window
-Ozwell.open();
+OzwellChat.open();
 
 // Close the chat window
-Ozwell.close();
+OzwellChat.close();
 
-// Toggle open/closed
-Ozwell.toggle();
+// Toggle open/closed (coming soon)
+// OzwellChat.toggle();
 ```
 
-### Send Messages
+### Update Context
 
 ```javascript
-// Send a message as the user
-Ozwell.sendMessage('Hello, I need help with...');
-
 // Set context data (passed to the agent)
-Ozwell.setContext({
+OzwellChat.updateContext({
   userId: 'user_123',
   page: window.location.pathname,
   customData: { ... }
 });
+
+// Send a message as the user (coming soon)
+// OzwellChat.sendMessage('Hello, I need help with...');
 ```
 
 ### Events
@@ -150,6 +154,13 @@ window.addEventListener('ozwell:user-share', (event) => {
 ---
 
 ## Examples
+
+:::note Current Script URLs
+The examples below use `cdn.ozwell.ai/embed.js` which is the future production CDN. For now, use:
+
+- **Dev:** `https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js`
+- **Production:** `https://ozwellai-refserver.opensource.mieweb.org/embed/ozwell-loader.js`
+:::
 
 ### Basic Embed
 
@@ -198,7 +209,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 ### Triggered by Button Click
 
 ```html
-<button onclick="Ozwell.open()">Chat with Us</button>
+<button onclick="OzwellChat.open()">Chat with Us</button>
 
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
