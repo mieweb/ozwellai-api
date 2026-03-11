@@ -1,8 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, isValidApiKey } from '../util';
 import * as yaml from 'yaml';
-import { agentStore } from '../storage/agents';
-import { getDatabase } from '../db/init-auth';
+import { agentStore, getDatabase } from '../storage/agents';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -112,12 +111,6 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         required: ['agent_id']
     };
 
-    const yamlBody = {
-        type: 'object',
-        properties: { yaml: { type: 'string' } },
-        required: ['yaml']
-    };
-
     // POST /v1/agents (register agent)
     fastify.post<{ Body: string | { yaml: string } }>('/v1/agents', {
         schema: { headers: authHeaders, tags: ['Agents'], summary: 'Create a new agent' },
@@ -162,6 +155,31 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             reply.code(500);
             return createError('Agent registration failed', 'server_error');
         }
+    });
+
+    // GET /v1/agents/me — agent key self-lookup (used by embed loader to discover tools)
+    fastify.get('/v1/agents/me', {
+        schema: { tags: ['Agents'], summary: 'Get own agent config (agent key auth)' },
+    }, async (request, reply) => {
+        const authHeader = request.headers.authorization;
+        if (!authHeader?.startsWith('Bearer agnt_key-')) {
+            reply.code(401);
+            return { error: { message: 'Requires an agent key (agnt_key-...)', code: 'invalid_api_key' } };
+        }
+
+        const agentKey = authHeader.slice(7);
+        const agent = agentStore.getByKey(agentKey);
+        if (!agent) {
+            reply.code(404);
+            return { error: { message: 'Agent not found', code: 'not_found' } };
+        }
+
+        return {
+            id: agent.id,
+            name: agent.name,
+            model: agent.model,
+            tools: agent.tools,
+        };
     });
 
     // GET /v1/agents (list agents)

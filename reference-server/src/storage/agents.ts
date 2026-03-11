@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import { getKeyHint } from '../util';
 
 interface DbAgentRow {
     id: string;
@@ -16,6 +17,55 @@ interface DbAgentRow {
 }
 
 const DB_PATH = path.join(process.cwd(), 'data', 'ozwell.db');
+
+// Demo parent API key
+export const DEMO_API_KEY = 'ozw_demo_localhost_key_for_testing';
+
+// ── Database singleton ──────────────────────────────────────────────
+
+let _db: Database.Database | null = null;
+
+export function getDatabase(): Database.Database {
+    if (!_db) _db = new Database(DB_PATH);
+    return _db;
+}
+
+// ── Auth tables (api_keys) ──────────────────────────────────────────
+
+export function initializeAuthTables(db: Database.Database): void {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        key TEXT NOT NULL UNIQUE,
+        key_hint TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+    `);
+    console.log('[auth] Auth tables initialized');
+}
+
+export function seedDemoData(db: Database.Database): void {
+    const demoKeyId = 'demo-key';
+    const existing = db.prepare('SELECT id FROM api_keys WHERE id = ?').get(demoKeyId);
+    if (existing) {
+        console.log('[auth] Demo data already exists');
+        return;
+    }
+
+    const now = new Date().toISOString();
+    const keyHint = getKeyHint(DEMO_API_KEY);
+
+    db.prepare(`
+      INSERT INTO api_keys (id, name, key, key_hint, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(demoKeyId, 'Demo Key', DEMO_API_KEY, keyHint, now);
+
+    console.log('[auth] Demo API key seeded');
+}
+
+// ── Agent model ─────────────────────────────────────────────────────
 
 export interface Agent {
     id: string;

@@ -88,50 +88,8 @@
       // model and system prompt are managed by the agent definition (server-side)
       apiKey: '__TICTACTOE_AGENT_KEY__', // injected from TICTACTOE_AGENT_KEY env var
       welcomeMessage: 'Click any square to play, or type moves like "play center". I\'m O, you\'re X!',
-      debug: false, // Disable debug mode for clean game experience
-      tools: [
-        {
-          type: 'function',
-          function: {
-            name: 'make_move',
-            description: 'ONLY use when user TYPES a move like "play center". Do NOT use when user clicks - their X is already placed.',
-            parameters: {
-              type: 'object',
-              properties: {
-                position: {
-                  type: 'integer',
-                  description: 'Position index (0-8) for the user\'s X move. Board layout: 0=top-left, 1=top-center, 2=top-right, 3=middle-left, 4=middle-center, 5=middle-right, 6=bottom-left, 7=bottom-center, 8=bottom-right.',
-                  minimum: 0,
-                  maximum: 8
-                }
-              },
-              required: ['position']
-            }
-          }
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'ai_move',
-            description: 'Make YOUR O move. Call this: (1) when you see "It\'s your turn as O", OR (2) IMMEDIATELY after make_move returns with currentPlayer:"O". JavaScript calculates the optimal move.',
-            parameters: {
-              type: 'object',
-              properties: {}
-            }
-          }
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'reset_game',
-            description: 'Reset the tic-tac-toe game board to start a new game',
-            parameters: {
-              type: 'object',
-              properties: {}
-            }
-          }
-        }
-      ]
+      debug: false // Disable debug mode for clean game experience
+      // tools are auto-discovered from the agent config via MCP handshake
     };
 
     // Load widget embed script

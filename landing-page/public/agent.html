@@ -579,72 +579,38 @@
             flashEl(entry);
         }
 
-        // --- Tool handlers ---
-        function getWidgetIframe() {
-            return window.OzwellChat?.iframe || null;
-        }
+        // --- Tool handlers (via MCP protocol — loader dispatches DOM events) ---
+        document.addEventListener('ozwell-tool-call', (e) => {
+            const { name, arguments: args, respond } = e.detail;
+            logEvent(`[tool] ${name}`, JSON.stringify(args));
 
-        function sendToolResult(toolCallId, result) {
-            const iframe = getWidgetIframe();
-            if (!iframe || !iframe.contentWindow) return;
-            iframe.contentWindow.postMessage({
-                source: 'ozwell-chat-parent',
-                type: 'tool_result',
-                tool_call_id: toolCallId,
-                result: result
-            }, '*');
-        }
+            switch (name) {
+                case 'get_ticket':
+                    respond(ticket);
+                    break;
 
-        const toolHandlers = {
-            get_ticket(toolCallId) {
-                logEvent('[tool] get_ticket', JSON.stringify(ticket));
-                sendToolResult(toolCallId, ticket);
-            },
-
-            update_ticket_status(toolCallId, args) {
-                console.log('[update_ticket_status] Received args:', args);
-                const newStatus = args.status;
-                if (!newStatus) {
-                    logEvent('[tool] update_ticket_status ERROR', 'No status in args');
-                    sendToolResult(toolCallId, { success: false, error: 'Missing status parameter' });
-                    return;
+                case 'update_ticket_status': {
+                    const newStatus = args.status;
+                    if (!newStatus) {
+                        respond({ success: false, error: 'Missing status parameter' });
+                        return;
+                    }
+                    ticket.status = newStatus;
+                    updateStatusUI(newStatus);
+                    logEvent('[tool] update_ticket_status', `Status → ${newStatus}`);
+                    respond({ success: true, status: newStatus });
+                    break;
                 }
-                ticket.status = newStatus;
-                updateStatusUI(newStatus);
-                logEvent('[tool] update_ticket_status', `Status → ${newStatus}`);
-                sendToolResult(toolCallId, { success: true, status: newStatus });
-            },
 
-            add_ticket_note(toolCallId, args) {
-                const noteText = args.note;
-                ticket.notes.push({ text: noteText, time: new Date().toISOString() });
-                addNoteUI(noteText);
-                logEvent('[tool] add_ticket_note', noteText);
-                sendToolResult(toolCallId, { success: true, noteCount: ticket.notes.length });
-            }
-        };
-
-        // --- Listen for widget messages ---
-        window.addEventListener('message', (e) => {
-            if (!e.data) return;
-
-            // Tool calls from widget
-            if (e.data.source === 'ozwell-chat-widget' && e.data.type === 'tool_call') {
-                const toolName = e.data.tool || e.data.name;
-                const toolCallId = e.data.tool_call_id;
-                const args = e.data.payload || e.data.arguments || {};
-                if (toolHandlers[toolName]) {
-                    toolHandlers[toolName](toolCallId, args);
+                case 'add_ticket_note': {
+                    const noteText = args.note;
+                    ticket.notes.push({ text: noteText, time: new Date().toISOString() });
+                    addNoteUI(noteText);
+                    logEvent('[tool] add_ticket_note', noteText);
+                    respond({ success: true, noteCount: ticket.notes.length });
+                    break;
                 }
             }
-
-            // Lifecycle events
-            if (e.data.source === 'ozwell-chat-widget') {
-                logEvent(`[widget] ${e.data.type}`, e.data.detail ? JSON.stringify(e.data.detail) : null);
-            }
-            if (e.data.type === 'ozwell:ready') logEvent('[lifecycle] ozwell:ready');
-            if (e.data.type === 'ozwell:open') logEvent('[lifecycle] ozwell:open');
-            if (e.data.type === 'ozwell:close') logEvent('[lifecycle] ozwell:close');
         });
 
         // --- Prompt chips ---
@@ -655,14 +621,13 @@
 
                 if (window.OzwellChat) {
                     window.OzwellChat.open();
-
                     setTimeout(() => {
                         const iframe = window.OzwellChat?.iframe;
                         if (iframe && iframe.contentWindow) {
                             iframe.contentWindow.postMessage({
-                                source: 'ozwell-chat-parent',
-                                type: 'ozwell:send-message',
-                                payload: { content: prompt }
+                                jsonrpc: '2.0',
+                                method: 'send-message',
+                                params: { content: prompt },
                             }, '*');
                         }
                     }, 500);

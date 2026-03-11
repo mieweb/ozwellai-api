@@ -48,72 +48,52 @@
 
       <!-- Step 1 -->
       <div class="integration-step">
-        <h3>1. Add the Widget &amp; Your Agent Key</h3>
-        <p>Paste this into your HTML. Replace the key with the one from the API.</p>
-        <pre class="code-block"><code>&lt;!-- Load the Ozwell chat widget --&gt;
-&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;
+        <h3>1. Create Your Agent</h3>
+        <p>Register an agent via the API with a name, instructions, and tool names:</p>
+        <pre class="code-block"><code>curl -X POST https://your-server.com/v1/agents \
+  -H "Authorization: Bearer ozw_your-api-key" \
+  -H "Content-Type: application/yaml" \
+  -d '
+name: Form Helper
+instructions: You help users fill out forms.
+tools:
+  - get_form_data
+  - submit_form
+'</code></pre>
+        <p>You'll get back an <code>agent_key</code> to use in the next step.
+          The agent key carries the personality, model, and tools &mdash; no client-side config needed.</p>
+      </div>
 
-&lt;!-- Configure it with your agent key --&gt;
+      <!-- Step 2 -->
+      <div class="integration-step">
+        <h3>2. Add the Widget</h3>
+        <p>Paste this into your HTML with the agent key from Step 1:</p>
+        <pre class="code-block"><code>&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;
 &lt;script&gt;
   window.OzwellChatConfig = {
     apiKey: 'agnt_key-your-agent-key-here'
   };
 &lt;/script&gt;</code></pre>
-        <p>That's it for a basic chatbot! The agent key tells Ozwell which personality,
-          model, and tools to use &mdash; all configured on the server when you create the agent.</p>
-      </div>
-
-      <!-- Step 2 -->
-      <div class="integration-step">
-        <h3>2. Define Your Tools (if your agent uses them)</h3>
-        <p>If your agent has tools (like reading form fields or updating the page), you
-          need to tell the widget <em>what those tools look like</em> so the AI knows how
-          to call them. Add a <code>tools</code> array to your config:</p>
-        <pre class="code-block"><code>window.OzwellChatConfig = {
-  apiKey: 'agnt_key-...',
-  tools: [{
-    type: 'function',
-    function: {
-      name: 'get_form_data',
-      description: 'Read the current form values',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  }]
-};</code></pre>
-        <p><strong>No tools?</strong> Skip this step entirely &mdash; Step 1 is all you need.</p>
+        <p>That's it for a basic chatbot! The widget automatically discovers
+          available tools from your agent config.</p>
       </div>
 
       <!-- Step 3 -->
       <div class="integration-step">
         <h3>3. Handle Tool Calls on Your Page</h3>
-        <p>When the AI decides to use a tool, the widget sends a message to your page.
-          You run the tool and send the result back:</p>
-        <pre class="code-block"><code>window.addEventListener('message', (e) =&gt; {
-  // Only handle messages from the Ozwell widget
-  if (e.data.source !== 'ozwell-chat-widget' ||
-      e.data.type !== 'tool_call') return;
+        <p>When the AI decides to use a tool, the loader dispatches a DOM event.
+          You handle it and call <code>respond()</code> with the result:</p>
+        <pre class="code-block"><code>document.addEventListener('ozwell-tool-call', (e) =&gt; {
+  const { name, arguments: args, respond } = e.detail;
 
-  let result = {};
-
-  if (e.data.tool === 'get_form_data') {
-    // Read values from your page
-    result = {
+  if (name === 'get_form_data') {
+    respond({
       name: document.getElementById('name').value,
       email: document.getElementById('email').value
-    };
+    });
   }
-
-  // Send the result back to the widget
-  OzwellChat.iframe.contentWindow.postMessage({
-    source: 'ozwell-chat-parent',
-    type: 'tool_result',
-    result: result
-  }, '*');
 });</code></pre>
-        <p><strong>No tools?</strong> Skip this step too.</p>
+        <p><strong>No tools?</strong> Skip Steps 1 and 3 &mdash; just embed the widget with a parent API key.</p>
       </div>
 
 
@@ -255,37 +235,8 @@
       welcomeMessage: 'Hi! I can help update your name, address, or zip code. Just ask!',
       // system prompt is now managed by the agent definition (server-side)
       apiKey: '__LANDING_AGENT_KEY__', // injected from LANDING_AGENT_KEY env var
-      debug: true, // Shows tool execution pills for developers (set false for production)
-      tools: [
-        {
-          type: 'function',
-          function: {
-            name: 'get_form_data',
-            description: 'Retrieves the current user information including name, address, and zip code. Call this when the user asks about their current information.',
-            parameters: {
-              type: 'object',
-              properties: {},
-              required: []
-            }
-          }
-        },
-        {
-          type: 'function',
-          function: {
-            name: 'update_form_data',
-            description: 'Updates user profile information. Can update name, address, and/or zip code in a single call. Use when user requests to change/update/modify any of these fields.',
-            parameters: {
-              type: 'object',
-              properties: {
-                name: { type: 'string', description: 'The new name value (optional)' },
-                address: { type: 'string', description: 'The new address value (optional)' },
-                zipCode: { type: 'string', description: 'The new zip code value (optional)' }
-              },
-              required: []
-            }
-          }
-        }
-      ]
+      debug: true // Shows tool execution pills for developers (set false for production)
+      // tools are auto-discovered from the agent config via MCP handshake
     };
 
     const loader = document.createElement('script');

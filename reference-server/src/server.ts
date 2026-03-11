@@ -15,7 +15,7 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
 import agentsRoute from './routes/agents';
-import { getDatabase, initializeAuthTables, seedDemoData } from './db/init-auth';
+import { getDatabase, initializeAuthTables, seedDemoData } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
