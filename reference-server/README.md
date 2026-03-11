@@ -5,7 +5,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 ## Features
 
 - **Full OpenAI API Compatibility**: Wire-compatible with OpenAI's API specification
-- **Real Text Inference**: Uses deterministic text generation for predictable testing
+- **Multi-Backend LLM Support**: Connects to OpenAI, Portkey Gateway, Ollama, or falls back to deterministic mock responses
 - **MCP Host**: Built-in WebSocket endpoint (`/mcp/ws`) and embeddable chat widget
 - **Streaming Support**: Server-Sent Events (SSE) for both `/v1/responses` and `/v1/chat/completions`
 - **File Management**: Complete file upload, download, and management system
@@ -22,16 +22,15 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 
 The server doesn't require any particular LLM provider. On each request it checks what's available and picks the best option:
 
-1. **Ollama (explicit)** — Client sends `Authorization: Bearer ollama`. Always routes to Ollama, even if a gateway is configured.
-2. **Portkey Gateway** — `PORTKEY_GATEWAY_URL` and `PORTKEY_GATEWAY_API_KEY` are set in `.env`. The gateway manages provider API keys (OpenAI, Anthropic, Ollama, etc.) so clients don't need them.
-3. **Ollama (fallback)** — No gateway configured, but Ollama is reachable on the network.
-4. **Mock** — Nothing else is available. Returns canned responses for demos.
+1. **LLM Backend** — `LLM_BASE_URL` is set in `.env`. Works with any OpenAI-compatible API: OpenAI, Portkey Gateway, etc.
+2. **Ollama (fallback)** — No `LLM_BASE_URL` configured, but Ollama is reachable on the network.
+3. **Mock** — Nothing else is available. Returns canned responses for demos.
 
-You don't need to change any code to switch backends. Just set (or unset) the environment variables and restart the server. See `.env.example` for all options.
+Just set the environment variables and restart the server. See `.env.example` for all options.
 
 ### Streaming Architecture
 
-The diagram below shows the Ollama path, but the gateway path works identically — the server just forwards to a different upstream.
+The diagram below applies to all backends — the server forwards to whichever upstream is configured.
 
 ```mermaid
 sequenceDiagram
@@ -81,7 +80,7 @@ sequenceDiagram
 **Key Components:**
 
 - **Reference Server**: Proxy layer handling API compatibility and SSE heartbeat
-- **LLM Backend**: Either a Portkey Gateway (routing to OpenAI, Anthropic, etc.) or a direct Ollama instance
+- **LLM Backend**: Any OpenAI-compatible API (OpenAI, Portkey Gateway, etc.) or a direct Ollama instance
 - **Widget**: Embeddable chat UI with iframe isolation
 - **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
 - **Tool Calls**: Extracted from streamed responses and sent to parent page via MCP JSON-RPC 2.0 over postMessage
@@ -258,8 +257,8 @@ The server will start at `http://localhost:3000`
 
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses, configure a backend in your `.env` file:
 
-- **Option A — Portkey Gateway:** Set `PORTKEY_GATEWAY_URL` and `PORTKEY_GATEWAY_API_KEY` to route through a gateway that manages provider keys (OpenAI, Anthropic, etc.) server-side. See `.env.example`.
-- **Option B — Ollama:** Set `OLLAMA_BASE_URL` to a local or remote Ollama instance. Or send `Authorization: Bearer ollama` from the client to auto-connect to `localhost:11434`.
+- **Any provider:** Set `LLM_BASE_URL` and `LLM_API_KEY` to point at OpenAI, Portkey Gateway, or any OpenAI-compatible API.
+- **Ollama:** Set `OLLAMA_BASE_URL` to a local or remote Ollama instance.
 
 No code changes needed — just set the environment variables and restart.
 
@@ -477,16 +476,27 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 
 Environment variables:
 
+**LLM Backend:**
+
+- `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
+- `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
+- `LLM_MODEL` - Default model when client doesn't specify one (default: `gpt-4o-mini`)
+- `LLM_PROVIDER` - Only for Portkey Gateway, sent as `x-portkey-provider` header
+
+**Ollama (fallback):**
+
+- `OLLAMA_BASE_URL` - Ollama instance URL (default: `http://localhost:11434`)
+- `OLLAMA_MODEL` - Ollama model to use (auto-detected if not set)
+
+**Server:**
+
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
-- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: <http://127.0.0.1:11434>)
-- `OLLAMA_MODEL` - Override Ollama model for chat (optional - server auto-selects from available models)
-- `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
 
-See `reference-server/.env.example` for a complete example configuration.
+See `.env.example` for a complete example configuration.
 
 ### Model Selection
 
@@ -494,11 +504,11 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 
 | Backend | Env var         | Default        | Example values                                       |
 |---------|-----------------|----------------|------------------------------------------------------|
-| Gateway | `PORTKEY_MODEL` | `gpt-4o-mini`  | `gpt-4o`, `claude-sonnet-4-20250514`, `llama3.2`     |
+| LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4o`, `claude-sonnet-4-20250514`, `llama3.2`     |
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
 | Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
 
-**Note:** When a Portkey Gateway is configured (`PORTKEY_GATEWAY_URL` is set), it takes priority over Ollama. Direct Ollama is only used when no gateway is configured, or when the client explicitly sends `Authorization: Bearer ollama`.
+**Note:** When `LLM_BASE_URL` is set, it takes priority over Ollama. Ollama is only used as a fallback when no LLM backend is configured.
 
 **Ollama auto-detection:** When `OLLAMA_MODEL` is not set, the server queries Ollama for installed models and picks the best available one, preferring in order:
 
@@ -506,7 +516,10 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 - `llama3.1:latest`
 - `llama3:latest`
 - `gpt-oss:latest`
+- `gpt-oss:20b`
 - `mistral:latest`
+- `llama2:latest`
+- `qwen2.5-coder:3b`
 - First available model as fallback
 
 If `OLLAMA_MODEL` is set, it is used directly and auto-detection is skipped.

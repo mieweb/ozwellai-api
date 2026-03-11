@@ -16,9 +16,9 @@ import type {
  */
 export interface OzwellAIConfig {
   /**
-   * Your API key for authentication.
+   * Your API key for authentication (sent as Authorization: Bearer header).
    * Special value: Use "ollama" to automatically connect to Ollama on localhost:11434.
-   * Omit to skip the Authorization header (e.g. when using a gateway that handles auth separately).
+   * Omit for backends that don't require authentication (e.g. local Ollama).
    */
   apiKey?: string;
   /** Base URL for the API (defaults to OzwellAI endpoint, or http://localhost:11434 for Ollama) */
@@ -50,8 +50,8 @@ export interface OzwellAIConfig {
  *   apiKey: 'ollama'
  * });
  * 
- * const response = await client.chat.completions.create({
- *   model: 'gpt-3.5-turbo',
+ * const response = await client.createChatCompletion({
+ *   model: 'gpt-4o-mini',
  *   messages: [{ role: 'user', content: 'Hello!' }]
  * });
  * ```

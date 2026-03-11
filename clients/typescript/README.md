@@ -36,7 +36,7 @@ const client = new OzwellAI({
 
 ```typescript
 const client = new OzwellAI({
-  apiKey: 'your-api-key',        // optional — omit to skip the Authorization header
+  apiKey: 'your-api-key',        // sent as Authorization: Bearer header
   baseURL: 'https://api.ozwell.ai', // optional, defaults to official API
   timeout: 30000, // optional, defaults to 30 seconds
   defaultHeaders: { // optional
@@ -45,7 +45,7 @@ const client = new OzwellAI({
 });
 ```
 
-> **Note:** `apiKey` is optional. When omitted, no `Authorization` header is sent. This is useful when connecting through a gateway or proxy that handles authentication separately (see [Gateway / Proxy Usage](#gateway--proxy-usage)).
+> **Note:** `apiKey` is optional. When omitted, no `Authorization` header is sent. This is useful for backends that don't require authentication (e.g. local Ollama without a `baseURL` override).
 
 ### Ollama Integration
 
@@ -76,14 +76,14 @@ See [`examples/ollama-example.ts`](./examples/ollama-example.ts) for a complete 
 
 ### Gateway / Proxy Usage
 
-If your server sits behind an API gateway (e.g. [Portkey AI Gateway](https://github.com/portkey-ai/gateway)) that already handles LLM provider authentication, you don't need an `apiKey`. Just omit it — the client won't send an `Authorization` header, and the gateway uses its own headers for auth:
+To route requests through an API gateway (e.g. [Portkey AI Gateway](https://github.com/portkey-ai/gateway)), pass the gateway key as `apiKey` and set `baseURL` to the gateway. The gateway manages provider API keys server-side — you only need the gateway key:
 
 ```typescript
 const gatewayClient = new OzwellAI({
+  apiKey: 'your-gateway-key',                 // authenticates with the gateway
   baseURL: 'https://your-gateway-host.example.com',
   defaultHeaders: {
-    'x-portkey-provider': 'openai',          // 'openai', 'anthropic', or 'ollama'
-    'x-gateway-api-key': 'your-gateway-key', // authenticate with the gateway itself
+    'x-portkey-provider': 'openai',           // pick the provider: 'openai', 'anthropic', or 'ollama'
   },
 });
 

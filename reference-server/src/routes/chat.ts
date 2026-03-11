@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isGatewayAvailable } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
 import { agentStore } from '../storage/agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
@@ -357,30 +357,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Extract API key from authorization header (needed before backend selection)
-    const authHeader = request.headers.authorization || '';
-    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const explicitOllama = apiKey.toLowerCase() === 'ollama';
-
-    // Check backend availability — parse auth first so explicit Ollama requests
-    // always probe Ollama, even when gateway is configured.
-    const gatewayAvailable = await isGatewayAvailable();
-    const ollamaAvailable = (explicitOllama || !gatewayAvailable) ? await isOllamaAvailable() : false;
-
     // Backend selection priority:
-    // 1. If client sends apiKey="ollama" → use Ollama (explicit request)
-    // 2. If gateway is configured and available → use gateway (primary backend)
-    // 3. If Ollama is available → use Ollama (fallback)
-    // 4. Otherwise → mock/simple generator
-    const useGateway = !explicitOllama && gatewayAvailable;
-    const useOllama = explicitOllama || (!useGateway && ollamaAvailable);
-    const backend = useGateway ? 'gateway' : useOllama ? 'ollama' : 'fallback';
+    // 1. LLM_BASE_URL configured → use it (OpenAI, Portkey Gateway, etc.)
+    // 2. Ollama reachable → use Ollama
+    // 3. Mock/simple generator
+    const llmConfigured = isLLMBackendConfigured();
+    const ollamaAvailable = llmConfigured ? false : await isOllamaAvailable();
+    const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
 
     // Determine default model based on backend
-    const GATEWAY_MODEL = process.env.PORTKEY_MODEL || 'gpt-4o-mini';
-    const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
-    const DEFAULT_MODEL = useGateway ? GATEWAY_MODEL : ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-
+    const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+    const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+    const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
 
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Agent-configured model takes precedence, then client request, then server default
@@ -388,7 +376,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
 
-    request.log.info({ backend, gatewayAvailable, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
+    request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
@@ -474,17 +462,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Use a real LLM backend (gateway or Ollama)
-    if (useGateway || useOllama) {
+    // Use a real LLM backend
+    if (backend !== 'fallback') {
       try {
         // Create the appropriate client based on backend
-        const llmClient = useGateway
+        const llmClient = llmConfigured
           ? new OzwellAI({
-              baseURL: process.env.PORTKEY_GATEWAY_URL!,
+              apiKey: process.env.LLM_API_KEY,
+              baseURL: process.env.LLM_BASE_URL!,
               timeout: 120000,
               defaultHeaders: {
-                'x-portkey-provider': process.env.PORTKEY_PROVIDER || 'openai',
-                'x-gateway-api-key': process.env.PORTKEY_GATEWAY_API_KEY || '',
+                ...(process.env.LLM_PROVIDER && { 'x-portkey-provider': process.env.LLM_PROVIDER }),
               },
             })
           : new OzwellAI({

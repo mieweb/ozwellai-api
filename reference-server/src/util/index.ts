@@ -271,19 +271,10 @@ export async function isOllamaAvailable(): Promise<boolean> {
 }
 
 /**
- * Check if Portkey Gateway URL is set in env.
+ * Check if an LLM backend is configured via LLM_BASE_URL.
  */
-export function isGatewayConfigured(): boolean {
-  return !!process.env.PORTKEY_GATEWAY_URL;
-}
-
-/**
- * Check if Portkey Gateway is configured (URL + API key present).
- * This only validates configuration; it does not perform a network probe
- * because the gateway requires provider headers on all endpoints.
- */
-export async function isGatewayAvailable(): Promise<boolean> {
-  return isGatewayConfigured() && !!process.env.PORTKEY_GATEWAY_API_KEY;
+export function isLLMBackendConfigured(): boolean {
+  return !!process.env.LLM_BASE_URL;
 }
 
 /**

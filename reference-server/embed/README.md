@@ -165,7 +165,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `placeholder` | string | `'Ask a question...'` | Input field placeholder text |
 | `title` | string | `'Ozwell Assistant'` | Widget header title |
 | `headers` | object | `{}` | Custom HTTP headers for API requests |
-| `openaiApiKey` | string | `'default'` | Bearer token for Authorization header. Set to `'ollama'` to force Ollama backend |
+| `openaiApiKey` | string | `'default'` | Bearer token for Authorization header |
 | `containerId` | string | (none) | DOM element ID to mount widget in (default: body) |
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 | `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
@@ -282,19 +282,18 @@ Disable auto-mount and control when/where the widget appears. Useful for:
 
 ### Using with Ollama
 
-The reference server automatically detects and routes to the best available backend. Use an agent key or parent API key for authentication. To force Ollama instead of the gateway, use `openaiApiKey: 'ollama'`:
+The reference server automatically detects and routes to the best available backend. Use an agent key or parent API key for authentication:
 
 ```html
 <script>
   window.OzwellChatConfig = {
     apiKey: 'agnt_key-your-agent-key'  // or 'ozw_your-parent-key'
-    // To force Ollama: openaiApiKey: 'ollama'
   };
 </script>
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-The server routes to the gateway when configured, or Ollama when available. Sending `Authorization: Bearer ollama` bypasses the gateway. Model is auto-detected from Ollama's installed models (or set `OLLAMA_MODEL` in the server's `.env`).
+To use Ollama as the backend, configure the server's `.env` file — set `OLLAMA_BASE_URL` (and optionally `OLLAMA_MODEL`). No client-side changes needed; the widget talks to the reference server and the server handles backend routing. See `../.env.example` for details.
 
 ### Custom Authentication
 
