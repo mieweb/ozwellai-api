@@ -128,10 +128,10 @@ Create a new agent with a YAML configuration wrapped in JSON.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name for the agent |
-| `instructions` | string | Yes | System prompt / persona (goes in the body after the YAML frontmatter `---`) |
+| `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
 | `model` | string | No | Model ID (default: `llama3.1:latest`) |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
-| `tools` | array | No | List of tool names the agent can use |
+| `tools` | array | No | List of tool names the agent can use (names only — no descriptions or schemas needed) |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |
 
 #### Example
@@ -139,9 +139,22 @@ Create a new agent with a YAML configuration wrapped in JSON.
 ```bash
 curl -s -X POST "$BASE/v1/agents" \
   -H "$AUTH" \
-  -H "Content-Type: application/json" \
-  -d '{"yaml": "name: Support Bot\ninstructions: >\n  You help users with technical support.\n  Be concise and friendly.\nmodel: llama3.1:latest\ntemperature: 0.5\ntools:\n  - search_docs\n"}' | jq .
+  -H "Content-Type: application/yaml" \
+  -d '
+name: Support Bot
+model: llama3.1:latest
+temperature: 0.5
+tools:
+  - search_docs
+  - create_ticket
+instructions: >
+  You help users with technical support. Be concise and friendly.
+  When a user asks a question, call search_docs to find relevant articles.
+  If the issue cannot be resolved, call create_ticket to escalate it.
+' | jq .
 ```
+
+> **Important:** Since tools are stored as names only (no descriptions or schemas), the `instructions` field is how the LLM knows what each tool does and when to call it. Always describe each tool's purpose in your instructions.
 
 #### Response
 

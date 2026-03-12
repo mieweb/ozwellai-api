@@ -55,13 +55,18 @@
   -H "Content-Type: application/yaml" \
   -d '
 name: Form Helper
-instructions: You help users fill out forms.
 tools:
   - get_form_data
   - submit_form
+instructions: >
+  You help users fill out forms.
+  Call get_form_data to read current field values.
+  Call submit_form to save changes.
 '</code></pre>
         <p>You'll get back an <code>agent_key</code> to use in the next step.
           The agent key carries the personality, model, and tools &mdash; no client-side config needed.</p>
+        <p><strong>Tip:</strong> Tools are just names &mdash; the <code>instructions</code> field
+          tells the AI what each tool does and when to call it.</p>
       </div>
 
       <!-- Step 2 -->
