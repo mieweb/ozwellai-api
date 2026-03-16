@@ -49,24 +49,35 @@
       <!-- Step 1 -->
       <div class="integration-step">
         <h3>1. Create Your Agent</h3>
-        <p>Register an agent via the API with a name, instructions, and tool names:</p>
+        <p>Register an agent via the API with a name, instructions, and tool schemas:</p>
         <pre class="code-block"><code>curl -X POST https://your-server.com/v1/agents \
   -H "Authorization: Bearer ozw_your-api-key" \
   -H "Content-Type: application/yaml" \
   -d '
 name: Form Helper
 tools:
-  - get_form_data
-  - submit_form
+  - name: get_form_data
+    description: Retrieves the current form values
+  - name: update_form_data
+    description: Updates form fields
+    inputSchema:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The new name
+        address:
+          type: string
+          description: The new address
 instructions: >
   You help users fill out forms.
   Call get_form_data to read current field values.
-  Call submit_form to save changes.
+  Call update_form_data to save changes.
 '</code></pre>
         <p>You'll get back an <code>agent_key</code> to use in the next step.
           The agent key carries the personality, model, and tools &mdash; no client-side config needed.</p>
-        <p><strong>Tip:</strong> Tools are just names &mdash; the <code>instructions</code> field
-          tells the AI what each tool does and when to call it.</p>
+        <p><strong>Key:</strong> Tool schemas (description + inputSchema) are stored server-side
+          with the agent &mdash; the LLM gets the correct parameter names automatically.</p>
       </div>
 
       <!-- Step 2 -->

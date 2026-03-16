@@ -76,7 +76,8 @@ function parseYamlInput(yamlInput: string, fallbackName?: string) {
     const instructions = parsed.instructions || '';
     const model = parsed.model as string | undefined;
     const temperature = parsed.temperature as number | undefined;
-    const tools = parsed.tools as string[] | undefined;
+    // Tools can be plain strings (names only) or objects with name/description/inputSchema
+    const tools = parsed.tools as (string | { name: string; description?: string; inputSchema?: Record<string, unknown>; parameters?: Record<string, unknown> })[] | undefined;
     const behavior = parsed.behavior as Record<string, unknown> | undefined;
 
     // Construct markdown with YAML front matter
@@ -174,11 +175,16 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             return { error: { message: 'Agent not found', code: 'not_found' } };
         }
 
+        // Normalize tools: plain strings become { name } objects
+        const normalizedTools = (agent.tools || []).map(t =>
+            typeof t === 'string' ? { name: t } : t
+        );
+
         return {
             id: agent.id,
             name: agent.name,
             model: agent.model,
-            tools: agent.tools,
+            tools: normalizedTools,
         };
     });
 

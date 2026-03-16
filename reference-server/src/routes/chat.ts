@@ -235,9 +235,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
         agentSystemPrompt = systemPrompt;
 
-        // Extract allowed tools from agent
+        // Extract allowed tools from agent (tools can be strings or objects with .name)
         if (agent.tools && Array.isArray(agent.tools)) {
-          agentAllowedTools = agent.tools;
+          agentAllowedTools = agent.tools.map(t => typeof t === 'string' ? t : t.name);
         }
 
         // Extract model and temperature overrides from agent definition

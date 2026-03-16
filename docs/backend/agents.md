@@ -119,7 +119,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 
 ```json
 {
-  "yaml": "name: My Agent\ninstructions: You are a helpful assistant.\nmodel: llama3.1:latest\ntemperature: 0.7\ntools:\n  - get_form_data\n  - search_docs\n"
+  "yaml": "name: My Agent\ninstructions: You are a helpful assistant.\nmodel: llama3.1:latest\ntemperature: 0.7\ntools:\n  - name: get_form_data\n    description: Retrieves form values\n  - name: search_docs\n    description: Searches documentation\n    inputSchema:\n      type: object\n      properties:\n        query:\n          type: string\n"
 }
 ```
 
@@ -131,7 +131,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 | `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
 | `model` | string | No | Model ID (default: `llama3.1:latest`) |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
-| `tools` | array | No | List of tool names the agent can use (names only — no descriptions or schemas needed) |
+| `tools` | array | No | List of tool definitions. Each tool can be a name string or an object with `name`, `description`, and `inputSchema` fields. Full schemas are served to the LLM automatically. |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |
 
 #### Example
@@ -145,8 +145,29 @@ name: Support Bot
 model: llama3.1:latest
 temperature: 0.5
 tools:
-  - search_docs
-  - create_ticket
+  - name: search_docs
+    description: Search the knowledge base for relevant articles
+    inputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query
+      required:
+        - query
+  - name: create_ticket
+    description: Create a support ticket to escalate an unresolved issue
+    inputSchema:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: Ticket subject
+        description:
+          type: string
+          description: Detailed issue description
+      required:
+        - subject
 instructions: >
   You help users with technical support. Be concise and friendly.
   When a user asks a question, call search_docs to find relevant articles.
@@ -154,7 +175,7 @@ instructions: >
 ' | jq .
 ```
 
-> **Important:** Since tools are stored as names only (no descriptions or schemas), the `instructions` field is how the LLM knows what each tool does and when to call it. Always describe each tool's purpose in your instructions.
+> **Note:** Tool schemas (description + inputSchema) are stored server-side with the agent. The LLM receives these schemas automatically — no client-side tool configuration needed.
 
 #### Response
 
@@ -194,7 +215,7 @@ curl -s "$BASE/v1/agents" -H "$AUTH" | jq .
       "agent_key": "agnt_key-abc123...",
       "name": "Support Bot",
       "model": "llama3.1:latest",
-      "tools": ["search_docs"],
+      "tools": [{"name": "search_docs", "description": "Searches documentation"}],
       "behavior": {
         "tone": "friendly and helpful",
         "rules": ["Always be helpful"]
@@ -236,7 +257,7 @@ curl -s "$BASE/v1/agents/agent-mmefp8bk" -H "$AUTH" | jq .
     "name": "Support Bot",
     "model": "llama3.1:latest",
     "temperature": 0.5,
-    "tools": ["search_docs"]
+    "tools": [{"name": "search_docs", "description": "Searches documentation"}]
   },
   "instructions": "You help users with technical support."
 }
@@ -270,7 +291,7 @@ curl -s -X PUT "$BASE/v1/agents/agent-mmefp8bk" \
   "parent_key": "demo-key",
   "name": "Support Bot v2",
   "model": "llama3.1:latest",
-  "tools": ["search_docs"],
+  "tools": [{"name": "search_docs", "description": "Searches documentation"}],
   "updated": true
 }
 ```

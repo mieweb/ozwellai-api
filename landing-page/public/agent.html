@@ -471,54 +471,13 @@
         };
 
         // Configure Ozwell chat widget — agent mode
+        // Option A: tools and schemas are auto-discovered from the agent config on the server
         window.OzwellChatConfig = {
             title: 'Aria',
             placeholder: 'Type a question or command...',
             apiKey: '__SHOWCASE_AGENT_KEY__',
             welcomeMessage: "How can I help with your support tickets?",
-            debug: false,
-            tools: [
-                {
-                    type: 'function',
-                    function: {
-                        name: 'get_ticket',
-                        description: 'Read the current support ticket details including status, priority, description, and any notes.',
-                        parameters: { type: 'object', properties: {}, required: [] }
-                    }
-                },
-                {
-                    type: 'function',
-                    function: {
-                        name: 'update_ticket_status',
-                        description: 'Update the status of the support ticket. Valid statuses: Open, In Progress, Resolved, Closed.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                status: {
-                                    type: 'string',
-                                    description: 'New status. Must be one of: Open, In Progress, Resolved, Closed',
-                                    enum: ['Open', 'In Progress', 'Resolved', 'Closed']
-                                }
-                            },
-                            required: ['status']
-                        }
-                    }
-                },
-                {
-                    type: 'function',
-                    function: {
-                        name: 'add_ticket_note',
-                        description: 'Add a note to the support ticket. Use this when the user asks to add a comment or note.',
-                        parameters: {
-                            type: 'object',
-                            properties: {
-                                note: { type: 'string', description: 'The note text to add to the ticket' }
-                            },
-                            required: ['note']
-                        }
-                    }
-                }
-            ]
+            debug: false
         };
 
         // Load widget

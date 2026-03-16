@@ -67,6 +67,12 @@ export function seedDemoData(db: Database.Database): void {
 
 // ── Agent model ─────────────────────────────────────────────────────
 
+export interface ToolDefinition {
+    name: string;
+    description?: string;
+    inputSchema?: Record<string, unknown>;
+}
+
 export interface Agent {
     id: string;
     agent_key: string;
@@ -75,7 +81,7 @@ export interface Agent {
     instructions: string;
     model?: string;
     temperature?: number;
-    tools?: string[];
+    tools?: (string | ToolDefinition)[];
     behavior?: Record<string, unknown>;
     markdown: string;
     created_at: number;

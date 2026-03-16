@@ -403,11 +403,17 @@ class IframeSyncBroker {
   function getMcpTools() {
     // Prefer server-discovered tools (agent key flow), fall back to client config
     if (state.agentTools && state.agentTools.length > 0) {
-      return state.agentTools.map(name => ({
-        name: name,
-        description: '',
-        inputSchema: { type: 'object', properties: {} },
-      }));
+      return state.agentTools.map(tool => {
+        // Support both plain strings (name only) and full objects
+        if (typeof tool === 'string') {
+          return { name: tool, description: '', inputSchema: { type: 'object', properties: {} } };
+        }
+        return {
+          name: tool.name,
+          description: tool.description || '',
+          inputSchema: tool.inputSchema || tool.parameters || { type: 'object', properties: {} },
+        };
+      });
     }
 
     const config = currentConfig();
