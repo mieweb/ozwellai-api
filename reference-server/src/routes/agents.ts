@@ -114,7 +114,25 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
     // POST /v1/agents (register agent)
     fastify.post<{ Body: string | { yaml: string } }>('/v1/agents', {
-        schema: { headers: authHeaders, tags: ['Agents'], summary: 'Create a new agent' },
+        schema: {
+            headers: authHeaders,
+            tags: ['Agents'],
+            summary: 'Create a new agent',
+            consumes: ['application/yaml', 'application/json'],
+            body: {
+                oneOf: [
+                    { type: 'string', description: 'Raw YAML agent definition (application/yaml)' },
+                    {
+                        type: 'object',
+                        description: 'JSON wrapper with yaml field (application/json)',
+                        properties: {
+                            yaml: { type: 'string', description: 'YAML agent definition string' }
+                        },
+                        required: ['yaml']
+                    }
+                ]
+            }
+        },
         preHandler: apiKeyAuth
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
