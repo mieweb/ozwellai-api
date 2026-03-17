@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
+import { agentStore } from '../storage/agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -19,7 +20,7 @@ type ToolFunction = {
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
-type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name'] };
+type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
 type JSONSchemaParameters = {
@@ -149,11 +150,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             type: 'array',
             items: {
               type: 'object',
+              // Allow additional properties so Fastify's removeAdditional:true
+              // does not strip tool_calls and tool_call_id from messages.
+              // These fields are required for OpenAI-compatible tool continuation.
+              additionalProperties: true,
               properties: {
                 role: { type: 'string' },
-                content: { type: 'string' }
+                content: { type: 'string' },
+                tool_calls: { type: 'array' },
+                tool_call_id: { type: 'string' }
               },
-              required: ['role', 'content']
+              required: ['role']
             }
           },
           tools: {
@@ -175,20 +182,74 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           },
           stream: { type: 'boolean' },
           max_tokens: { type: 'number' },
-          temperature: { type: 'number' }
+          temperature: { type: 'number' },
+          response_format: { type: 'object', properties: { type: { type: 'string' } } }
         },
         required: ['messages']
       }
     },
   }, async (request, reply) => {
-    // Validate authorization
+    // Validate authorization — only agent keys (agnt_key-) and parent keys (ozw_) accepted
     if (!validateAuth(request.headers.authorization)) {
       reply.code(401);
-      return createError('Invalid API key provided', 'invalid_request_error');
+      return createError('Invalid or missing API key. Use an agent key (agnt_key-...) or parent API key (ozw_...).', 'invalid_request_error');
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
     
+    // --- Agent key resolution ---
+    let agentSystemPrompt: string | null = null;
+    let agentAllowedTools: string[] | null = null;
+    let agentModel: string | null = null;
+    let agentTemperature: number | null = null;
+
+    if (isAgentKey(request.headers.authorization)) {
+      const agentKey = extractToken(request.headers.authorization);
+      const agent = agentStore.getByKey(agentKey);
+      if (!agent) {
+        reply.code(401);
+        return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
+      } else {
+        // Use agent instructions as the system prompt
+        let systemPrompt = agent.instructions || '';
+
+        // Append behavior metadata (tone, language, rules) as a structured
+        // supplement AFTER the instructions so they don't dilute or compete
+        // with the primary prompt.  Rules are formatted as bullet points for
+        // clarity, and only non-instruction metadata (tone/language) plus
+        // explicit rules are included.
+        if (agent.behavior && typeof agent.behavior === 'object') {
+          const b = agent.behavior as Record<string, unknown>;
+          const extras: string[] = [];
+          if (b.tone) extras.push(`- Respond with a ${b.tone} tone.`);
+          if (b.language && b.language !== 'en') extras.push(`- Respond in ${b.language}.`);
+          if (Array.isArray(b.rules) && b.rules.length > 0) {
+            for (const rule of b.rules) {
+              if (typeof rule === 'string') extras.push(`- ${rule}`);
+            }
+          }
+          if (extras.length > 0) {
+            systemPrompt = systemPrompt.trimEnd() + '\n\n=== ADDITIONAL RULES ===\n' + extras.join('\n');
+          }
+        }
+
+        agentSystemPrompt = systemPrompt;
+
+        // Extract allowed tools from agent (tools can be strings or objects with .name)
+        if (agent.tools && Array.isArray(agent.tools)) {
+          agentAllowedTools = agent.tools.map(t => typeof t === 'string' ? t : t.name);
+        }
+
+        // Extract model and temperature overrides from agent definition
+        if (agent.model) {
+          agentModel = agent.model;
+        }
+        if (agent.temperature !== undefined && agent.temperature !== null) {
+          agentTemperature = agent.temperature;
+        }
+      }
+    }
+
     // Check if Ollama is available as a backend (check early to determine default model)
     const ollamaAvailable = await isOllamaAvailable();
     
@@ -196,30 +257,65 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
     
-    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature = 0.7 } = body;
-    // Use requested model if provided, otherwise use appropriate default
-    const model = requestedModel || DEFAULT_MODEL;
+    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
+    // Use requested model if provided, then agent model, then server default
+    const model = requestedModel || agentModel || DEFAULT_MODEL;
+    // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
+    const temperature = agentTemperature ?? requestedTemperature;
     
-    request.log.info({ ollamaAvailable, model, requestedModel }, 'Chat request model selection');
+    request.log.info({ ollamaAvailable, model, requestedModel, agentModel, agentTemperature }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
-    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => ({
-      role: m.role,
-      content: m.content ?? '',
-      name: m.name
-    }));
+    // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
+    // so Ollama can correctly associate tool results with the calls that produced them
+    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => {
+      const msg: NonNullableMessage = {
+        role: m.role,
+        content: m.content ?? '',
+        name: m.name
+      };
+      // Preserve tool_calls on assistant messages
+      const raw = m as Record<string, unknown>;
+      if (raw.tool_calls && Array.isArray(raw.tool_calls)) {
+        msg.tool_calls = raw.tool_calls as ToolCall[];
+      }
+      // Preserve tool_call_id on tool result messages
+      if (typeof raw.tool_call_id === 'string') {
+        msg.tool_call_id = raw.tool_call_id;
+      }
+      return msg;
+    });
 
-    // Extract API key from authorization header
-    const authHeader = request.headers.authorization || '';
-    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-    
-    // Use Ollama if: explicitly requested via 'ollama' API key, OR if available and no other backend
-    const useOllama = apiKey.toLowerCase() === 'ollama' || ollamaAvailable;
+    // --- Agent: inject system prompt ---
+    if (agentSystemPrompt) {
+      // Prepend agent instructions as the first system message
+      normalizedMessages.unshift({
+        role: 'system',
+        content: agentSystemPrompt,
+      });
+    }
+
+    // --- Agent: filter tools by allowed list ---
+    let filteredTools = tools;
+    if (agentAllowedTools && tools) {
+      filteredTools = tools.filter(
+        (t) =>
+          t &&
+          t.type === 'function' &&
+          t.function &&
+          typeof t.function.name === 'string' &&
+          agentAllowedTools!.includes(t.function.name)
+      );
+    }
+
+    // Use Ollama if available (checked independently of auth token)
+    const useOllama = ollamaAvailable;
     
     // If no backend is available, redirect to mock endpoint
-    if (!ollamaAvailable && apiKey.toLowerCase() !== 'ollama') {
-      // Forward to mock chat endpoint
+    if (!ollamaAvailable) {
+      // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
       const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
+      const mockBody = { ...body, messages: normalizedMessages, ...(filteredTools ? { tools: filteredTools } : {}) };
       try {
         const mockResponse = await fetch(mockUrl, {
           method: 'POST',
@@ -227,7 +323,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             'Content-Type': 'application/json',
             'Authorization': request.headers.authorization || 'Bearer mock'
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(mockBody)
         });
         
         if (stream) {
@@ -288,11 +384,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
           ...(max_tokens && { max_tokens }),
           ...(temperature !== undefined && { temperature }),
+          ...(response_format && { response_format }),
         };
 
-        // Include tools if provided
-        if (tools && tools.length > 0) {
-          requestOptions.tools = tools as ToolDef[];
+        // Include tools if provided (use filtered tools for agent policy)
+        if (filteredTools && filteredTools.length > 0) {
+          requestOptions.tools = filteredTools as ToolDef[];
         }
 
         // (Parsing helper is defined at module scope)
@@ -335,7 +432,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               messages: requestOptions.messages as ChatCompletionRequest['messages'],
               ...(max_tokens && { max_tokens }),
               ...(temperature !== undefined && { temperature }),
-              ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
+              ...(response_format && { response_format }),
+              ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true,
             };
             const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
@@ -425,7 +523,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             messages: requestOptions.messages as ChatCompletionRequest['messages'],
             ...(max_tokens && { max_tokens }),
             ...(temperature !== undefined && { temperature }),
-            ...(tools && tools.length > 0 && { tools: requestOptions.tools }),
+            ...(response_format && { response_format }),
+            ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false,
           };
           const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);

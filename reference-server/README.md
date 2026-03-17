@@ -13,7 +13,8 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 - **CI/CD Ready**: Automated testing and publishing workflows
 - **Swagger Documentation**: Interactive API docs at `/docs`
 - **TypeScript**: Fully typed with Zod schema validation
-- **No Database**: All data stored in JSON files under `/data`
+- **Agent Mode** *(PoC)*: Register agents with custom personas, tool allowlists, and scoped API keys
+- **No Database**: All data stored in JSON files under `/data` (agent/auth data uses SQLite)
 
 ## Architecture
 
@@ -40,7 +41,7 @@ sequenceDiagram
     Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
     Widget->>Widget: User types message
     Widget->>Ozwell: POST /v1/chat/completions<br />(stream=true)
-    Note over Widget,Ozwell: Authorization: Bearer ollama
+    Note over Widget,Ozwell: Authorization: Bearer agnt_key-...
 
     Ozwell->>Ollama: Forward to Ollama API<br />(qwen2.5-coder:3b)
     Note over Ozwell,Ollama: Internal IP: 10.15.123.17:8080
@@ -72,17 +73,147 @@ sequenceDiagram
 ```
 
 **Key Components:**
+
 - **Reference Server**: Proxy layer handling API compatibility and SSE heartbeat
 - **Ollama Container**: Runs LLM models (qwen2.5-coder:3b, llama3.1:8b, etc.)
 - **Widget**: Embeddable chat UI with iframe isolation
 - **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
 - **Tool Calls**: Extracted from streamed responses and sent to parent page via postMessage
 
+### Agent Mode (PoC)
+
+Agent Mode lets you register "agents" — preconfigured AI personas with custom system prompts, tool allowlists, and behavioral settings — and issue scoped agent keys that automatically apply those settings at chat time.
+
+> **🎬 Demo Video:** [Watch the Agent Mode demo on YouTube](https://youtube.com/shorts/u4DhC69JUfw?si=3TECDApOORKnrTmn)
+
+#### How It Works
+
+```mermaid
+sequenceDiagram
+    participant Admin as Site Admin
+    participant Server as Reference Server
+    participant DB as SQLite
+    participant Widget as Chat Widget
+    participant LLM as Ollama / LLM
+
+    rect rgb(240, 248, 255)
+    Note over Admin,DB: 🔧 Setup Phase
+    Admin->>Server: POST /auth/register (email, password)
+    Server->>DB: Create user
+    Admin->>Server: POST /auth/login
+    Server-->>Admin: Session token
+    Admin->>Server: POST /v1/api-keys (name)
+    Server-->>Admin: Parent key (ozw_...)
+    end
+
+    rect rgb(255, 248, 240)
+    Note over Admin,DB: 🤖 Agent Registration
+    Admin->>Server: POST /v1/agents<br/>Authorization: Bearer ozw_...<br/>{definition: {name, model, tools, behavior}}
+    Server->>DB: Store agent + generate agent key
+    Server-->>Admin: Agent key (agnt_key-...)
+    end
+
+    rect rgb(240, 255, 240)
+    Note over Widget,LLM: 💬 Chat with Agent
+    Widget->>Server: POST /v1/chat/completions<br/>Authorization: Bearer agnt_key-...
+    Server->>DB: Resolve agent key → agent definition
+    Note over Server: Inject system prompt<br/>Filter tools to allowlist
+    Server->>LLM: Forward with agent config
+    LLM-->>Server: Stream response
+    Server-->>Widget: SSE chunks
+    end
+```
+
+#### Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Parent Key** (`ozw_...`) | Issued to a user via `/v1/api-keys`. Used to manage agents. |
+| **Agent Key** (`agnt_key-...`) | Scoped key issued when an agent is registered. Used for chat. |
+| **Agent Definition** | Name, model, temperature, tools allowlist, behavior (tone, language, rules), and instructions. |
+| **Tool Filtering** | When chatting with an agent key, only tools in the agent's allowlist are forwarded to the LLM. |
+| **System Prompt Injection** | The agent's instructions + behavior settings are prepended as a system message automatically. |
+
+#### Agent API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/agents` | Parent key | Register a new agent |
+| `GET` | `/v1/agents` | Parent key | List agents under this key |
+| `GET` | `/v1/agents/:id` | Parent key | Get a specific agent |
+| `PUT` | `/v1/agents/:id` | Parent key | Update an agent definition |
+
+#### Agent Definition Schema
+
+Agents can be defined via structured JSON or YAML/Markdown:
+
+```json
+{
+  "definition": {
+    "name": "Landing Page Assistant",
+    "description": "Helps users manage their profile",
+    "model": "llama3.2:latest",
+    "temperature": 0.7,
+    "tools": ["get_form_data", "update_form_data"],
+    "behavior": {
+      "tone": "friendly pirate",
+      "language": "en"
+    },
+    "instructions": "You are a helpful assistant on the demo landing page."
+  }
+}
+```
+
+Or as Markdown with YAML front matter:
+
+```markdown
+---
+name: Landing Page Assistant
+model: llama3.2:latest
+temperature: 0.7
+tools:
+  - get_form_data
+  - update_form_data
+behavior:
+  tone: friendly pirate
+---
+
+You are a helpful assistant on the demo landing page.
+```
+
+#### Example: Register and Chat with an Agent
+
+**Prerequisite:** You need a parent API key (`ozw_...`). In dev mode, a demo key is seeded automatically: `ozw_demo_localhost_key_for_testing`.
+
+```bash
+# 1. Register an agent (YAML config)
+curl -X POST http://localhost:3000/v1/agents \
+  -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
+  -H "Content-Type: application/json" \
+  -d '{"yaml": "name: Helper\nmodel: llama3.2:latest\ntemperature: 0.7\ntools:\n  - get_form_data\nbehavior:\n  tone: friendly\ninstructions: You help visitors navigate the site."}'
+# Returns: { "agent_key": "agnt_key-xyz..." }
+
+# 2. Chat using the agent key
+curl -X POST http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer agnt_key-xyz..." \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
+# Response uses the agent's system prompt, model, temperature, and tool allowlist
+```
+
+#### Privacy & Agent Mode
+
+Agent mode follows Ozwell's core privacy principles:
+
+- **Conversations are private by default** — the host site receives only lifecycle events, never message content
+- **Agent keys are scoped** — they can only be used for chat, not to manage other agents or keys
+- **Tool calls are filtered** — only tools explicitly listed in the agent definition are forwarded
+
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 20+
 - npm or yarn
 
 ### Installation
@@ -100,11 +231,13 @@ The server will start at `http://localhost:3000`
 ### Embeddable Chat Widget
 
 **Simple (one line):**
+
 ```html
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **Advanced (with config):**
+
 ```html
 <script>
   window.OzwellChatConfig = {
@@ -116,11 +249,12 @@ The server will start at `http://localhost:3000`
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-**Live Demo:** https://ozwellai-embedtest.opensource.mieweb.org
+**Live Demo:** <https://ozwellai-embedtest.opensource.mieweb.org>
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
 The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
+
 - Change one line in the HTML to switch to Ollama mode
 - Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
 - Requires Ollama running with a compatible model
@@ -139,22 +273,28 @@ See [embed/README.md](embed/README.md) for full documentation.
 ## API Endpoints
 
 ### Models
+
 - `GET /v1/models` - List available models
 
 ### Chat Completions  
+
 - `POST /v1/chat/completions` - Create chat completion (supports streaming)
 
 ### Responses (New Primitive)
+
 - `POST /v1/responses` - Generate response with semantic events streaming
 
 ### Embeddings
+
 - `POST /v1/embeddings` - Generate text embeddings
 
 ### Embed Widget
+
 - `GET /embed/ozwell-loader.js` - Widget loader script (creates iframe with inline HTML)
 - `GET /embed/ozwell.js` - Self-contained widget code (includes CSS)
 
 ### Files
+
 - `POST /v1/files` - Upload file
 - `GET /v1/files` - List files
 - `GET /v1/files/{id}` - Get file metadata
@@ -162,70 +302,87 @@ See [embed/README.md](embed/README.md) for full documentation.
 - `DELETE /v1/files/{id}` - Delete file
 
 ### Documentation
+
 - `GET /docs` - Swagger UI documentation
 - `GET /openapi.json` - OpenAPI 3.1 specification
 - `GET /health` - Health check
 
 ## Authentication
 
-The server accepts any Bearer token for testing purposes:
+The server requires a valid API key. Two key types are accepted:
+
+- **Agent keys** (`agnt_key-...`) — scoped to a specific agent, used for chat
+- **Parent API keys** (`ozw_...`) — full access, used for managing agents and keys
 
 ```bash
-Authorization: Bearer your-test-key-here
+# Using an agent key
+Authorization: Bearer agnt_key-your-agent-key
+
+# Using a parent key
+Authorization: Bearer ozw_your-parent-key
 ```
+
+A demo parent key (`ozw_demo_localhost_key_for_testing`) is seeded on startup for local development.
 
 ## Example Usage
 
 ### Using curl
 
 #### List Models
+
 ```bash
-curl -H "Authorization: Bearer test" http://localhost:3000/v1/models
+curl -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" http://localhost:3000/v1/models
 ```
 
 #### Chat Completion (Non-streaming)
+
 ```bash
-curl -H "Authorization: Bearer test" \
+curl -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -H "Content-Type: application/json" \
      -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello!"}]}' \
      http://localhost:3000/v1/chat/completions
 ```
 
 #### Chat Completion (Streaming)
+
 ```bash
-curl -N -H "Authorization: Bearer test" \
+curl -N -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -H "Content-Type: application/json" \
      -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"stream":true}' \
      http://localhost:3000/v1/chat/completions
 ```
 
 #### Responses (Non-streaming)
+
 ```bash
-curl -H "Authorization: Bearer test" \
+curl -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -H "Content-Type: application/json" \
      -d '{"model":"gpt-4o","input":"hello"}' \
      http://localhost:3000/v1/responses
 ```
 
 #### Responses (Streaming with Semantic Events)
+
 ```bash
-curl -N -H "Authorization: Bearer test" \
+curl -N -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -H "Content-Type: application/json" \
      -d '{"model":"gpt-4o","input":"stream please","stream":true}' \
      http://localhost:3000/v1/responses
 ```
 
 #### Embeddings
+
 ```bash
-curl -H "Authorization: Bearer test" \
+curl -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -H "Content-Type: application/json" \
      -d '{"model":"text-embedding-3-small","input":"abc"}' \
      http://localhost:3000/v1/embeddings
 ```
 
 #### File Upload
+
 ```bash
-curl -H "Authorization: Bearer test" \
+curl -H "Authorization: Bearer ozw_demo_localhost_key_for_testing" \
      -F "file=@README.md" \
      -F "purpose=assistants" \
      http://localhost:3000/v1/files
@@ -234,6 +391,7 @@ curl -H "Authorization: Bearer test" \
 ### Using OpenAI SDK
 
 #### Node.js
+
 ```typescript
 import OpenAI from 'openai';
 
@@ -249,6 +407,7 @@ const response = await ozwellai.chat.completions.create({
 ```
 
 #### Python
+
 ```python
 from openai import OpenAI
 
@@ -285,6 +444,7 @@ rm -rf data/
 ## Text Generation
 
 The server uses a deterministic text generation system that:
+
 - Provides consistent, predictable outputs for testing
 - Generates contextually relevant responses based on input
 - Supports streaming with realistic token-by-token delivery
@@ -293,11 +453,13 @@ The server uses a deterministic text generation system that:
 ## Streaming
 
 ### Chat Completions Streaming
+
 - Uses OpenAI's standard chunked SSE format
 - Sends `data:` prefixed JSON objects
 - Ends with `data: [DONE]`
 
 ### Responses Streaming  
+
 - Uses semantic event types: `start`, `content`, `completion`, `done`
 - Each event has appropriate data payload
 - Provides structured streaming experience
@@ -312,10 +474,11 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 ## Configuration
 
 Environment variables:
+
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
-- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: http://127.0.0.1:11434)
+- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: <http://127.0.0.1:11434>)
 - `OLLAMA_MODEL` - Override Ollama model for chat (optional - server auto-selects from available models)
 - `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
@@ -340,7 +503,7 @@ The server intelligently selects the best available model:
 The server automatically routes requests based on available backends:
 
 1. **Check Ollama availability** at startup and periodically (cached for 30 seconds)
-2. **Route to Ollama** if available or if `Authorization: Bearer ollama` header is present
+2. **Route to Ollama** if available
 3. **Fall back to mock** if no backend is available
 
 ## Error Handling
@@ -359,6 +522,7 @@ All errors follow OpenAI's error format:
 ```
 
 Common HTTP status codes:
+
 - `400` - Bad Request (invalid parameters)
 - `401` - Unauthorized (missing/invalid API key)
 - `404` - Not Found (resource doesn't exist)
@@ -367,6 +531,7 @@ Common HTTP status codes:
 ## Testing
 
 The server is designed for deterministic testing:
+
 - Text generation produces consistent outputs for same inputs
 - Embeddings are deterministic based on input text
 - All responses include proper usage statistics

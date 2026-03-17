@@ -14,6 +14,8 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import mockChatRoute from './routes/mock-chat';
+import agentsRoute from './routes/agents';
+import { getDatabase, initializeAuthTables, seedDemoData } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -38,6 +40,7 @@ async function buildServer() {
   });
 
   // Register Swagger for OpenAPI documentation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await fastify.register(swagger as any, {
     openapi: {
       openapi: '3.1.0',
@@ -57,6 +60,10 @@ async function buildServer() {
       servers: [
         {
           url: 'http://localhost:3000',
+          description: 'Local development',
+        },
+        {
+          url: 'https://ozwell-dev-refserver.opensource.mieweb.org',
           description: 'Development server',
         },
       ],
@@ -99,24 +106,24 @@ async function buildServer() {
       deepLinking: false,
     },
     uiHooks: {
-      onRequest: function (request, reply, next) { next(); },
-      preHandler: function (request, reply, next) { next(); },
+      onRequest: function (_request, _reply, next) { next(); },
+      preHandler: function (_request, _reply, next) { next(); },
     },
     staticCSP: true,
     transformStaticCSP: (header) => header,
-    transformSpecification: (swaggerObject, request, reply) => {
+    transformSpecification: (swaggerObject, _request, _reply) => {
       return swaggerObject;
     },
     transformSpecificationClone: true,
   });
 
   // Health check endpoint
-  fastify.get('/health', async (request, reply) => {
+  fastify.get('/health', async (_request, _reply) => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
   // OpenAPI spec endpoint
-  fastify.get('/openapi.json', async (request, reply) => {
+  fastify.get('/openapi.json', async (_request, _reply) => {
     return fastify.swagger();
   });
 
@@ -134,6 +141,7 @@ async function buildServer() {
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
   await fastify.register(mockChatRoute);  // Mock AI for demos
+  await fastify.register(agentsRoute);  // Agent registration CRUD
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {
@@ -163,7 +171,7 @@ async function buildServer() {
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
-    
+
     // Handle validation errors
     if (error.validation) {
       return reply.code(400).send({
@@ -198,7 +206,16 @@ if (require.main === module) {
       const port = parseInt(process.env.PORT || '3000', 10);
       const host = process.env.HOST || '0.0.0.0';
       const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-      
+
+      // Initialize auth database and seed demo data
+      const db = getDatabase();
+      initializeAuthTables(db);
+      try {
+        seedDemoData(db);
+      } catch (_e) {
+        // Seeding may fail on repeated starts — that's fine
+      }
+
       await server.listen({ port, host });
       console.log(`🚀 OzwellAI Reference Server running at http://${displayHost}:${port}`);
       console.log(`📖 API Documentation available at http://${displayHost}:${port}/docs`);
