@@ -478,6 +478,20 @@ const state = {
   parentOrigin: null, // Pinned parent origin from first validated config message
 };
 
+// MCP pending tool call tracker (keyed by JSON-RPC request id)
+let mcpRequestId = 0;
+const mcpPendingToolCalls = {};
+
+// Read OZWELL_CONFIG from window (set by embedding page before widget loads)
+if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
+  const extConf = window.OZWELL_CONFIG;
+  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage'];
+  for (const k of keys) {
+    if (extConf[k] !== undefined) state.config[k] = extConf[k];
+  }
+  console.log('[widget.js] Applied OZWELL_CONFIG:', Object.keys(extConf));
+}
+
 console.log('[widget.js] Widget initializing...');
 console.log('[widget.js] Type OzwellDebug.help() in console for debug commands');
 
@@ -726,6 +740,19 @@ You have access to tools. Use them wisely:
   return systemPrompt;
 }
 
+/** Build request headers with auth + any custom headers */
+function getRequestHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const authKey = state.config.apiKey || state.config.openaiApiKey;
+  if (authKey) {
+    headers['Authorization'] = `Bearer ${authKey}`;
+  }
+  if (state.config.headers) {
+    Object.assign(headers, state.config.headers);
+  }
+  return headers;
+}
+
 /**
  * Create and render tool pills (debug mode only)
  * @param {Array} toolCalls - Array of tool call objects
@@ -922,7 +949,14 @@ async function sendMessage(text) {
   state.messages.push(userMessage);
   addMessage('user', text);
 
-  // Build MCP tools from parent config (dynamic, not hardcoded)
+  // Require an API key or agent key to be configured
+  const authKey = state.config.apiKey || state.config.openaiApiKey;
+  if (!authKey) {
+    addMessage('system', 'Error: No API key configured. Please provide an agent key (agnt_key-...) or parent API key (ozw_...) in your OzwellChatConfig.');
+    return;
+  }
+
+  // Build tools list (discovered via MCP tools/list handshake on init)
   let tools = [];
 
   // Check if tools are disabled via console debug flag
@@ -955,25 +989,7 @@ async function sendMessageNonStreaming(text, tools) {
   const systemPrompt = buildSystemPrompt();
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
-
-    // Merge in any custom headers from config
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-      console.log('[widget.js] Added custom headers from config:', state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
@@ -1049,14 +1065,14 @@ async function sendMessageNonStreaming(text, tools) {
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
-            // Send tool call to parent via postMessage
-            postToParent({
-              source: 'ozwell-chat-widget',
-              type: 'tool_call',
-              tool: toolName,
-              payload: args,
-              tool_call_id: toolCall.id
-            });
+            // Send tool call to parent via MCP tools/call
+            mcpPendingToolCalls[toolCall.id] = true;
+            window.parent.postMessage({
+              jsonrpc: '2.0',
+              id: toolCall.id,
+              method: 'tools/call',
+              params: { name: toolName, arguments: args },
+            }, state.parentOrigin || '*');
 
             // No system messages - tools are invisible to end users
           } catch (error) {
@@ -1187,22 +1203,7 @@ async function sendMessageStreaming(text, tools) {
   messagesEl?.appendChild(assistantMsgEl);
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
-
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request
     const requestMessages = buildMessages();
@@ -1379,14 +1380,14 @@ async function sendMessageStreaming(text, tools) {
             // Store tool_call_id for later use in tool message
             state.activeToolCalls[toolName] = toolCall.id;
 
-            // Send tool call to parent via postMessage
-            postToParent({
-              source: 'ozwell-chat-widget',
-              type: 'tool_call',
-              tool: toolName,
-              tool_call_id: toolCall.id,  // Include ID for parent logging/tracking
-              payload: args
-            });
+            // Send tool call to parent via MCP tools/call
+            mcpPendingToolCalls[toolCall.id] = true;
+            window.parent.postMessage({
+              jsonrpc: '2.0',
+              id: toolCall.id,
+              method: 'tools/call',
+              params: { name: toolName, arguments: args },
+            }, state.parentOrigin || '*');
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
             // Errors are logged to console, not shown to user unless debug mode
@@ -1474,25 +1475,7 @@ async function continueConversationWithToolResult(result) {
   const systemPrompt = buildSystemPrompt();
 
   try {
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
-    // Add Authorization header - use configured key or default to 'ollama' for server routing
-    if (state.config.openaiApiKey) {
-      headers['Authorization'] = `Bearer ${state.config.openaiApiKey}`;
-      console.log('[widget.js] Using OpenAI API with authorization');
-    } else {
-      // Default to 'ollama' - server will route to Ollama if available, or mock if not
-      headers['Authorization'] = 'Bearer ollama';
-    }
-
-    // Merge in any custom headers from config
-    if (state.config.headers) {
-      Object.assign(headers, state.config.headers);
-      console.log('[widget.js] Added custom headers from config:', state.config.headers);
-    }
+    const headers = getRequestHeaders();
 
     // Build messages for request (OpenAI format: system message in messages array)
     const requestMessages = buildMessages();
@@ -1582,12 +1565,13 @@ function handleParentMessage(event) {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
-  // Handle tool results from parent (OpenAI function calling protocol)
-  if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
-    console.log('[widget.js] Received tool result from parent:', data.result);
+  // Handle MCP JSON-RPC tool results from parent
+  if (data.jsonrpc === '2.0' && data.id && mcpPendingToolCalls[data.id]) {
+    delete mcpPendingToolCalls[data.id];
+    console.log('[widget.js] Received MCP tool result from parent:', data.result);
 
-    const result = data.result;
-    const toolCallId = data.tool_call_id;
+    const result = data.error ? { error: data.error.message } : data.result;
+    const toolCallId = data.id;
 
     // Update tool execution result in debug mode
     if (toolCallId) {
@@ -1648,7 +1632,12 @@ function handleParentMessage(event) {
     return;
   }
 
-  // Handle send-message from parent (per iframe-integration.md spec)
+  // Handle send-message from parent (JSON-RPC or legacy)
+  if (data.jsonrpc === '2.0' && data.method === 'send-message' && data.params?.content) {
+    console.log('[widget.js] Received send-message from parent:', data.params.content);
+    sendMessage(data.params.content);
+    return;
+  }
   if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:send-message' && data.payload?.content) {
     console.log('[widget.js] Received ozwell:send-message from parent:', data.payload.content);
     sendMessage(data.payload.content);
@@ -1690,3 +1679,69 @@ setStatus('', false);
 
 // Notify parent that widget is ready
 notifyReady();
+
+// ── MCP handshake (postMessage transport) ──────────────────────────
+// Send initialize → tools/list to parent. Tools are discovered at
+// runtime via the MCP protocol instead of being passed in config.
+
+function mcpSend(method, params) {
+  const id = ++mcpRequestId;
+  window.parent.postMessage({
+    jsonrpc: '2.0',
+    id: id,
+    method: method,
+    params: params || {},
+  }, state.parentOrigin || '*');
+  return id;
+}
+
+function mcpNotify(method, params) {
+  window.parent.postMessage({
+    jsonrpc: '2.0',
+    method: method,
+    params: params || {},
+  }, state.parentOrigin || '*');
+}
+
+// Perform MCP initialize handshake and discover tools
+(function mcpInit() {
+  mcpSend('initialize', {
+    protocolVersion: '2025-11-25',
+    capabilities: {},
+    clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
+  });
+
+  // Listen for initialize response, then send tools/list
+  function onInitResponse(event) {
+    const data = event.data;
+    if (!data || data.jsonrpc !== '2.0' || data.id !== 1) return;
+
+    console.log('[widget.js] MCP initialized:', data.result);
+    mcpNotify('notifications/initialized');
+
+    // Request tool list from parent
+    const toolsReqId = mcpSend('tools/list');
+
+    function onToolsResponse(event2) {
+      const d = event2.data;
+      if (!d || d.jsonrpc !== '2.0' || d.id !== toolsReqId) return;
+
+      window.removeEventListener('message', onToolsResponse);
+      const mcpTools = (d.result && d.result.tools) || [];
+      console.log('[widget.js] MCP tools discovered:', mcpTools);
+
+      // Convert MCP tools to OpenAI format for the chat API
+      state.config.tools = mcpTools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description || '',
+          parameters: t.inputSchema || { type: 'object', properties: {} },
+        },
+      }));
+    }
+    window.addEventListener('message', onToolsResponse);
+    window.removeEventListener('message', onInitResponse);
+  }
+  window.addEventListener('message', onInitResponse);
+})();

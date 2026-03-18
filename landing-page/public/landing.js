@@ -286,35 +286,6 @@
       }, 600);
     }
 
-    // Helper: Get widget iframe
-    function getWidgetIframe() {
-      // Use OzwellChat.iframe directly (works with both src and srcdoc iframes)
-      return window.OzwellChat?.iframe || null;
-    }
-
-    // Helper: Send tool result back to widget
-    function sendToolResult(toolCallId, result) {
-      const widgetIframe = getWidgetIframe();
-      if (!widgetIframe || !widgetIframe.contentWindow) {
-        console.error('[landing.js] Cannot send tool result: widget iframe not found');
-        return;
-      }
-
-      widgetIframe.contentWindow.postMessage({
-        source: 'ozwell-chat-parent',
-        type: 'tool_result',
-        tool_call_id: toolCallId,
-        result: result
-      }, '*');
-
-      console.log('[landing.js] ✓ Tool result sent to widget:', result);
-      logEvent(
-        'postmessage',
-        '[postMessage] Tool result sent',
-        JSON.stringify({ tool_call_id: toolCallId, result })
-      );
-    }
-
     // Helper: Update a single form field with visual feedback and logging
     function updateField(fieldName, value, inputElement) {
       inputElement.value = value;
@@ -330,109 +301,39 @@
       return `${fieldName.toLowerCase()}: "${value}"`;
     }
 
-    // MCP Tool Handler Registry
-    const toolHandlers = {
-      'get_form_data': function(toolCallId) {
-        console.log('[landing.js] ✓ Executing get_form_data tool handler');
+    // Tool handlers (via MCP protocol — loader dispatches DOM events)
+    document.addEventListener('ozwell-tool-call', function(e) {
+      const { name, arguments: args, respond } = e.detail;
 
-        logEvent(
-          'tool-call',
-          '[Tool Call] get_form_data',
-          'Retrieving current form data'
-        );
+      logEvent('tool-call', `[Tool Call] ${name}`, JSON.stringify(args));
 
+      if (name === 'get_form_data') {
         const formData = {
           name: nameInput.value,
           address: addressInput.value,
           zipCode: zipInput.value
         };
-
         console.log('[landing.js] ✓ Form data retrieved:', formData);
+        logEvent('postmessage', '[Handler] Form data retrieved', JSON.stringify(formData, null, 2));
+        respond({ success: true, data: formData });
 
-        logEvent(
-          'postmessage',
-          '[Handler] Form data retrieved',
-          JSON.stringify(formData, null, 2)
-        );
-
-        // Send result back to widget
-        sendToolResult(toolCallId, {
-          success: true,
-          data: formData
-        });
-      },
-
-      'update_form_data': function(toolCallId, args) {
-        console.log('[landing.js] ✓ Executing update_form_data tool handler:', args);
-
+      } else if (name === 'update_form_data') {
         const updates = [];
+        if (args.name) updates.push(updateField('Name', args.name, nameInput));
+        if (args.address) updates.push(updateField('Address', args.address, addressInput));
+        if (args.zipCode) updates.push(updateField('Zip', args.zipCode, zipInput));
 
-        // Update fields using helper function
-        if (args.name) {
-          updates.push(updateField('Name', args.name, nameInput));
-        }
-        if (args.address) {
-          updates.push(updateField('Address', args.address, addressInput));
-        }
-        if (args.zipCode) {
-          updates.push(updateField('Zip', args.zipCode, zipInput));
-        }
-
-        // Send result back to widget
         if (updates.length > 0) {
-          logEvent(
-            'postmessage',
-            '[Handler] Form data updated',
-            `Updated: ${updates.join(', ')}`
-          );
-
-          sendToolResult(toolCallId, {
-            success: true,
-            message: `Updated: ${updates.join(', ')}`
-          });
+          logEvent('postmessage', '[Handler] Form data updated', `Updated: ${updates.join(', ')}`);
+          respond({ success: true, message: `Updated: ${updates.join(', ')}` });
         } else {
-          sendToolResult(toolCallId, {
-            success: false,
-            error: 'No fields provided to update'
-          });
-        }
-      }
-    };
-
-    // Listen for messages from the widget
-    window.addEventListener('message', function(event) {
-      const data = event.data;
-
-      // Only handle messages from our widget
-      if (!data || data.source !== 'ozwell-chat-widget') return;
-
-      // Handle tool calls using registry
-      if (data.type === 'tool_call') {
-        console.log('[landing.js] → Received tool call from widget:', data);
-
-        logEvent(
-          'postmessage',
-          '[postMessage] Tool call received',
-          `Tool: "${data.tool}", Payload: ${JSON.stringify(data.payload)}`
-        );
-
-        const handler = toolHandlers[data.tool];
-        if (handler) {
-          handler(data.tool_call_id, data.payload);
-        } else {
-          console.warn('[landing.js] ⚠️  No handler registered for tool:', data.tool);
-          logEvent(
-            'postmessage',
-            '[Warning] No handler for tool',
-            `Tool: "${data.tool}"`
-          );
+          respond({ success: false, error: 'No fields provided to update' });
         }
       }
     });
 
     console.log('[landing.js] Event listeners attached to form inputs');
-    console.log('[landing.js] Tool handlers registered:', Object.keys(toolHandlers));
-    console.log('[landing.js] ✓ Initialization complete! Ready for MCP tool calls.');
+    console.log('[landing.js] ✓ Initialization complete! Ready for tool calls.');
 
     logEvent('tool-call', '[System] Initialization complete', 'Ready for MCP tool calls');
   }

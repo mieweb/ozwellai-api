@@ -4,14 +4,26 @@ The fastest way to add Ozwell to any website. No build step, no framework requir
 
 ## Quick Start
 
+:::info Getting an Agent Key
+To get an API key and create an agent, see the [Agent Registration API](../backend/agents.md) or contact **`adamerla128@gmail.com`**.
+:::
+
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
+<!-- Development server (current) -->
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+
+<!-- Production (coming soon) -->
+<!--
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
+  data-api-key="agnt_key-your-agent-key"
 ></script>
+-->
 ```
 
 That's it! A chat widget will appear in the bottom-right corner of your page.
@@ -20,32 +32,40 @@ That's it! A chat widget will appear in the bottom-right corner of your page.
 
 ## Getting Your Credentials
 
-### 1. Create a Scoped API Key
+Ozwell supports two authentication modes:
 
-1. Log in to your Ozwell dashboard
-2. Navigate to **Settings → API Keys**
-3. Click **Create Scoped Key**
-4. Select the agent this key should access
-5. Configure permissions (typically "Chat Only" for frontend use)
-6. Copy the generated key (starts with `ozw_scoped_`)
+### Option A: Agent Key (Recommended)
 
-### 2. Find Your Agent ID
+Agent keys connect to a server-side agent definition that manages the system prompt, model, temperature, and allowed tools.
 
-1. Go to **Agents** in your dashboard
-2. Click on the agent you want to embed
-3. Copy the **Agent ID** from the settings panel
+1. Get an API key (`ozw_` prefix) — contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`**
+2. Create an agent via the [Agent Registration API](../backend/agents.md)
+3. Copy the **Agent Key** from the response (starts with `agnt_key-`)
+4. Use it in the embed config
+
+### Option B: Parent API Key
+
+Parent keys give you raw completions access — you provide the system prompt, model, and tools inline in your client config.
+
+1. Contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`** for an API key
+2. Use the key directly (starts with `ozw_`)
+
+*Self-service key creation via the [Ozwell Dashboard](https://dashboard.ozwell.ai) is coming soon.*
 
 ---
 
 ## Configuration Options
+
+:::caution Coming Soon
+The `data-*` attribute configuration method is not yet supported. Use `window.OzwellChatConfig` (shown above) for now.
+:::
 
 Customize the widget using `data-*` attributes:
 
 ```html
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
+  data-api-key="agnt_key-your-agent-key"
   data-theme="dark"
   data-position="bottom-left"
   data-primary-color="#10b981"
@@ -58,8 +78,7 @@ Customize the widget using `data-*` attributes:
 
 | Attribute | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `data-api-key` | string | *required* | Your scoped API key |
-| `data-agent-id` | string | *required* | The agent ID to use |
+| `data-api-key` | string | *required* | Agent key (`agnt_key-...`) or parent key (`ozw_...`) |
 | `data-theme` | `"light"` \| `"dark"` \| `"auto"` | `"auto"` | Color theme |
 | `data-position` | `"bottom-right"` \| `"bottom-left"` | `"bottom-right"` | Widget position |
 | `data-primary-color` | string (hex) | `"#4f46e5"` | Accent color |
@@ -74,33 +93,33 @@ Customize the widget using `data-*` attributes:
 
 ## JavaScript API
 
-The embed script exposes a global `Ozwell` object for programmatic control:
+The embed script exposes a global `OzwellChat` object for programmatic control:
 
 ### Open/Close the Widget
 
 ```javascript
 // Open the chat window
-Ozwell.open();
+OzwellChat.open();
 
 // Close the chat window
-Ozwell.close();
+OzwellChat.close();
 
-// Toggle open/closed
-Ozwell.toggle();
+// Toggle open/closed (coming soon)
+// OzwellChat.toggle();
 ```
 
-### Send Messages
+### Update Context
 
 ```javascript
-// Send a message as the user
-Ozwell.sendMessage('Hello, I need help with...');
-
 // Set context data (passed to the agent)
-Ozwell.setContext({
+OzwellChat.updateContext({
   userId: 'user_123',
   page: window.location.pathname,
   customData: { ... }
 });
+
+// Send a message as the user (coming soon)
+// OzwellChat.sendMessage('Hello, I need help with...');
 ```
 
 ### Events
@@ -136,6 +155,13 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 ## Examples
 
+:::note Current Script URLs
+The examples below use `cdn.ozwell.ai/embed.js` which is the future production CDN. For now, use:
+
+- **Dev:** `https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js`
+- **Production:** `https://ozwellai-refserver.opensource.mieweb.org/embed/ozwell-loader.js`
+:::
+
 ### Basic Embed
 
 ```html
@@ -151,8 +177,7 @@ window.addEventListener('ozwell:user-share', (event) => {
   <!-- Ozwell Chat Widget -->
   <script 
     src="https://cdn.ozwell.ai/embed.js" 
-    data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-    data-agent-id="agent_xxxxxxxx"
+    data-api-key="agnt_key-your-agent-key"
   ></script>
 </body>
 </html>
@@ -163,8 +188,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 ```html
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
+  data-api-key="agnt_key-your-agent-key"
   data-theme="dark"
   data-position="bottom-left"
   data-primary-color="#f59e0b"
@@ -176,8 +200,7 @@ window.addEventListener('ozwell:user-share', (event) => {
 ```html
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
+  data-api-key="agnt_key-your-agent-key"
   data-auto-open="true"
   data-greeting="👋 Welcome! I'm here to help you find what you're looking for."
 ></script>
@@ -186,12 +209,11 @@ window.addEventListener('ozwell:user-share', (event) => {
 ### Triggered by Button Click
 
 ```html
-<button onclick="Ozwell.open()">Chat with Us</button>
+<button onclick="OzwellChat.open()">Chat with Us</button>
 
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxxxxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
+  data-api-key="agnt_key-your-agent-key"
 ></script>
 ```
 
@@ -205,15 +227,20 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 Sharing is always opt-in: only when a user explicitly chooses to share information does it become visible to the host site.
 
-### Scoped Keys Only
+### API Key Requirements
 
-⚠️ **Never use general-purpose API keys in frontend code.** Always use scoped keys that are restricted to specific agents and permissions.
+⚠️ **Every widget instance requires a valid API key.** Use either:
 
-### Domain Restrictions
+- **Agent key** (`agnt_key-...`) — recommended; persona and tools managed server-side
+- **Parent key** (`ozw_...`) — for advanced use; you provide all config inline
+
+The widget will display a clear error if no key is configured.
+
+### Domain Restrictions *(Coming Soon)*
 
 For additional security, configure domain restrictions for your scoped key:
 
-1. Go to **Settings → API Keys** in your dashboard
+1. Go to **Settings → API Keys** in your dashboard *(coming soon)*
 2. Edit your scoped key
 3. Add allowed domains under **Domain Restrictions**
 4. Only requests from listed domains will be accepted
@@ -242,9 +269,10 @@ Content-Security-Policy:
 
 ### Widget Appears But Chat Fails
 
-1. **Verify agent ID** is correct
-2. **Check API key permissions** include chat access
-3. **Review network tab** for failed API requests
+1. **Check the error message** in the chat widget — it will show the specific auth error
+2. **Verify your API key** starts with `agnt_key-` or `ozw_`
+3. **Verify the agent key** exists via `curl GET /v1/agents` if using an agent key
+4. **Review network tab** for 401 responses
 
 ### Styling Conflicts
 
