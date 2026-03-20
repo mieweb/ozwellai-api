@@ -47,6 +47,8 @@ type StreamingChoice = {
   index?: number;
   delta?: {
     content?: string;
+    thinking?: string;
+    reasoning_content?: string;
     finish_reason?: string;
   };
   finish_reason?: string;
@@ -130,6 +132,119 @@ function tryExtractToolCallsFromContent(content: string | undefined, tools?: Too
     // not JSON or not recognized
   }
   return null;
+}
+
+// Helper: extract thinking tokens from content that uses <think>...</think> tags (Ollama/Qwen)
+// Returns { thinking, content } — thinking is the extracted text, content is the remainder.
+function extractThinkTagsFromContent(text: string): { thinking: string; content: string } {
+  // Match <think>...</think> blocks (greedy within, but non-greedy across multiple blocks)
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
+  let thinking = '';
+  let match;
+  while ((match = thinkRegex.exec(text)) !== null) {
+    thinking += match[1];
+  }
+  // Strip all <think>...</think> blocks from content (preserve spacing for token integrity)
+  const content = text.replace(thinkRegex, '');
+  return { thinking, content };
+}
+
+// Normalize a streaming chunk: extract thinking tokens into delta.thinking
+// Handles:
+//   - Ollama/Qwen: <think>...</think> tags inside delta.content
+//   - DeepSeek: delta.reasoning_content field
+//   - Anthropic: already separate (future — passthrough)
+// Mutates and returns the chunk for forwarding.
+function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { partial: string }): Record<string, unknown> {
+  const choices = chunk.choices as Array<Record<string, unknown>> | undefined;
+  if (!choices || choices.length === 0) return chunk;
+
+  const choice = choices[0];
+  const delta = choice.delta as Record<string, unknown> | undefined;
+  if (!delta) return chunk;
+
+  // --- Ollama/Qwen3: reasoning field (separate from content) ---
+  if (delta.reasoning && typeof delta.reasoning === 'string') {
+    delta.thinking = delta.reasoning;
+    delete delta.reasoning;
+    // Also clean up empty content strings that Ollama sends alongside reasoning
+    if (delta.content === '') delete delta.content;
+    return chunk;
+  }
+
+  // --- DeepSeek: reasoning_content field ---
+  if (delta.reasoning_content && typeof delta.reasoning_content === 'string') {
+    delta.thinking = delta.reasoning_content;
+    delete delta.reasoning_content;
+    return chunk;
+  }
+
+  // --- Ollama/Qwen (older): <think> tags in content ---
+  // Only enter this branch if content might contain <think> tags or we have a partial buffer
+  if (delta.content && typeof delta.content === 'string') {
+    const raw = thinkBuffer.partial + delta.content;
+
+    // Fast path: no <think> tags and no buffered partial — pass through unchanged
+    if (!thinkBuffer.partial && !raw.includes('<think')) {
+      return chunk;
+    }
+
+    // Check for partial/open <think> tag at the end (tag not yet closed)
+    const lastOpenIdx = raw.lastIndexOf('<think>');
+    const lastCloseIdx = raw.lastIndexOf('</think>');
+
+    if (lastOpenIdx !== -1 && (lastCloseIdx === -1 || lastCloseIdx < lastOpenIdx)) {
+      // We're inside an unclosed <think> block — buffer everything after the last <think>
+      const before = raw.substring(0, lastOpenIdx);
+      thinkBuffer.partial = raw.substring(lastOpenIdx);
+
+      // Extract any completed <think>...</think> pairs from the "before" portion
+      const { thinking, content } = extractThinkTagsFromContent(before);
+      delta.content = content || undefined;
+      if (thinking) {
+        delta.thinking = thinking;
+      }
+      // Remove empty content to avoid sending blank deltas
+      if (!delta.content) delete delta.content;
+      return chunk;
+    }
+
+    // No unclosed tag — flush buffer and extract
+    thinkBuffer.partial = '';
+    const { thinking, content } = extractThinkTagsFromContent(raw);
+    delta.content = content || undefined;
+    if (thinking) {
+      delta.thinking = thinking;
+    }
+    if (!delta.content) delete delta.content;
+    return chunk;
+  }
+
+  return chunk;
+}
+
+// Normalize a non-streaming response message: extract thinking from content
+function normalizeMessageThinking(message: Record<string, unknown>): void {
+  // Ollama/Qwen3: reasoning field (separate from content)
+  if (message.reasoning && typeof message.reasoning === 'string') {
+    message.thinking = message.reasoning;
+    delete message.reasoning;
+  }
+
+  // DeepSeek: reasoning_content field on message
+  if (message.reasoning_content && typeof message.reasoning_content === 'string') {
+    message.thinking = message.reasoning_content;
+    delete message.reasoning_content;
+  }
+
+  // Ollama/Qwen (older): <think> tags in content
+  if (message.content && typeof message.content === 'string') {
+    const { thinking, content } = extractThinkTagsFromContent(message.content as string);
+    if (thinking) {
+      message.thinking = thinking;
+      message.content = content;
+    }
+  }
 }
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -436,23 +551,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             // Buffer map for accumulating assistant content per chat id
             const buffers: Record<string, string> = {};
+            // Buffer for partial <think> tags that span multiple chunks
+            const thinkBuffer = { partial: '' };
 
             for await (const chunk of streamResponse) {
               try {
                 const id = chunk.id as string;
-                const choice = chunk.choices?.[0];
-                const delta = choice?.delta;
+
+                // Normalize thinking tokens before forwarding
+                const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, thinkBuffer);
+                const choice = (normalized.choices as Array<Record<string, unknown>>)?.[0];
+                const delta = choice?.delta as Record<string, unknown> | undefined;
 
                 // Initialize buffer
                 if (!buffers[id]) buffers[id] = '';
 
                 // Accumulate content deltas for parsing when the stream finishes
                 if (delta?.content) {
-                  buffers[id] += delta.content;
+                  buffers[id] += delta.content as string;
                 }
 
-                // Forward original chunk unchanged
-                reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                // Forward normalized chunk (thinking extracted into delta.thinking)
+                reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
 
                 // If model finished this message, attempt to parse as tool call and emit tool_calls
                 const finishReason = (choice as StreamingChoice)?.finish_reason || (delta as StreamingChoice)?.finish_reason;
@@ -524,15 +644,21 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             stream: false,
           };
           const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
-          // If the model returned plain JSON as assistant content, try to convert it to tool_calls
+          // Normalize thinking tokens and extract tool calls from non-streaming response
           try {
             if (response && Array.isArray(response.choices)) {
               for (const choice of response.choices) {
                 const msg = choice.message as ChatMessage;
-                if (msg && !msg.tool_calls && typeof msg.content === 'string') {
-                  const extracted = tryExtractToolCallsFromContent(msg.content, requestOptions.tools as ToolDef[] | undefined);
-                  if (extracted && extracted.length > 0) {
-                    msg.tool_calls = extracted;
+                if (msg) {
+                  // Extract thinking tokens (e.g. <think> tags, reasoning_content)
+                  normalizeMessageThinking(msg as Record<string, unknown>);
+
+                  // Try to convert plain JSON content to tool_calls
+                  if (!msg.tool_calls && typeof msg.content === 'string') {
+                    const extracted = tryExtractToolCallsFromContent(msg.content, requestOptions.tools as ToolDef[] | undefined);
+                    if (extracted && extracted.length > 0) {
+                      msg.tool_calls = extracted;
+                    }
                   }
                 }
               }

@@ -47,16 +47,21 @@ body {
   flex-direction: column;
 }
 
-.status {
-  padding: 8px 16px;
-  font-size: 12px;
-  background: #f9fafb;
-  color: transparent;
-  border-bottom: 1px solid #e5e7eb;
-  min-height: 32px;
+.status-strip {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  padding: 4px 14px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 32px;
+}
+
+.status {
+  font-size: 12px;
+  color: transparent;
+  display: flex;
+  align-items: center;
 }
 
 .status.status--processing {
@@ -73,6 +78,61 @@ body {
   0%, 20% { content: '●'; }
   40% { content: '●●'; }
   60%, 100% { content: '●●●'; }
+}
+
+/* Reasoning mode capsule & segmented control */
+.reasoning-capsule {
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  user-select: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.reasoning-capsule:hover {
+  background: #d1d5db;
+}
+
+.reasoning-seg {
+  display: none;
+  background: #e5e7eb;
+  border-radius: 12px;
+  padding: 2px;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.reasoning-seg.open {
+  display: inline-flex;
+}
+
+.reasoning-seg-btn {
+  padding: 3px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.reasoning-seg-btn:hover {
+  color: #374151;
+  background: #d1d5db;
+}
+
+.reasoning-seg-btn.active {
+  background: #fff;
+  color: #1f2937;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .messages {
@@ -365,13 +425,89 @@ body {
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* Thinking / Reasoning Bubble */
+.thinking-bubble {
+  align-self: flex-start;
+  max-width: 85%;
+  margin-bottom: 4px;
+}
+
+.thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  background: #f3f0ff;
+  border: 1px solid #e0d8ff;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #8b5cf6;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.thinking-toggle:hover {
+  background: #ede9fe;
+}
+
+.thinking-toggle .thinking-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 10px;
+}
+
+.thinking-toggle .thinking-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.thinking-toggle .thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #8b5cf6;
+  border-radius: 50%;
+  animation: thinkingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.thinking-content {
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-left: 2px solid #c4b5fd;
+  border-radius: 0 10px 10px 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+  max-height: 300px;
+  opacity: 1;
+}
+
+.thinking-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 14px;
+  margin-top: 0;
+}
   `;
   document.head.appendChild(style);
 
   // Inject HTML structure
   document.body.innerHTML = `
     <div class="chat-container">
-      <div id="status" class="status">Connecting...</div>
+      <div class="status-strip">
+        <div id="status" class="status">Connecting...</div>
+        <div id="reasoning-controls"></div>
+      </div>
       <div id="messages" class="messages"></div>
       <form id="chat-form" class="chat-form">
         <input
@@ -466,6 +602,8 @@ const state = {
     // model is optional - server chooses default if not specified
     endpoint: '/v1/chat/completions',
     debug: false, // Debug mode for developers
+    thinkingEnabled: false, // Show reasoning/thinking tokens from models
+    thinkingDefaultMode: 2, // 0=None, 1=Peek, 2=Smart (expand-then-collapse), 3=Expanded
   },
   messages: [],
   sending: false,
@@ -491,7 +629,7 @@ function trackPendingToolCall(id) {
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
   const extConf = window.OZWELL_CONFIG;
-  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage'];
+  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage', 'thinkingEnabled', 'thinkingDefaultMode'];
   for (const k of keys) {
     if (extConf[k] !== undefined) state.config[k] = extConf[k];
   }
@@ -506,6 +644,8 @@ const messagesEl = document.getElementById('messages');
 const formEl = document.getElementById('chat-form');
 const inputEl = document.getElementById('chat-input');
 const submitButton = document.querySelector('.chat-submit');
+const reasoningControlsEl = document.getElementById('reasoning-controls');
+let lastAssistantMessage = '';
 
 /**
  * Post a message to the parent frame using the pinned origin when available.
@@ -514,6 +654,49 @@ const submitButton = document.querySelector('.chat-submit');
 function postToParent(message) {
   const targetOrigin = state.parentOrigin || '*';
   window.parent.postMessage(message, targetOrigin);
+}
+
+// Reasoning mode labels: index maps to thinkingDefaultMode values
+const REASONING_MODES = ['None', 'Peek', 'Smart', 'Expanded'];
+
+/**
+ * Build the reasoning capsule + segmented control in the status strip.
+ * Only shown when thinkingEnabled is true.
+ */
+function initReasoningControls() {
+  if (!reasoningControlsEl || !state.config.thinkingEnabled) return;
+
+  const capsule = document.createElement('span');
+  capsule.className = 'reasoning-capsule';
+  capsule.title = 'Controls how AI reasoning is displayed';
+  capsule.textContent = `Reasoning: ${REASONING_MODES[state.config.thinkingDefaultMode] || 'Smart'}`;
+
+  const seg = document.createElement('div');
+  seg.className = 'reasoning-seg';
+
+  REASONING_MODES.forEach((label, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'reasoning-seg-btn' + (idx === state.config.thinkingDefaultMode ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('.reasoning-seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.config.thinkingDefaultMode = idx;
+      capsule.textContent = `Reasoning: ${label}`;
+      seg.classList.remove('open');
+      capsule.style.display = '';
+      console.log(`[widget.js] Reasoning mode changed to: ${label} (${idx})`);
+    });
+    seg.appendChild(btn);
+  });
+
+  capsule.addEventListener('click', () => {
+    capsule.style.display = 'none';
+    seg.classList.add('open');
+  });
+
+  reasoningControlsEl.appendChild(capsule);
+  reasoningControlsEl.appendChild(seg);
 }
 
 function setStatus(text, processing = false) {
@@ -710,6 +893,9 @@ function applyConfig(config) {
   }
 
   setStatus('', false);
+
+  // Initialize reasoning controls if thinking is enabled
+  initReasoningControls();
 }
 
 function buildMessages() {
@@ -946,6 +1132,84 @@ function updateToolExecutionResult(toolCallId, result) {
       }
     }
   }
+}
+
+/**
+ * Create a thinking bubble element for displaying reasoning tokens.
+ * @param {number} mode - Display mode (0=hide, 1=collapsed, 2=expand-then-collapse, 3=always-expanded)
+ * @returns {{ container: HTMLElement, contentEl: HTMLElement, update: Function, finish: Function }}
+ */
+function createThinkingBubble(mode) {
+  const container = document.createElement('div');
+  container.className = 'thinking-bubble';
+  const startTime = Date.now();
+
+  const toggle = document.createElement('div');
+  toggle.className = 'thinking-toggle';
+
+  const dot = document.createElement('span');
+  dot.className = 'thinking-dot';
+
+  const label = document.createElement('span');
+  label.textContent = 'Thinking';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'thinking-arrow';
+  arrow.textContent = '▾';
+
+  toggle.appendChild(dot);
+  toggle.appendChild(label);
+  toggle.appendChild(arrow);
+
+  const contentEl = document.createElement('div');
+  contentEl.className = 'thinking-content';
+  // Start collapsed or expanded based on mode
+  if (mode === 1) {
+    // Peek: collapsed pill only
+    contentEl.classList.add('collapsed');
+  } else if (mode === 2 || mode === 3) {
+    // Smart & Expanded: start expanded while thinking
+    // arrow already points down (▾) which is correct for expanded
+  }
+
+  toggle.addEventListener('click', () => {
+    const isCollapsed = contentEl.classList.contains('collapsed');
+    if (isCollapsed) {
+      contentEl.classList.remove('collapsed');
+      arrow.textContent = '▾';
+    } else {
+      contentEl.classList.add('collapsed');
+      arrow.textContent = '▸';
+    }
+  });
+
+  container.appendChild(toggle);
+  container.appendChild(contentEl);
+
+  return {
+    container,
+    contentEl,
+    update(text) {
+      contentEl.textContent = text;
+    },
+    finish() {
+      // Calculate duration
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const durationText = elapsed > 0 ? ` for ${elapsed}s` : '';
+
+      // Stop the pulsing dot
+      dot.remove();
+      label.textContent = `Thought${durationText}`;
+
+      // Smart (mode 2): collapse on answer arrival
+      if (mode === 2) {
+        contentEl.classList.add('collapsed');
+        arrow.textContent = '▸';
+      }
+      // Expanded (mode 3): stays expanded, arrow stays ▾
+      // Peek (mode 1): was already collapsed, stays collapsed
+    }
+  };
 }
 
 async function sendMessage(text) {
@@ -1250,7 +1514,11 @@ async function sendMessageStreaming(text, tools) {
     const decoder = new TextDecoder();
     let buffer = '';
     let fullContent = '';
+    let fullThinking = '';
     let accumulatedToolCalls = []; // Accumulate tool calls from deltas
+    let thinkingBubble = null; // Thinking bubble UI (created on first thinking token)
+    // Capture mode at stream start so mid-stream toggle doesn't cause inconsistency
+    const thinkingMode = state.config.thinkingDefaultMode ?? 2;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1271,11 +1539,31 @@ async function sendMessageStreaming(text, tools) {
 
             if (!delta) continue;
 
+            // Handle thinking/reasoning tokens
+            if (delta.thinking && state.config.thinkingEnabled && thinkingMode !== 0) {
+              fullThinking += delta.thinking;
+
+              // Create thinking bubble on first token
+              if (!thinkingBubble) {
+                thinkingBubble = createThinkingBubble(thinkingMode);
+                // Insert thinking bubble before the assistant message element
+                messagesEl?.insertBefore(thinkingBubble.container, assistantMsgEl);
+              }
+              thinkingBubble.update(fullThinking);
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            }
+
             // Handle text content (streaming)
             if (delta.content) {
               fullContent += delta.content;
               assistantMsgEl.textContent = fullContent;
               messagesEl.scrollTop = messagesEl.scrollHeight;
+
+              // Finish thinking bubble when content starts arriving
+              if (thinkingBubble) {
+                thinkingBubble.finish();
+                thinkingBubble = null;
+              }
             }
 
             // Handle tool calls (accumulate from deltas)
@@ -1316,6 +1604,12 @@ async function sendMessageStreaming(text, tools) {
           }
         }
       }
+    }
+
+    // Finish thinking bubble if stream ended without content arriving
+    if (thinkingBubble) {
+      thinkingBubble.finish();
+      thinkingBubble = null;
     }
 
     // Check if we have tool calls from deltas
@@ -1398,15 +1692,26 @@ async function sendMessageStreaming(text, tools) {
       // Skip notification - tool execution flow will notify when complete
     } else {
       // No tool calls, just text response
+      // Never-blank contract: if only thinking tokens arrived with no content, show explicit message
+      let displayContent = fullContent;
+      if (!fullContent.trim() && fullThinking.trim()) {
+        displayContent = 'The model produced reasoning but no final answer. Please try again.';
+      }
+
       const assistantMessage = {
         role: 'assistant',
-        content: fullContent || '(no response)',
+        content: displayContent || '(no response)',
+        ...(fullThinking ? { thinking: fullThinking } : {}),
       };
       state.messages.push(assistantMessage);
+      lastAssistantMessage = displayContent;
 
       // Update placeholder if empty
-      if (!fullContent.trim()) {
+      if (!displayContent.trim()) {
         assistantMsgEl.textContent = '(no response)';
+      } else if (!fullContent.trim() && fullThinking.trim()) {
+        // Thinking-only case: update the placeholder with the explicit message
+        assistantMsgEl.textContent = displayContent;
       }
 
       // Notify parent of assistant response (signal only — no message content)

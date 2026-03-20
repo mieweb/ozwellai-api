@@ -50,6 +50,8 @@
     // model is optional - server chooses default if not specified by client
     endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
     widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
+    thinkingEnabled: false, // Display reasoning/thinking tokens from models
+    thinkingDefaultMode: 2, // 0=None, 1=Peek, 2=Smart (expand-then-collapse), 3=Expanded
   };
 
   const state = {
