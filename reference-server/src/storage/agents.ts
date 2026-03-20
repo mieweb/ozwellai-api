@@ -95,7 +95,8 @@ export class AgentStore {
     private stmtUpdate: Database.Statement;
     private stmtDeleteOwned: Database.Statement;
     private stmtGetOwned: Database.Statement;
-    private stmtLookupApiKey: Database.Statement;
+    // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
+    private _stmtLookupApiKey: Database.Statement | null = null;
 
     constructor() {
         this.db = getDatabase();
@@ -115,7 +116,6 @@ export class AgentStore {
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
         this.stmtGetOwned = this.db.prepare('SELECT * FROM agents WHERE id = ? AND parent_key = ?');
-        this.stmtLookupApiKey = this.db.prepare('SELECT id, name FROM api_keys WHERE key = ?');
     }
 
     private initTable() {
@@ -139,7 +139,10 @@ export class AgentStore {
 
     /** Look up a parent API key — returns { id, name } or undefined */
     lookupApiKey(key: string): { id: string; name: string } | undefined {
-        return this.stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
+        if (!this._stmtLookupApiKey) {
+            this._stmtLookupApiKey = this.db.prepare('SELECT id, name FROM api_keys WHERE key = ?');
+        }
+        return this._stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
     }
 
     createAgent(agent: Omit<Agent, 'created_at'>): Agent {
