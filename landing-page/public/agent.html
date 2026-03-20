@@ -563,6 +563,10 @@
 
                 case 'add_ticket_note': {
                     const noteText = args.note;
+                    if (!noteText) {
+                        respond({ success: false, error: 'Missing required parameter: note' });
+                        return;
+                    }
                     ticket.notes.push({ text: noteText, time: new Date().toISOString() });
                     addNoteUI(noteText);
                     logEvent('[tool] add_ticket_note', noteText);

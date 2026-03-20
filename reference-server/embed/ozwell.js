@@ -481,6 +481,12 @@ const state = {
 // MCP pending tool call tracker (keyed by JSON-RPC request id)
 let mcpRequestId = 0;
 const mcpPendingToolCalls = {};
+const MCP_TOOL_TIMEOUT_MS = 30000;
+
+function trackPendingToolCall(id) {
+  mcpPendingToolCalls[id] = true;
+  setTimeout(() => { delete mcpPendingToolCalls[id]; }, MCP_TOOL_TIMEOUT_MS);
+}
 
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
@@ -740,10 +746,15 @@ You have access to tools. Use them wisely:
   return systemPrompt;
 }
 
+/** Get configured auth key */
+function getAuthKey() {
+  return state.config.apiKey || state.config.openaiApiKey || '';
+}
+
 /** Build request headers with auth + any custom headers */
 function getRequestHeaders() {
   const headers = { 'Content-Type': 'application/json' };
-  const authKey = state.config.apiKey || state.config.openaiApiKey;
+  const authKey = getAuthKey();
   if (authKey) {
     headers['Authorization'] = `Bearer ${authKey}`;
   }
@@ -950,8 +961,7 @@ async function sendMessage(text) {
   addMessage('user', text);
 
   // Require an API key or agent key to be configured
-  const authKey = state.config.apiKey || state.config.openaiApiKey;
-  if (!authKey) {
+  if (!getAuthKey()) {
     addMessage('system', 'Error: No API key configured. Please provide an agent key (agnt_key-...) or parent API key (ozw_...) in your OzwellChatConfig.');
     return;
   }
@@ -1066,18 +1076,10 @@ async function sendMessageNonStreaming(text, tools) {
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Send tool call to parent via MCP tools/call
-            mcpPendingToolCalls[toolCall.id] = true;
-            window.parent.postMessage({
-              jsonrpc: '2.0',
-              id: toolCall.id,
-              method: 'tools/call',
-              params: { name: toolName, arguments: args },
-            }, state.parentOrigin || '*');
-
-            // No system messages - tools are invisible to end users
+            trackPendingToolCall(toolCall.id);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
-            // Errors are logged to console, not shown to user
           }
         }
       }
@@ -1381,16 +1383,10 @@ async function sendMessageStreaming(text, tools) {
             state.activeToolCalls[toolName] = toolCall.id;
 
             // Send tool call to parent via MCP tools/call
-            mcpPendingToolCalls[toolCall.id] = true;
-            window.parent.postMessage({
-              jsonrpc: '2.0',
-              id: toolCall.id,
-              method: 'tools/call',
-              params: { name: toolName, arguments: args },
-            }, state.parentOrigin || '*');
+            trackPendingToolCall(toolCall.id);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
-            // Errors are logged to console, not shown to user unless debug mode
           }
         }
       }
@@ -1684,8 +1680,8 @@ notifyReady();
 // Send initialize → tools/list to parent. Tools are discovered at
 // runtime via the MCP protocol instead of being passed in config.
 
-function mcpSend(method, params) {
-  const id = ++mcpRequestId;
+function mcpSend(method, params, explicitId) {
+  const id = explicitId !== undefined ? explicitId : ++mcpRequestId;
   window.parent.postMessage({
     jsonrpc: '2.0',
     id: id,
@@ -1695,6 +1691,7 @@ function mcpSend(method, params) {
   return id;
 }
 
+/** Send an MCP notification (no id field per JSON-RPC 2.0 spec) */
 function mcpNotify(method, params) {
   window.parent.postMessage({
     jsonrpc: '2.0',
@@ -1705,7 +1702,7 @@ function mcpNotify(method, params) {
 
 // Perform MCP initialize handshake and discover tools
 (function mcpInit() {
-  mcpSend('initialize', {
+  const initReqId = mcpSend('initialize', {
     protocolVersion: '2025-11-25',
     capabilities: {},
     clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
@@ -1714,7 +1711,7 @@ function mcpNotify(method, params) {
   // Listen for initialize response, then send tools/list
   function onInitResponse(event) {
     const data = event.data;
-    if (!data || data.jsonrpc !== '2.0' || data.id !== 1) return;
+    if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId) return;
 
     console.log('[widget.js] MCP initialized:', data.result);
     mcpNotify('notifications/initialized');

@@ -164,39 +164,31 @@
     iframeWindow.postMessage(message, '*');
   }
 
-  function getMcpTools() {
-    // Prefer server-discovered tools (agent key flow), fall back to client config
-    if (state.agentTools && state.agentTools.length > 0) {
-      return state.agentTools.map(tool => {
-        // Support both plain strings (name only) and full objects
-        if (typeof tool === 'string') {
-          return { name: tool, description: '', inputSchema: { type: 'object', properties: {} } };
-        }
-        return {
-          name: tool.name,
-          description: tool.description || '',
-          inputSchema: tool.inputSchema || tool.parameters || { type: 'object', properties: {} },
-        };
-      });
-    }
+  const EMPTY_SCHEMA = { type: 'object', properties: {} };
 
-    const config = currentConfig();
-    const tools = config.tools || [];
-    return tools.map(tool => {
-      // Support both MCP format (name/inputSchema) and OpenAI format (type/function)
-      if (tool.function) {
-        return {
-          name: tool.function.name,
-          description: tool.function.description || '',
-          inputSchema: tool.function.parameters || { type: 'object', properties: {} },
-        };
-      }
+  function normalizeTool(tool) {
+    if (typeof tool === 'string') {
+      return { name: tool, description: '', inputSchema: EMPTY_SCHEMA };
+    }
+    if (tool.function) {
       return {
-        name: tool.name,
-        description: tool.description || '',
-        inputSchema: tool.inputSchema || { type: 'object', properties: {} },
+        name: tool.function.name,
+        description: tool.function.description || '',
+        inputSchema: tool.function.parameters || EMPTY_SCHEMA,
       };
-    });
+    }
+    return {
+      name: tool.name,
+      description: tool.description || '',
+      inputSchema: tool.inputSchema || tool.parameters || EMPTY_SCHEMA,
+    };
+  }
+
+  function getMcpTools() {
+    const tools = (state.agentTools && state.agentTools.length > 0)
+      ? state.agentTools
+      : (currentConfig().tools || []);
+    return tools.map(normalizeTool);
   }
 
   function handleMcpMessage(event) {
@@ -235,7 +227,7 @@
         const requestId = data.id;
 
         // Dispatch as DOM event — integrator listens for this
-        const event = new CustomEvent('ozwell-tool-call', {
+        const toolEvent = new CustomEvent('ozwell-tool-call', {
           detail: {
             name: toolName,
             arguments: toolArgs,
@@ -255,7 +247,7 @@
             },
           },
         });
-        document.dispatchEvent(event);
+        document.dispatchEvent(toolEvent);
         break;
       }
 

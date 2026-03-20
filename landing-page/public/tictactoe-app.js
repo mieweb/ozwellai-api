@@ -478,20 +478,20 @@ function placePieceAndCheckWin(index, normalizedPosition) {
  * Handle ai_move tool call - LLM requests this when it's O's turn
  * JavaScript calculates perfect move using minimax strategy
  */
-function handleAiMove(toolCallId) {
+function handleAiMove(respond) {
   if (gameOver) {
-    sendToolResult({ success: false, error: 'Game is over' }, toolCallId);
+    respond({ success: false, error: 'Game is over' });
     return;
   }
 
   if (currentPlayer !== 'O') {
-    sendToolResult({ success: false, error: "It's not O's turn" }, toolCallId);
+    respond({ success: false, error: "It's not O's turn" });
     return;
   }
 
   const aiIndex = makeAIMove();
   if (aiIndex === null) {
-    sendToolResult({ success: false, error: 'No available moves' }, toolCallId);
+    respond({ success: false, error: 'No available moves' });
     return;
   }
 
@@ -501,31 +501,31 @@ function handleAiMove(toolCallId) {
   placePieceAndCheckWin(aiIndex, aiPositionName);
 
   // Return raw data (not success/message) so LLM can respond naturally
-  sendToolResult({
+  respond({
     move: aiIndex,
     position: aiPositionName,
     board: boardState.map((v, i) => v || i), // Show board state with indices for empty
     gameOver: gameOver,
     winner: winner
-  }, toolCallId);
+  });
 }
 
-function handleMakeMove(position, toolCallId) {
+function handleMakeMove(position, respond) {
   if (gameOver) {
     logEvent('Game is over. Reset to play again.', 'error');
-    sendToolResult({ success: false, error: 'Game is over. Reset to play again.' }, toolCallId);
+    respond({ success: false, error: 'Game is over. Reset to play again.' });
     return;
   }
 
   // Safety: Only allow make_move when it's X's turn
   if (currentPlayer !== 'X') {
-    sendToolResult({ success: false, error: "Not X's turn. Call ai_move instead." }, toolCallId);
+    respond({ success: false, error: "Not X's turn. Call ai_move instead." });
     return;
   }
 
   const index = typeof position === 'number' ? position : parseInt(position);
   if (isNaN(index) || index < 0 || index > 8) {
-    sendToolResult({ success: false, error: `Invalid position: ${position}. Must be 0-8.` }, toolCallId);
+    respond({ success: false, error: `Invalid position: ${position}. Must be 0-8.` });
     return;
   }
 
@@ -539,11 +539,11 @@ function handleMakeMove(position, toolCallId) {
 
     const errorMsg = `Position ${index} is already taken. Available positions: ${availablePositions.join(', ')}. Please choose one of these positions.`;
     logEvent(errorMsg, 'error');
-    sendToolResult({
+    respond({
       success: false,
       error: errorMsg,
-      availablePositions: availablePositions // Help LLM understand what's valid
-    }, toolCallId);
+      availablePositions: availablePositions
+    });
     return;
   }
 
@@ -552,10 +552,7 @@ function handleMakeMove(position, toolCallId) {
   const gameEnded = placePieceAndCheckWin(index, positionName);
 
   // Return success message (NOT raw data) so widget doesn't auto-continue
-  sendToolResult(
-    { success: true, message: `Placed X at ${positionName}.` },
-    toolCallId
-  );
+  respond({ success: true, message: `Placed X at ${positionName}.` });
 
   // If game continues and it's now O's turn, trigger AI the same way as clicks
   if (!gameEnded && currentPlayer === 'O') {
@@ -577,17 +574,6 @@ function handleResetGame() {
 // Tool Communication (MCP protocol via loader DOM events)
 // ========================================
 
-// Active respond callback — set by the tool-call event handler,
-// used by game logic functions (handleAiMove, handleMakeMove).
-let _activeRespond = null;
-
-function sendToolResult(result, _toolCallId) {
-  if (_activeRespond) {
-    _activeRespond(result);
-    _activeRespond = null;
-  }
-}
-
 function sendUserMessageToWidget(text) {
   const widgetIframe = window.OzwellChat?.iframe;
   if (!widgetIframe || !widgetIframe.contentWindow) return;
@@ -601,18 +587,16 @@ function sendUserMessageToWidget(text) {
 // Listen for tool calls from loader
 document.addEventListener('ozwell-tool-call', (e) => {
   const { name, arguments: args, respond } = e.detail;
-  _activeRespond = respond;
 
   logEvent(`Tool call received: ${name}`, 'tool-call');
 
   if (name === 'make_move') {
-    handleMakeMove(args.position);
+    handleMakeMove(args.position, respond);
   } else if (name === 'ai_move') {
-    handleAiMove();
+    handleAiMove(respond);
   } else if (name === 'reset_game') {
     handleResetGame();
     respond({ success: true, message: 'Game reset successfully' });
-    _activeRespond = null;
   }
 });
 
