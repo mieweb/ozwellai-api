@@ -1,7 +1,8 @@
 import * as crypto from 'crypto';
 
-// Key prefix for parent API keys
+// Key prefixes
 export const KEY_PREFIX = 'ozw_';
+export const AGENT_KEY_PREFIX = 'agnt_';
 
 /** Get the hint (last 4 chars) for display */
 export function getKeyHint(key: string): string {
@@ -206,8 +207,8 @@ export function validateAuth(authorization: string | undefined): boolean {
 /** Check if a bearer token is an agent key */
 export function isAgentKey(authorization: string | undefined): boolean {
   if (!authorization) return false;
-  const token = authorization.replace(/^bearer\s+/i, '').trim();
-  return token.startsWith('agnt_');
+  const token = extractToken(authorization);
+  return token.startsWith(AGENT_KEY_PREFIX);
 }
 
 /** Extract the raw token from an authorization header */

@@ -198,10 +198,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as ChatCompletionRequestWithTools;
     
     // --- Agent key resolution ---
-    let agentSystemPrompt: string | null = null;
-    let agentAllowedTools: string[] | null = null;
-    let agentModel: string | null = null;
-    let agentTemperature: number | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; model: string | null; temperature: number | null } | null = null;
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
@@ -209,45 +206,37 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       if (!agent) {
         reply.code(401);
         return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
-      } else {
-        // Use agent instructions as the system prompt
-        let systemPrompt = agent.instructions || '';
+      }
 
-        // Append behavior metadata (tone, language, rules) as a structured
-        // supplement AFTER the instructions so they don't dilute or compete
-        // with the primary prompt.  Rules are formatted as bullet points for
-        // clarity, and only non-instruction metadata (tone/language) plus
-        // explicit rules are included.
-        if (agent.behavior && typeof agent.behavior === 'object') {
-          const b = agent.behavior as Record<string, unknown>;
-          const extras: string[] = [];
-          if (b.tone) extras.push(`- Respond with a ${b.tone} tone.`);
-          if (b.language && b.language !== 'en') extras.push(`- Respond in ${b.language}.`);
-          if (Array.isArray(b.rules) && b.rules.length > 0) {
-            for (const rule of b.rules) {
-              if (typeof rule === 'string') extras.push(`- ${rule}`);
-            }
-          }
-          if (extras.length > 0) {
-            systemPrompt = systemPrompt.trimEnd() + '\n\n=== ADDITIONAL RULES ===\n' + extras.join('\n');
+      // Use agent instructions as the system prompt
+      let systemPrompt = agent.instructions || '';
+
+      // Append behavior metadata (tone, language, rules) as a structured
+      // supplement AFTER the instructions so they don't dilute or compete
+      // with the primary prompt.
+      if (agent.behavior && typeof agent.behavior === 'object') {
+        const b = agent.behavior as Record<string, unknown>;
+        const extras: string[] = [];
+        if (b.tone) extras.push(`- Respond with a ${b.tone} tone.`);
+        if (b.language && b.language !== 'en') extras.push(`- Respond in ${b.language}.`);
+        if (Array.isArray(b.rules) && b.rules.length > 0) {
+          for (const rule of b.rules) {
+            if (typeof rule === 'string') extras.push(`- ${rule}`);
           }
         }
-
-        agentSystemPrompt = systemPrompt;
-
-        // Extract allowed tools from agent (tools can be strings or objects with .name)
-        if (agent.tools && Array.isArray(agent.tools)) {
-          agentAllowedTools = agent.tools.map(t => typeof t === 'string' ? t : t.name);
-        }
-
-        // Extract model and temperature overrides from agent definition
-        if (agent.model) {
-          agentModel = agent.model;
-        }
-        if (agent.temperature !== undefined && agent.temperature !== null) {
-          agentTemperature = agent.temperature;
+        if (extras.length > 0) {
+          systemPrompt = systemPrompt.trimEnd() + '\n\n=== ADDITIONAL RULES ===\n' + extras.join('\n');
         }
       }
+
+      agentConfig = {
+        systemPrompt,
+        allowedTools: agent.tools && Array.isArray(agent.tools)
+          ? agent.tools.map(t => typeof t === 'string' ? t : t.name)
+          : null,
+        model: agent.model || null,
+        temperature: agent.temperature ?? null,
+      };
     }
 
     // Check if Ollama is available as a backend (check early to determine default model)
@@ -259,11 +248,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Use requested model if provided, then agent model, then server default
-    const model = requestedModel || agentModel || DEFAULT_MODEL;
+    const model = requestedModel || agentConfig?.model || DEFAULT_MODEL;
     // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
-    const temperature = agentTemperature ?? requestedTemperature;
+    const temperature = agentConfig?.temperature ?? requestedTemperature;
     
-    request.log.info({ ollamaAvailable, model, requestedModel, agentModel, agentTemperature }, 'Chat request model selection');
+    request.log.info({ ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request model selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
@@ -287,24 +276,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // --- Agent: inject system prompt ---
-    if (agentSystemPrompt) {
-      // Prepend agent instructions as the first system message
+    if (agentConfig?.systemPrompt) {
       normalizedMessages.unshift({
         role: 'system',
-        content: agentSystemPrompt,
+        content: agentConfig.systemPrompt,
       });
     }
 
     // --- Agent: filter tools by allowed list ---
     let filteredTools = tools;
-    if (agentAllowedTools && tools) {
+    if (agentConfig?.allowedTools && tools) {
+      const allowed = agentConfig.allowedTools;
       filteredTools = tools.filter(
         (t) =>
           t &&
           t.type === 'function' &&
           t.function &&
           typeof t.function.name === 'string' &&
-          agentAllowedTools!.includes(t.function.name)
+          allowed.includes(t.function.name)
       );
     }
 

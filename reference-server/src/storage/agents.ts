@@ -12,7 +12,6 @@ interface DbAgentRow {
     temperature: number | null;
     tools: string | null;
     behavior: string | null;
-    markdown: string;
     created_at: number;
 }
 
@@ -83,16 +82,40 @@ export interface Agent {
     temperature?: number;
     tools?: (string | ToolDefinition)[];
     behavior?: Record<string, unknown>;
-    markdown: string;
     created_at: number;
 }
 
 export class AgentStore {
     private db: Database.Database;
+    // Cached prepared statements
+    private stmtInsert: Database.Statement;
+    private stmtGetByKey: Database.Statement;
+    private stmtGetById: Database.Statement;
+    private stmtListByParent: Database.Statement;
+    private stmtUpdate: Database.Statement;
+    private stmtDeleteOwned: Database.Statement;
+    private stmtGetOwned: Database.Statement;
+    private stmtLookupApiKey: Database.Statement;
 
-    constructor(dbPath: string = DB_PATH) {
-        this.db = new Database(dbPath);
+    constructor() {
+        this.db = getDatabase();
         this.initTable();
+
+        this.stmtInsert = this.db.prepare(`
+          INSERT INTO agents (id, agent_key, parent_key, name, instructions, model, temperature, tools, behavior, created_at)
+          VALUES (@id, @agent_key, @parent_key, @name, @instructions, @model, @temperature, @tools, @behavior, @created_at)
+        `);
+        this.stmtGetByKey = this.db.prepare('SELECT * FROM agents WHERE agent_key = ?');
+        this.stmtGetById = this.db.prepare('SELECT * FROM agents WHERE id = ?');
+        this.stmtListByParent = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
+        this.stmtUpdate = this.db.prepare(`
+          UPDATE agents SET name = @name, instructions = @instructions, model = @model,
+            temperature = @temperature, tools = @tools, behavior = @behavior
+          WHERE id = @id AND parent_key = @parent_key
+        `);
+        this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
+        this.stmtGetOwned = this.db.prepare('SELECT * FROM agents WHERE id = ? AND parent_key = ?');
+        this.stmtLookupApiKey = this.db.prepare('SELECT id, name FROM api_keys WHERE key = ?');
     }
 
     private initTable() {
@@ -107,7 +130,6 @@ export class AgentStore {
         temperature REAL,
         tools TEXT,
         behavior TEXT,
-        markdown TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
@@ -115,14 +137,15 @@ export class AgentStore {
     `);
     }
 
+    /** Look up a parent API key — returns { id, name } or undefined */
+    lookupApiKey(key: string): { id: string; name: string } | undefined {
+        return this.stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
+    }
+
     createAgent(agent: Omit<Agent, 'created_at'>): Agent {
         const created_at = Math.floor(Date.now() / 1000);
-        const stmt = this.db.prepare(`
-      INSERT INTO agents (id, agent_key, parent_key, name, instructions, model, temperature, tools, behavior, markdown, created_at)
-      VALUES (@id, @agent_key, @parent_key, @name, @instructions, @model, @temperature, @tools, @behavior, @markdown, @created_at)
-    `);
 
-        stmt.run({
+        this.stmtInsert.run({
             id: agent.id,
             agent_key: agent.agent_key,
             parent_key: agent.parent_key,
@@ -132,7 +155,6 @@ export class AgentStore {
             temperature: agent.temperature ?? null,
             tools: agent.tools ? JSON.stringify(agent.tools) : null,
             behavior: agent.behavior ? JSON.stringify(agent.behavior) : null,
-            markdown: agent.markdown,
             created_at
         });
 
@@ -140,25 +162,28 @@ export class AgentStore {
     }
 
     getByKey(agentKey: string): Agent | null {
-        const stmt = this.db.prepare('SELECT * FROM agents WHERE agent_key = ?');
-        const row = stmt.get(agentKey) as DbAgentRow | undefined;
+        const row = this.stmtGetByKey.get(agentKey) as DbAgentRow | undefined;
         return row ? this.deserialize(row) : null;
     }
 
     getById(agentId: string): Agent | null {
-        const stmt = this.db.prepare('SELECT * FROM agents WHERE id = ?');
-        const row = stmt.get(agentId) as DbAgentRow | undefined;
+        const row = this.stmtGetById.get(agentId) as DbAgentRow | undefined;
+        return row ? this.deserialize(row) : null;
+    }
+
+    /** Get agent only if owned by parentKey */
+    getOwned(agentId: string, parentKey: string): Agent | null {
+        const row = this.stmtGetOwned.get(agentId, parentKey) as DbAgentRow | undefined;
         return row ? this.deserialize(row) : null;
     }
 
     listByParent(parentKey: string): Agent[] {
-        const stmt = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
-        const rows = stmt.all(parentKey) as DbAgentRow[];
+        const rows = this.stmtListByParent.all(parentKey) as DbAgentRow[];
         return rows.map(row => this.deserialize(row));
     }
 
-    updateAgent(agentId: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior' | 'markdown'>>): Agent | null {
-        const existing = this.getById(agentId);
+    updateAgent(agentId: string, parentKey: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior'>>): Agent | null {
+        const existing = this.getOwned(agentId, parentKey);
         if (!existing) return null;
 
         const merged = {
@@ -168,31 +193,28 @@ export class AgentStore {
             temperature: updates.temperature ?? existing.temperature,
             tools: updates.tools ?? existing.tools,
             behavior: updates.behavior ?? existing.behavior,
-            markdown: updates.markdown ?? existing.markdown,
         };
 
-        const stmt = this.db.prepare(`
-      UPDATE agents SET name = @name, instructions = @instructions, model = @model,
-        temperature = @temperature, tools = @tools, behavior = @behavior, markdown = @markdown
-      WHERE id = @id
-    `);
-
-        stmt.run({
+        this.stmtUpdate.run({
             id: agentId,
+            parent_key: parentKey,
             name: merged.name,
             instructions: merged.instructions,
             model: merged.model || null,
             temperature: merged.temperature ?? null,
             tools: merged.tools ? JSON.stringify(merged.tools) : null,
             behavior: merged.behavior ? JSON.stringify(merged.behavior) : null,
-            markdown: merged.markdown,
         });
 
-        return this.getById(agentId);
+        return {
+            ...existing,
+            ...merged,
+        };
     }
 
-    deleteAgent(agentId: string): boolean {
-        const result = this.db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
+    /** Delete agent only if owned by parentKey. Returns true if deleted. */
+    deleteAgent(agentId: string, parentKey: string): boolean {
+        const result = this.stmtDeleteOwned.run(agentId, parentKey);
         return result.changes > 0;
     }
 
@@ -207,7 +229,6 @@ export class AgentStore {
             temperature: row.temperature ?? undefined,
             tools: row.tools ? JSON.parse(row.tools) : undefined,
             behavior: row.behavior ? JSON.parse(row.behavior) : undefined,
-            markdown: row.markdown,
             created_at: row.created_at
         };
     }
