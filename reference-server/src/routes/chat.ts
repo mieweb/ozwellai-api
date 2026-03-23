@@ -134,26 +134,44 @@ function tryExtractToolCallsFromContent(content: string | undefined, tools?: Too
   return null;
 }
 
+// Cached regex for <think>...</think> extraction (used in hot streaming path)
+const THINK_TAG_REGEX = /<think>([\s\S]*?)<\/think>/g;
+
 // Helper: extract thinking tokens from content that uses <think>...</think> tags (Ollama/Qwen)
 // Returns { thinking, content } — thinking is the extracted text, content is the remainder.
 function extractThinkTagsFromContent(text: string): { thinking: string; content: string } {
-  // Match <think>...</think> blocks (greedy within, but non-greedy across multiple blocks)
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/g;
-  let thinking = '';
-  let match;
-  while ((match = thinkRegex.exec(text)) !== null) {
-    thinking += match[1];
-  }
-  // Strip all <think>...</think> blocks from content (preserve spacing for token integrity)
-  const content = text.replace(thinkRegex, '');
-  return { thinking, content };
+  THINK_TAG_REGEX.lastIndex = 0;
+  const thinkParts: string[] = [];
+  // Single pass: collect thinking parts and strip tags via replace callback
+  const content = text.replace(THINK_TAG_REGEX, (_, inner) => {
+    thinkParts.push(inner);
+    return '';
+  });
+  return { thinking: thinkParts.join(''), content };
 }
 
+// Rename vendor-specific reasoning fields to the canonical `thinking` field.
+// Handles Ollama/Qwen3 `reasoning` and DeepSeek `reasoning_content`.
+// Returns true if a field was renamed (caller can skip further processing).
+function renameReasoningField(obj: Record<string, unknown>): boolean {
+  if (obj.reasoning && typeof obj.reasoning === 'string') {
+    obj.thinking = obj.reasoning;
+    delete obj.reasoning;
+    return true;
+  }
+  if (obj.reasoning_content && typeof obj.reasoning_content === 'string') {
+    obj.thinking = obj.reasoning_content;
+    delete obj.reasoning_content;
+    return true;
+  }
+  return false;
+}
+
+// Max partial buffer size to prevent unbounded growth on truncated streams
+const MAX_THINK_BUFFER = 64 * 1024;
+
 // Normalize a streaming chunk: extract thinking tokens into delta.thinking
-// Handles:
-//   - Ollama/Qwen: <think>...</think> tags inside delta.content
-//   - DeepSeek: delta.reasoning_content field
-//   - Anthropic: already separate (future — passthrough)
+// Handles Ollama/Qwen, DeepSeek, and <think> tags in content.
 // Mutates and returns the chunk for forwarding.
 function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { partial: string }): Record<string, unknown> {
   const choices = chunk.choices as Array<Record<string, unknown>> | undefined;
@@ -163,24 +181,13 @@ function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { p
   const delta = choice.delta as Record<string, unknown> | undefined;
   if (!delta) return chunk;
 
-  // --- Ollama/Qwen3: reasoning field (separate from content) ---
-  if (delta.reasoning && typeof delta.reasoning === 'string') {
-    delta.thinking = delta.reasoning;
-    delete delta.reasoning;
-    // Also clean up empty content strings that Ollama sends alongside reasoning
+  // --- Ollama/Qwen3 & DeepSeek: named reasoning fields ---
+  if (renameReasoningField(delta)) {
     if (delta.content === '') delete delta.content;
     return chunk;
   }
 
-  // --- DeepSeek: reasoning_content field ---
-  if (delta.reasoning_content && typeof delta.reasoning_content === 'string') {
-    delta.thinking = delta.reasoning_content;
-    delete delta.reasoning_content;
-    return chunk;
-  }
-
   // --- Ollama/Qwen (older): <think> tags in content ---
-  // Only enter this branch if content might contain <think> tags or we have a partial buffer
   if (delta.content && typeof delta.content === 'string') {
     const raw = thinkBuffer.partial + delta.content;
 
@@ -189,22 +196,23 @@ function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { p
       return chunk;
     }
 
+    // Safety: cap buffer to prevent unbounded growth on truncated streams
+    if (raw.length > MAX_THINK_BUFFER) {
+      thinkBuffer.partial = '';
+      return chunk;
+    }
+
     // Check for partial/open <think> tag at the end (tag not yet closed)
     const lastOpenIdx = raw.lastIndexOf('<think>');
     const lastCloseIdx = raw.lastIndexOf('</think>');
 
     if (lastOpenIdx !== -1 && (lastCloseIdx === -1 || lastCloseIdx < lastOpenIdx)) {
-      // We're inside an unclosed <think> block — buffer everything after the last <think>
       const before = raw.substring(0, lastOpenIdx);
       thinkBuffer.partial = raw.substring(lastOpenIdx);
 
-      // Extract any completed <think>...</think> pairs from the "before" portion
       const { thinking, content } = extractThinkTagsFromContent(before);
       delta.content = content || undefined;
-      if (thinking) {
-        delta.thinking = thinking;
-      }
-      // Remove empty content to avoid sending blank deltas
+      if (thinking) delta.thinking = thinking;
       if (!delta.content) delete delta.content;
       return chunk;
     }
@@ -213,9 +221,7 @@ function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { p
     thinkBuffer.partial = '';
     const { thinking, content } = extractThinkTagsFromContent(raw);
     delta.content = content || undefined;
-    if (thinking) {
-      delta.thinking = thinking;
-    }
+    if (thinking) delta.thinking = thinking;
     if (!delta.content) delete delta.content;
     return chunk;
   }
@@ -225,21 +231,11 @@ function normalizeChunkThinking(chunk: Record<string, unknown>, thinkBuffer: { p
 
 // Normalize a non-streaming response message: extract thinking from content
 function normalizeMessageThinking(message: Record<string, unknown>): void {
-  // Ollama/Qwen3: reasoning field (separate from content)
-  if (message.reasoning && typeof message.reasoning === 'string') {
-    message.thinking = message.reasoning;
-    delete message.reasoning;
-  }
-
-  // DeepSeek: reasoning_content field on message
-  if (message.reasoning_content && typeof message.reasoning_content === 'string') {
-    message.thinking = message.reasoning_content;
-    delete message.reasoning_content;
-  }
+  renameReasoningField(message);
 
   // Ollama/Qwen (older): <think> tags in content
-  if (message.content && typeof message.content === 'string') {
-    const { thinking, content } = extractThinkTagsFromContent(message.content as string);
+  if (!message.thinking && message.content && typeof message.content === 'string') {
+    const { thinking, content } = extractThinkTagsFromContent(message.content);
     if (thinking) {
       message.thinking = thinking;
       message.content = content;

@@ -656,6 +656,8 @@ function postToParent(message) {
   window.parent.postMessage(message, targetOrigin);
 }
 
+// Thinking mode constants — used for thinkingDefaultMode config value
+const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 };
 // Reasoning mode labels: index maps to thinkingDefaultMode values
 const REASONING_MODES = ['None', 'Peek', 'Smart', 'Expanded'];
 
@@ -685,6 +687,7 @@ function initReasoningControls() {
       capsule.textContent = `Reasoning: ${label}`;
       seg.classList.remove('open');
       capsule.style.display = '';
+      applyThinkingModeToExisting(idx);
       console.log(`[widget.js] Reasoning mode changed to: ${label} (${idx})`);
     });
     seg.appendChild(btn);
@@ -697,6 +700,30 @@ function initReasoningControls() {
 
   reasoningControlsEl.appendChild(capsule);
   reasoningControlsEl.appendChild(seg);
+}
+
+/** Apply a mode change to all existing thinking bubbles in the chat */
+function applyThinkingModeToExisting(mode) {
+  if (!messagesEl) return;
+  const bubbles = messagesEl.querySelectorAll('.thinking-bubble');
+  bubbles.forEach(bubble => {
+    if (mode === THINKING.NONE) {
+      bubble.style.display = 'none';
+    } else {
+      bubble.style.display = '';
+      const content = bubble.querySelector('.thinking-content');
+      const arrow = bubble.querySelector('.thinking-arrow');
+      if (!content) return;
+      if (mode === THINKING.EXPANDED) {
+        content.classList.remove('collapsed');
+        if (arrow) arrow.textContent = '▾';
+      } else {
+        // Peek or Smart: collapse
+        content.classList.add('collapsed');
+        if (arrow) arrow.textContent = '▸';
+      }
+    }
+  });
 }
 
 function setStatus(text, processing = false) {
@@ -899,8 +926,8 @@ function applyConfig(config) {
 }
 
 function buildMessages() {
-  // Just return message history - system prompt is handled by buildSystemPrompt()
-  return [...state.messages];
+  // Strip thinking field — it's for UI display only, not re-sent to the model
+  return state.messages.map(({ thinking, ...rest }) => rest);
 }
 
 function buildSystemPrompt() {
@@ -1164,12 +1191,8 @@ function createThinkingBubble(mode) {
   const contentEl = document.createElement('div');
   contentEl.className = 'thinking-content';
   // Start collapsed or expanded based on mode
-  if (mode === 1) {
-    // Peek: collapsed pill only
+  if (mode === THINKING.PEEK) {
     contentEl.classList.add('collapsed');
-  } else if (mode === 2 || mode === 3) {
-    // Smart & Expanded: start expanded while thinking
-    // arrow already points down (▾) which is correct for expanded
   }
 
   toggle.addEventListener('click', () => {
@@ -1189,8 +1212,9 @@ function createThinkingBubble(mode) {
   return {
     container,
     contentEl,
-    update(text) {
-      contentEl.textContent = text;
+    update(newText) {
+      // Use direct textContent — thinking content replaces fully since it accumulates
+      contentEl.textContent = newText;
     },
     finish() {
       // Calculate duration
@@ -1201,15 +1225,24 @@ function createThinkingBubble(mode) {
       dot.remove();
       label.textContent = `Thought${durationText}`;
 
-      // Smart (mode 2): collapse on answer arrival
-      if (mode === 2) {
+      // Smart: collapse on answer arrival
+      if (mode === THINKING.SMART) {
         contentEl.classList.add('collapsed');
         arrow.textContent = '▸';
       }
-      // Expanded (mode 3): stays expanded, arrow stays ▾
-      // Peek (mode 1): was already collapsed, stays collapsed
     }
   };
+}
+
+// Debounced scroll-to-bottom using rAF to avoid per-chunk reflows
+let _scrollRafPending = false;
+function scrollToBottom() {
+  if (_scrollRafPending) return;
+  _scrollRafPending = true;
+  requestAnimationFrame(() => {
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+    _scrollRafPending = false;
+  });
 }
 
 async function sendMessage(text) {
@@ -1455,10 +1488,12 @@ function parseToolCallsFromContent(content) {
   }
 }
 
-async function sendMessageStreaming(text, tools) {
+async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
+  lastAssistantMessage = '';
+  let _needsThinkingRetry = false;
 
   // Build system prompt
   const systemPrompt = buildSystemPrompt();
@@ -1518,7 +1553,7 @@ async function sendMessageStreaming(text, tools) {
     let accumulatedToolCalls = []; // Accumulate tool calls from deltas
     let thinkingBubble = null; // Thinking bubble UI (created on first thinking token)
     // Capture mode at stream start so mid-stream toggle doesn't cause inconsistency
-    const thinkingMode = state.config.thinkingDefaultMode ?? 2;
+    const thinkingMode = state.config.thinkingDefaultMode ?? THINKING.SMART;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1540,7 +1575,7 @@ async function sendMessageStreaming(text, tools) {
             if (!delta) continue;
 
             // Handle thinking/reasoning tokens
-            if (delta.thinking && state.config.thinkingEnabled && thinkingMode !== 0) {
+            if (delta.thinking && state.config.thinkingEnabled && thinkingMode !== THINKING.NONE) {
               fullThinking += delta.thinking;
 
               // Create thinking bubble on first token
@@ -1550,14 +1585,14 @@ async function sendMessageStreaming(text, tools) {
                 messagesEl?.insertBefore(thinkingBubble.container, assistantMsgEl);
               }
               thinkingBubble.update(fullThinking);
-              messagesEl.scrollTop = messagesEl.scrollHeight;
+              scrollToBottom();
             }
 
             // Handle text content (streaming)
             if (delta.content) {
               fullContent += delta.content;
               assistantMsgEl.textContent = fullContent;
-              messagesEl.scrollTop = messagesEl.scrollHeight;
+              scrollToBottom();
 
               // Finish thinking bubble when content starts arriving
               if (thinkingBubble) {
@@ -1692,39 +1727,58 @@ async function sendMessageStreaming(text, tools) {
       // Skip notification - tool execution flow will notify when complete
     } else {
       // No tool calls, just text response
-      // Never-blank contract: if only thinking tokens arrived with no content, show explicit message
       let displayContent = fullContent;
-      if (!fullContent.trim() && fullThinking.trim()) {
-        displayContent = 'The model produced reasoning but no final answer. Please try again.';
-      }
+      const trimmedContent = displayContent.trim();
+      const trimmedThinking = fullThinking.trim();
 
-      const assistantMessage = {
-        role: 'assistant',
-        content: displayContent || '(no response)',
-        ...(fullThinking ? { thinking: fullThinking } : {}),
-      };
-      state.messages.push(assistantMessage);
-      lastAssistantMessage = displayContent;
+      // Thinking-only response (no content, no tool calls) — retry with a cap
+      if (!trimmedContent && trimmedThinking) {
+        const MAX_THINKING_RETRIES = 3;
+        assistantMsgEl?.remove();
+        // Also remove the orphaned thinking bubble
+        const lastThinking = messagesEl?.querySelector('.thinking-bubble:last-of-type');
+        if (lastThinking) lastThinking.remove();
 
-      // Update placeholder if empty
-      if (!displayContent.trim()) {
+        if (_thinkingRetryCount < MAX_THINKING_RETRIES) {
+          console.log(`[widget.js] Thinking-only response, retrying (${_thinkingRetryCount + 1}/${MAX_THINKING_RETRIES})`);
+          // Flag retry — handled after finally to avoid state.sending race
+          _needsThinkingRetry = true;
+        } else {
+          // Exhausted retries — show user-friendly message
+          console.warn('[widget.js] Thinking-only responses exhausted retries');
+          addMessage('assistant', 'The model is not responding right now. Please try again or refresh the page.');
+          lastAssistantMessage = '';
+        }
+      } else if (!trimmedContent) {
         assistantMsgEl.textContent = '(no response)';
-      } else if (!fullContent.trim() && fullThinking.trim()) {
-        // Thinking-only case: update the placeholder with the explicit message
-        assistantMsgEl.textContent = displayContent;
+        lastAssistantMessage = '';
+      } else {
+        lastAssistantMessage = displayContent;
       }
 
-      // Notify parent of assistant response (signal only — no message content)
-      postToParent({
-        source: 'ozwell-chat-widget',
-        type: 'assistant_response',
-        hadToolCalls: false
-      });
+      if (!_needsThinkingRetry) {
+        // Only push to history if we have actual content
+        if (trimmedContent) {
+          const assistantMessage = {
+            role: 'assistant',
+            content: displayContent,
+            ...(trimmedThinking ? { thinking: fullThinking } : {}),
+          };
+          state.messages.push(assistantMessage);
+        }
 
-      // Send any queued message now that LLM is done (no tool calls pending)
-      if (state.queuedMessage) {
-        // Use setTimeout to let the UI update first
-        setTimeout(() => sendQueuedMessage(), 100);
+        // Notify parent of assistant response (signal only — no message content)
+        postToParent({
+          source: 'ozwell-chat-widget',
+          type: 'assistant_response',
+          hadToolCalls: false
+        });
+
+        // Send any queued message now that LLM is done (no tool calls pending)
+        if (state.queuedMessage) {
+          // Use setTimeout to let the UI update first
+          setTimeout(() => sendQueuedMessage(), 100);
+        }
       }
     }
 
@@ -1740,6 +1794,11 @@ async function sendMessageStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
+  }
+
+  // Retry after finally so state.sending is properly cleaned up first
+  if (_needsThinkingRetry) {
+    return sendMessageStreaming('', tools, _thinkingRetryCount + 1);
   }
 }
 
@@ -1895,12 +1954,9 @@ function handleParentMessage(event) {
       if (state.queuedMessage) {
         sendQueuedMessage();
       }
-    } else if (result.error) {
-      // Error case
-      addMessage('system', `Error: ${result.error}`);
     } else {
-      // Get tool - raw data returned, need to send back to LLM for final answer
-      console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
+      // No display message — send tool result back to LLM for continuation
+      console.log('[widget.js] Sending tool result to LLM');
 
       // Get tool_call_id from parent response (required for OpenAI protocol)
       if (!toolCallId) {
