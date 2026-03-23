@@ -667,8 +667,9 @@ const REASONING_MODES = ['None', 'Peek', 'Smart', 'Expanded'];
  */
 function initReasoningControls() {
   if (!reasoningControlsEl || !state.config.thinkingEnabled) return;
+  reasoningControlsEl.innerHTML = '';
 
-  const capsule = document.createElement('span');
+  const capsule = document.createElement('button');
   capsule.className = 'reasoning-capsule';
   capsule.title = 'Controls how AI reasoning is displayed';
   capsule.textContent = `Reasoning: ${REASONING_MODES[state.config.thinkingDefaultMode] || 'Smart'}`;
@@ -1182,8 +1183,11 @@ function createThinkingBubble(mode) {
 
   const arrow = document.createElement('span');
   arrow.className = 'thinking-arrow';
-  arrow.textContent = '▾';
+  arrow.textContent = mode === THINKING.PEEK ? '▸' : '▾';
 
+  toggle.setAttribute('role', 'button');
+  toggle.setAttribute('tabindex', '0');
+  toggle.setAttribute('aria-expanded', mode !== THINKING.PEEK ? 'true' : 'false');
   toggle.appendChild(dot);
   toggle.appendChild(label);
   toggle.appendChild(arrow);
@@ -1195,15 +1199,21 @@ function createThinkingBubble(mode) {
     contentEl.classList.add('collapsed');
   }
 
-  toggle.addEventListener('click', () => {
+  const handleToggle = () => {
     const isCollapsed = contentEl.classList.contains('collapsed');
     if (isCollapsed) {
       contentEl.classList.remove('collapsed');
       arrow.textContent = '▾';
+      toggle.setAttribute('aria-expanded', 'true');
     } else {
       contentEl.classList.add('collapsed');
       arrow.textContent = '▸';
+      toggle.setAttribute('aria-expanded', 'false');
     }
+  };
+  toggle.addEventListener('click', handleToggle);
+  toggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggle(); }
   });
 
   container.appendChild(toggle);
