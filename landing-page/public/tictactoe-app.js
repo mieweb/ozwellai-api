@@ -591,11 +591,16 @@ document.addEventListener('ozwell-tool-call', (e) => {
   logEvent(`Tool call received: ${name}`, 'tool-call');
 
   if (name === 'get_board') {
+    const emptySquares = boardState
+      .map((v, i) => v ? null : i)
+      .filter(i => i !== null);
     respond({
       board: boardState.map((v, i) => v || i),
       currentPlayer: currentPlayer,
       gameOver: gameOver,
-      winner: winner
+      winner: winner,
+      difficulty: getAIDifficulty(),
+      availablePositions: emptySquares
     });
   } else if (name === 'make_move') {
     handleMakeMove(args.position, respond);
