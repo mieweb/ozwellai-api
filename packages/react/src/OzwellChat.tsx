@@ -40,7 +40,6 @@ export function OzwellChat(props: OzwellChatProps) {
     openaiApiKey,
     headers,
     widgetUrl,
-    context,
     autoOpenOnReply,
 
     // Future props (not yet implemented in vanilla widget)
@@ -56,7 +55,6 @@ export function OzwellChat(props: OzwellChatProps) {
     onReady,
     onOpen,
     onClose,
-    onInsert,
     onToolCall,
     onUserShare,
     onError,
@@ -236,19 +234,6 @@ export function OzwellChat(props: OzwellChatProps) {
     onError,
   ]);
 
-  // Update context when it changes
-  useEffect(() => {
-    if (!isWidgetReady || !window.OzwellChat || !context) {
-      return;
-    }
-
-    try {
-      window.OzwellChat.updateContext(context);
-    } catch (error) {
-      console.error('[OzwellChat] Failed to update context:', error);
-    }
-  }, [isWidgetReady, context]);
-
   // Listen for widget events via postMessage (single listener for all events)
   useEffect(() => {
     if (!isWidgetReady) {
@@ -269,10 +254,6 @@ export function OzwellChat(props: OzwellChatProps) {
       }
 
       switch (data.type) {
-        case 'insert':
-          onInsert?.(data.payload);
-          break;
-
         case 'closed':
           onClose?.();
           break;
@@ -325,7 +306,7 @@ export function OzwellChat(props: OzwellChatProps) {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [isWidgetReady, onInsert, onClose, onOpen, onUserShare, onError, onToolCall]);
+  }, [isWidgetReady, onClose, onOpen, onUserShare, onError, onToolCall]);
 
   // Render container div (only if not using default UI)
   if (defaultUI) {

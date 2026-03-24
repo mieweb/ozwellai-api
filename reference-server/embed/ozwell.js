@@ -4,74 +4,18 @@
  * ============================================
  *
  * This file bundles everything needed for the widget:
- * - IframeSyncClient (for state synchronization)
  * - CSS styles (inlined)
  * - HTML structure (dynamically injected)
  * - Widget logic
  *
- * No separate HTML or CSS files needed!
- */
-
-/**
- * ============================================
- * IFRAME-SYNC CLIENT (Bundled)
- * ============================================
+ * Communication with parent page uses postMessage only:
+ * - Lifecycle: ready, closed (signals only, no data)
+ * - MCP tools: tool_call, tool_result (by design)
+ * - Config: config, request-config
+ * - Notifications: assistant_response (signal only)
  *
- * IframeSyncClient allows this widget iframe to receive state updates from the parent page.
- * This is bundled here to eliminate the need for a separate iframe-sync.js script tag.
- *
- * The parent page uses IframeSyncBroker (bundled in ozwell-loader.js) to send updates.
+ * No private chat data crosses the iframe boundary.
  */
-class IframeSyncClient {
-  #channel;
-  #recv;
-  #clientName;
-
-  constructor(clientName, recv) {
-    this.#recv = recv;
-    this.#channel = 'IframeSync';
-    this.#clientName = clientName || [...Array(16)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-
-    if (!window) {
-      return;
-    }
-    window.addEventListener('message', (event) => {
-      if (!event.data || event.data.channel !== this.#channel) {
-        return;
-      }
-
-      const isOwnMessage = event.data.sourceClientName === this.#clientName;
-      const isReadyReceived = event.data.type === 'readyReceived';
-
-      if (['syncState', 'readyReceived'].includes(event.data.type) && typeof this.#recv === 'function') {
-        this.#recv(event.data.payload, isOwnMessage, isReadyReceived);
-      }
-    });
-  }
-
-  ready() {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'ready',
-      sourceClientName: this.#clientName
-    }, '*');
-  }
-
-  stateChange(update) {
-    if (!window || !window.parent) {
-      return;
-    }
-    window.parent.postMessage({
-      channel: this.#channel,
-      type: 'stateChange',
-      sourceClientName: this.#clientName,
-      payload: update
-    }, '*');
-  }
-}
 
 /**
  * ============================================
@@ -319,10 +263,6 @@ body {
   cursor: not-allowed;
 }
 
-.chat-save {
-  display: none;
-}
-
 .chat-footer {
   text-align: center;
   padding: 8px;
@@ -443,7 +383,6 @@ body {
         />
         <button type="submit" class="chat-submit">Send</button>
       </form>
-      <button type="button" id="save-button" class="chat-save" disabled>Save & Close</button>
       <div class="chat-footer">Powered by Ozwell</div>
     </div>
   `;
@@ -530,7 +469,6 @@ const state = {
   },
   messages: [],
   sending: false,
-  formData: null, // Form context from parent page
   activeToolCalls: {}, // Track tool_call_id by tool name for OpenAI protocol
   toolExecutions: [], // Track tool executions for debug mode: { id, messageIndex, toolName, arguments, result, timestamp }
   expandedTools: new Set(), // Track which tool pills are expanded
@@ -547,9 +485,6 @@ const messagesEl = document.getElementById('messages');
 const formEl = document.getElementById('chat-form');
 const inputEl = document.getElementById('chat-input');
 const submitButton = document.querySelector('.chat-submit');
-const saveButton = document.getElementById('save-button');
-
-let lastAssistantMessage = '';
 
 function setStatus(text, processing = false) {
   if (statusEl) {
@@ -755,12 +690,6 @@ function buildMessages() {
 function buildSystemPrompt() {
   // Start with custom system prompt from parent config
   let systemPrompt = state.config.system || 'You are a helpful assistant.';
-
-  // APPEND form context if available (don't replace!)
-  if (state.formData) {
-    console.log('[widget.js] Including form context in system prompt:', state.formData);
-    systemPrompt += `\n\nCurrent page context:\n${JSON.stringify(state.formData, null, 2)}`;
-  }
 
   // Add generic tool usage guidance if tools are available
   if (state.config.tools && state.config.tools.length > 0) {
@@ -1011,10 +940,8 @@ async function sendMessageNonStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  saveButton?.setAttribute('disabled', 'true');
-  lastAssistantMessage = '';
 
-  // Build system prompt (handles custom prompts and form context)
+  // Build system prompt
   const systemPrompt = buildSystemPrompt();
 
   try {
@@ -1131,7 +1058,6 @@ async function sendMessageNonStreaming(text, tools) {
 
       // Display text content in UI if present and not hidden (parsed/structured tool calls should hide the raw JSON)
       if (!shouldHideContent && assistantContent && assistantContent.trim()) {
-        lastAssistantMessage = assistantContent;
         addMessage('assistant', assistantContent);
       }
     } else {
@@ -1141,14 +1067,10 @@ async function sendMessageNonStreaming(text, tools) {
         content: assistantContent || '(no response)',
       };
       state.messages.push(assistantMessage);
-      lastAssistantMessage = assistantContent;
       addMessage('assistant', assistantContent || '(no response)');
     }
 
     setStatus('', false);
-    if (lastAssistantMessage.trim()) {
-      saveButton?.removeAttribute('disabled');
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     addMessage('system', `Error: ${message}`);
@@ -1156,9 +1078,6 @@ async function sendMessageNonStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    if (!lastAssistantMessage.trim()) {
-      saveButton?.setAttribute('disabled', 'true');
-    }
   }
 }
 
@@ -1248,8 +1167,6 @@ async function sendMessageStreaming(text, tools) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  saveButton?.setAttribute('disabled', 'true');
-  lastAssistantMessage = '';
 
   // Build system prompt
   const systemPrompt = buildSystemPrompt();
@@ -1469,7 +1386,6 @@ async function sendMessageStreaming(text, tools) {
 
       // Display text content only if it shouldn't be hidden (i.e., not JSON)
       if (!shouldHideContent && fullContent && fullContent.trim()) {
-        lastAssistantMessage = fullContent;
         addMessage('assistant', fullContent);
       }
       // Skip notification - tool execution flow will notify when complete
@@ -1480,18 +1396,16 @@ async function sendMessageStreaming(text, tools) {
         content: fullContent || '(no response)',
       };
       state.messages.push(assistantMessage);
-      lastAssistantMessage = fullContent;
 
       // Update placeholder if empty
       if (!fullContent.trim()) {
         assistantMsgEl.textContent = '(no response)';
       }
 
-      // Notify parent of assistant response (for notification system)
+      // Notify parent of assistant response (signal only — no message content)
       window.parent.postMessage({
         source: 'ozwell-chat-widget',
         type: 'assistant_response',
-        message: fullContent || '(no response)',
         hadToolCalls: false
       }, '*');
 
@@ -1503,9 +1417,6 @@ async function sendMessageStreaming(text, tools) {
     }
 
     setStatus('', false);
-    if (lastAssistantMessage.trim()) {
-      saveButton?.removeAttribute('disabled');
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     // Remove placeholder on error
@@ -1517,9 +1428,6 @@ async function sendMessageStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    if (!lastAssistantMessage.trim()) {
-      saveButton?.setAttribute('disabled', 'true');
-    }
   }
 }
 
@@ -1538,7 +1446,6 @@ async function continueConversationWithToolResult(result) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
-  saveButton?.setAttribute('disabled', 'true');
 
   // Build MCP tools from parent config (same as sendMessage)
   let tools = [];
@@ -1630,21 +1537,16 @@ async function continueConversationWithToolResult(result) {
       content: assistantContent || '(no response)',
     };
     state.messages.push(assistantMessage);
-    lastAssistantMessage = assistantContent;
     addMessage('assistant', assistantContent || '(no response)');
 
-    // Notify parent of assistant response
+    // Notify parent of assistant response (signal only — no message content)
     window.parent.postMessage({
       source: 'ozwell-chat-widget',
       type: 'assistant_response',
-      message: assistantContent || '(no response)',
       hadToolCalls: false
     }, '*');
 
     setStatus('', false);
-    if (lastAssistantMessage.trim()) {
-      saveButton?.removeAttribute('disabled');
-    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     addMessage('system', `Error: ${message}`);
@@ -1652,9 +1554,6 @@ async function continueConversationWithToolResult(result) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
-    if (!lastAssistantMessage.trim()) {
-      saveButton?.setAttribute('disabled', 'true');
-    }
   }
 }
 
@@ -1670,17 +1569,6 @@ function handleSubmit(event) {
 function handleParentMessage(event) {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
-
-  // Handle state updates from parent page (app.js)
-  if (data.type === 'STATE_UPDATE' && data.state) {
-    console.log('[widget.js] Received state update from parent:', data.state);
-
-    if (data.state.formData) {
-      state.formData = data.state.formData;
-      console.log('[widget.js] Form data stored:', state.formData);
-    }
-    return;
-  }
 
   // Handle tool results from parent (OpenAI function calling protocol)
   if (data.source === 'ozwell-chat-parent' && data.type === 'tool_result') {
@@ -1698,15 +1586,12 @@ function handleParentMessage(event) {
     if (result.success && result.message) {
       // Update tool - just display the message (no LLM continuation needed)
       addMessage('assistant', result.message);
-      lastAssistantMessage = result.message;
-      saveButton?.removeAttribute('disabled');
 
-      // Notify parent of assistant response (for notification system)
+      // Notify parent of assistant response (signal only — no message content)
       window.parent.postMessage({
         source: 'ozwell-chat-widget',
         type: 'assistant_response',
-        message: result.message,
-        hadToolCalls: false  // This is the final response after tool execution
+        hadToolCalls: false
       }, '*');
 
       // After displaying the tool result message, send any queued user message (if present)
@@ -1774,61 +1659,17 @@ function handleParentMessage(event) {
 }
 
 function notifyReady() {
-  // Send IFRAME_READY to register with app.js StateBroker
-  window.parent.postMessage({
-    type: 'IFRAME_READY',
-  }, '*');
-
-  console.log('[widget.js] Sent IFRAME_READY to parent');
-
-  // Also send legacy ready message for embed system
   window.parent.postMessage({
     source: 'ozwell-chat-widget',
     type: 'ready',
   }, '*');
 }
 
-function handleSave() {
-  if (!lastAssistantMessage.trim()) return;
-
-  window.parent.postMessage({
-    source: 'ozwell-chat-widget',
-    type: 'insert',
-    payload: {
-      text: lastAssistantMessage,
-      close: true,
-    },
-  }, '*');
-
-  setStatus('', false);
-}
-
 window.addEventListener('message', handleParentMessage);
 formEl?.addEventListener('submit', handleSubmit);
-saveButton?.addEventListener('click', handleSave);
 
 // Don't show initial system message - keep it clean
 setStatus('', false);
 
-// Initialize IframeSyncClient
-if (typeof IframeSyncClient !== 'undefined') {
-  console.log('[widget.js] Initializing IframeSyncClient...');
-
-  const iframeClient = new IframeSyncClient('ozwell-widget', function (payload, isOwnMessage, isReadyReceived) {
-    console.log('[widget.js] Received state from broker:', { payload, isOwnMessage, isReadyReceived });
-
-    if (payload && payload.formData) {
-      state.formData = payload.formData;
-      console.log('[widget.js] Form data updated:', state.formData);
-    }
-  });
-
-  // Register with broker
-  iframeClient.ready();
-  console.log('[widget.js] IframeSyncClient registered with broker');
-} else {
-  console.warn('[widget.js] IframeSyncClient not available');
-}
-
-// Legacy ready notification for embed system
+// Notify parent that widget is ready
 notifyReady();

@@ -120,9 +120,6 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
   /** Widget height (CSS value or number in pixels) */
   height?: number | string;
 
-  /** Context data to send to the widget */
-  context?: Record<string, unknown>;
-
   // Event Callbacks
 
   /** Called when widget is ready */
@@ -133,9 +130,6 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
 
   /** Called when chat is closed */
   onClose?: () => void;
-
-  /** Called when user inserts text to parent page */
-  onInsert?: (data: { text: string; close: boolean }) => void;
 
   /**
    * Called when the AI requests a tool call.
@@ -211,9 +205,6 @@ export interface UseOzwellReturn {
   /** Send a message programmatically */
   sendMessage: (content: string) => void;
 
-  /** Update context data */
-  setContext: (context: Record<string, unknown>) => void;
-
   /** Access the underlying iframe element */
   iframe: HTMLIFrameElement | null;
 }
@@ -247,8 +238,6 @@ export interface OzwellChatAPI {
   }) => HTMLIFrameElement;
 
   configure: (config: Partial<OzwellConfig>) => void;
-
-  updateContext: (data: Record<string, unknown>) => void;
 
   ready: () => Promise<void>;
 
@@ -292,7 +281,7 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'insert' | 'closed' | 'opened' | 'tool_call' | 'user-share' | 'error';
+  type: 'ready' | 'request-config' | 'closed' | 'opened' | 'tool_call' | 'user-share' | 'error';
   payload?: unknown;
 }
 

@@ -154,28 +154,6 @@ export function useOzwell(): UseOzwellReturn {
     // window.OzwellChat?.sendMessage?.(content);
   }, [isReady]);
 
-  /**
-   * Update context data
-   * Uses window.OzwellChat.updateContext() from vanilla widget
-   */
-  const setContext = useCallback((context: Record<string, unknown>) => {
-    if (!isReady) {
-      console.warn('[useOzwell] Widget not ready yet');
-      return;
-    }
-
-    if (!context || typeof context !== 'object') {
-      console.warn('[useOzwell] setContext requires an object');
-      return;
-    }
-
-    try {
-      window.OzwellChat?.updateContext(context);
-    } catch (error) {
-      console.error('[useOzwell] Failed to update context:', error);
-    }
-  }, [isReady]);
-
   return {
     isReady,
     isOpen,
@@ -184,7 +162,6 @@ export function useOzwell(): UseOzwellReturn {
     close,
     toggle,
     sendMessage,
-    setContext,
     iframe,
   };
 }
