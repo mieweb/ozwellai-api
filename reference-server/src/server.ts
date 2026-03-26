@@ -72,7 +72,7 @@ async function buildServer() {
           bearerAuth: {
             type: 'http',
             scheme: 'bearer',
-            bearerFormat: 'JWT',
+            bearerFormat: 'API Key (ozw_...)',
           },
         },
         schemas: {
