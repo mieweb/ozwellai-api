@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create an Agent — Ozwell</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #fafafa;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .main-container { max-width: 800px; margin: 0 auto; }
+
+    /* Header — matches agent.html / tictactoe.html */
+    .header {
+      text-align: center;
+      color: #1a1a1a;
+      margin-bottom: 40px;
+      position: relative;
+    }
+    .back-link-container { position: absolute; left: 0; top: 10px; }
+    .back-link {
+      color: #0066ff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0.9;
+      transition: opacity 0.2s;
+    }
+    .back-link:hover { opacity: 1; text-decoration: underline; }
+    .header-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.025em;
+    }
+    .header-subtitle { font-size: 16px; color: #6b7280; }
+
+    /* Sections */
+    .section {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+    .section p {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    /* API Key input */
+    .api-key-row { display: flex; gap: 8px; }
+    .api-key-input {
+      flex: 1;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #1a1a1a;
+      font-family: monospace;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .api-key-input:focus { border-color: #0066ff; }
+    .validate-btn {
+      background: #0066ff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .validate-btn:hover { background: #0052cc; }
+    .key-status { margin-top: 8px; font-size: 13px; min-height: 1.2em; }
+    .key-status.valid { color: #16a34a; }
+    .key-status.invalid { color: #dc2626; }
+
+    /* Q sandbox area */
+    .q-section { position: relative; }
+    .q-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(250, 250, 250, 0.9);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .q-overlay span {
+      color: #9ca3af;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .q-overlay.hidden { display: none; }
+
+    #q-mount {
+      min-height: 300px;
+      background: #f9fafb;
+      border: 2px dashed #e5e7eb;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+
+    /* Action buttons */
+    .actions { display: flex; gap: 10px; margin-top: 12px; }
+    .btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #0066ff; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #0052cc; }
+    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+    .btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
+
+    /* Result section */
+    .result-section { display: none; }
+    .result-section.visible { display: block; }
+    .agent-key-box {
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .agent-key-value {
+      font-family: monospace;
+      font-size: 14px;
+      color: #16a34a;
+      word-break: break-all;
+    }
+    .copy-btn {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 6px 14px;
+      color: #374151;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      margin-left: 12px;
+      transition: background 0.2s;
+    }
+    .copy-btn:hover { background: #f3f4f6; }
+    .result-hint {
+      color: #9ca3af;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .result-hint code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+  </style>
+  <!-- Q agent config generator (bundled via esbuild) -->
+  <link rel="stylesheet" href="/vendor/q-bundle.css" />
+</head>
+<body>
+  <script src="/vendor/q-bundle.js"></script>
+  <div class="main-container">
+    <header class="header">
+      <div class="back-link-container">
+        <a href="/" class="back-link">&larr; Back to demos</a>
+      </div>
+      <h1 class="header-title">Create an Agent</h1>
+      <p class="header-subtitle">Configure your agent visually, then register it with one click.</p>
+    </header>
+
+    <!-- 1. API Key -->
+    <div class="section">
+      <h3>1. Enter your API key</h3>
+      <p>This acts as your login and will be used to register the agent.</p>
+      <div class="api-key-row">
+        <input type="password" id="api-key-input" class="api-key-input" placeholder="ozw_your-api-key" />
+        <button id="validate-btn" class="validate-btn">Validate</button>
+      </div>
+      <div id="key-status" class="key-status"></div>
+    </div>
+
+    <!-- 2. Q sandbox -->
+    <div class="section q-section">
+      <h3>2. Configure your agent</h3>
+      <div id="q-overlay" class="q-overlay">
+        <span>Enter your API key above to unlock</span>
+      </div>
+      <div id="q-mount">
+        Q agent config builder will load here
+      </div>
+    </div>
+
+    <!-- 3. Actions -->
+    <div class="section">
+      <h3>3. Create your agent</h3>
+      <p>Submit will generate the YAML and register the agent automatically.</p>
+      <div class="actions">
+        <button id="create-btn" class="btn btn-primary" disabled>Create Agent</button>
+        <button id="download-btn" class="btn btn-secondary" disabled>Download YAML</button>
+      </div>
+    </div>
+
+    <!-- 4. Result -->
+    <div id="result-section" class="section result-section">
+      <h3>Your agent key</h3>
+      <p>Use this key in the widget embed code to connect to your agent.</p>
+      <div class="agent-key-box">
+        <span id="agent-key-value" class="agent-key-value"></span>
+        <button id="copy-btn" class="copy-btn">Copy</button>
+      </div>
+      <p class="result-hint">Paste this as the <code>data-api-key</code> in your widget script tag.</p>
+    </div>
+  </div>
+
+  <script>
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+    let apiKeyValidated = false;
+    let currentYaml = null;
+
+    const apiKeyInput = document.getElementById('api-key-input');
+    const validateBtn = document.getElementById('validate-btn');
+    const keyStatus = document.getElementById('key-status');
+    const qOverlay = document.getElementById('q-overlay');
+    const createBtn = document.getElementById('create-btn');
+    const downloadBtn = document.getElementById('download-btn');
+    const resultSection = document.getElementById('result-section');
+    const agentKeyValue = document.getElementById('agent-key-value');
+    const copyBtn = document.getElementById('copy-btn');
+
+    // Validate API key
+    validateBtn.addEventListener('click', async () => {
+      const key = apiKeyInput.value.trim();
+      if (!key) { keyStatus.textContent = 'Please enter a key'; keyStatus.className = 'key-status invalid'; return; }
+
+      keyStatus.textContent = 'Validating...';
+      keyStatus.className = 'key-status';
+
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents', {
+          headers: { 'Authorization': `Bearer ${key}` }
+        });
+        if (resp.ok) {
+          apiKeyValidated = true;
+          keyStatus.textContent = 'Valid key';
+          keyStatus.className = 'key-status valid';
+          qOverlay.classList.add('hidden');
+          createBtn.disabled = false;
+          downloadBtn.disabled = false;
+          mountQ();
+        } else {
+          keyStatus.textContent = 'Invalid key';
+          keyStatus.className = 'key-status invalid';
+        }
+      } catch {
+        keyStatus.textContent = 'Could not reach server';
+        keyStatus.className = 'key-status invalid';
+      }
+    });
+
+    // Ozwell agent schema for Q form builder
+    const ozwellSchema = {
+      schemaType: 'mieforms-v1.0',
+      title: 'Ozwell Agent Configuration',
+      fields: [
+        {
+          id: 'sec-basic', fieldType: 'section', title: 'Basic Info',
+          fields: [
+            { id: 'name', fieldType: 'text', question: 'Agent Name', answer: 'My Agent', required: true },
+            { id: 'instructions', fieldType: 'longtext', question: 'Instructions', answer: 'You are a helpful assistant.', required: true },
+          ],
+        },
+        {
+          id: 'sec-model', fieldType: 'section', title: 'Model Settings',
+          fields: [
+            {
+              id: 'model', fieldType: 'dropdown', question: 'Model', answer: 'qwen2.5-coder:3b', required: false,
+              options: [
+                { id: 'm-gptoss', label: 'gpt-oss:latest', value: 'gpt-oss:latest' },
+                { id: 'm-qwen3b', label: 'qwen2.5-coder:3b', value: 'qwen2.5-coder:3b' },
+                { id: 'm-qwen7b', label: 'qwen2.5-coder:7b', value: 'qwen2.5-coder:7b' },
+                { id: 'm-llama3', label: 'llama3', value: 'llama3' },
+                { id: 'm-llama31', label: 'llama3.1', value: 'llama3.1' },
+              ],
+            },
+            { id: 'temperature', fieldType: 'text', question: 'Temperature (0.0 – 1.0)', answer: '0.7', required: false, configType: 'number' },
+          ],
+        },
+      ],
+    };
+
+    // Convert Q config object to Ozwell agent YAML
+    function configToYaml(config) {
+      const lines = [];
+      if (config.name) lines.push(`name: ${config.name}`);
+      if (config.instructions) lines.push(`instructions: >\n  ${config.instructions.replace(/\n/g, '\n  ')}`);
+      if (config.model) lines.push(`model: ${config.model}`);
+      if (config.temperature != null) lines.push(`temperature: ${config.temperature}`);
+      if (config.tools && config.tools.length) {
+        lines.push('tools:');
+        for (const tool of config.tools) {
+          lines.push(`  - name: ${tool.name}`);
+          if (tool.description) lines.push(`    description: ${tool.description}`);
+          if (tool.inputSchema) lines.push(`    inputSchema: ${JSON.stringify(tool.inputSchema)}`);
+        }
+      }
+      if (config.behavior && config.behavior.greeting) {
+        lines.push('behavior:');
+        lines.push(`  greeting: ${config.behavior.greeting}`);
+      }
+      return lines.join('\n') + '\n';
+    }
+
+    const DEFAULT_YAML = 'name: Test Agent\ninstructions: You are helpful.\n';
+
+    function downloadYaml(content) {
+      const blob = new Blob([content], { type: 'application/yaml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'agent-config.yaml';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Mount Q after API key validation
+    let qGenerator = null;
+    let isCreating = false;
+
+    function mountQ() {
+      if (qGenerator) return;
+      const mount = document.getElementById('q-mount');
+      mount.textContent = '';
+      mount.style.display = 'block';
+      mount.style.alignItems = '';
+      mount.style.justifyContent = '';
+      mount.style.border = 'none';
+      mount.style.background = 'transparent';
+
+      qGenerator = new window.UniversalAgentConfigGenerator(mount, {
+        schema: ozwellSchema,
+        showEditor: true,
+      });
+
+      mount.addEventListener('config-change', (e) => {
+        currentYaml = configToYaml(e.detail);
+      });
+
+      mount.addEventListener('config-submit', (e) => {
+        currentYaml = e.detail.yaml;
+        createAgent();
+      });
+
+      mount.addEventListener('config-download', (e) => {
+        downloadYaml(e.detail.content);
+      });
+    }
+
+    // Create agent
+    createBtn.addEventListener('click', createAgent);
+
+    async function createAgent() {
+      if (!apiKeyValidated || isCreating) return;
+
+      const yaml = currentYaml || DEFAULT_YAML;
+
+      isCreating = true;
+      createBtn.disabled = true;
+      createBtn.textContent = 'Creating...';
+
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKeyInput.value.trim()}`,
+            'Content-Type': 'application/yaml',
+          },
+          body: yaml,
+        });
+
+        const data = await resp.json();
+
+        if (resp.ok && data.agent_key) {
+          agentKeyValue.textContent = data.agent_key;
+          resultSection.classList.add('visible');
+        } else {
+          alert('Failed to create agent: ' + (data.error?.message || JSON.stringify(data)));
+        }
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+
+      isCreating = false;
+      createBtn.disabled = false;
+      createBtn.textContent = 'Create Agent';
+    }
+
+    // Download YAML
+    downloadBtn.addEventListener('click', () => {
+      downloadYaml(currentYaml || DEFAULT_YAML);
+    });
+
+    // Copy agent key
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(agentKeyValue.textContent);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+    });
+  </script>
+</body>
+</html>
