@@ -125,23 +125,6 @@
       font-size: 14px;
     }
 
-    /* Action buttons */
-    .actions { display: flex; gap: 10px; margin-top: 12px; }
-    .btn {
-      padding: 10px 24px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background 0.2s, opacity 0.2s;
-    }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-primary { background: #0066ff; color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: #0052cc; }
-    .btn-secondary { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
-    .btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
-
     /* Result section */
     .result-section { display: none; }
     .result-section.visible { display: block; }
@@ -197,7 +180,7 @@
         <a href="/" class="back-link">&larr; Back to demos</a>
       </div>
       <h1 class="header-title">Create an Agent</h1>
-      <p class="header-subtitle">Configure your agent visually, then register it with one click.</p>
+      <p class="header-subtitle">Configure your agent visually, then hit Submit to register.</p>
     </header>
 
     <!-- 1. API Key -->
@@ -222,17 +205,7 @@
       </div>
     </div>
 
-    <!-- 3. Actions -->
-    <div class="section">
-      <h3>3. Create your agent</h3>
-      <p>Submit will generate the YAML and register the agent automatically.</p>
-      <div class="actions">
-        <button id="create-btn" class="btn btn-primary" disabled>Create Agent</button>
-        <button id="download-btn" class="btn btn-secondary" disabled>Download YAML</button>
-      </div>
-    </div>
-
-    <!-- 4. Result -->
+    <!-- 3. Result -->
     <div id="result-section" class="section result-section">
       <h3>Your agent key</h3>
       <p>Use this key in the widget embed code to connect to your agent.</p>
@@ -255,8 +228,6 @@
     const validateBtn = document.getElementById('validate-btn');
     const keyStatus = document.getElementById('key-status');
     const qOverlay = document.getElementById('q-overlay');
-    const createBtn = document.getElementById('create-btn');
-    const downloadBtn = document.getElementById('download-btn');
     const resultSection = document.getElementById('result-section');
     const agentKeyValue = document.getElementById('agent-key-value');
     const copyBtn = document.getElementById('copy-btn');
@@ -278,8 +249,6 @@
           keyStatus.textContent = 'Valid key';
           keyStatus.className = 'key-status valid';
           qOverlay.classList.add('hidden');
-          createBtn.disabled = false;
-          downloadBtn.disabled = false;
           mountQ();
         } else {
           keyStatus.textContent = 'Invalid key';
@@ -389,17 +358,12 @@
       });
     }
 
-    // Create agent
-    createBtn.addEventListener('click', createAgent);
-
     async function createAgent() {
       if (!apiKeyValidated || isCreating) return;
 
       const yaml = currentYaml || DEFAULT_YAML;
 
       isCreating = true;
-      createBtn.disabled = true;
-      createBtn.textContent = 'Creating...';
 
       try {
         const resp = await fetch(normalizedBase + '/v1/agents', {
@@ -424,14 +388,7 @@
       }
 
       isCreating = false;
-      createBtn.disabled = false;
-      createBtn.textContent = 'Create Agent';
     }
-
-    // Download YAML
-    downloadBtn.addEventListener('click', () => {
-      downloadYaml(currentYaml || DEFAULT_YAML);
-    });
 
     // Copy agent key
     copyBtn.addEventListener('click', () => {
