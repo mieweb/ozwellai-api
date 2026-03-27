@@ -21,7 +21,13 @@ async function apiKeyAuth(
     request: FastifyRequest,
     reply: FastifyReply
 ): Promise<void> {
-    const token = extractToken(request.headers.authorization);
+    const authorization = request.headers.authorization;
+    if (!authorization || !/^bearer\s+/i.test(authorization)) {
+        reply.code(401).send(createError('Authorization header must use Bearer scheme', 'authentication_error', null, 'missing_api_key'));
+        return;
+    }
+
+    const token = extractToken(authorization);
 
     if (!token) {
         reply.code(401).send(createError('Missing API key', 'authentication_error', null, 'missing_api_key'));

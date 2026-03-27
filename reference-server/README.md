@@ -98,12 +98,7 @@ sequenceDiagram
 
     rect rgb(240, 248, 255)
     Note over Admin,DB: 🔧 Setup Phase
-    Admin->>Server: POST /auth/register (email, password)
-    Server->>DB: Create user
-    Admin->>Server: POST /auth/login
-    Server-->>Admin: Session token
-    Admin->>Server: POST /v1/api-keys (name)
-    Server-->>Admin: Parent key (ozw_...)
+    Note over Admin,DB: Get a parent key (ozw_...) via the API key endpoint
     end
 
     rect rgb(255, 248, 240)
