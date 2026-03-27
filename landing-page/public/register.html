@@ -248,7 +248,7 @@
       keyStatus.className = 'key-status';
 
       try {
-        const resp = await fetch(normalizedBase + '/v1/agents', {
+        const resp = await fetch(normalizedBase + '/v1/keys/validate', {
           headers: { 'Authorization': `Bearer ${key}` }
         });
         if (resp.ok) {
@@ -403,9 +403,13 @@
     }
 
     // Copy agent key
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(agentKeyValue.textContent);
-      copyBtn.textContent = 'Copied!';
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(agentKeyValue.textContent);
+        copyBtn.textContent = 'Copied!';
+      } catch {
+        copyBtn.textContent = 'Failed';
+      }
       setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
     });
   </script>
