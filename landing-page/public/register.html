@@ -232,6 +232,13 @@
     const agentKeyValue = document.getElementById('agent-key-value');
     const copyBtn = document.getElementById('copy-btn');
 
+    // Reset validated state if key is edited after validation
+    apiKeyInput.addEventListener('input', () => {
+      apiKeyValidated = false;
+      keyStatus.textContent = '';
+      keyStatus.className = 'key-status';
+    });
+
     // Validate API key
     validateBtn.addEventListener('click', async () => {
       const key = apiKeyInput.value.trim();
@@ -291,24 +298,29 @@
       ],
     };
 
+    const YAML_SPECIAL_CHARS = /[:#\[\]{}&*!|>'"%@`]/;
+
     // Convert Q config object to Ozwell agent YAML
     function configToYaml(config) {
+      function scalarValue(val) {
+        return YAML_SPECIAL_CHARS.test(val) ? JSON.stringify(val) : val;
+      }
       const lines = [];
-      if (config.name) lines.push(`name: ${config.name}`);
-      if (config.instructions) lines.push(`instructions: >\n  ${config.instructions.replace(/\n/g, '\n  ')}`);
-      if (config.model) lines.push(`model: ${config.model}`);
+      if (config.name) lines.push(`name: ${scalarValue(config.name)}`);
+      if (config.instructions) lines.push(`instructions: |\n  ${config.instructions.replace(/\n/g, '\n  ')}`);
+      if (config.model) lines.push(`model: ${scalarValue(config.model)}`);
       if (config.temperature != null) lines.push(`temperature: ${config.temperature}`);
       if (config.tools && config.tools.length) {
         lines.push('tools:');
         for (const tool of config.tools) {
-          lines.push(`  - name: ${tool.name}`);
-          if (tool.description) lines.push(`    description: ${tool.description}`);
+          lines.push(`  - name: ${scalarValue(tool.name)}`);
+          if (tool.description) lines.push(`    description: ${scalarValue(tool.description)}`);
           if (tool.inputSchema) lines.push(`    inputSchema: ${JSON.stringify(tool.inputSchema)}`);
         }
       }
       if (config.behavior && config.behavior.greeting) {
         lines.push('behavior:');
-        lines.push(`  greeting: ${config.behavior.greeting}`);
+        lines.push(`  greeting: ${scalarValue(config.behavior.greeting)}`);
       }
       return lines.join('\n') + '\n';
     }

@@ -55,7 +55,7 @@
         <div class="method-accordion">
           <!-- Method 1: cURL -->
           <div class="method-tab">
-            <button class="method-tab-header" data-method="curl">
+            <button class="method-tab-header" data-method="curl" aria-expanded="false" aria-controls="method-curl">
               <span class="method-arrow">&#9654;</span> cURL
             </button>
             <div class="method-tab-content" id="method-curl">
@@ -78,7 +78,7 @@ tools:
         address:
           type: string
           description: The new address
-instructions: >
+instructions: |
   You help users fill out forms.
   Call get_form_data to read current field values.
   Call update_form_data to save changes.
@@ -88,7 +88,7 @@ instructions: >
 
           <!-- Method 2: Interactive API -->
           <div class="method-tab">
-            <button class="method-tab-header" data-method="swagger">
+            <button class="method-tab-header" data-method="swagger" aria-expanded="false" aria-controls="method-swagger">
               <span class="method-arrow">&#9654;</span> Interactive API
             </button>
             <div class="method-tab-content" id="method-swagger">
@@ -99,7 +99,7 @@ instructions: >
 
           <!-- Method 3: Visual Builder -->
           <div class="method-tab">
-            <button class="method-tab-header" data-method="builder">
+            <button class="method-tab-header" data-method="builder" aria-expanded="false" aria-controls="method-builder">
               <span class="method-arrow">&#9654;</span> Visual Builder
             </button>
             <div class="method-tab-content" id="method-builder">
@@ -336,13 +336,17 @@ instructions: >
         const isOpen = content.classList.contains('open');
 
         // Close all tabs
+        document.querySelectorAll('.method-tab-header').forEach(b => {
+          b.setAttribute('aria-expanded', 'false');
+          b.querySelector('.method-arrow').textContent = '\u25B6';
+        });
         document.querySelectorAll('.method-tab-content').forEach(c => c.classList.remove('open'));
-        document.querySelectorAll('.method-arrow').forEach(a => { a.textContent = '\u25B6'; });
 
         // Toggle clicked tab
         if (!isOpen) {
           content.classList.add('open');
           arrow.textContent = '\u25BC';
+          btn.setAttribute('aria-expanded', 'true');
 
           // Lazy-load Swagger UI on first open
           if (method === 'swagger' && !swaggerLoaded) {
@@ -354,6 +358,10 @@ instructions: >
 
             const script = document.createElement('script');
             script.src = '/swagger-ui/swagger-ui-bundle.js';
+            const embedEl = document.getElementById('swagger-ui-embed');
+            function showSwaggerError(msg) {
+              embedEl.textContent = 'Could not load API explorer: ' + msg;
+            }
             script.onload = () => {
               const hint = document.querySelector('.swagger-loading-hint');
               if (hint) hint.remove();
@@ -362,22 +370,28 @@ instructions: >
               fetch(normalizedBase + '/openapi.json')
                 .then(r => r.json())
                 .then(spec => {
-                  const filtered = Object.assign({}, spec, {
-                    paths: {
-                      '/v1/agents': { post: spec.paths['/v1/agents'].post }
-                    }
-                  });
-                  SwaggerUIBundle({
-                    dom_id: '#swagger-ui-embed',
-                    spec: filtered,
-                    docExpansion: 'full',
-                    defaultModelsExpandDepth: -1,
-                    tryItOutEnabled: true,
-                    presets: [SwaggerUIBundle.presets.apis],
-                    layout: 'BaseLayout'
-                  });
-                });
+                  try {
+                    const filtered = Object.assign({}, spec, {
+                      paths: {
+                        '/v1/agents': { post: spec.paths['/v1/agents'].post }
+                      }
+                    });
+                    SwaggerUIBundle({
+                      dom_id: '#swagger-ui-embed',
+                      spec: filtered,
+                      docExpansion: 'full',
+                      defaultModelsExpandDepth: -1,
+                      tryItOutEnabled: true,
+                      presets: [SwaggerUIBundle.presets.apis],
+                      layout: 'BaseLayout'
+                    });
+                  } catch (err) {
+                    showSwaggerError(err.message);
+                  }
+                })
+                .catch(err => showSwaggerError(err.message));
             };
+            script.onerror = () => showSwaggerError('failed to load swagger-ui-bundle.js');
             document.head.appendChild(script);
           }
         }
