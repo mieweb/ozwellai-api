@@ -713,15 +713,18 @@ function applyThinkingModeToExisting(mode) {
     } else {
       bubble.style.display = '';
       const content = bubble.querySelector('.thinking-content');
-      const arrow = bubble.querySelector('.thinking-arrow');
       if (!content) return;
+      const arrow = bubble.querySelector('.thinking-arrow');
+      const toggle = bubble.querySelector('[aria-expanded]');
       if (mode === THINKING.EXPANDED) {
         content.classList.remove('collapsed');
         if (arrow) arrow.textContent = '▾';
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
       } else {
         // Peek or Smart: collapse
         content.classList.add('collapsed');
         if (arrow) arrow.textContent = '▸';
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
       }
     }
   });
