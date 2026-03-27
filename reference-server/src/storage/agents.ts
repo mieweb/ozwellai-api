@@ -97,6 +97,7 @@ export class AgentStore {
     private stmtGetOwned: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
+    private _stmtValidateKey: Database.Statement | null = null;
 
     constructor() {
         this.db = getDatabase();
@@ -135,6 +136,19 @@ export class AgentStore {
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
     `);
+    }
+
+    /** Check if a token is a valid parent or agent key (single query) */
+    validateKey(token: string): boolean {
+        if (!this._stmtValidateKey) {
+            this._stmtValidateKey = this.db.prepare(`
+              SELECT 1 FROM api_keys WHERE key = ?
+              UNION ALL
+              SELECT 1 FROM agents WHERE agent_key = ?
+              LIMIT 1
+            `);
+        }
+        return !!this._stmtValidateKey.get(token, token);
     }
 
     /** Look up a parent API key — returns { id, name } or undefined */

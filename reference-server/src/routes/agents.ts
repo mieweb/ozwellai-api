@@ -97,6 +97,36 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         required: ['agent_id']
     };
 
+    // GET /v1/keys/validate — lightweight auth check, accepts both ozw_ and agnt_key-
+    fastify.get('/v1/keys/validate', {
+        schema: {
+            headers: authHeaders,
+            tags: ['Keys'],
+            summary: 'Validate an API key (parent or agent)',
+            response: {
+                200: {
+                    type: 'object',
+                    properties: { valid: { type: 'boolean' } },
+                    required: ['valid']
+                }
+            }
+        },
+    }, async (request, reply) => {
+        const authorization = request.headers.authorization;
+        if (!authorization || !/^bearer\s+/i.test(authorization)) {
+            reply.code(401);
+            return createError('Authorization header must use Bearer scheme', 'authentication_error', null, 'missing_api_key');
+        }
+
+        const token = extractToken(authorization);
+        if (!token || !agentStore.validateKey(token)) {
+            reply.code(401);
+            return createError('Invalid API key', 'authentication_error', null, 'invalid_api_key');
+        }
+
+        return { valid: true };
+    });
+
     // POST /v1/agents (register agent)
     fastify.post<{ Body: string | { yaml: string } }>('/v1/agents', {
         schema: {
