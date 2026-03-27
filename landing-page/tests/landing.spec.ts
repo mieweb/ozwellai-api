@@ -101,7 +101,7 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Check if name was updated (only possible with a valid agent key + Ollama)
     try {
-      await expect(page.locator('#name-input')).not.toHaveValue('Alice Johnson', { timeout: 30000 });
+      await expect(page.locator('#input-name')).not.toHaveValue('Alice Johnson', { timeout: 30000 });
     } catch {
       // Expected in CI or when AI doesn't trigger tool call
       await expect(iframe.getByText('change my name to TestUser')).toBeVisible();

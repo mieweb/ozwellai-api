@@ -1562,7 +1562,7 @@ function handleParentMessage(event) {
   if (!data || typeof data !== 'object') return;
 
   // Handle MCP JSON-RPC tool results from parent
-  if (data.jsonrpc === '2.0' && data.id && mcpPendingToolCalls[data.id]) {
+  if (data.jsonrpc === '2.0' && data.id != null && mcpPendingToolCalls[data.id]) {
     delete mcpPendingToolCalls[data.id];
     console.log('[widget.js] Received MCP tool result from parent:', data.result);
 

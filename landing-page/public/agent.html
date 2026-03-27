@@ -270,6 +270,7 @@
             border: 1px solid #d1d5db;
             border-radius: 20px;
             font-size: 13px;
+            font-family: inherit;
             color: #374151;
             cursor: pointer;
             transition: all 0.2s;
@@ -429,12 +430,10 @@
 
                     <div class="prompts-heading">Try asking</div>
                     <div class="prompt-chips">
-                        <div class="prompt-chip" data-prompt="What's the status of this ticket?">What's the ticket
-                            status?</div>
-                        <div class="prompt-chip" data-prompt="Mark this ticket as in progress">Mark as in progress</div>
-                        <div class="prompt-chip"
-                            data-prompt="Add a note: Checked DB config, port changed in v3.2 migration">Add a note</div>
-                        <div class="prompt-chip" data-prompt="What's the weather today?">Ask something off-topic</div>
+                        <button class="prompt-chip" data-prompt="What's the status of this ticket?">What's the ticket status?</button>
+                        <button class="prompt-chip" data-prompt="Mark this ticket as in progress">Mark as in progress</button>
+                        <button class="prompt-chip" data-prompt="Add a note: Checked DB config, port changed in v3.2 migration">Add a note</button>
+                        <button class="prompt-chip" data-prompt="What's the weather today?">Ask something off-topic</button>
                     </div>
                 </div>
             </div>

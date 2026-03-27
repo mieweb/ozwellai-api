@@ -161,7 +161,7 @@ Enable page interactions using MCP tools (OpenAI function calling format):
 <script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-Now users can type: "update my email to <john@example.com>" and the field updates automatically.
+Now users can type: "update my email to john@example.com" and the field updates automatically.
 
 ## Configuration Options
 
@@ -355,15 +355,17 @@ Or use custom headers for any authentication scheme:
 
 ## MCP Tool Flow
 
-1. User sends message: "update my email to <test@example.com>"
-2. LLM responds with `tool_calls` in response
-3. Widget sends `tool_call` event to parent via postMessage (includes `tool_call_id`)
-4. Parent executes tool (updates input field)
-5. Parent sends `tool_result` back to widget (MUST include same `tool_call_id`)
-6. Widget sends result to LLM with `tool_call_id` for tracking
-7. LLM responds: "Done! I've updated your email to <test@example.com>"
+The widget uses MCP JSON-RPC 2.0 over postMessage. The loader handles the protocol; your page only sees DOM events.
 
-**Important:** The `tool_call_id` is required by the OpenAI function calling protocol. If you don't include it in the `tool_result`, the widget will show an error: "Tool result missing ID"
+1. On load, loader sends `initialize` (JSON-RPC 2.0) to parent, then `tools/list` to discover available tools
+2. User sends message: "update my email to test@example.com"
+3. LLM responds with `tool_calls`
+4. Loader sends `tools/call` JSON-RPC request to parent AND dispatches `ozwell-tool-call` DOM event on `document`
+5. Your event listener calls `e.detail.respond(result)` — loader sends the JSON-RPC response automatically
+6. Widget forwards result to LLM
+7. LLM responds: "Done! I've updated your email to test@example.com"
+
+**Note:** If you're not using `ozwell-loader.js` and are communicating with the widget iframe directly, use raw JSON-RPC 2.0 postMessages matching the `tools/call` request ID.
 
 ## PostMessage Events Reference
 
@@ -376,7 +378,6 @@ Messages sent from the parent page to the widget iframe. All messages require `s
 | Type | Payload | Description |
 |------|---------|-------------|
 | `ozwell:send-message` | `{ content: string }` | Send a chat message programmatically (appears as user message, triggers AI response) |
-| `tool_result` | `{ tool_call_id, result }` | Return result from MCP tool execution |
 | `config` | `{ config: OzwellChatConfig }` | Update widget configuration at runtime |
 | `close` | — | Close/hide the chat widget |
 
@@ -417,16 +418,17 @@ This enables smooth back-and-forth conversations without waiting, and is especia
 
 #### Returning Tool Results
 
-After receiving a `tool_call` event, execute the tool and send results back:
+After receiving an `ozwell-tool-call` DOM event, call `respond()` from the event detail:
 
 ```javascript
-OzwellChat.iframe.contentWindow.postMessage({
-  source: 'ozwell-chat-parent',
-  type: 'tool_result',
-  tool_call_id: toolCallId,  // Must match the tool_call_id from the request
-  result: { success: true, message: 'Action completed' }
-}, '*');
+document.addEventListener('ozwell-tool-call', (e) => {
+  const { name, arguments: args, respond } = e.detail;
+  // execute the tool, then:
+  respond({ success: true, message: 'Action completed' });
+});
 ```
+
+The loader automatically sends the correct JSON-RPC 2.0 response back to the widget.
 
 ### Widget → Parent Messages
 
