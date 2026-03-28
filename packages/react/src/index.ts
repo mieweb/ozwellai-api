@@ -25,6 +25,7 @@ export type {
   OzwellError,
   OzwellChatAPI,
   OzwellWidgetMessage,
+  OzwellAssistantResponseMessage,
   OzwellParentMessage,
   OzwellToolCallMessage,
   OzwellToolResultMessage,
