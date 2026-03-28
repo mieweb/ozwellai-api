@@ -219,8 +219,12 @@
       showUnreadNotification();
     }
 
-    // Dispatch custom event for external listeners (signal only, no message content)
-    document.dispatchEvent(new CustomEvent('ozwell-chat-unread'));
+    // Dispatch custom event for external listeners (signal only, no message content).
+    // Disabled by default to honor privacy guidance; integrators
+    // must explicitly opt in via config.exposeUnreadEvent === true.
+    if (config.exposeUnreadEvent === true) {
+      document.dispatchEvent(new CustomEvent('ozwell-chat-unread'));
+    }
   }
 
   /**

@@ -475,6 +475,7 @@ const state = {
   queuedMessage: null, // Message queued while LLM is responding
   queuedMessageEl: null, // DOM element for queued message bubble
   isEditingQueued: false, // Whether user is editing the queued message
+  parentOrigin: null, // Pinned parent origin from first validated config message
 };
 
 console.log('[widget.js] Widget initializing...');
@@ -485,6 +486,15 @@ const messagesEl = document.getElementById('messages');
 const formEl = document.getElementById('chat-form');
 const inputEl = document.getElementById('chat-input');
 const submitButton = document.querySelector('.chat-submit');
+
+/**
+ * Post a message to the parent frame using the pinned origin when available.
+ * Falls back to '*' only before the first config handshake completes.
+ */
+function postToParent(message) {
+  const targetOrigin = state.parentOrigin || '*';
+  window.parent.postMessage(message, targetOrigin);
+}
 
 function setStatus(text, processing = false) {
   if (statusEl) {
@@ -1040,13 +1050,13 @@ async function sendMessageNonStreaming(text, tools) {
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Send tool call to parent via postMessage
-            window.parent.postMessage({
+            postToParent({
               source: 'ozwell-chat-widget',
               type: 'tool_call',
               tool: toolName,
               payload: args,
               tool_call_id: toolCall.id
-            }, '*');
+            });
 
             // No system messages - tools are invisible to end users
           } catch (error) {
@@ -1370,13 +1380,13 @@ async function sendMessageStreaming(text, tools) {
             state.activeToolCalls[toolName] = toolCall.id;
 
             // Send tool call to parent via postMessage
-            window.parent.postMessage({
+            postToParent({
               source: 'ozwell-chat-widget',
               type: 'tool_call',
               tool: toolName,
               tool_call_id: toolCall.id,  // Include ID for parent logging/tracking
               payload: args
-            }, '*');
+            });
           } catch (error) {
             console.error('[widget.js] Error parsing tool arguments:', error);
             // Errors are logged to console, not shown to user unless debug mode
@@ -1403,11 +1413,11 @@ async function sendMessageStreaming(text, tools) {
       }
 
       // Notify parent of assistant response (signal only — no message content)
-      window.parent.postMessage({
+      postToParent({
         source: 'ozwell-chat-widget',
         type: 'assistant_response',
         hadToolCalls: false
-      }, '*');
+      });
 
       // Send any queued message now that LLM is done (no tool calls pending)
       if (state.queuedMessage) {
@@ -1540,11 +1550,11 @@ async function continueConversationWithToolResult(result) {
     addMessage('assistant', assistantContent || '(no response)');
 
     // Notify parent of assistant response (signal only — no message content)
-    window.parent.postMessage({
+    postToParent({
       source: 'ozwell-chat-widget',
       type: 'assistant_response',
       hadToolCalls: false
-    }, '*');
+    });
 
     setStatus('', false);
   } catch (error) {
@@ -1567,6 +1577,8 @@ function handleSubmit(event) {
 }
 
 function handleParentMessage(event) {
+  // Only accept messages from the parent frame
+  if (event.source !== window.parent) return;
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
@@ -1588,11 +1600,11 @@ function handleParentMessage(event) {
       addMessage('assistant', result.message);
 
       // Notify parent of assistant response (signal only — no message content)
-      window.parent.postMessage({
+      postToParent({
         source: 'ozwell-chat-widget',
         type: 'assistant_response',
         hadToolCalls: false
-      }, '*');
+      });
 
       // After displaying the tool result message, send any queued user message (if present)
       if (state.queuedMessage) {
@@ -1647,22 +1659,27 @@ function handleParentMessage(event) {
   if (data.source !== 'ozwell-chat-parent') return;
 
   if (data.type === 'config' && data.payload?.config) {
+    // Pin the parent origin from the first validated config message
+    if (!state.parentOrigin && event.origin) {
+      state.parentOrigin = event.origin;
+      console.log('[widget.js] Pinned parent origin:', state.parentOrigin);
+    }
     applyConfig(data.payload.config);
   }
 
   if (data.type === 'close') {
-    window.parent.postMessage({
+    postToParent({
       source: 'ozwell-chat-widget',
       type: 'closed',
-    }, '*');
+    });
   }
 }
 
 function notifyReady() {
-  window.parent.postMessage({
+  postToParent({
     source: 'ozwell-chat-widget',
     type: 'ready',
-  }, '*');
+  });
 }
 
 window.addEventListener('message', handleParentMessage);

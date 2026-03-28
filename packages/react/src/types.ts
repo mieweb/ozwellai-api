@@ -281,8 +281,18 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'closed' | 'opened' | 'tool_call' | 'user-share' | 'error';
+  type: 'ready' | 'request-config' | 'closed' | 'opened' | 'tool_call' | 'assistant_response' | 'user-share' | 'error';
   payload?: unknown;
+}
+
+/**
+ * Assistant response notification from widget (signal only, no message content)
+ */
+export interface OzwellAssistantResponseMessage {
+  source: 'ozwell-chat-widget';
+  type: 'assistant_response';
+  /** Whether the response included tool calls */
+  hadToolCalls: boolean;
 }
 
 /**
