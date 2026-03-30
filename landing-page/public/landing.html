@@ -158,7 +158,7 @@ instructions: |
     <header class="header">
       <h1 class="header-title">Ozwell Chatbot Client Demo</h1>
       <p class="header-subtitle">
-        Embedded chat with tool execution via iframe-sync and postMessage
+        Embedded chat with tool execution via MCP JSON-RPC and postMessage
       </p>
       <div class="demo-links">
         <a href="https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48" target="_blank" class="demo-link">
@@ -223,14 +223,11 @@ instructions: |
             Widget->>Widget: Parse tool calls from response
             end
 
-            Widget->>Handler: 4. postMessage: tool_call
+            Widget->>Handler: 4. MCP JSON-RPC: tools/call
             Note over Widget,Handler: Only tool calls cross boundary
             Handler->>Handler: 5. Execute tool (update form)
 
-            Handler-->>Widget: 6. postMessage: tool_result
-
-            Browser->>Widget: 7. iframe-sync: state update
-            Note over Browser,Widget: Widget always has page context
+            Handler-->>Widget: 6. MCP JSON-RPC response
           </div>
         </div>
       </div>
@@ -259,7 +256,7 @@ instructions: |
         <!-- Event Log -->
         <div class="event-log-container">
           <h3>Live Event Log</h3>
-          <p class="event-log-hint">Watch iframe-sync and postMessage in action</p>
+          <p class="event-log-hint">Watch MCP tool calls and postMessage in action</p>
           <div id="event-log" class="event-log"></div>
         </div>
       </div>
@@ -267,7 +264,7 @@ instructions: |
 
     <!-- Footer -->
     <footer class="footer">
-      Built with: Fastify • iframe-sync • postMessage • Mock AI
+      Built with: Fastify • MCP JSON-RPC • postMessage • Mock AI
     </footer>
   </div>
 
