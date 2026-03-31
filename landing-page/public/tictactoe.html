@@ -88,7 +88,9 @@
       // model and system prompt are managed by the agent definition (server-side)
       apiKey: '__TICTACTOE_AGENT_KEY__', // injected from TICTACTOE_AGENT_KEY env var
       welcomeMessage: 'Click any square to play, or type moves like "play center". I\'m O, you\'re X!',
-      debug: false // Disable debug mode for clean game experience
+      debug: false, // Disable debug mode for clean game experience
+      thinkingEnabled: true,
+      thinkingDefaultMode: 2
       // tools are auto-discovered from the agent config via MCP handshake
     };
 

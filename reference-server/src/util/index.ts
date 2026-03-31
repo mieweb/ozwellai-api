@@ -241,7 +241,7 @@ export async function isOllamaAvailable(): Promise<boolean> {
   
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     
     const response = await fetch(`${ollamaUrl}/api/tags`, {
       signal: controller.signal

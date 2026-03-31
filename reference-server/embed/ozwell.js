@@ -47,16 +47,21 @@ body {
   flex-direction: column;
 }
 
-.status {
-  padding: 8px 16px;
-  font-size: 12px;
-  background: #f9fafb;
-  color: transparent;
-  border-bottom: 1px solid #e5e7eb;
-  min-height: 32px;
+.status-strip {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  padding: 4px 14px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  min-height: 32px;
+}
+
+.status {
+  font-size: 12px;
+  color: transparent;
+  display: flex;
+  align-items: center;
 }
 
 .status.status--processing {
@@ -73,6 +78,61 @@ body {
   0%, 20% { content: '●'; }
   40% { content: '●●'; }
   60%, 100% { content: '●●●'; }
+}
+
+/* Reasoning mode capsule & segmented control */
+.reasoning-capsule {
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #e5e7eb;
+  user-select: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.reasoning-capsule:hover {
+  background: #d1d5db;
+}
+
+.reasoning-seg {
+  display: none;
+  background: #e5e7eb;
+  border-radius: 12px;
+  padding: 2px;
+  gap: 2px;
+  font-size: 11px;
+}
+
+.reasoning-seg.open {
+  display: inline-flex;
+}
+
+.reasoning-seg-btn {
+  padding: 3px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.reasoning-seg-btn:hover {
+  color: #374151;
+  background: #d1d5db;
+}
+
+.reasoning-seg-btn.active {
+  background: #fff;
+  color: #1f2937;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .messages {
@@ -365,13 +425,89 @@ body {
   max-height: 300px;
   overflow-y: auto;
 }
+
+/* Thinking / Reasoning Bubble */
+.thinking-bubble {
+  align-self: flex-start;
+  max-width: 85%;
+  margin-bottom: 4px;
+}
+
+.thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  background: #f3f0ff;
+  border: 1px solid #e0d8ff;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #8b5cf6;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.thinking-toggle:hover {
+  background: #ede9fe;
+}
+
+.thinking-toggle .thinking-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 10px;
+}
+
+.thinking-toggle .thinking-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.thinking-toggle .thinking-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #8b5cf6;
+  border-radius: 50%;
+  animation: thinkingPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes thinkingPulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.thinking-content {
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-left: 2px solid #c4b5fd;
+  border-radius: 0 10px 10px 0;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+  max-height: 300px;
+  opacity: 1;
+}
+
+.thinking-content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 14px;
+  margin-top: 0;
+}
   `;
   document.head.appendChild(style);
 
   // Inject HTML structure
   document.body.innerHTML = `
     <div class="chat-container">
-      <div id="status" class="status">Connecting...</div>
+      <div class="status-strip">
+        <div id="status" class="status">Connecting...</div>
+        <div id="reasoning-controls"></div>
+      </div>
       <div id="messages" class="messages"></div>
       <form id="chat-form" class="chat-form">
         <input
@@ -466,6 +602,8 @@ const state = {
     // model is optional - server chooses default if not specified
     endpoint: '/v1/chat/completions',
     debug: false, // Debug mode for developers
+    thinkingEnabled: false, // Show reasoning/thinking tokens from models
+    thinkingDefaultMode: 2, // 0=None, 1=Peek, 2=Smart (expand-then-collapse), 3=Expanded
   },
   messages: [],
   sending: false,
@@ -491,7 +629,7 @@ function trackPendingToolCall(id) {
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
   const extConf = window.OZWELL_CONFIG;
-  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage'];
+  const keys = ['endpoint', 'apiKey', 'openaiApiKey', 'title', 'placeholder', 'model', 'system', 'tools', 'debug', 'welcomeMessage', 'thinkingEnabled', 'thinkingDefaultMode'];
   for (const k of keys) {
     if (extConf[k] !== undefined) state.config[k] = extConf[k];
   }
@@ -506,6 +644,8 @@ const messagesEl = document.getElementById('messages');
 const formEl = document.getElementById('chat-form');
 const inputEl = document.getElementById('chat-input');
 const submitButton = document.querySelector('.chat-submit');
+const reasoningControlsEl = document.getElementById('reasoning-controls');
+let lastAssistantMessage = '';
 
 /**
  * Post a message to the parent frame using the pinned origin when available.
@@ -514,6 +654,80 @@ const submitButton = document.querySelector('.chat-submit');
 function postToParent(message) {
   const targetOrigin = state.parentOrigin || '*';
   window.parent.postMessage(message, targetOrigin);
+}
+
+// Thinking mode constants — used for thinkingDefaultMode config value
+const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 };
+// Reasoning mode labels: index maps to thinkingDefaultMode values
+const REASONING_MODES = ['None', 'Peek', 'Smart', 'Expanded'];
+
+/**
+ * Build the reasoning capsule + segmented control in the status strip.
+ * Only shown when thinkingEnabled is true.
+ */
+function initReasoningControls() {
+  if (!reasoningControlsEl || !state.config.thinkingEnabled) return;
+  reasoningControlsEl.innerHTML = '';
+
+  const capsule = document.createElement('button');
+  capsule.className = 'reasoning-capsule';
+  capsule.title = 'Controls how AI reasoning is displayed';
+  capsule.textContent = `Reasoning: ${REASONING_MODES[state.config.thinkingDefaultMode] || 'Smart'}`;
+
+  const seg = document.createElement('div');
+  seg.className = 'reasoning-seg';
+
+  REASONING_MODES.forEach((label, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'reasoning-seg-btn' + (idx === state.config.thinkingDefaultMode ? ' active' : '');
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('.reasoning-seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.config.thinkingDefaultMode = idx;
+      capsule.textContent = `Reasoning: ${label}`;
+      seg.classList.remove('open');
+      capsule.style.display = '';
+      applyThinkingModeToExisting(idx);
+      console.log(`[widget.js] Reasoning mode changed to: ${label} (${idx})`);
+    });
+    seg.appendChild(btn);
+  });
+
+  capsule.addEventListener('click', () => {
+    capsule.style.display = 'none';
+    seg.classList.add('open');
+  });
+
+  reasoningControlsEl.appendChild(capsule);
+  reasoningControlsEl.appendChild(seg);
+}
+
+/** Apply a mode change to all existing thinking bubbles in the chat */
+function applyThinkingModeToExisting(mode) {
+  if (!messagesEl) return;
+  const bubbles = messagesEl.querySelectorAll('.thinking-bubble');
+  bubbles.forEach(bubble => {
+    if (mode === THINKING.NONE) {
+      bubble.style.display = 'none';
+    } else {
+      bubble.style.display = '';
+      const content = bubble.querySelector('.thinking-content');
+      if (!content) return;
+      const arrow = bubble.querySelector('.thinking-arrow');
+      const toggle = bubble.querySelector('[aria-expanded]');
+      if (mode === THINKING.EXPANDED) {
+        content.classList.remove('collapsed');
+        if (arrow) arrow.textContent = '▾';
+        if (toggle) toggle.setAttribute('aria-expanded', 'true');
+      } else {
+        // Peek or Smart: collapse
+        content.classList.add('collapsed');
+        if (arrow) arrow.textContent = '▸';
+        if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      }
+    }
+  });
 }
 
 function setStatus(text, processing = false) {
@@ -710,11 +924,14 @@ function applyConfig(config) {
   }
 
   setStatus('', false);
+
+  // Initialize reasoning controls if thinking is enabled
+  initReasoningControls();
 }
 
 function buildMessages() {
-  // Just return message history - system prompt is handled by buildSystemPrompt()
-  return [...state.messages];
+  // Strip thinking field — it's for UI display only, not re-sent to the model
+  return state.messages.map(({ thinking, ...rest }) => rest);
 }
 
 function buildSystemPrompt() {
@@ -946,6 +1163,99 @@ function updateToolExecutionResult(toolCallId, result) {
       }
     }
   }
+}
+
+/**
+ * Create a thinking bubble element for displaying reasoning tokens.
+ * @param {number} mode - Display mode (0=hide, 1=collapsed, 2=expand-then-collapse, 3=always-expanded)
+ * @returns {{ container: HTMLElement, contentEl: HTMLElement, update: Function, finish: Function }}
+ */
+function createThinkingBubble(mode) {
+  const container = document.createElement('div');
+  container.className = 'thinking-bubble';
+  const startTime = Date.now();
+
+  const toggle = document.createElement('div');
+  toggle.className = 'thinking-toggle';
+
+  const dot = document.createElement('span');
+  dot.className = 'thinking-dot';
+
+  const label = document.createElement('span');
+  label.textContent = 'Thinking';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'thinking-arrow';
+  arrow.textContent = mode === THINKING.PEEK ? '▸' : '▾';
+
+  toggle.setAttribute('role', 'button');
+  toggle.setAttribute('tabindex', '0');
+  toggle.setAttribute('aria-expanded', mode !== THINKING.PEEK ? 'true' : 'false');
+  toggle.appendChild(dot);
+  toggle.appendChild(label);
+  toggle.appendChild(arrow);
+
+  const contentEl = document.createElement('div');
+  contentEl.className = 'thinking-content';
+  // Start collapsed or expanded based on mode
+  if (mode === THINKING.PEEK) {
+    contentEl.classList.add('collapsed');
+  }
+
+  const handleToggle = () => {
+    const isCollapsed = contentEl.classList.contains('collapsed');
+    if (isCollapsed) {
+      contentEl.classList.remove('collapsed');
+      arrow.textContent = '▾';
+      toggle.setAttribute('aria-expanded', 'true');
+    } else {
+      contentEl.classList.add('collapsed');
+      arrow.textContent = '▸';
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  };
+  toggle.addEventListener('click', handleToggle);
+  toggle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggle(); }
+  });
+
+  container.appendChild(toggle);
+  container.appendChild(contentEl);
+
+  return {
+    container,
+    contentEl,
+    update(newText) {
+      // Use direct textContent — thinking content replaces fully since it accumulates
+      contentEl.textContent = newText;
+    },
+    finish() {
+      // Calculate duration
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      const durationText = elapsed > 0 ? ` for ${elapsed}s` : '';
+
+      // Stop the pulsing dot
+      dot.remove();
+      label.textContent = `Thought${durationText}`;
+
+      // Smart: collapse on answer arrival
+      if (mode === THINKING.SMART) {
+        contentEl.classList.add('collapsed');
+        arrow.textContent = '▸';
+      }
+    }
+  };
+}
+
+// Debounced scroll-to-bottom using rAF to avoid per-chunk reflows
+let _scrollRafPending = false;
+function scrollToBottom() {
+  if (_scrollRafPending) return;
+  _scrollRafPending = true;
+  requestAnimationFrame(() => {
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+    _scrollRafPending = false;
+  });
 }
 
 async function sendMessage(text) {
@@ -1191,10 +1501,12 @@ function parseToolCallsFromContent(content) {
   }
 }
 
-async function sendMessageStreaming(text, tools) {
+async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
   setStatus('Processing...', true);
   state.sending = true;
   formEl?.classList.add('is-sending');
+  lastAssistantMessage = '';
+  let _needsThinkingRetry = false;
 
   // Build system prompt
   const systemPrompt = buildSystemPrompt();
@@ -1250,7 +1562,11 @@ async function sendMessageStreaming(text, tools) {
     const decoder = new TextDecoder();
     let buffer = '';
     let fullContent = '';
+    let fullThinking = '';
     let accumulatedToolCalls = []; // Accumulate tool calls from deltas
+    let thinkingBubble = null; // Thinking bubble UI (created on first thinking token)
+    // Capture mode at stream start so mid-stream toggle doesn't cause inconsistency
+    const thinkingMode = state.config.thinkingDefaultMode ?? THINKING.SMART;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -1271,11 +1587,31 @@ async function sendMessageStreaming(text, tools) {
 
             if (!delta) continue;
 
+            // Handle thinking/reasoning tokens
+            if (delta.thinking && state.config.thinkingEnabled && thinkingMode !== THINKING.NONE) {
+              fullThinking += delta.thinking;
+
+              // Create thinking bubble on first token
+              if (!thinkingBubble) {
+                thinkingBubble = createThinkingBubble(thinkingMode);
+                // Insert thinking bubble before the assistant message element
+                messagesEl?.insertBefore(thinkingBubble.container, assistantMsgEl);
+              }
+              thinkingBubble.update(fullThinking);
+              scrollToBottom();
+            }
+
             // Handle text content (streaming)
             if (delta.content) {
               fullContent += delta.content;
               assistantMsgEl.textContent = fullContent;
-              messagesEl.scrollTop = messagesEl.scrollHeight;
+              scrollToBottom();
+
+              // Finish thinking bubble when content starts arriving
+              if (thinkingBubble) {
+                thinkingBubble.finish();
+                thinkingBubble = null;
+              }
             }
 
             // Handle tool calls (accumulate from deltas)
@@ -1316,6 +1652,12 @@ async function sendMessageStreaming(text, tools) {
           }
         }
       }
+    }
+
+    // Finish thinking bubble if stream ended without content arriving
+    if (thinkingBubble) {
+      thinkingBubble.finish();
+      thinkingBubble = null;
     }
 
     // Check if we have tool calls from deltas
@@ -1398,28 +1740,58 @@ async function sendMessageStreaming(text, tools) {
       // Skip notification - tool execution flow will notify when complete
     } else {
       // No tool calls, just text response
-      const assistantMessage = {
-        role: 'assistant',
-        content: fullContent || '(no response)',
-      };
-      state.messages.push(assistantMessage);
+      let displayContent = fullContent;
+      const trimmedContent = displayContent.trim();
+      const trimmedThinking = fullThinking.trim();
 
-      // Update placeholder if empty
-      if (!fullContent.trim()) {
+      // Thinking-only response (no content, no tool calls) — retry with a cap
+      if (!trimmedContent && trimmedThinking) {
+        const MAX_THINKING_RETRIES = 3;
+        assistantMsgEl?.remove();
+        // Also remove the orphaned thinking bubble
+        const lastThinking = messagesEl?.querySelector('.thinking-bubble:last-of-type');
+        if (lastThinking) lastThinking.remove();
+
+        if (_thinkingRetryCount < MAX_THINKING_RETRIES) {
+          console.log(`[widget.js] Thinking-only response, retrying (${_thinkingRetryCount + 1}/${MAX_THINKING_RETRIES})`);
+          // Flag retry — handled after finally to avoid state.sending race
+          _needsThinkingRetry = true;
+        } else {
+          // Exhausted retries — show user-friendly message
+          console.warn('[widget.js] Thinking-only responses exhausted retries');
+          addMessage('assistant', 'The model is not responding right now. Please try again or refresh the page.');
+          lastAssistantMessage = '';
+        }
+      } else if (!trimmedContent) {
         assistantMsgEl.textContent = '(no response)';
+        lastAssistantMessage = '';
+      } else {
+        lastAssistantMessage = displayContent;
       }
 
-      // Notify parent of assistant response (signal only — no message content)
-      postToParent({
-        source: 'ozwell-chat-widget',
-        type: 'assistant_response',
-        hadToolCalls: false
-      });
+      if (!_needsThinkingRetry) {
+        // Only push to history if we have actual content
+        if (trimmedContent) {
+          const assistantMessage = {
+            role: 'assistant',
+            content: displayContent,
+            ...(trimmedThinking ? { thinking: fullThinking } : {}),
+          };
+          state.messages.push(assistantMessage);
+        }
 
-      // Send any queued message now that LLM is done (no tool calls pending)
-      if (state.queuedMessage) {
-        // Use setTimeout to let the UI update first
-        setTimeout(() => sendQueuedMessage(), 100);
+        // Notify parent of assistant response (signal only — no message content)
+        postToParent({
+          source: 'ozwell-chat-widget',
+          type: 'assistant_response',
+          hadToolCalls: false
+        });
+
+        // Send any queued message now that LLM is done (no tool calls pending)
+        if (state.queuedMessage) {
+          // Use setTimeout to let the UI update first
+          setTimeout(() => sendQueuedMessage(), 100);
+        }
       }
     }
 
@@ -1435,6 +1807,11 @@ async function sendMessageStreaming(text, tools) {
   } finally {
     state.sending = false;
     formEl?.classList.remove('is-sending');
+  }
+
+  // Retry after finally so state.sending is properly cleaned up first
+  if (_needsThinkingRetry) {
+    return sendMessageStreaming('', tools, _thinkingRetryCount + 1);
   }
 }
 
@@ -1590,12 +1967,9 @@ function handleParentMessage(event) {
       if (state.queuedMessage) {
         sendQueuedMessage();
       }
-    } else if (result.error) {
-      // Error case
-      addMessage('system', `Error: ${result.error}`);
     } else {
-      // Get tool - raw data returned, need to send back to LLM for final answer
-      console.log('[widget.js] Raw data tool result detected, continuing conversation with LLM');
+      // No display message — send tool result back to LLM for continuation
+      console.log('[widget.js] Sending tool result to LLM');
 
       // Get tool_call_id from parent response (required for OpenAI protocol)
       if (!toolCallId) {
