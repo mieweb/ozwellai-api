@@ -120,6 +120,88 @@ async function buildServer() {
     return fastify.swagger();
   });
 
+  // Root route with content negotiation
+  fastify.get('/', async (request, reply) => {
+    const acceptHeader = request.headers.accept || '';
+
+    // If browser request (accepts HTML), serve landing page
+    if (acceptHeader.includes('text/html')) {
+      reply.type('text/html').send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OzwellAI Reference Server</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1e1e1e;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #e0e0e0;
+    }
+    .container { max-width: 400px; width: 100%; padding: 2rem; }
+    h1 { font-size: 1.25rem; font-weight: 500; margin-bottom: 0.25rem; color: #fff; }
+    .subtitle { color: #888; font-size: 0.875rem; margin-bottom: 2rem; }
+    .links { display: flex; flex-direction: column; gap: 0.75rem; }
+    a {
+      display: block;
+      padding: 0.75rem 1rem;
+      background: #2a2a2a;
+      border-radius: 6px;
+      color: #e0e0e0;
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    a:hover { background: #333; }
+    .desc { color: #666; margin-left: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>OzwellAI Reference Server</h1>
+    <p class="subtitle">OpenAI-compatible API</p>
+    <div class="links">
+      <a href="/docs">API Documentation<span class="desc">Swagger UI</span></a>
+      <a href="/openapi.json">OpenAPI Spec<span class="desc">JSON</span></a>
+      <a href="/health">Health Check</a>
+      <a href="https://ozwellai-embedtest.opensource.mieweb.org/" target="_blank" rel="noopener">Demo</a>
+      <a href="https://github.com/mieweb/ozwellai-api" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</body>
+</html>
+      `);
+      return;
+    }
+
+    // For API clients, return JSON metadata
+    return {
+      name: 'OzwellAI Reference Server',
+      version: '1.0.0',
+      description: 'OpenAI-compatible API reference implementation',
+      endpoints: {
+        documentation: '/docs',
+        openapi_spec: '/openapi.json',
+        health: '/health',
+      },
+      api: {
+        models: 'GET /v1/models',
+        chat_completions: 'POST /v1/chat/completions',
+        embeddings: 'POST /v1/embeddings',
+        files: '/v1/files',
+      },
+      links: {
+        github: 'https://github.com/mieweb/ozwellai-api',
+        demos: 'https://ozwellai-embedtest.opensource.mieweb.org/',
+      },
+    };
+  });
+
   // Allow widget to be embedded on any website (CSP frame-ancestors)
   fastify.addHook('onSend', async (request, reply) => {
     if (request.url.startsWith('/embed/')) {
