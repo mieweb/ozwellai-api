@@ -195,9 +195,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid or missing API key. Use an agent key (agnt_key-...) or parent API key (ozw_...).', 'invalid_request_error');
     }
 
-    // Validate token exists in database (skip for ollama sentinel — removed in #86)
+    // Validate token exists in database
     const token = extractToken(request.headers.authorization);
-    if (token !== 'ollama' && !agentStore.validateKey(token)) {
+    if (!agentStore.validateKey(token)) {
       reply.code(401);
       return createError('API key not found. Verify the key exists in the database.', 'invalid_request_error');
     }

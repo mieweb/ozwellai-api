@@ -195,13 +195,16 @@ export function createError(message: string, type: string, param: string | null 
 }
 
 /**
- * Validate bearer token
+ * Validate bearer token.
+ * Only two token types are accepted:
+ *   - Agent keys: agnt_key-... (scoped to a specific agent)
+ *   - Parent API keys: ozw_... (full completions access)
  */
 export function validateAuth(authorization: string | undefined): boolean {
   if (!authorization) return false;
-  if (!authorization.startsWith('Bearer ')) return false;
-  const token = authorization.substring(7);
-  return token.startsWith(KEY_PREFIX) || token.startsWith(AGENT_KEY_PREFIX) || token === 'ollama';
+  const token = extractToken(authorization);
+  if (!token) return false;
+  return token.startsWith(KEY_PREFIX) || token.startsWith(AGENT_KEY_PREFIX);
 }
 
 /** Check if a bearer token is an agent key */

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aria — Ozwell Agent Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #fafafa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header — same family as tic-tac-toe / landing */
+        .header {
+            text-align: center;
+            color: #1a1a1a;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .back-link-container {
+            position: absolute;
+            left: 0;
+            top: 10px;
+        }
+
+        .back-link {
+            color: #0066ff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .back-link:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        .header-title {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.025em;
+        }
+
+        .header-subtitle {
+            font-size: 16px;
+            color: #6b7280;
+        }
+
+        /* Two-column layout */
+        .demo-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .demo-left,
+        .demo-right {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            border: none;
+            box-shadow: none;
+        }
+
+        /* Agent identity bar */
+        .agent-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 24px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .agent-avatar {
+            font-size: 48px;
+            line-height: 1;
+        }
+
+        .agent-meta {
+            flex: 1;
+        }
+
+        .agent-name {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .agent-tagline {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+
+        /* Ticket panel */
+        .ticket-panel h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #1a1a1a;
+        }
+
+        .ticket-card {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .ticket-id {
+            font-size: 12px;
+            color: #9ca3af;
+            font-family: monospace;
+            margin-bottom: 8px;
+        }
+
+        .ticket-subject {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+        }
+
+        .ticket-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-top: 1px solid #e5e7eb;
+            font-size: 14px;
+        }
+
+        .ticket-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .ticket-value {
+            color: #1a1a1a;
+        }
+
+        .ticket-description {
+            margin-top: 12px;
+            padding: 12px;
+            background: #fff;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-open {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-in-progress {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-resolved {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-closed {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        /* Notes section */
+        .ticket-notes {
+            margin-top: 16px;
+        }
+
+        .ticket-notes h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .note-entry {
+            padding: 8px 12px;
+            background: #fff;
+            border-left: 3px solid #0066ff;
+            border-radius: 0 6px 6px 0;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #374151;
+        }
+
+        .note-time {
+            font-size: 11px;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+
+        .no-notes {
+            font-size: 13px;
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        /* Visual flash for updates */
+        .flash {
+            animation: flashHighlight 0.6s ease-out;
+        }
+
+        @keyframes flashHighlight {
+            0% {
+                background: #dbeafe;
+            }
+
+            100% {
+                background: #f9fafb;
+            }
+        }
+
+        /* Prompt chips */
+        .prompts-heading {
+            font-size: 14px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+
+        .prompt-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .prompt-chip {
+            padding: 8px 16px;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 20px;
+            font-size: 13px;
+            font-family: inherit;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .prompt-chip:hover {
+            border-color: #0066ff;
+            color: #0066ff;
+            background: #eff6ff;
+        }
+
+        /* Event log */
+        .event-log-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .event-log-container h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #1a1a1a;
+        }
+
+        .event-log-hint {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+
+        .event-log {
+            flex: 1;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-y: auto;
+            max-height: 500px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 12px;
+            color: #374151;
+        }
+
+        .event-log:empty::before {
+            content: 'No events yet. Open the chat to see lifecycle events.';
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .log-entry {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            line-height: 1.4;
+        }
+
+        .log-time {
+            font-weight: 600;
+            margin-right: 8px;
+            color: #6b7280;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+            padding: 16px;
+        }
+
+        .footer a {
+            color: #0066ff;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 1024px) {
+            .demo-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .header {
+                padding-top: 0;
+            }
+
+            .back-link-container {
+                position: static;
+                text-align: left;
+                margin-bottom: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <header class="header">
+            <div class="back-link-container">
+                <a href="/" class="back-link">← Back to Main Demo</a>
+            </div>
+            <h1 class="header-title">Aria — Agent Demo</h1>
+            <p class="header-subtitle">
+                Manages support tickets — check status, update progress, add notes
+            </p>
+        </header>
+
+        <div class="demo-content">
+            <!-- Left Side: Agent + Ticket -->
+            <div class="demo-left">
+                <div class="agent-header">
+                    <div class="agent-avatar">👩‍💻</div>
+                    <div class="agent-meta">
+                        <div class="agent-name">Aria</div>
+                        <div class="agent-tagline">Support ticket management</div>
+                    </div>
+                </div>
+
+                <div class="ticket-panel">
+                    <h3>Support Ticket</h3>
+                    <div class="ticket-card" id="ticket-card">
+                        <div class="ticket-id">TKT-1042</div>
+                        <div class="ticket-subject" id="ticket-subject">Cannot connect to database after upgrade</div>
+                        <div class="ticket-row">
+                            <span class="ticket-label">Status</span>
+                            <span class="ticket-value"><span class="status-badge status-open"
+                                    id="ticket-status">Open</span></span>
+                        </div>
+                        <div class="ticket-row">
+                            <span class="ticket-label">Priority</span>
+                            <span class="ticket-value" id="ticket-priority">High</span>
+                        </div>
+                        <div class="ticket-row">
+                            <span class="ticket-label">Submitted by</span>
+                            <span class="ticket-value">jamie@example.com</span>
+                        </div>
+                        <div class="ticket-row">
+                            <span class="ticket-label">Created</span>
+                            <span class="ticket-value">Mar 9, 2026 — 10:23 AM</span>
+                        </div>
+                        <div class="ticket-description" id="ticket-description">
+                            After upgrading to v3.2, the app throws "ECONNREFUSED 127.0.0.1:5432" on startup.
+                            I've verified PostgreSQL is running and the credentials haven't changed.
+                            Rolling back to v3.1 fixes it. Seems like a config migration issue.
+                        </div>
+                        <div class="ticket-notes" id="ticket-notes">
+                            <h4>Notes</h4>
+                            <div class="no-notes" id="no-notes-msg">No notes yet — ask the agent to add one.</div>
+                        </div>
+                    </div>
+
+                    <div class="prompts-heading">Try asking</div>
+                    <div class="prompt-chips">
+                        <button class="prompt-chip" data-prompt="What's the status of this ticket?">What's the ticket status?</button>
+                        <button class="prompt-chip" data-prompt="Mark this ticket as in progress">Mark as in progress</button>
+                        <button class="prompt-chip" data-prompt="Add a note: Checked DB config, port changed in v3.2 migration">Add a note</button>
+                        <button class="prompt-chip" data-prompt="What's the weather today?">Ask something off-topic</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Event Log -->
+            <div class="demo-right">
+                <div class="event-log-container">
+                    <h3>Live Event Log</h3>
+                    <p class="event-log-hint">Watch agent lifecycle and tool events</p>
+                    <div id="event-log" class="event-log"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            Aria · powered by <a href="/">Ozwell</a>
+        </footer>
+    </div>
+
+    <script>
+        const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+        const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+
+        // --- Ticket state (the page data the agent interacts with) ---
+        const ticket = {
+            id: 'TKT-1042',
+            subject: 'Cannot connect to database after upgrade',
+            status: 'Open',
+            priority: 'High',
+            submittedBy: 'jamie@example.com',
+            created: 'Mar 9, 2026 — 10:23 AM',
+            description: "After upgrading to v3.2, the app throws \"ECONNREFUSED 127.0.0.1:5432\" on startup. I've verified PostgreSQL is running and the credentials haven't changed. Rolling back to v3.1 fixes it. Seems like a config migration issue.",
+            notes: []
+        };
+
+        // Configure Ozwell chat widget — agent mode
+        // Option A: tools and schemas are auto-discovered from the agent config on the server
+        window.OzwellChatConfig = {
+            title: 'Aria',
+            placeholder: 'Type a question or command...',
+            apiKey: '__SHOWCASE_AGENT_KEY__',
+            welcomeMessage: "How can I help with your support tickets?",
+            debug: false
+        };
+
+        // Load widget
+        const loader = document.createElement('script');
+        loader.src = `${normalizedBase}/embed/ozwell-loader.js`;
+        loader.async = true;
+        document.head.appendChild(loader);
+
+        // --- Event log ---
+        const eventLog = document.getElementById('event-log');
+
+        function logEvent(message, details) {
+            const ts = new Date().toLocaleTimeString('en-US', {
+                hour12: false, hour: '2-digit', minute: '2-digit',
+                second: '2-digit', fractionalSecondDigits: 3
+            });
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">${ts}</span> ${message}`;
+            if (details) {
+                const d = document.createElement('div');
+                d.style.cssText = 'margin-top:4px;padding-left:16px;color:#6b7280;font-size:11px;word-break:break-all;';
+                d.textContent = details;
+                entry.appendChild(d);
+            }
+            eventLog.appendChild(entry);
+            eventLog.scrollTop = eventLog.scrollHeight;
+            while (eventLog.children.length > 50) eventLog.removeChild(eventLog.firstChild);
+        }
+
+        // --- UI update helpers ---
+        function flashEl(el) {
+            el.classList.remove('flash');
+            void el.offsetWidth; // reflow
+            el.classList.add('flash');
+        }
+
+        function updateStatusUI(status) {
+            if (!status) {
+                console.error('[updateStatusUI] Status is undefined or null');
+                return;
+            }
+            const el = document.getElementById('ticket-status');
+            el.textContent = status;
+            el.className = 'status-badge status-' + status.toLowerCase().replace(/\s+/g, '-');
+            flashEl(document.getElementById('ticket-card'));
+        }
+
+        function addNoteUI(text) {
+            const notesEl = document.getElementById('ticket-notes');
+            const noMsg = document.getElementById('no-notes-msg');
+            if (noMsg) noMsg.remove();
+
+            const entry = document.createElement('div');
+            entry.className = 'note-entry';
+            entry.innerHTML = `${text}<div class="note-time">${new Date().toLocaleTimeString()}</div>`;
+            notesEl.appendChild(entry);
+            flashEl(entry);
+        }
+
+        // --- Tool handlers (via MCP protocol — loader dispatches DOM events) ---
+        document.addEventListener('ozwell-tool-call', (e) => {
+            const { name, arguments: args, respond } = e.detail;
+            logEvent(`[tool] ${name}`, JSON.stringify(args));
+
+            switch (name) {
+                case 'get_ticket':
+                    respond(ticket);
+                    break;
+
+                case 'update_ticket_status': {
+                    const newStatus = args.status;
+                    if (!newStatus) {
+                        respond({ success: false, error: 'Missing status parameter' });
+                        return;
+                    }
+                    ticket.status = newStatus;
+                    updateStatusUI(newStatus);
+                    logEvent('[tool] update_ticket_status', `Status → ${newStatus}`);
+                    respond({ success: true, status: newStatus });
+                    break;
+                }
+
+                case 'add_ticket_note': {
+                    const noteText = args.note;
+                    if (!noteText) {
+                        respond({ success: false, error: 'Missing required parameter: note' });
+                        return;
+                    }
+                    ticket.notes.push({ text: noteText, time: new Date().toISOString() });
+                    addNoteUI(noteText);
+                    logEvent('[tool] add_ticket_note', noteText);
+                    respond({ success: true, noteCount: ticket.notes.length });
+                    break;
+                }
+            }
+        });
+
+        // --- Prompt chips ---
+        document.querySelectorAll('.prompt-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                const prompt = chip.dataset.prompt;
+                logEvent('[user] Clicked prompt chip', prompt);
+
+                if (window.OzwellChat) {
+                    window.OzwellChat.open();
+                    setTimeout(() => {
+                        const iframe = window.OzwellChat?.iframe;
+                        if (iframe && iframe.contentWindow) {
+                            iframe.contentWindow.postMessage({
+                                jsonrpc: '2.0',
+                                method: 'send-message',
+                                params: { content: prompt },
+                            }, '*');
+                        }
+                    }, 500);
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
