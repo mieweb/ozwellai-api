@@ -72,46 +72,9 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
 
 **Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
 
-## Providing Page Context
-
-Send page data to the widget so the AI can answer questions about current state:
-
-```html
-<input id="user-name" value="Alice">
-<input id="user-email" value="alice@example.com">
-
-<script>
-  window.OzwellChatConfig = { model: 'llama3' };
-
-  // Send context when inputs change
-  function updateContext() {
-    OzwellChat.updateContext({
-      formData: {
-        name: document.getElementById('user-name').value,
-        email: document.getElementById('user-email').value
-      }
-    });
-  }
-
-  // Wait for widget to load, then send initial context and listen for changes
-  document.addEventListener('DOMContentLoaded', () => {
-    OzwellChat.ready().then(() => {
-      updateContext();
-      document.getElementById('user-name').addEventListener('input', updateContext);
-      document.getElementById('user-email').addEventListener('input', updateContext);
-    });
-  });
-</script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
-```
-
-Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
-
-**How it works:** Context is included in the system prompt for every message, so the AI always sees current page state.
-
 ## With MCP Tools
 
-Enable page interactions using MCP tools (OpenAI function calling format):
+Enable page interactions using MCP tools (OpenAI function calling format). The loader handles the MCP JSON-RPC protocol — your page listens for `ozwell-tool-call` DOM events:
 
 ```html
 <input id="user-email" type="email" placeholder="Enter email">
@@ -136,25 +99,13 @@ Enable page interactions using MCP tools (OpenAI function calling format):
     ]
   };
 
-  // Handle tool calls from widget
-  window.addEventListener('message', (event) => {
-    const data = event.data;
-    if (!data || data.source !== 'ozwell-chat-widget') return;
+  // Handle tool calls via DOM event (loader handles JSON-RPC automatically)
+  document.addEventListener('ozwell-tool-call', (e) => {
+    const { name, arguments: args, respond } = e.detail;
 
-    if (data.type === 'tool_call') {
-      const { tool, tool_call_id, payload } = data;
-
-      if (tool === 'update_email') {
-        document.getElementById('user-email').value = payload.email;
-
-        // Send result back to widget (MUST include tool_call_id)
-        window.OzwellChat.iframe.contentWindow.postMessage({
-          source: 'ozwell-chat-parent',
-          type: 'tool_result',
-          tool_call_id: tool_call_id,  // Required for OpenAI protocol
-          result: { success: true, message: 'Email updated successfully' }
-        }, '*');
-      }
+    if (name === 'update_email') {
+      document.getElementById('user-email').value = args.email;
+      respond({ success: true, message: 'Email updated successfully' });
     }
   });
 </script>
@@ -194,19 +145,6 @@ OzwellChat.mount({
   containerId: 'chat-container',  // Mount in specific element
   width: 400,                      // Widget width in pixels
   height: 500                      // Widget height in pixels
-});
-```
-
-### OzwellChat.updateContext(data)
-
-Send page state to the widget. Context is included in system prompt for every message.
-
-```javascript
-OzwellChat.updateContext({
-  formData: {
-    name: 'Alice',
-    email: 'alice@example.com'
-  }
 });
 ```
 
@@ -437,30 +375,25 @@ Messages sent from the widget iframe to the parent page. All messages include `s
 | Type | Payload | Description |
 |------|---------|-------------|
 | `ready` | — | Widget fully initialized and ready to receive messages |
-| `tool_call` | `{ tool, tool_call_id, payload }` | Request parent to execute an MCP tool |
-| `assistant_response` | `{ content }` | AI assistant sent a response |
+| `tool_call` | MCP JSON-RPC 2.0 request | Request parent to execute an MCP tool (use `ozwell-tool-call` DOM event instead) |
+| `assistant_response` | `{ hadToolCalls }` | AI assistant finished responding (signal only, no message content) |
 | `insert` | `{ text }` | User clicked "Save & Close" button |
 | `closed` | — | Widget was closed |
 
 #### Listening for Tool Calls
 
+Use the `ozwell-tool-call` DOM event (recommended) instead of raw postMessage:
+
 ```javascript
-window.addEventListener('message', (event) => {
-  // Security: validate origin if widget is hosted on a different domain
-  // if (event.origin !== 'https://your-widget-domain.com') return;
-
-  const data = event.data;
-  if (data?.source !== 'ozwell-chat-widget') return;
-
-  if (data.type === 'tool_call') {
-    const { tool, tool_call_id, payload } = data;
-    console.log(`Tool requested: ${tool}`, payload);
-    // Execute the tool, then send tool_result back
-  }
+document.addEventListener('ozwell-tool-call', (e) => {
+  const { name, arguments: args, respond } = e.detail;
+  console.log(`Tool requested: ${name}`, args);
+  // Execute the tool, then call respond() with the result
+  respond({ success: true });
 });
 ```
 
-> **Security Note:** When hosting the widget on a different domain, always validate `event.origin` to prevent malicious sites from sending fake tool_call messages.
+> **Note:** The loader handles MCP JSON-RPC 2.0 and origin validation automatically. Only use raw `postMessage` listeners if you're not using `ozwell-loader.js`.
 
 #### Listening for Widget Ready
 
