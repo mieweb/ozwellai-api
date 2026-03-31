@@ -66,11 +66,11 @@ function extractYamlInput(body: string | { yaml: string }): string | null {
     return raw?.trim() || null;
 }
 
-// Parse YAML input into structured fields
-function parseYamlInput(yamlInput: string, fallbackName?: string) {
+// Parse YAML input into structured fields (returns undefined for missing fields — caller validates)
+function parseYamlInput(yamlInput: string) {
     const parsed = yaml.parse(yamlInput);
-    const name = parsed.name || fallbackName || 'Unnamed Agent';
-    const instructions = parsed.instructions || '';
+    const name = (parsed.name as string | undefined)?.trim() || undefined;
+    const instructions = (parsed.instructions as string | undefined)?.trim() || undefined;
     const model = parsed.model as string | undefined;
     const temperature = parsed.temperature as number | undefined;
     const tools = parsed.tools as (string | { name: string; description?: string; inputSchema?: Record<string, unknown>; parameters?: Record<string, unknown> })[] | undefined;
@@ -162,6 +162,16 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             let agent;
             try {
                 const fields = parseYamlInput(yamlInput);
+
+                if (!fields.name) {
+                    reply.code(400);
+                    return createError("'name' is required", 'invalid_request_error');
+                }
+                if (!fields.instructions) {
+                    reply.code(400);
+                    return createError("'instructions' is required", 'invalid_request_error');
+                }
+
                 const agentId = generateId('agent');
                 const agentKey = generateAgentKey();
 
@@ -170,6 +180,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                     agent_key: agentKey,
                     parent_key: parentKey,
                     ...fields,
+                    name: fields.name,
+                    instructions: fields.instructions,
                 });
             } catch {
                 reply.code(400);

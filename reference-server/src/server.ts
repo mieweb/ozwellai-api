@@ -210,10 +210,12 @@ if (require.main === module) {
       // Initialize auth database and seed demo data
       const db = getDatabase();
       initializeAuthTables(db);
-      try {
-        seedDemoData(db);
-      } catch (_e) {
-        // Seeding may fail on repeated starts — that's fine
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          seedDemoData(db);
+        } catch (_e) {
+          // Seeding may fail on repeated starts — that's fine
+        }
       }
 
       await server.listen({ port, host });

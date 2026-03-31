@@ -201,7 +201,7 @@ export function validateAuth(authorization: string | undefined): boolean {
   if (!authorization) return false;
   if (!authorization.startsWith('Bearer ')) return false;
   const token = authorization.substring(7);
-  return token.length > 0; // Accept any non-empty token for testing
+  return token.startsWith(KEY_PREFIX) || token.startsWith(AGENT_KEY_PREFIX) || token === 'ollama';
 }
 
 /** Check if a bearer token is an agent key */

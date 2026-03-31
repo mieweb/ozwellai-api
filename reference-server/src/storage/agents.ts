@@ -15,7 +15,8 @@ interface DbAgentRow {
     created_at: number;
 }
 
-const DB_PATH = path.join(process.cwd(), 'data', 'ozwell.db');
+const DB_PATH = process.env.DB_PATH
+    ?? path.join(process.cwd(), 'data', 'ozwell.db');
 
 // Demo parent API key
 export const DEMO_API_KEY = 'ozw_demo_localhost_key_for_testing';

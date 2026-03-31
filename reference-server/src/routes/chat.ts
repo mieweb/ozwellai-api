@@ -195,8 +195,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid or missing API key. Use an agent key (agnt_key-...) or parent API key (ozw_...).', 'invalid_request_error');
     }
 
+    // Validate token exists in database (skip for ollama sentinel — removed in #86)
+    const token = extractToken(request.headers.authorization);
+    if (token !== 'ollama' && !agentStore.validateKey(token)) {
+      reply.code(401);
+      return createError('API key not found. Verify the key exists in the database.', 'invalid_request_error');
+    }
+
     const body = request.body as ChatCompletionRequestWithTools;
-    
+
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; model: string | null; temperature: number | null } | null = null;
 
@@ -233,7 +240,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         systemPrompt,
         allowedTools: agent.tools && Array.isArray(agent.tools)
           ? agent.tools.map(t => typeof t === 'string' ? t : t.name)
-          : null,
+          : [],
         model: agent.model || null,
         temperature: agent.temperature ?? null,
       };
@@ -247,9 +254,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
     
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
-    // Use requested model if provided, then agent model, then server default
-    const model = requestedModel || agentConfig?.model || DEFAULT_MODEL;
-    // Use agent temperature if set (client-specified temperature takes precedence via requestedTemperature)
+    // Agent-configured model takes precedence, then client request, then server default
+    const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
+    // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     
     request.log.info({ ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request model selection');
@@ -285,8 +292,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // --- Agent: filter tools by allowed list ---
     let filteredTools = tools;
-    if (agentConfig?.allowedTools && tools) {
-      const allowed = agentConfig.allowedTools;
+    if (agentConfig !== null && tools) {
+      const allowed = agentConfig.allowedTools ?? [];
       filteredTools = tools.filter(
         (t) =>
           t &&
