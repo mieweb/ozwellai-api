@@ -468,7 +468,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         // Create the appropriate client based on backend
         const llmClient = llmConfigured
           ? new OzwellAI({
-              apiKey: process.env.LLM_API_KEY,
+              apiKey: process.env.LLM_API_KEY || '',
               baseURL: process.env.LLM_BASE_URL!,
               timeout: 120000,
               defaultHeaders: {
