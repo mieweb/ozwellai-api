@@ -9,6 +9,8 @@ The Ozwell Dashboard for key provisioning is **coming soon**. In the meantime, t
 
 Agents let you define a persona, model, temperature, and allowed tools server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
 
+Agent chat requests are processed by whichever backend the server has configured (LLM gateway, Ollama, or mock). See the reference server README for backend configuration details.
+
 ## Base URLs
 
 | Environment | URL |

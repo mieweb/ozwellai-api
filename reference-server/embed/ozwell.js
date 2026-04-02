@@ -621,6 +621,17 @@ let mcpRequestId = 0;
 const mcpPendingToolCalls = {};
 const MCP_TOOL_TIMEOUT_MS = 30000;
 
+// Safely parse tool call arguments — handles empty strings (Anthropic), objects, and invalid JSON
+function parseToolArgs(rawArgs) {
+  try {
+    return typeof rawArgs === 'string'
+      ? (rawArgs.trim() ? JSON.parse(rawArgs) : {})
+      : rawArgs || {};
+  } catch (e) {
+    return { error: 'Failed to parse arguments' };
+  }
+}
+
 function trackPendingToolCall(id) {
   mcpPendingToolCalls[id] = true;
   setTimeout(() => { delete mcpPendingToolCalls[id]; }, MCP_TOOL_TIMEOUT_MS);
@@ -1077,14 +1088,7 @@ function createToolDetails(toolId, toolCall) {
   const toolName = toolCall.function?.name || 'unknown';
 
   // Parse arguments
-  let args = {};
-  try {
-    args = typeof toolCall.function?.arguments === 'string'
-      ? JSON.parse(toolCall.function.arguments)
-      : toolCall.function?.arguments || {};
-  } catch (e) {
-    args = { error: 'Failed to parse arguments' };
-  }
+  const args = parseToolArgs(toolCall.function?.arguments);
 
   // Get result from tracked executions
   const execution = state.toolExecutions.find(exec => exec.toolCallId === toolCall.id);
@@ -1378,19 +1382,13 @@ async function sendMessageNonStreaming(text, tools) {
         const toolName = toolCall.function?.name;
 
         if (toolName) {
-          try {
-            const args = typeof toolCall.function.arguments === 'string'
-              ? JSON.parse(toolCall.function.arguments)
-              : toolCall.function.arguments;
+            const args = parseToolArgs(toolCall.function.arguments);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Send tool call to parent via MCP tools/call
             trackPendingToolCall(toolCall.id);
             mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
-          } catch (error) {
-            console.error('[widget.js] Error parsing tool arguments:', error);
-          }
         }
       }
 
@@ -1699,10 +1697,7 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
         const toolName = toolCall.function?.name;
 
         if (toolName) {
-          try {
-            const args = typeof toolCall.function.arguments === 'string'
-              ? JSON.parse(toolCall.function.arguments)
-              : toolCall.function.arguments;
+            const args = parseToolArgs(toolCall.function.arguments);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
@@ -1727,9 +1722,6 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
             // Send tool call to parent via MCP tools/call
             trackPendingToolCall(toolCall.id);
             mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
-          } catch (error) {
-            console.error('[widget.js] Error parsing tool arguments:', error);
-          }
         }
       }
 
