@@ -508,7 +508,15 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
 | Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
 
-**Note:** When `LLM_BASE_URL` is set, it takes priority over Ollama. Ollama is only used as a fallback when no LLM backend is configured.
+### Backend Selection
+
+The server auto-detects which backend to use at startup:
+
+1. **LLM Backend** — if `LLM_BASE_URL` is set, all requests go through it (OpenAI, Portkey Gateway, etc.)
+2. **Ollama** — if `LLM_BASE_URL` is not set and Ollama is reachable at `OLLAMA_BASE_URL`
+3. **Mock responses** — fallback when neither backend is available (deterministic, no AI)
+
+Only one backend is active at a time. Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — LLM takes priority.
 
 **Ollama auto-detection:** When `OLLAMA_MODEL` is not set, the server queries Ollama for installed models and picks the best available one, preferring in order:
 

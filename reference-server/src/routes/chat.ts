@@ -243,6 +243,29 @@ function normalizeMessageThinking(message: Record<string, unknown>): void {
   }
 }
 
+// Hoist static env reads (these never change at runtime)
+const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+
+// Pre-construct LLM clients once (reused across all requests)
+const llmClient = isLLMBackendConfigured()
+  ? new OzwellAI({
+      apiKey: process.env.LLM_API_KEY || '',
+      baseURL: process.env.LLM_BASE_URL!,
+      timeout: 120000,
+      defaultHeaders: {
+        ...(LLM_PROVIDER && { 'x-portkey-provider': LLM_PROVIDER }),
+      },
+    })
+  : null;
+
+const ollamaClient = new OzwellAI({
+  apiKey: 'ollama',
+  baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+  timeout: 120000,
+});
+
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
   fastify.post('/v1/chat/completions', {
@@ -366,8 +389,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
 
     // Determine default model based on backend
-    const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
-    const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
     const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
 
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
@@ -465,23 +486,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Use a real LLM backend
     if (backend !== 'fallback') {
       try {
-        // Create the appropriate client based on backend
-        const llmClient = llmConfigured
-          ? new OzwellAI({
-              apiKey: process.env.LLM_API_KEY || '',
-              baseURL: process.env.LLM_BASE_URL!,
-              timeout: 120000,
-              defaultHeaders: {
-                ...(process.env.LLM_PROVIDER && { 'x-portkey-provider': process.env.LLM_PROVIDER }),
-              },
-            })
-          : new OzwellAI({
-              apiKey: 'ollama',
-              baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-              timeout: 120000,
-            });
+        // Select pre-constructed client based on backend
+        const client = llmConfigured ? llmClient! : ollamaClient;
 
-        // Pass through without preprocessing (client-side handles parsing)
+        // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
@@ -528,18 +536,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
 
           try {
-            // Client type may not include "tools" in the ChatCompletionRequest by design,
-            // so cast via unknown to pass through our tooling information to the client.
-            const requestForClient: ChatCompletionRequest = {
-              model: requestOptions.model,
-              messages: requestOptions.messages as ChatCompletionRequest['messages'],
-              ...(max_tokens && { max_tokens }),
-              ...(temperature !== undefined && { temperature }),
-              ...(response_format && { response_format }),
+            const requestForClient = {
+              ...requestOptions,
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
-              stream: true,
+              stream: true as const,
             };
-            const streamResponse = llmClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
+            const streamResponse = client.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
             // Buffer map for accumulating assistant content per chat id
             const buffers: Record<string, string> = {};
@@ -626,16 +628,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             return;
           }
         } else {
-          const requestForClientNonStream: ChatCompletionRequest = {
-            model: requestOptions.model,
-            messages: requestOptions.messages as ChatCompletionRequest['messages'],
-            ...(max_tokens && { max_tokens }),
-            ...(temperature !== undefined && { temperature }),
-            ...(response_format && { response_format }),
+          const requestForClientNonStream = {
+            ...requestOptions,
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
-            stream: false,
+            stream: false as const,
           };
-          const response = await llmClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
+          const response = await client.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
           // Normalize thinking tokens and extract tool calls from non-streaming response
           try {
             if (response && Array.isArray(response.choices)) {
