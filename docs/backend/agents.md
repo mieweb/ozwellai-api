@@ -131,7 +131,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name for the agent |
 | `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
-| `model` | string | No | Model ID (default: `llama3.1:latest`) |
+| `model` | string | No | Model ID (default: server's configured model). If the model doesn't exist on the current provider, the server falls back to `LLM_MODEL`. |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
 | `tools` | array | No | Allowlist of tool names the agent may use. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. The client page must supply full tool schemas at chat time — the server uses this list only for filtering. |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |

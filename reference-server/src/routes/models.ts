@@ -6,6 +6,11 @@ const FALLBACK_MODELS = [
   { id: 'gpt-4o-mini', object: 'model' as const, created: 1677610602, owned_by: 'ozwellai' },
 ];
 
+// When set, only these models appear in the dropdown (comma-separated)
+const ALLOWED_MODELS = process.env.LLM_ALLOWED_MODELS
+  ? process.env.LLM_ALLOWED_MODELS.split(',').map(m => m.trim()).filter(Boolean)
+  : null;
+
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get('/v1/models', {
     schema: {
@@ -15,6 +20,19 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
     if (!validateAuth(request.headers.authorization)) {
       reply.code(401);
       return createError('Invalid API key provided', 'invalid_request_error');
+    }
+
+    // If LLM_ALLOWED_MODELS is set, return only those (skip gateway/Ollama call)
+    if (ALLOWED_MODELS) {
+      return {
+        object: 'list' as const,
+        data: ALLOWED_MODELS.map(id => ({
+          id,
+          object: 'model' as const,
+          created: 0,
+          owned_by: 'curated',
+        })),
+      };
     }
 
     // Proxy to LLM gateway when configured

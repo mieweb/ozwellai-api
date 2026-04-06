@@ -480,8 +480,9 @@ Environment variables:
 
 - `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
 - `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
-- `LLM_MODEL` - Default model when client doesn't specify one (default: `gpt-4o-mini`)
+- `LLM_MODEL` - Fallback model — used when an agent's configured model doesn't exist on this provider (default: `gpt-4o-mini`)
 - `LLM_PROVIDER` - Only for Portkey Gateway, sent as `x-portkey-provider` header
+- `LLM_ALLOWED_MODELS` - Comma-separated list of models to show in the register page dropdown. When set, skips the gateway `/v1/models` call. If unset, shows all models from the provider.
 
 **Ollama (fallback):**
 
@@ -504,9 +505,11 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 
 | Backend | Env var         | Default        | Example values                                       |
 |---------|-----------------|----------------|------------------------------------------------------|
-| LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4o`, `claude-sonnet-4-20250514`, `llama3.2`     |
+| LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4.1-mini`, `gpt-4o`, `claude-sonnet-4-20250514` |
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
 | Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
+
+**Model fallback:** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
 
 ### Backend Selection
 
