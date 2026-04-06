@@ -243,6 +243,24 @@ function normalizeMessageThinking(message: Record<string, unknown>): void {
   }
 }
 
+// Detect model-not-found errors from gateway (404, model_not_found, etc.)
+function isModelNotFoundError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist');
+  }
+  return false;
+}
+
+function buildFallbackWarning(originalModel: string, fallbackModel: string) {
+  return {
+    type: 'model_fallback' as const,
+    message: `Model ${originalModel} not available on this provider — using ${fallbackModel}`,
+    original_model: originalModel,
+    fallback_model: fallbackModel,
+  };
+}
+
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -622,6 +640,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               heartbeatInterval = null;
             }
 
+            // Model not found → retry with fallback model
+            if (isModelNotFoundError(streamError) && model !== DEFAULT_MODEL && llmConfigured) {
+              request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
+              const warning = buildFallbackWarning(model, DEFAULT_MODEL);
+              reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
+
+              try {
+                const retryRequest = {
+                  ...requestOptions,
+                  model: DEFAULT_MODEL,
+                  ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
+                  stream: true as const,
+                };
+                const retryStream = client.createChatCompletionStream(retryRequest as unknown as ClientChatCompletionRequest);
+                for await (const chunk of retryStream) {
+                  reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                }
+              } catch (retryError) {
+                request.log.error({ err: retryError }, 'Fallback model also failed');
+              }
+            }
+
             // Headers already sent, just end the stream
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
@@ -664,6 +704,29 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         // Only fall through if headers haven't been sent yet
         if (reply.raw.headersSent) {
           return;
+        }
+
+        // Model not found → retry with fallback model
+        if (isModelNotFoundError(error) && model !== DEFAULT_MODEL && llmConfigured) {
+          request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
+          try {
+            const retryRequest = {
+              model: DEFAULT_MODEL,
+              messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
+              ...(max_tokens && { max_tokens }),
+              ...(temperature !== undefined && { temperature }),
+              ...(response_format && { response_format }),
+              ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
+              stream: false as const,
+            };
+            const retryResponse = await llmClient!.createChatCompletion(retryRequest as unknown as ClientChatCompletionRequest);
+            return {
+              ...retryResponse,
+              warning: buildFallbackWarning(model, DEFAULT_MODEL),
+            };
+          } catch (retryError) {
+            request.log.error({ err: retryError }, 'Fallback model also failed');
+          }
         }
       }
     }
