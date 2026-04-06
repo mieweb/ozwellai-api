@@ -509,7 +509,7 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
 | Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
 
-**Model fallback:** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
+**Model fallback (LLM backend only):** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
 
 ### Backend Selection
 
@@ -577,7 +577,7 @@ src/
 │   ├── chat.ts         # Implements the `/v1/chat/completions` endpoint supporting both streaming and non-streaming chat completions, with OpenAI-compatible request/response formats including message handling, model validation, and token usage tracking. Provides the core conversational AI functionality that mimics OpenAI's chat completions API, enabling clients to interact with language models for generating human-like responses in chat applications.
 │   ├── embeddings.ts   # Handles the `/v1/embeddings` endpoint for generating vector embeddings from text inputs, supporting multiple embedding models with configurable dimensions and batch processing. Enables text-to-vector conversion for semantic search, similarity matching, clustering, and other NLP tasks that require numerical representations of text for machine learning applications.
 │   ├── files.ts        # Manages file operations through multiple endpoints (`/v1/files`) including upload, listing, retrieval, content download, and deletion, with persistent storage in a local data directory. Supports file management capabilities for AI applications, allowing clients to upload training data, documents, images, or other assets that language models or processing pipelines might need to access.
-│   ├── models.ts       # Provides the `/v1/models` endpoint that returns a hardcoded list of available AI models (GPT-4 variants and embedding models) with their metadata. Allows API clients to discover and enumerate what AI models are available for use, following OpenAI's API conventions for model discovery and selection.
+│   ├── models.ts       # Provides the `/v1/models` endpoint — proxies to the LLM gateway or Ollama for live model lists, with `LLM_ALLOWED_MODELS` filtering and a hardcoded fallback. Allows API clients to discover available models for the register page dropdown.
 │   ├── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
 │   └── mock-chat.ts    # Provides mock AI responses for testing and demos without requiring Ollama. Generates deterministic responses based on input patterns for predictable testing scenarios.
 └── util/               # Utility functions
