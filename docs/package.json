@@ -47,6 +47,13 @@
       "last 5 safari version"
     ]
   },
+  "overrides": {
+    "picomatch": "4.0.4",
+    "lodash-es": "4.18.1",
+    "dompurify": "3.3.3",
+    "node-forge": "1.4.0",
+    "serialize-javascript": "7.0.5"
+  },
   "engines": {
     "node": ">=18.0"
   }
