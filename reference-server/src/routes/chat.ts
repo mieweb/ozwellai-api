@@ -654,8 +654,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   stream: true as const,
                 };
                 const retryStream = client.createChatCompletionStream(retryRequest as unknown as ClientChatCompletionRequest);
+                const retryThinkBuffer = { partial: '' };
                 for await (const chunk of retryStream) {
-                  reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                  const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
+                  reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
               } catch (retryError) {
                 request.log.error({ err: retryError }, 'Fallback model also failed');
@@ -720,6 +722,20 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               stream: false as const,
             };
             const retryResponse = await llmClient!.createChatCompletion(retryRequest as unknown as ClientChatCompletionRequest);
+            if (retryResponse && Array.isArray(retryResponse.choices)) {
+              for (const choice of retryResponse.choices) {
+                const msg = choice.message as ChatMessage;
+                if (msg) {
+                  normalizeMessageThinking(msg as Record<string, unknown>);
+                  if (!msg.tool_calls && typeof msg.content === 'string') {
+                    const extracted = tryExtractToolCallsFromContent(msg.content, filteredTools as ToolDef[] | undefined);
+                    if (extracted && extracted.length > 0) {
+                      msg.tool_calls = extracted;
+                    }
+                  }
+                }
+              }
+            }
             return {
               ...retryResponse,
               warning: buildFallbackWarning(model, DEFAULT_MODEL),
