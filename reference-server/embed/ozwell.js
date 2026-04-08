@@ -498,6 +498,44 @@ body {
   padding: 0 14px;
   margin-top: 0;
 }
+
+.ozwell-toast {
+  position: fixed;
+  top: 52px;
+  left: 12px;
+  right: 12px;
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-left: 3px solid #f59e0b;
+  border-radius: 12px;
+  padding: 12px 36px 12px 16px;
+  font-size: 13px;
+  color: #78716c;
+  z-index: 100;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  animation: toastFadeIn 0.3s ease;
+  line-height: 1.4;
+}
+.ozwell-toast-close {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #78716c;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  margin: 0;
+}
+.ozwell-toast-close:hover { opacity: 1; }
+@keyframes toastFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
   `;
   document.head.appendChild(style);
 
@@ -579,6 +617,7 @@ window.OzwellDebug.getTools = function () {
 
 window.OzwellDebug.clearMessages = function () {
   state.messages = [];
+  state.fallbackToastShown = false;
   if (messagesEl) {
     messagesEl.innerHTML = '';
   }
@@ -614,12 +653,24 @@ const state = {
   queuedMessageEl: null, // DOM element for queued message bubble
   isEditingQueued: false, // Whether user is editing the queued message
   parentOrigin: null, // Pinned parent origin from first validated config message
+  fallbackToastShown: false, // Show model fallback toast only once per conversation
 };
 
 // MCP pending tool call tracker (keyed by JSON-RPC request id)
 let mcpRequestId = 0;
 const mcpPendingToolCalls = {};
 const MCP_TOOL_TIMEOUT_MS = 30000;
+
+// Safely parse tool call arguments — handles empty strings (Anthropic), objects, and invalid JSON
+function parseToolArgs(rawArgs) {
+  try {
+    return typeof rawArgs === 'string'
+      ? (rawArgs.trim() ? JSON.parse(rawArgs) : {})
+      : rawArgs || {};
+  } catch (e) {
+    return { error: 'Failed to parse arguments' };
+  }
+}
 
 function trackPendingToolCall(id) {
   mcpPendingToolCalls[id] = true;
@@ -748,6 +799,24 @@ function addMessage(role, text) {
   el.textContent = text;
   messagesEl.appendChild(el);
   messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showToast(message) {
+  if (state.fallbackToastShown) return;
+  state.fallbackToastShown = true;
+
+  const toast = document.createElement('div');
+  toast.className = 'ozwell-toast';
+  toast.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'ozwell-toast-close';
+  closeBtn.textContent = '\u00d7';
+  closeBtn.onclick = () => toast.remove();
+  toast.appendChild(closeBtn);
+
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 5000);
 }
 
 // SVG icons for queued message actions
@@ -1077,14 +1146,7 @@ function createToolDetails(toolId, toolCall) {
   const toolName = toolCall.function?.name || 'unknown';
 
   // Parse arguments
-  let args = {};
-  try {
-    args = typeof toolCall.function?.arguments === 'string'
-      ? JSON.parse(toolCall.function.arguments)
-      : toolCall.function?.arguments || {};
-  } catch (e) {
-    args = { error: 'Failed to parse arguments' };
-  }
+  const args = parseToolArgs(toolCall.function?.arguments);
 
   // Get result from tracked executions
   const execution = state.toolExecutions.find(exec => exec.toolCallId === toolCall.id);
@@ -1343,6 +1405,11 @@ async function sendMessageNonStreaming(text, tools) {
     const payload = await response.json();
     console.log('[widget.js] API response:', payload);
 
+    // Show toast for model fallback warnings
+    if (payload.warning && payload.warning.type === 'model_fallback') {
+      showToast(payload.warning.message);
+    }
+
     // Handle errors
     if (payload.error) {
       throw new Error(payload.error.message || 'Model request failed');
@@ -1378,19 +1445,13 @@ async function sendMessageNonStreaming(text, tools) {
         const toolName = toolCall.function?.name;
 
         if (toolName) {
-          try {
-            const args = typeof toolCall.function.arguments === 'string'
-              ? JSON.parse(toolCall.function.arguments)
-              : toolCall.function.arguments;
+            const args = parseToolArgs(toolCall.function.arguments);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Send tool call to parent via MCP tools/call
             trackPendingToolCall(toolCall.id);
             mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
-          } catch (error) {
-            console.error('[widget.js] Error parsing tool arguments:', error);
-          }
         }
       }
 
@@ -1576,10 +1637,28 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
+      let currentEventType = null;
       for (const line of lines) {
+        if (line.trim() === '') { currentEventType = null; continue; }
+        if (line.startsWith('event: ')) {
+          currentEventType = line.slice(7).trim();
+          continue;
+        }
         if (line.startsWith('data: ')) {
           const data = line.slice(6);
-          if (data === '[DONE]') continue;
+          if (data === '[DONE]') { currentEventType = null; continue; }
+
+          if (currentEventType === 'warning') {
+            try {
+              const warning = JSON.parse(data);
+              if (warning.type === 'model_fallback') {
+                showToast(warning.message);
+              }
+            } catch (e) { /* ignore malformed warning */ }
+            currentEventType = null;
+            continue;
+          }
+          currentEventType = null;
 
           try {
             const chunk = JSON.parse(data);
@@ -1699,10 +1778,7 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
         const toolName = toolCall.function?.name;
 
         if (toolName) {
-          try {
-            const args = typeof toolCall.function.arguments === 'string'
-              ? JSON.parse(toolCall.function.arguments)
-              : toolCall.function.arguments;
+            const args = parseToolArgs(toolCall.function.arguments);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
@@ -1727,9 +1803,6 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
             // Send tool call to parent via MCP tools/call
             trackPendingToolCall(toolCall.id);
             mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
-          } catch (error) {
-            console.error('[widget.js] Error parsing tool arguments:', error);
-          }
         }
       }
 

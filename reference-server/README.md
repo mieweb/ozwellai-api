@@ -5,7 +5,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 ## Features
 
 - **Full OpenAI API Compatibility**: Wire-compatible with OpenAI's API specification
-- **Real Text Inference**: Uses deterministic text generation for predictable testing
+- **Multi-Backend LLM Support**: Connects to OpenAI, Portkey Gateway, Ollama, or falls back to deterministic mock responses
 - **MCP Host**: Built-in WebSocket endpoint (`/mcp/ws`) and embeddable chat widget
 - **Streaming Support**: Server-Sent Events (SSE) for both `/v1/responses` and `/v1/chat/completions`
 - **File Management**: Complete file upload, download, and management system
@@ -18,15 +18,25 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 
 ## Architecture
 
-### Streaming Chat with Ollama Integration
+### How the Server Picks an LLM Backend
 
-The reference server acts as a proxy to Ollama for chat completions, with full streaming support and SSE heartbeat to prevent nginx timeouts.
+The server doesn't require any particular LLM provider. On each request it checks what's available and picks the best option:
+
+1. **LLM Backend** — `LLM_BASE_URL` is set in `.env`. Works with any OpenAI-compatible API: OpenAI, Portkey Gateway, etc.
+2. **Ollama (fallback)** — No `LLM_BASE_URL` configured, but Ollama is reachable on the network.
+3. **Mock** — Nothing else is available. Returns canned responses for demos.
+
+Just set the environment variables and restart the server. See `.env.example` for all options.
+
+### Streaming Architecture
+
+The diagram below applies to all backends — the server forwards to whichever upstream is configured.
 
 ```mermaid
 sequenceDiagram
     participant Browser
     participant Ozwell as Reference Server
-    participant Ollama as Ollama Container
+    participant LLM as LLM Backend<br/>(Gateway or Ollama)
     participant Widget as Widget (iframe)
     participant Handler as Tool Handler
 
@@ -38,24 +48,22 @@ sequenceDiagram
     Note over Widget: Chat widget loads
 
     rect rgb(255, 243, 205)
-    Note over Widget: 🔒 SECURE BOUNDARY<br />All chat messages stay in iframe
+    Note over Widget: SECURE BOUNDARY<br/>All chat messages stay in iframe
     Widget->>Widget: User types message
-    Widget->>Ozwell: POST /v1/chat/completions<br />(stream=true)
+    Widget->>Ozwell: POST /v1/chat/completions<br/>(stream=true)
     Note over Widget,Ozwell: Authorization: Bearer agnt_key-...
 
-    Ozwell->>Ollama: Forward to Ollama API<br />(qwen2.5-coder:3b)
-    Note over Ozwell,Ollama: Internal IP: 10.15.123.17:8080
+    Ozwell->>LLM: Forward request
+    Note over Ozwell,LLM: Gateway or Ollama<br/>(based on config)
 
     rect rgb(230, 255, 230)
-    Note over Ozwell,Widget: 🔄 SSE STREAMING
-    Ollama-->>Ozwell: Stream: chunk 1
+    Note over Ozwell,Widget: SSE STREAMING
+    LLM-->>Ozwell: Stream: chunk 1
     Ozwell-->>Widget: data: {"delta":{"content":"Hello"}}
-    Ollama-->>Ozwell: Stream: chunk 2
+    LLM-->>Ozwell: Stream: chunk 2
     Ozwell-->>Widget: data: {"delta":{"content":"!"}}
-    Note over Ozwell: ❤️ Heartbeat every 25s<br />: heartbeat
-    Ollama-->>Ozwell: Stream: chunk N
-    Ozwell-->>Widget: data: {"delta":{"content":"..."}}
-    Ollama-->>Ozwell: Stream: finish_reason=stop
+    Note over Ozwell: Heartbeat every 25s<br/>: heartbeat
+    LLM-->>Ozwell: Stream: finish_reason=stop
     Ozwell-->>Widget: data: [DONE]
     end
 
@@ -72,7 +80,7 @@ sequenceDiagram
 **Key Components:**
 
 - **Reference Server**: Proxy layer handling API compatibility and SSE heartbeat
-- **Ollama Container**: Runs LLM models (qwen2.5-coder:3b, llama3.1:8b, etc.)
+- **LLM Backend**: Any OpenAI-compatible API (OpenAI, Portkey Gateway, etc.) or a direct Ollama instance
 - **Widget**: Embeddable chat UI with iframe isolation
 - **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
 - **Tool Calls**: Extracted from streamed responses and sent to parent page via MCP JSON-RPC 2.0 over postMessage
@@ -247,13 +255,12 @@ The server will start at `http://localhost:3000`
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
-The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses:
+The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses, configure a backend in your `.env` file:
 
-- Change one line in the HTML to switch to Ollama mode
-- Ollama mode uses `/v1/chat/completions` endpoint which proxies to local Ollama instance
-- Requires Ollama running with a compatible model
+- **Any provider:** Set `LLM_BASE_URL` and `LLM_API_KEY` to point at OpenAI, Portkey Gateway, or any OpenAI-compatible API.
+- **Ollama:** Set `OLLAMA_BASE_URL` to a local or remote Ollama instance.
 
-**For deployment:** Run Ollama in your container or set `OLLAMA_BASE_URL` to your LLM endpoint for real responses.
+No code changes needed — just set the environment variables and restart.
 
 See [embed/README.md](embed/README.md) for full documentation.
 
@@ -469,36 +476,64 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 
 Environment variables:
 
+**LLM Backend:**
+
+- `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
+- `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
+- `LLM_MODEL` - Fallback model — used when an agent's configured model doesn't exist on this provider (default: `gpt-4o-mini`)
+- `LLM_PROVIDER` - Only for Portkey Gateway, sent as `x-portkey-provider` header
+- `LLM_ALLOWED_MODELS` - Comma-separated list of models to show in the register page dropdown. When set, skips the gateway `/v1/models` call. If unset, shows all models from the provider.
+
+**Ollama (fallback):**
+
+- `OLLAMA_BASE_URL` - Ollama instance URL (default: `http://localhost:11434`)
+- `OLLAMA_MODEL` - Ollama model to use (auto-detected if not set)
+
+**Server:**
+
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 0.0.0.0)
 - `NODE_ENV` - Environment (development/production)
-- `OLLAMA_BASE_URL` - Ollama API endpoint for embed chat (default: <http://127.0.0.1:11434>)
-- `OLLAMA_MODEL` - Override Ollama model for chat (optional - server auto-selects from available models)
-- `DEFAULT_MODEL` - Default model for non-Ollama backends (default: gpt-4o-mini)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
 
+See `.env.example` for a complete example configuration.
+
 ### Model Selection
 
-The server intelligently selects the best available model:
+If the client sends a `model` field in the request, it is used as-is. Otherwise the server picks a default based on the active backend:
 
-1. **Client-specified model**: If the request includes a `model` parameter, that model is used
-2. **Ollama auto-detection**: If Ollama is running, the server queries available models and prefers:
-   - `llama3.2:latest`
-   - `llama3.1:latest`
-   - `llama3:latest`
-   - `gpt-oss:latest`
-   - `mistral:latest`
-   - First available model as fallback
-3. **Mock fallback**: If no backend is available, routes to `/mock/chat` for demos
+| Backend | Env var         | Default        | Example values                                       |
+|---------|-----------------|----------------|------------------------------------------------------|
+| LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4.1-mini`, `gpt-4o`, `claude-sonnet-4-20250514` |
+| Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
+| Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
 
-### Backend Routing
+**Model fallback (LLM backend only):** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
 
-The server automatically routes requests based on available backends:
+### Backend Selection
 
-1. **Check Ollama availability** at startup and periodically (cached for 30 seconds)
-2. **Route to Ollama** if available
-3. **Fall back to mock** if no backend is available
+The server auto-detects which backend to use at startup:
+
+1. **LLM Backend** — if `LLM_BASE_URL` is set, all requests go through it (OpenAI, Portkey Gateway, etc.)
+2. **Ollama** — if `LLM_BASE_URL` is not set and Ollama is reachable at `OLLAMA_BASE_URL`
+3. **Mock responses** — fallback when neither backend is available (deterministic, no AI)
+
+Only one backend is active at a time. Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — LLM takes priority.
+
+**Ollama auto-detection:** When `OLLAMA_MODEL` is not set, the server queries Ollama for installed models and picks the best available one, preferring in order:
+
+- `llama3.2:latest`
+- `llama3.1:latest`
+- `llama3:latest`
+- `gpt-oss:latest`
+- `gpt-oss:20b`
+- `mistral:latest`
+- `llama2:latest`
+- `qwen2.5-coder:3b`
+- First available model as fallback
+
+If `OLLAMA_MODEL` is set, it is used directly and auto-detection is skipped.
 
 ## Error Handling
 
@@ -542,7 +577,7 @@ src/
 │   ├── chat.ts         # Implements the `/v1/chat/completions` endpoint supporting both streaming and non-streaming chat completions, with OpenAI-compatible request/response formats including message handling, model validation, and token usage tracking. Provides the core conversational AI functionality that mimics OpenAI's chat completions API, enabling clients to interact with language models for generating human-like responses in chat applications.
 │   ├── embeddings.ts   # Handles the `/v1/embeddings` endpoint for generating vector embeddings from text inputs, supporting multiple embedding models with configurable dimensions and batch processing. Enables text-to-vector conversion for semantic search, similarity matching, clustering, and other NLP tasks that require numerical representations of text for machine learning applications.
 │   ├── files.ts        # Manages file operations through multiple endpoints (`/v1/files`) including upload, listing, retrieval, content download, and deletion, with persistent storage in a local data directory. Supports file management capabilities for AI applications, allowing clients to upload training data, documents, images, or other assets that language models or processing pipelines might need to access.
-│   ├── models.ts       # Provides the `/v1/models` endpoint that returns a hardcoded list of available AI models (GPT-4 variants and embedding models) with their metadata. Allows API clients to discover and enumerate what AI models are available for use, following OpenAI's API conventions for model discovery and selection.
+│   ├── models.ts       # Provides the `/v1/models` endpoint — proxies to the LLM gateway or Ollama for live model lists, with `LLM_ALLOWED_MODELS` filtering and a hardcoded fallback. Allows API clients to discover available models for the register page dropdown.
 │   ├── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
 │   └── mock-chat.ts    # Provides mock AI responses for testing and demos without requiring Ollama. Generates deterministic responses based on input patterns for predictable testing scenarios.
 └── util/               # Utility functions

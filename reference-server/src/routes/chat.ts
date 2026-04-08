@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
 import { agentStore } from '../storage/agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
@@ -243,6 +243,47 @@ function normalizeMessageThinking(message: Record<string, unknown>): void {
   }
 }
 
+// Detect model-not-found errors from gateway (404, model_not_found, etc.)
+function isModelNotFoundError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist');
+  }
+  return false;
+}
+
+function buildFallbackWarning(originalModel: string, fallbackModel: string) {
+  return {
+    type: 'model_fallback' as const,
+    message: `Model ${originalModel} not available on this provider — using ${fallbackModel}`,
+    original_model: originalModel,
+    fallback_model: fallbackModel,
+  };
+}
+
+// Hoist static env reads (these never change at runtime)
+const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+
+// Pre-construct LLM clients once (reused across all requests)
+const llmClient = isLLMBackendConfigured()
+  ? new OzwellAI({
+      apiKey: process.env.LLM_API_KEY || '',
+      baseURL: process.env.LLM_BASE_URL!,
+      timeout: 120000,
+      defaultHeaders: {
+        ...(LLM_PROVIDER && { 'x-portkey-provider': LLM_PROVIDER }),
+      },
+    })
+  : null;
+
+const ollamaClient = new OzwellAI({
+  apiKey: 'ollama',
+  baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+  timeout: 120000,
+});
+
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
   fastify.post('/v1/chat/completions', {
@@ -357,41 +398,35 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       };
     }
 
-    // Check if Ollama is available as a backend (check early to determine default model)
-    const ollamaAvailable = await isOllamaAvailable();
-    
-    // Server-side default model - use Ollama-compatible model when Ollama is available
-    const OPENAI_DEFAULT_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
-    const DEFAULT_MODEL = ollamaAvailable ? getOllamaDefaultModel() : OPENAI_DEFAULT_MODEL;
-    
+    // Backend selection priority:
+    // 1. LLM_BASE_URL configured → use it (OpenAI, Portkey Gateway, etc.)
+    // 2. Ollama reachable → use Ollama
+    // 3. Mock/simple generator
+    const llmConfigured = isLLMBackendConfigured();
+    const ollamaAvailable = llmConfigured ? false : await isOllamaAvailable();
+    const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
+
+    // Determine default model based on backend
+    const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
+
     const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Agent-configured model takes precedence, then client request, then server default
     const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
-    
-    request.log.info({ ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request model selection');
+
+    request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
     // so Ollama can correctly associate tool results with the calls that produced them
-    const normalizedMessages: NonNullableMessage[] = (messages as Message[]).map((m) => {
-      const msg: NonNullableMessage = {
-        role: m.role,
-        content: m.content ?? '',
-        name: m.name
-      };
-      // Preserve tool_calls on assistant messages
-      const raw = m as Record<string, unknown>;
-      if (raw.tool_calls && Array.isArray(raw.tool_calls)) {
-        msg.tool_calls = raw.tool_calls as ToolCall[];
-      }
-      // Preserve tool_call_id on tool result messages
-      if (typeof raw.tool_call_id === 'string') {
-        msg.tool_call_id = raw.tool_call_id;
-      }
-      return msg;
-    });
+    const normalizedMessages: NonNullableMessage[] = (messages as (Message & { tool_calls?: ToolCall[]; tool_call_id?: string })[]).map((m) => ({
+      role: m.role,
+      content: m.content ?? '',
+      name: m.name,
+      ...(m.tool_calls && { tool_calls: m.tool_calls }),
+      ...(m.tool_call_id && { tool_call_id: m.tool_call_id }),
+    }));
 
     // --- Agent: inject system prompt ---
     if (agentConfig?.systemPrompt) {
@@ -415,11 +450,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       );
     }
 
-    // Use Ollama if available (checked independently of auth token)
-    const useOllama = ollamaAvailable;
-    
-    // If no backend is available, redirect to mock endpoint
-    if (!ollamaAvailable) {
+    // If no real backend is available, redirect to mock endpoint
+    if (backend === 'fallback') {
       // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
       const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
       const mockBody = { ...body, messages: normalizedMessages, ...(filteredTools ? { tools: filteredTools } : {}) };
@@ -469,23 +501,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Validate model (only if not using Ollama - Ollama accepts any model)
-    const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
-    if (!useOllama && !supportedModels.includes(model)) {
-      reply.code(400);
-      return createError(`Model '${model}' not found`, 'invalid_request_error', 'model');
-    }
-
-    // If using Ollama, proxy the request
-    if (useOllama) {
+    // Use a real LLM backend
+    if (backend !== 'fallback') {
       try {
-        const ollamaClient = new OzwellAI({
-          apiKey: 'ollama',
-          baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-          timeout: 120000 // 2 minutes - reasonable timeout for Ollama requests
-        });
+        // Select pre-constructed client based on backend
+        const client = llmConfigured ? llmClient! : ollamaClient;
 
-        // Pass through without preprocessing (client-side handles parsing)
+        // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
@@ -532,18 +554,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
 
           try {
-            // Client type may not include "tools" in the ChatCompletionRequest by design,
-            // so cast via unknown to pass through our tooling information to the client.
-            const requestForClient: ChatCompletionRequest = {
-              model: requestOptions.model,
-              messages: requestOptions.messages as ChatCompletionRequest['messages'],
-              ...(max_tokens && { max_tokens }),
-              ...(temperature !== undefined && { temperature }),
-              ...(response_format && { response_format }),
+            const requestForClient = {
+              ...requestOptions,
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
-              stream: true,
+              stream: true as const,
             };
-            const streamResponse = ollamaClient.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
+            const streamResponse = client.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
             // Buffer map for accumulating assistant content per chat id
             const buffers: Record<string, string> = {};
@@ -616,12 +632,36 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             return;
           } catch (streamError: unknown) {
             const errToLog = streamError instanceof Error ? streamError : new Error(String(streamError));
-            request.log.error({ err: errToLog }, 'Ollama streaming failed after headers sent');
+            request.log.error({ err: errToLog, backend }, 'LLM streaming failed after headers sent');
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
               clearInterval(heartbeatInterval);
               heartbeatInterval = null;
+            }
+
+            // Model not found → retry with fallback model
+            if (isModelNotFoundError(streamError) && model !== DEFAULT_MODEL && llmConfigured) {
+              request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
+              const warning = buildFallbackWarning(model, DEFAULT_MODEL);
+              reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
+
+              try {
+                const retryRequest = {
+                  ...requestOptions,
+                  model: DEFAULT_MODEL,
+                  ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
+                  stream: true as const,
+                };
+                const retryStream = client.createChatCompletionStream(retryRequest as unknown as ClientChatCompletionRequest);
+                const retryThinkBuffer = { partial: '' };
+                for await (const chunk of retryStream) {
+                  const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
+                  reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
+                }
+              } catch (retryError) {
+                request.log.error({ err: retryError }, 'Fallback model also failed');
+              }
             }
 
             // Headers already sent, just end the stream
@@ -630,16 +670,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             return;
           }
         } else {
-          const requestForClientNonStream: ChatCompletionRequest = {
-            model: requestOptions.model,
-            messages: requestOptions.messages as ChatCompletionRequest['messages'],
-            ...(max_tokens && { max_tokens }),
-            ...(temperature !== undefined && { temperature }),
-            ...(response_format && { response_format }),
+          const requestForClientNonStream = {
+            ...requestOptions,
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
-            stream: false,
+            stream: false as const,
           };
-          const response = await ollamaClient.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
+          const response = await client.createChatCompletion(requestForClientNonStream as unknown as ClientChatCompletionRequest);
           // Normalize thinking tokens and extract tool calls from non-streaming response
           try {
             if (response && Array.isArray(response.choices)) {
@@ -666,10 +702,47 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
       } catch (error: unknown) {
         const errToLog = error instanceof Error ? error : new Error(String(error));
-        request.log.error({ err: errToLog }, 'Ollama request failed, falling back to local generator');
+        request.log.error({ err: errToLog, backend }, 'LLM request failed, falling back to local generator');
         // Only fall through if headers haven't been sent yet
         if (reply.raw.headersSent) {
           return;
+        }
+
+        // Model not found → retry with fallback model
+        if (isModelNotFoundError(error) && model !== DEFAULT_MODEL && llmConfigured) {
+          request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
+          try {
+            const retryRequest = {
+              model: DEFAULT_MODEL,
+              messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
+              ...(max_tokens && { max_tokens }),
+              ...(temperature !== undefined && { temperature }),
+              ...(response_format && { response_format }),
+              ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
+              stream: false as const,
+            };
+            const retryResponse = await llmClient!.createChatCompletion(retryRequest as unknown as ClientChatCompletionRequest);
+            if (retryResponse && Array.isArray(retryResponse.choices)) {
+              for (const choice of retryResponse.choices) {
+                const msg = choice.message as ChatMessage;
+                if (msg) {
+                  normalizeMessageThinking(msg as Record<string, unknown>);
+                  if (!msg.tool_calls && typeof msg.content === 'string') {
+                    const extracted = tryExtractToolCallsFromContent(msg.content, filteredTools as ToolDef[] | undefined);
+                    if (extracted && extracted.length > 0) {
+                      msg.tool_calls = extracted;
+                    }
+                  }
+                }
+              }
+            }
+            return {
+              ...retryResponse,
+              warning: buildFallbackWarning(model, DEFAULT_MODEL),
+            };
+          } catch (retryError) {
+            request.log.error({ err: retryError }, 'Fallback model also failed');
+          }
         }
       }
     }

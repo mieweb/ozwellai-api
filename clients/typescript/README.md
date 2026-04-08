@@ -36,7 +36,7 @@ const client = new OzwellAI({
 
 ```typescript
 const client = new OzwellAI({
-  apiKey: 'your-api-key',
+  apiKey: 'your-api-key',        // sent as Authorization: Bearer header
   baseURL: 'https://api.ozwell.ai', // optional, defaults to official API
   timeout: 30000, // optional, defaults to 30 seconds
   defaultHeaders: { // optional
@@ -44,6 +44,8 @@ const client = new OzwellAI({
   }
 });
 ```
+
+> **Note:** `apiKey` is optional. When omitted, no `Authorization` header is sent. This is useful for backends that don't require authentication (e.g. local Ollama without a `baseURL` override).
 
 ### Ollama Integration
 
@@ -56,7 +58,7 @@ const ollamaClient = new OzwellAI({
 
 // Use any model you have installed in Ollama
 const response = await ollamaClient.createChatCompletion({
-  model: 'llama2', // or any model installed in your Ollama
+  model: 'llama3.1', // or any model installed in your Ollama
   messages: [
     { role: 'user', content: 'Hello from Ollama!' }
   ]
@@ -67,10 +69,29 @@ The client will automatically use `http://localhost:11434` as the base URL when 
 
 **Prerequisites for Ollama:**
 1. Install Ollama from [https://ollama.ai](https://ollama.ai) 
-2. Pull at least one model: `ollama pull llama2`
+2. Pull at least one model: `ollama pull llama3.1`
 3. Ensure Ollama is running: `ollama serve` (usually starts automatically)
 
 See [`examples/ollama-example.ts`](./examples/ollama-example.ts) for a complete working example.
+
+### Gateway / Proxy Usage
+
+To route requests through an API gateway (e.g. [Portkey AI Gateway](https://github.com/portkey-ai/gateway)), pass the gateway key as `apiKey` and set `baseURL` to the gateway. The gateway manages provider API keys server-side — you only need the gateway key:
+
+```typescript
+const gatewayClient = new OzwellAI({
+  apiKey: 'your-gateway-key',                 // authenticates with the gateway
+  baseURL: 'https://your-gateway-host.example.com',
+  defaultHeaders: {
+    'x-portkey-provider': 'openai',           // pick the provider: 'openai', 'anthropic', or 'ollama'
+  },
+});
+
+const response = await gatewayClient.createChatCompletion({
+  model: 'gpt-4o-mini',
+  messages: [{ role: 'user', content: 'Hello from the gateway!' }],
+});
+```
 
 ### Chat Completions
 

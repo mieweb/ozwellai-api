@@ -27,7 +27,7 @@ POST /v1/chat/completions
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID to use (e.g., `gpt-4`, `gpt-3.5-turbo`) |
+| `model` | string | No | Model ID (e.g., `gpt-4.1-mini`). If omitted, uses the server's default. If the model doesn't exist on the provider, falls back to `LLM_MODEL`. |
 | `messages` | array | Yes | Array of message objects |
 | `temperature` | number | No | Sampling temperature (0-2). Default: 1 |
 | `top_p` | number | No | Nucleus sampling. Default: 1 |
@@ -249,29 +249,29 @@ GET /v1/files/{file_id}/content
 
 ### List Models
 
-List all available models.
+List available models. Proxies to the configured LLM gateway or Ollama for live model lists. When `LLM_ALLOWED_MODELS` is set, returns only those models (skips the upstream call).
 
 ```
 GET /v1/models
 ```
 
-#### Response
+#### Response (example — actual models depend on your backend configuration)
 
 ```json
 {
   "object": "list",
   "data": [
     {
-      "id": "gpt-4",
+      "id": "gpt-4.1-mini",
       "object": "model",
-      "created": 1699000000,
-      "owned_by": "openai"
+      "created": 0,
+      "owned_by": "curated"
     },
     {
-      "id": "gpt-3.5-turbo",
+      "id": "gpt-4o-mini",
       "object": "model",
-      "created": 1699000000,
-      "owned_by": "openai"
+      "created": 0,
+      "owned_by": "curated"
     }
   ]
 }
