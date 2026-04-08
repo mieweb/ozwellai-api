@@ -201,7 +201,7 @@ export class OzwellAI {
             try {
               const chunk = JSON.parse(jsonStr) as ChatCompletionChunk;
               yield chunk;
-            } catch (e) {
+            } catch {
               // Skip invalid JSON chunks
               console.warn('Failed to parse SSE chunk:', jsonStr);
             }

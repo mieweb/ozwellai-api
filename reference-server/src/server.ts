@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
@@ -106,12 +106,12 @@ async function buildServer() {
       deepLinking: false,
     },
     uiHooks: {
-      onRequest: function (_request, _reply, next) { next(); },
-      preHandler: function (_request, _reply, next) { next(); },
+      onRequest: function (_request: FastifyRequest, _reply: FastifyReply, next: () => void) { next(); },
+      preHandler: function (_request: FastifyRequest, _reply: FastifyReply, next: () => void) { next(); },
     },
     staticCSP: true,
-    transformStaticCSP: (header) => header,
-    transformSpecification: (swaggerObject, _request, _reply) => {
+    transformStaticCSP: (header: string) => header,
+    transformSpecification: (swaggerObject: Record<string, unknown>, _request: FastifyRequest, _reply: FastifyReply) => {
       return swaggerObject;
     },
     transformSpecificationClone: true,
@@ -169,7 +169,7 @@ async function buildServer() {
   });
 
   // Error handler
-  fastify.setErrorHandler((error, request, reply) => {
+  fastify.setErrorHandler((error: Error & { validation?: Array<{ schemaPath?: string }> }, request, reply) => {
     fastify.log.error(error);
 
     // Handle validation errors
@@ -213,7 +213,7 @@ if (require.main === module) {
       if (process.env.NODE_ENV !== 'production') {
         try {
           seedDemoData(db);
-        } catch (_e) {
+        } catch {
           // Seeding may fail on repeated starts — that's fine
         }
       }

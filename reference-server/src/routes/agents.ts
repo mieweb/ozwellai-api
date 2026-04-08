@@ -108,6 +108,20 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                     type: 'object',
                     properties: { valid: { type: 'boolean' } },
                     required: ['valid']
+                },
+                401: {
+                    type: 'object',
+                    properties: {
+                        error: {
+                            type: 'object',
+                            properties: {
+                                message: { type: 'string' },
+                                type: { type: 'string' },
+                                param: { type: ['string', 'null'] },
+                                code: { type: ['string', 'null'] }
+                            }
+                        }
+                    }
                 }
             }
         },

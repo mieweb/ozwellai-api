@@ -48,7 +48,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
           const data = await resp.json() as { object: string; data: unknown[] };
           return data;
         }
-      } catch {}
+      } catch {
+        // Gateway unavailable, fall through to next provider
+      }
     }
 
     if (process.env.OLLAMA_BASE_URL) {
@@ -66,7 +68,9 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
             })),
           };
         }
-      } catch {}
+      } catch {
+        // Ollama unavailable, fall through to fallback
+      }
     }
 
     return { object: 'list' as const, data: FALLBACK_MODELS };
