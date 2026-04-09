@@ -82,7 +82,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
       });
 
       return fileObject;
-    } catch (error) {
+    } catch {
       reply.code(500);
       return createError('File upload failed', 'server_error');
     }
@@ -207,7 +207,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
       });
 
       return fileContent;
-    } catch (error) {
+    } catch {
       reply.code(404);
       return createError('File content not found', 'invalid_request_error');
     }
@@ -267,7 +267,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
         object: 'file',
         deleted: true,
       };
-    } catch (error) {
+    } catch {
       reply.code(500);
       return createError('File deletion failed', 'server_error');
     }

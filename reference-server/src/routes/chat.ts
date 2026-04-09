@@ -128,7 +128,7 @@ function tryExtractToolCallsFromContent(content: string | undefined, tools?: Too
         }];
       }
     }
-  } catch (e) {
+  } catch {
     // not JSON or not recognized
   }
   return null;
@@ -543,7 +543,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             heartbeatInterval = setInterval(() => {
               try {
                 reply.raw.write(': heartbeat\n\n');
-              } catch (e) {
+              } catch {
                 // Connection closed, clear interval
                 if (heartbeatInterval) {
                   clearInterval(heartbeatInterval);
@@ -614,7 +614,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   // cleanup buffer
                   delete buffers[id];
                 }
-              } catch (err) {
+              } catch {
                 // If anything goes wrong, still forward the chunk to the client
                 reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
               }
@@ -695,7 +695,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 }
               }
             }
-          } catch (e) {
+          } catch {
             // No-op: parsing fallback should not break the response
           }
           return response;
