@@ -172,6 +172,7 @@ export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 export type ChatCompletionResponse = z.infer<typeof ChatCompletionResponseSchema>;
+
 export type ResponseRequest = z.infer<typeof ResponseRequestSchema>;
 export type Response = z.infer<typeof ResponseSchema>;
 export type EmbeddingRequest = z.infer<typeof EmbeddingRequestSchema>;

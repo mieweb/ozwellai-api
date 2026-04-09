@@ -2,6 +2,13 @@
 
 Ozwell uses API keys to authenticate requests. This guide covers key types, security best practices, and implementation patterns.
 
+:::info Getting an API Key Now
+The Ozwell Dashboard for self-service key provisioning is **coming soon**. In the meantime, to get an API key, contact:
+
+- **`adamerla128@gmail.com`** (Aditya Damerla)
+- **`horner@mieweb.com`** (Doug Horner)
+:::
+
 ## API Key Types
 
 Ozwell provides two types of API keys for different use cases:
@@ -9,7 +16,8 @@ Ozwell provides two types of API keys for different use cases:
 | Key Type | Prefix | Use Case | Security Level |
 |----------|--------|----------|----------------|
 | **General-Purpose** | `ozw_` | Server-side, full API access | Server-only |
-| **Scoped** | `ozw_scoped_` | Client-side, limited access | Client-safe |
+| **Agent Key** | `agnt_key-` | Per-agent embed key, auto-generated | Client-safe |
+| **Scoped** | `ozw_scoped_` | Client-side, limited access *(coming soon)* | Client-safe |
 
 ### General-Purpose Keys
 
@@ -41,17 +49,33 @@ const apiKey = 'ozw_scoped_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 ---
 
+### Agent Keys
+
+Agent keys are generated automatically when you create an agent via the [Agent Registration API](./agents.md). They are scoped to that agent's configuration (model, tools, instructions) and safe for use in browser embeds.
+
+```javascript
+// Safe for frontend use — scoped to one agent
+const apiKey = 'agnt_key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+```
+
 ## Creating API Keys
 
-### Via Dashboard
+### Contact Us (Current)
 
-1. Log in to [Ozwell Dashboard](https://dashboard.ozwell.ai)
+API key provisioning is currently manual. Contact the team to get a key:
+
+- **`adamerla128@gmail.com`** (Aditya Damerla)
+- **`horner@mieweb.com`** (Doug Horner)
+
+### Via Dashboard *(Coming Soon)*
+
+1. Log in to [Ozwell Dashboard](https://dashboard.ozwell.ai) *(coming soon)*
 2. Navigate to **Settings → API Keys**
 3. Click **Create API Key** or **Create Scoped Key**
 4. Configure permissions (for scoped keys)
 5. Copy the key immediately — it won't be shown again
 
-### Via API (Coming Soon)
+### Via API *(Coming Soon)*
 
 ```bash
 curl https://api.ozwell.ai/v1/api-keys \
@@ -63,6 +87,10 @@ curl https://api.ozwell.ai/v1/api-keys \
     "permissions": ["*"]
   }'
 ```
+
+### Creating Agent Keys
+
+Agent keys are created automatically when you register an agent. See the [Agent Registration API](./agents.md) for the full guide.
 
 ---
 
@@ -257,6 +285,7 @@ API keys are rate-limited. When exceeded:
 **HTTP Status:** `429 Too Many Requests`
 
 **Headers:**
+
 ```
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
@@ -265,6 +294,7 @@ Retry-After: 30
 ```
 
 **Response:**
+
 ```json
 {
   "error": {

@@ -2,6 +2,17 @@
 
 Complete reference for all Ozwell API endpoints.
 
+## Base URLs
+
+| Environment | URL |
+|-------------|-----|
+| **Development** | `https://ozwell-dev-refserver.opensource.mieweb.org` |
+| **Production** | `https://api.ozwell.ai` *(coming soon)* |
+
+:::tip
+All examples below use `https://api.ozwell.ai` as the base URL. For development and testing, replace with the development URL above.
+:::
+
 ## Chat
 
 ### Create Chat Completion
@@ -375,8 +386,17 @@ Current version: **v1**
 
 ---
 
+## Agents
+
+Agent registration and management API. See the full reference:
+
+➡️ [Agent Registration API](./agents.md)
+
+---
+
 ## See Also
 
 - [Authentication](./api-authentication.md)
+- [Agent Registration](./agents.md)
 - [Examples](./api-examples.md)
 - [Backend Overview](./overview.md)
