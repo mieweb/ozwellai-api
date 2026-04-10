@@ -50,6 +50,10 @@ app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
 });
 
+app.get('/kerebron.html', (req, res) => {
+  res.type('html').send(renderHtml('kerebron.html'));
+});
+
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
     return res.type('html').send(renderHtml('landing.html'));
