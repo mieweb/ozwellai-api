@@ -472,44 +472,26 @@ function placePieceAndCheckWin(index, normalizedPosition) {
   return false;
 }
 
-/**
- * Send a user message to the widget (triggers LLM response)
- * Widget handles queuing if LLM is busy.
- */
-function sendUserMessageToWidget(text) {
-  const widgetIframe = getWidgetIframe();
-  if (!widgetIframe || !widgetIframe.contentWindow) {
-    console.error('[tictactoe-app.js] Cannot send message: widget iframe not found');
-    return;
-  }
-
-  widgetIframe.contentWindow.postMessage({
-    source: 'ozwell-chat-parent',
-    type: 'ozwell:send-message',
-    payload: { content: text }
-  }, '*');
-
-  console.log('[tictactoe-app.js] Sent user message to widget:', text);
-}
+// sendUserMessageToWidget is defined in the tool communication section below
 
 /**
  * Handle ai_move tool call - LLM requests this when it's O's turn
  * JavaScript calculates perfect move using minimax strategy
  */
-function handleAiMove(toolCallId) {
+function handleAiMove(respond) {
   if (gameOver) {
-    sendToolResult({ success: false, error: 'Game is over' }, toolCallId);
+    respond({ success: false, error: 'Game is over' });
     return;
   }
 
   if (currentPlayer !== 'O') {
-    sendToolResult({ success: false, error: "It's not O's turn" }, toolCallId);
+    respond({ success: false, error: "It's not O's turn" });
     return;
   }
 
   const aiIndex = makeAIMove();
   if (aiIndex === null) {
-    sendToolResult({ success: false, error: 'No available moves' }, toolCallId);
+    respond({ success: false, error: 'No available moves' });
     return;
   }
 
@@ -519,31 +501,31 @@ function handleAiMove(toolCallId) {
   placePieceAndCheckWin(aiIndex, aiPositionName);
 
   // Return raw data (not success/message) so LLM can respond naturally
-  sendToolResult({
+  respond({
     move: aiIndex,
     position: aiPositionName,
     board: boardState.map((v, i) => v || i), // Show board state with indices for empty
     gameOver: gameOver,
     winner: winner
-  }, toolCallId);
+  });
 }
 
-function handleMakeMove(position, toolCallId) {
+function handleMakeMove(position, respond) {
   if (gameOver) {
     logEvent('Game is over. Reset to play again.', 'error');
-    sendToolResult({ success: false, error: 'Game is over. Reset to play again.' }, toolCallId);
+    respond({ success: false, error: 'Game is over. Reset to play again.' });
     return;
   }
 
   // Safety: Only allow make_move when it's X's turn
   if (currentPlayer !== 'X') {
-    sendToolResult({ success: false, error: "Not X's turn. Call ai_move instead." }, toolCallId);
+    respond({ success: false, error: "Not X's turn. Call ai_move instead." });
     return;
   }
 
   const index = typeof position === 'number' ? position : parseInt(position);
   if (isNaN(index) || index < 0 || index > 8) {
-    sendToolResult({ success: false, error: `Invalid position: ${position}. Must be 0-8.` }, toolCallId);
+    respond({ success: false, error: `Invalid position: ${position}. Must be 0-8.` });
     return;
   }
 
@@ -557,11 +539,11 @@ function handleMakeMove(position, toolCallId) {
 
     const errorMsg = `Position ${index} is already taken. Available positions: ${availablePositions.join(', ')}. Please choose one of these positions.`;
     logEvent(errorMsg, 'error');
-    sendToolResult({
+    respond({
       success: false,
       error: errorMsg,
-      availablePositions: availablePositions // Help LLM understand what's valid
-    }, toolCallId);
+      availablePositions: availablePositions
+    });
     return;
   }
 
@@ -570,10 +552,7 @@ function handleMakeMove(position, toolCallId) {
   const gameEnded = placePieceAndCheckWin(index, positionName);
 
   // Return success message (NOT raw data) so widget doesn't auto-continue
-  sendToolResult(
-    { success: true, message: `Placed X at ${positionName}.` },
-    toolCallId
-  );
+  respond({ success: true, message: `Placed X at ${positionName}.` });
 
   // If game continues and it's now O's turn, trigger AI the same way as clicks
   if (!gameEnded && currentPlayer === 'O') {
@@ -592,56 +571,32 @@ function handleResetGame() {
 }
 
 // ========================================
-// PostMessage Communication
+// Tool Communication (MCP protocol via loader DOM events)
 // ========================================
 
-// Helper: Get widget iframe
-function getWidgetIframe() {
-  // Use OzwellChat.iframe directly (works with both src and srcdoc iframes)
-  return window.OzwellChat?.iframe || null;
-}
-
-// Helper: Send tool result back to widget
-function sendToolResult(result, toolCallId) {
-  const widgetIframe = getWidgetIframe();
-  if (!widgetIframe || !widgetIframe.contentWindow) {
-    console.error('[tictactoe-app.js] Cannot send tool result: widget iframe not found');
-    return;
-  }
-
+function sendUserMessageToWidget(text) {
+  const widgetIframe = window.OzwellChat?.iframe;
+  if (!widgetIframe || !widgetIframe.contentWindow) return;
   widgetIframe.contentWindow.postMessage({
-    source: 'ozwell-chat-parent',
-    type: 'tool_result',
-    tool_call_id: toolCallId,
-    result: result
+    jsonrpc: '2.0',
+    method: 'send-message',
+    params: { content: text },
   }, '*');
-
-  console.log('[tictactoe-app.js] ✓ Tool result sent to widget:', result);
 }
 
-// Listen for tool calls from widget
-window.addEventListener('message', (event) => {
-  // Security: Verify origin if needed
-  // if (event.origin !== expectedOrigin) return;
+// Listen for tool calls from loader
+document.addEventListener('ozwell-tool-call', (e) => {
+  const { name, arguments: args, respond } = e.detail;
 
-  const data = event.data;
+  logEvent(`Tool call received: ${name}`, 'tool-call');
 
-  // Handle tool call from widget (widget sends 'tool', not 'name')
-  if (data.type === 'tool_call' && data.source === 'ozwell-chat-widget') {
-    const toolName = data.tool;
-    const toolCallId = data.tool_call_id;
-    const payload = data.payload;
-
-    logEvent(`Tool call received: ${toolName}`, 'tool-call');
-
-    if (toolName === 'make_move') {
-      handleMakeMove(payload.position, toolCallId);
-    } else if (toolName === 'ai_move') {
-      handleAiMove(toolCallId);
-    } else if (toolName === 'reset_game') {
-      handleResetGame();
-      sendToolResult({ success: true, message: 'Game reset successfully' }, toolCallId);
-    }
+  if (name === 'make_move') {
+    handleMakeMove(args.position, respond);
+  } else if (name === 'ai_move') {
+    handleAiMove(respond);
+  } else if (name === 'reset_game') {
+    handleResetGame();
+    respond({ success: true, message: 'Game reset successfully' });
   }
 });
 

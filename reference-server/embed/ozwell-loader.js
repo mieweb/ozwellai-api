@@ -59,6 +59,7 @@
     runtimeConfig: {},
     hasUnread: false, // Track unread messages when chat is closed
     chatOpen: false, // Track if chat window is currently open
+    agentTools: null, // Tools fetched from server via agent key (MCP discovery)
   };
 
   function readGlobalConfig() {
@@ -153,10 +154,123 @@
     });
   }
 
+  // ── MCP JSON-RPC handler (postMessage transport) ──────────────────
+  // Implements the MCP protocol over postMessage for iframe ↔ parent
+  // communication. Handles initialize, tools/list, and tools/call.
+
+  function postJsonRpc(message) {
+    const iframeWindow = state.iframe && state.iframe.contentWindow;
+    if (!iframeWindow) return;
+    iframeWindow.postMessage(message, '*');
+  }
+
+  const EMPTY_SCHEMA = { type: 'object', properties: {} };
+
+  function normalizeTool(tool) {
+    if (typeof tool === 'string') {
+      return { name: tool, description: '', inputSchema: EMPTY_SCHEMA };
+    }
+    if (tool.function) {
+      return {
+        name: tool.function.name,
+        description: tool.function.description || '',
+        inputSchema: tool.function.parameters || EMPTY_SCHEMA,
+      };
+    }
+    return {
+      name: tool.name,
+      description: tool.description || '',
+      inputSchema: tool.inputSchema || tool.parameters || EMPTY_SCHEMA,
+    };
+  }
+
+  function getMcpTools() {
+    const tools = (state.agentTools && state.agentTools.length > 0)
+      ? state.agentTools
+      : (currentConfig().tools || []);
+    return tools.map(normalizeTool);
+  }
+
+  function handleMcpMessage(event) {
+    if (!state.iframe || event.source !== state.iframe.contentWindow) return;
+    const data = event.data;
+    if (!data || data.jsonrpc !== '2.0' || !data.method) return;
+
+    switch (data.method) {
+      case 'initialize':
+        postJsonRpc({
+          jsonrpc: '2.0',
+          id: data.id,
+          result: {
+            protocolVersion: '2025-11-25',
+            capabilities: { tools: { listChanged: false } },
+            serverInfo: { name: 'ozwell-parent', version: '1.0.0' },
+          },
+        });
+        break;
+
+      case 'notifications/initialized':
+        // Client acknowledged — no response needed for notifications
+        break;
+
+      case 'tools/list':
+        postJsonRpc({
+          jsonrpc: '2.0',
+          id: data.id,
+          result: { tools: getMcpTools() },
+        });
+        break;
+
+      case 'tools/call': {
+        const toolName = data.params?.name;
+        const toolArgs = data.params?.arguments || {};
+        const requestId = data.id;
+
+        // Dispatch as DOM event — integrator listens for this
+        const toolEvent = new CustomEvent('ozwell-tool-call', {
+          detail: {
+            name: toolName,
+            arguments: toolArgs,
+            respond: (result) => {
+              postJsonRpc({
+                jsonrpc: '2.0',
+                id: requestId,
+                result: result,
+              });
+            },
+            error: (message) => {
+              postJsonRpc({
+                jsonrpc: '2.0',
+                id: requestId,
+                error: { code: -32000, message: message },
+              });
+            },
+          },
+        });
+        document.dispatchEvent(toolEvent);
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
+  // ── Legacy widget message handler ────────────────────────────────
+
   function handleWidgetMessage(event) {
     if (!state.iframe || event.source !== state.iframe.contentWindow) return;
     const data = event.data;
-    if (!data || typeof data !== 'object' || data.source !== 'ozwell-chat-widget') return;
+    if (!data || typeof data !== 'object') return;
+
+    // Route JSON-RPC messages to MCP handler
+    if (data.jsonrpc === '2.0') {
+      handleMcpMessage(event);
+      return;
+    }
+
+    // Legacy messages require source check
+    if (data.source !== 'ozwell-chat-widget') return;
 
     switch (data.type) {
       case 'ready':
@@ -727,16 +841,41 @@
   // Export API
   window.OzwellChat = api;
 
+  // Fetch agent tools from server when an agent key is configured.
+  // This populates state.agentTools so getMcpTools() can respond to
+  // the widget's tools/list MCP request with the correct tool names.
+  async function fetchAgentTools() {
+    const config = currentConfig();
+    const apiKey = config.apiKey;
+    if (!apiKey || !apiKey.startsWith('agnt_key-')) return;
+
+    try {
+      const base = autoDetectedBase || '';
+      const resp = await fetch(`${base}/v1/agents/me`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (Array.isArray(data.tools)) {
+        state.agentTools = data.tools;
+        console.log('[OzwellChat] Agent tools discovered from server:', state.agentTools);
+      }
+    } catch (e) {
+      // Silent fail — tools will fall back to config.tools if any
+    }
+  }
+
   // Auto-mount widget unless explicitly disabled
   const config = readGlobalConfig();
   if (config.autoMount !== false) {
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
+      document.addEventListener('DOMContentLoaded', async () => {
+        await fetchAgentTools();
         api.mount();
       });
     } else {
-      // DOM already loaded, mount immediately
-      api.mount();
+      // DOM already loaded, fetch tools then mount
+      fetchAgentTools().then(() => api.mount());
     }
   }
 })();

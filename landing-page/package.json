@@ -12,6 +12,7 @@
     "test:debug": "playwright test --debug"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
     "express": "^4.22.1",
     "iframe-sync": "^1.0.4"
   },

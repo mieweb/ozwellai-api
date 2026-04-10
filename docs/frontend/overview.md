@@ -43,8 +43,7 @@ Add Ozwell to any website with a single script tag. No build step required.
 ```html
 <script 
   src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="your-scoped-api-key"
-  data-agent-id="your-agent-id"
+  data-api-key="agnt_key-your-agent-key"
 ></script>
 ```
 
@@ -66,6 +65,7 @@ For production applications using modern JavaScript frameworks, we provide dedic
 | Vanilla JS | [Vanilla JS Integration](./vanilla.md) | ✅ |
 
 All framework integrations render Ozwell within an **isolated iframe**, ensuring:
+
 - 🔒 **Security isolation** from your host page
 - 🎨 **Consistent styling** that won't conflict with your CSS
 - 📱 **Responsive behavior** out of the box
