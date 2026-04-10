@@ -519,7 +519,7 @@ function handleMakeMove(position, respond) {
 
   // Safety: Only allow make_move when it's X's turn
   if (currentPlayer !== 'X') {
-    respond({ success: false, error: "Not X's turn. Call ai_move instead." });
+    respond({ success: false, error: "It's O's turn, not X's." });
     return;
   }
 
@@ -556,7 +556,7 @@ function handleMakeMove(position, respond) {
 
   // If game continues and it's now O's turn, trigger AI the same way as clicks
   if (!gameEnded && currentPlayer === 'O') {
-    sendUserMessageToWidget(`I placed my X. It's your turn as O.`);
+    sendUserMessageToWidget(`I placed X at ${positionName}. Your turn.`);
   }
 }
 
@@ -590,7 +590,19 @@ document.addEventListener('ozwell-tool-call', (e) => {
 
   logEvent(`Tool call received: ${name}`, 'tool-call');
 
-  if (name === 'make_move') {
+  if (name === 'get_board') {
+    const emptySquares = boardState
+      .map((v, i) => v ? null : i)
+      .filter(i => i !== null);
+    respond({
+      board: boardState.map((v, i) => v || i),
+      currentPlayer: currentPlayer,
+      gameOver: gameOver,
+      winner: winner,
+      difficulty: getAIDifficulty(),
+      availablePositions: emptySquares
+    });
+  } else if (name === 'make_move') {
     handleMakeMove(args.position, respond);
   } else if (name === 'ai_move') {
     handleAiMove(respond);
@@ -646,9 +658,13 @@ function handleUserClick(index) {
   currentPlayer = 'X';
   const gameEnded = placePieceAndCheckWin(index, positionName);
 
-  // If game continues, send message to LLM to trigger its turn
-  if (!gameEnded) {
-    sendUserMessageToWidget(`I placed my X at ${positionName}. It's your turn as O.`);
+  if (gameEnded) {
+    // Tell the LLM the game result so it can respond
+    const result = winner === 'X' ? 'X wins!' : winner === 'draw' ? "It's a draw!" : 'Game over.';
+    sendUserMessageToWidget(`Game over. ${result}`);
+  } else {
+    // Game continues, trigger AI turn
+    sendUserMessageToWidget(`I placed X at ${positionName}. Your turn.`);
   }
 }
 
