@@ -70,6 +70,8 @@ All framework integrations render Ozwell within an **isolated iframe**, ensuring
 - 🎨 **Consistent styling** that won't conflict with your CSS
 - 📱 **Responsive behavior** out of the box
 
+> **Standards-inspired:** Ozwell's iframe architecture implements an *inverted* MCP postMessage transport, drawing from proposals by [Josh Mandel](https://github.com/jmandel) and the [W3C WebMCP](https://github.com/webmachinelearning/webmcp) community. Learn more in [MCP postMessage Standard](./mcp-postmessage-standard.md).
+
 ---
 
 ## Security Model
@@ -208,4 +210,5 @@ This ensures users always feel comfortable asking questions—even ones they mig
 1. **Quick start:** Try the [CDN embed](./cdn-embed.md) first
 2. **Production app:** Follow your framework guide above
 3. **Custom needs:** Review [iframe integration](./iframe-integration.md)
-4. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security)
+4. **Standards context:** Read about the [MCP postMessage Standard](./mcp-postmessage-standard.md) that inspired Ozwell's architecture
+5. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security)

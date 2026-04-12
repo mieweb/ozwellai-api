@@ -37,6 +37,7 @@ const sidebars: SidebarsConfig = {
           label: 'Advanced',
           items: [
             'frontend/iframe-integration',
+            'frontend/mcp-postmessage-standard',
           ],
         },
       ],
