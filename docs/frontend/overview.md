@@ -6,9 +6,37 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 # Frontend Integration Overview
 
-This guide covers how to integrate Ozwell's AI chat interface into your website or web application. All frontend integrations use **scoped API keys** that are restricted to specific agents and their assigned permissions, making them safe for client-side use.
+Ozwell is an embeddable AI assistant that runs inside an iframe on your website. Users chat with it. The AI can call **tools you define** — JavaScript functions that read from or write to your page. Conversations are private by default; your page only sees tool calls and lifecycle events, never message content.
 
 > **Try it live:** See Ozwell in action at the [demo site](https://ozwellai-embedtest.opensource.mieweb.org/).
+
+## What You're Building
+
+Here's the basic setup. You add a script tag, and then you write an event listener that handles tool calls from the AI:
+
+```html
+<!-- 1. Load the widget -->
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+
+<!-- 2. Handle tool calls from the AI -->
+<script>
+  document.addEventListener('ozwell-tool-call', (e) => {
+    const { name, arguments: args, respond } = e.detail;
+
+    if (name === 'update_user_email') {
+      document.getElementById('email').value = args.email;
+      respond({ success: true });
+    }
+  });
+</script>
+```
+
+The agent definition (created via the [Agent API](../backend/agents.md)) tells the AI what tools exist and what parameters they accept. Your page handles what happens when the AI calls them. The widget runs in a sandboxed iframe — it cannot touch your DOM, read your cookies, or access your JavaScript directly.
+
+➡️ **[Full tutorial with tool calling](./cdn-embed.md#tool-calling)** — the CDN embed guide walks through this step by step.
 
 ## Integration Approaches
 
@@ -38,16 +66,16 @@ graph LR
 
 ## CDN Embed (Fastest)
 
-Add Ozwell to any website with a single script tag. No build step required.
+Add Ozwell to any website with a single script tag. No build step required. Supports tool calling out of the box — define what your AI can do, then handle tool calls in a simple event listener.
 
 ```html
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="agnt_key-your-agent-key"
-></script>
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-➡️ [Full CDN documentation](./cdn-embed.md)
+➡️ [Full CDN documentation with tool calling tutorial](./cdn-embed.md)
 
 ---
 
@@ -211,4 +239,4 @@ This ensures users always feel comfortable asking questions—even ones they mig
 2. **Production app:** Follow your framework guide above
 3. **Custom needs:** Review [iframe integration](./iframe-integration.md)
 4. **Standards context:** Read about the [MCP postMessage Standard](./mcp-postmessage-standard.md) that inspired Ozwell's architecture
-5. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security)
+5. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security--privacy-checklist)

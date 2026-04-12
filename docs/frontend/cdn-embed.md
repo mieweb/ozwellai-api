@@ -153,6 +153,144 @@ window.addEventListener('ozwell:user-share', (event) => {
 
 ---
 
+## Tool Calling
+
+This is the big one. Ozwell can do more than chat — it can **take actions on your page**. When a user says "update my email to bob@example.com," Ozwell's AI can call a function *you* define that actually updates the form field.
+
+Here's how it works:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Ozwell as Ozwell (iframe)
+    participant Page as Your Page
+
+    User->>Ozwell: "change my name to Bob"
+    Ozwell->>Ozwell: AI decides to call update_form_data
+    Ozwell->>Page: ozwell-tool-call event
+    Page->>Page: Your handler runs (updates the input)
+    Page->>Ozwell: respond({ success: true })
+    Ozwell->>User: "Done! I've updated your name to Bob."
+```
+
+The Ozwell widget runs in a sandboxed iframe. It **cannot** touch your page directly — no DOM access, no cookies, no JavaScript variables. Instead, when the AI decides to use a tool, the widget sends an `ozwell-tool-call` event to your page. Your code runs the action and sends a result back. The AI then uses that result to respond to the user.
+
+### Step 1: Load the Widget with an Agent Key
+
+Your agent definition (created via the [Agent Registration API](../backend/agents.md)) includes the tools Ozwell can offer. The widget discovers them automatically.
+
+```html
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+That's the same script tag from [Quick Start](#quick-start). If your agent has tools defined, they just work — the widget discovers them during its MCP handshake with the server.
+
+### Step 2: Handle Tool Calls
+
+When the AI calls one of your tools, the loader dispatches an `ozwell-tool-call` DOM event on `document`. Listen for it and call `respond()` with the result:
+
+```javascript
+document.addEventListener('ozwell-tool-call', (e) => {
+  const { name, arguments: args, respond } = e.detail;
+
+  if (name === 'update_form_data') {
+    // Do whatever you want — update inputs, call your own API, etc.
+    if (args.name) document.getElementById('input-name').value = args.name;
+    if (args.email) document.getElementById('input-email').value = args.email;
+
+    // Tell Ozwell what happened
+    respond({ success: true, message: 'Fields updated' });
+
+  } else if (name === 'get_form_data') {
+    // Tools can also READ from your page
+    respond({
+      success: true,
+      data: {
+        name: document.getElementById('input-name').value,
+        email: document.getElementById('input-email').value
+      }
+    });
+  }
+});
+```
+
+**You must call `respond()`.** The AI is waiting for the result. If you don't respond, the conversation will hang.
+
+### Step 3: That's It
+
+There is no step 3. The loader handles the MCP protocol, JSON-RPC messages, and postMessage plumbing. You write normal JavaScript in a normal event listener.
+
+### What Goes in the Agent Definition vs. Your Page
+
+| Concern | Where It Lives | Who Manages It |
+|---------|----------------|----------------|
+| Tool names and descriptions | Agent definition (server) | You, via the [Agent API](../backend/agents.md) |
+| Parameter schemas (what inputs the tool accepts) | Agent definition (server) | You, via the Agent API |
+| System prompt ("you are a helpful assistant…") | Agent definition (server) | You, via the Agent API |
+| **What happens when a tool is called** | **Your page (client)** | **Your JavaScript** |
+
+The AI sees the tool name, description, and parameter schema to decide *when* to call a tool and *what arguments* to pass. Your page decides *what to do* with those arguments.
+
+### Alternative: Define Tools Inline (Parent Key)
+
+If you're using a parent API key (`ozw_...`) instead of an agent key, you can define tools directly in your page config. This gives you full client-side control but means you also need to provide the system prompt and model yourself:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'ozw_your-api-key',
+    model: 'qwen2.5-coder:3b',
+    system: 'You are a helpful assistant for managing user profiles.',
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'update_form_data',
+        description: 'Updates user profile fields on the page',
+        parameters: {
+          type: 'object',
+          properties: {
+            name:  { type: 'string', description: 'New display name' },
+            email: { type: 'string', description: 'New email address' }
+          },
+          required: []
+        }
+      }
+    }]
+  };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+You still handle `ozwell-tool-call` the same way — the event listener code doesn't change.
+
+### Security: What Crosses the Iframe Boundary
+
+Understanding what data flows where:
+
+| Data | Crosses the boundary? | Direction |
+|------|----------------------|-----------|
+| Tool call name + arguments | ✅ Yes | Ozwell → Your page |
+| Tool result (your `respond()`) | ✅ Yes | Your page → Ozwell |
+| User's chat messages | ❌ No | Stays in iframe |
+| AI's text responses | ❌ No | Stays in iframe |
+| Your page's DOM, cookies, JS | ❌ No | Stays on your page |
+
+The AI can only call tools you've defined. It cannot access your page's DOM, make arbitrary network requests from your origin, or read anything you haven't explicitly returned via `respond()`.
+
+### Tips
+
+- **Write good tool descriptions.** The AI reads them to decide when to use a tool. "Updates user profile fields on the page" is better than "updates stuff."
+- **Validate arguments.** The AI usually gets the schema right, but treat the incoming `args` like any untrusted input — check types and ranges before acting on them.
+- **Return useful results.** The AI uses `respond()` data to craft its reply. If you return `{ success: true }`, the AI can only say "done." If you return `{ success: true, message: "Name changed from Alice to Bob" }`, the AI can confirm the details.
+- **Use `debug: true` during development.** It shows tool execution pills in the chat UI so you can see what's happening.
+
+For the full postMessage protocol details (useful if you're building a custom integration without the loader), see the [Embed Widget README](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed). For the design inspiration behind this architecture, see [MCP postMessage Standard](./mcp-postmessage-standard.md).
+
+---
+
 ## Examples
 
 :::note Current Script URLs
@@ -216,6 +354,66 @@ The examples below use `cdn.ozwell.ai/embed.js` which is the future production C
   data-api-key="agnt_key-your-agent-key"
 ></script>
 ```
+
+### Complete Page with Tool Calling
+
+A full working example — an AI assistant that can read and update form fields on the page:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My App — with Ozwell</title>
+</head>
+<body>
+  <h1>User Profile</h1>
+  <form id="profile-form">
+    <label>Name: <input type="text" id="input-name" value="Alice Johnson" /></label><br/>
+    <label>Email: <input type="email" id="input-email" value="alice@example.com" /></label><br/>
+    <label>Zip:  <input type="text" id="input-zip" value="90210" /></label>
+  </form>
+
+  <!-- 1. Load Ozwell (agent key — tools defined server-side) -->
+  <script>
+    window.OzwellChatConfig = {
+      apiKey: 'agnt_key-your-agent-key',
+      welcomeMessage: 'Hi! I can view or update your profile. Just ask.',
+      debug: true  // shows tool pills in chat — turn off in production
+    };
+  </script>
+  <script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+
+  <!-- 2. Handle tool calls -->
+  <script>
+    document.addEventListener('ozwell-tool-call', (e) => {
+      const { name, arguments: args, respond } = e.detail;
+
+      if (name === 'get_form_data') {
+        respond({
+          success: true,
+          data: {
+            name: document.getElementById('input-name').value,
+            email: document.getElementById('input-email').value,
+            zip: document.getElementById('input-zip').value
+          }
+        });
+
+      } else if (name === 'update_form_data') {
+        if (args.name)  document.getElementById('input-name').value = args.name;
+        if (args.email) document.getElementById('input-email').value = args.email;
+        if (args.zip)   document.getElementById('input-zip').value = args.zip;
+        respond({ success: true, message: 'Profile updated' });
+
+      } else {
+        respond({ success: false, error: `Unknown tool: ${name}` });
+      }
+    });
+  </script>
+</body>
+</html>
+```
+
+Try saying: *"what's my name?"* or *"change my email to bob@example.com"*
 
 ---
 
@@ -289,6 +487,9 @@ The widget renders in an iframe, so styling conflicts are rare. If you need to a
 
 ## Next Steps
 
+- [Agent Registration API](../backend/agents.md) — Create agents and define tools server-side
+- [MCP postMessage Standard](./mcp-postmessage-standard.md) — The design ideas behind Ozwell's tool-calling architecture
+- [Embed Widget README](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed) — Raw postMessage protocol details for custom integrations
 - [Framework Integration](./overview.md) — For React, Vue, Svelte apps
 - [Iframe Details](./iframe-integration.md) — Deep dive on iframe security
 - [Backend API](../backend/overview.md) — Server-side integration
