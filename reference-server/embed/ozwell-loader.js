@@ -165,6 +165,7 @@
   }
 
   const EMPTY_SCHEMA = { type: 'object', properties: {} };
+  const PAGE_TOOL_PREFIX = 'postMessage:';
 
   function normalizeTool(tool) {
     if (typeof tool === 'string') {
@@ -184,11 +185,27 @@
     };
   }
 
+  /** Add postMessage: prefix to a page tool so it can't collide with server-side tools. */
+  function prefixPageTool(tool) {
+    return { ...tool, name: PAGE_TOOL_PREFIX + tool.name };
+  }
+
   function getMcpTools() {
-    const tools = (state.agentTools && state.agentTools.length > 0)
-      ? state.agentTools
-      : (currentConfig().tools || []);
-    return tools.map(normalizeTool);
+    const agentTools = (state.agentTools && state.agentTools.length > 0)
+      ? state.agentTools.map(normalizeTool)
+      : [];
+    // Page tools are prefixed so they occupy a separate namespace from
+    // server-implemented tools. The prefix is transparent to page authors —
+    // it is stripped before dispatching ozwell-tool-call events.
+    const pageTools = (currentConfig().tools || []).map(normalizeTool).map(prefixPageTool);
+
+    // Merge: agent-defined tools first, then page tools that don't collide.
+    // If the agent defines no tools, all page tools are available.
+    if (agentTools.length === 0) return pageTools;
+
+    const agentNames = new Set(agentTools.map(t => t.name));
+    const extra = pageTools.filter(t => !agentNames.has(t.name));
+    return agentTools.concat(extra);
   }
 
   function handleMcpMessage(event) {
@@ -222,9 +239,14 @@
         break;
 
       case 'tools/call': {
-        const toolName = data.params?.name;
+        const rawToolName = data.params?.name;
         const toolArgs = data.params?.arguments || {};
         const requestId = data.id;
+
+        // Strip postMessage: prefix so page handlers see the original name
+        const toolName = rawToolName && rawToolName.startsWith(PAGE_TOOL_PREFIX)
+          ? rawToolName.slice(PAGE_TOOL_PREFIX.length)
+          : rawToolName;
 
         // Dispatch as DOM event — integrator listens for this
         const toolEvent = new CustomEvent('ozwell-tool-call', {

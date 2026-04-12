@@ -131,7 +131,8 @@ Create a new agent with a YAML configuration wrapped in JSON.
 | `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
 | `model` | string | No | Model ID (default: `llama3.1:latest`) |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
-| `tools` | array | No | Allowlist of tool names the agent may use. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. The client page must supply full tool schemas at chat time — the server uses this list only for filtering. |
+| `tools` | array | No | Server-side tool definitions. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. These are always available to the agent. Page-provided tools are separate and controlled by `pageTools`. |
+| `pageTools` | string or object | No | Controls which page-provided tools (via `postMessage:`) the agent can call. `all` (default) — accept everything. `{ restricted: [...] }` — only these page tools. `{ blocked: [...] }` — all page tools except these. |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |
 
 #### Example
