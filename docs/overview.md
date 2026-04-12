@@ -74,8 +74,6 @@ graph TB
         User1[👤 User] -->|Types| Widget[💬 Ozwell Widget]
         Widget -->|iframe on| Site1[🌐 Your Site]
         Widget -.->|Direct| OzwellAPI1[☁️ Ozwell API]
-        style Widget fill:#e3f2fd
-        style OzwellAPI1 fill:#e3f2fd
     end
     
     subgraph "Option 2: Custom UI + Your Backend (Most Flexible)"
@@ -83,16 +81,11 @@ graph TB
         CustomUI -->|in| Site2[🌐 Your Site]
         CustomUI -->|Calls| YourBackend[🖥️ Your Backend API]
         YourBackend -->|Proxies to| OzwellAPI2[☁️ Ozwell API]
-        style CustomUI fill:#fff9c4
-        style YourBackend fill:#fff9c4
-        style OzwellAPI2 fill:#e3f2fd
     end
     
     subgraph "Option 3: Backend Only (Automation)"
         YourServer[⚙️ Your Server] -->|Automated| OzwellAPI3[☁️ Ozwell API]
         OzwellAPI3 -.->|Results| YourServer
-        style YourServer fill:#fff3e0
-        style OzwellAPI3 fill:#e3f2fd
     end
 ```
 
@@ -118,11 +111,6 @@ graph TB
     CDN --> F1[✨ Fastest: 5 minutes<br/>📜 One script tag<br/>🎯 Perfect for demos]
     
     Framework --> F2[🚀 Production ready<br/>🎨 Matches your app<br/>⏱️ Setup: 15 minutes]
-    
-    style Backend fill:#fff3e0
-    style Custom fill:#fff9c4
-    style CDN fill:#e3f2fd
-    style Framework fill:#e3f2fd
 ```
 
 ### Real-World Scenarios

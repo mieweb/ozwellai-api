@@ -64,6 +64,20 @@
   color: #04a454 !important;
 }
 
+/* Dark mode toggle — visible on dark navbar */
+.navbar .clean-btn[class*='toggle'] svg,
+.navbar .clean-btn[class*='colorMode'] svg {
+  color: #ffffff;
+}
+
+button[class*='toggleButton'] {
+  color: #ffffff !important;
+}
+
+[data-theme='dark'] button[class*='toggleButton'] {
+  color: #ffffff !important;
+}
+
 /* Privacy callout styling */
 .privacy-note {
   background: linear-gradient(135deg, #0b1844 0%, #162b72 100%);
@@ -188,7 +202,17 @@ table {
   --ifm-alert-background-color: rgba(255, 209, 0, 0.1);
 }
 
-/* Mermaid diagram with MIE theme */
+/* Mermaid diagram sizing */
 .docusaurus-mermaid-container svg {
   max-width: 100%;
+}
+
+/* Fix Mermaid subgraph contrast in dark mode */
+[data-theme='dark'] .docusaurus-mermaid-container .cluster rect {
+  fill: rgba(255, 255, 255, 0.07) !important;
+  stroke: rgba(255, 255, 255, 0.2) !important;
+}
+
+[data-theme='dark'] .docusaurus-mermaid-container .cluster span {
+  color: #d1d5db !important;
 }

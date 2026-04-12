@@ -120,11 +120,6 @@ graph TB
 
     LLM -->|"tool_call via postMessage"| Tools
     Tools -->|"tool_result via postMessage"| LLM
-
-    classDef server fill:#e0f2fe,stroke:#0284c7
-    classDef client fill:#fef3c7,stroke:#d97706
-    class Parent,Tools server
-    class Chat,LLM client
 ```
 
 ### How It Works
@@ -175,11 +170,6 @@ graph LR
     MCP -->|"inverted architecture<br/>origin security<br/>two-phase handshake"| OZ
     WebMCP -->|"tool registration<br/>human-in-the-loop<br/>browser-native vision"| OZ
     MCPB -->|"tab transport<br/>extension integration"| OZ
-
-    classDef proposal fill:#f3e8ff,stroke:#7c3aed
-    classDef ozwell fill:#dcfce7,stroke:#16a34a
-    class MCP,WebMCP,MCPB proposal
-    class OZ ozwell
 ```
 
 ## Further Reading
