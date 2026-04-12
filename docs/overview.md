@@ -68,26 +68,7 @@ When you build your own chat interface powered by Ozwell's API, you **must NOT**
 - **Example:** Automated document processing, email summarization, data analysis
 - **Security:** API keys stay on your server
 
-```mermaid
-graph TB
-    subgraph "Option 1: Ozwell's Widget (Fastest)"
-        User1[👤 User] -->|Types| Widget[💬 Ozwell Widget]
-        Widget -->|iframe on| Site1[🌐 Your Site]
-        Widget -.->|Direct| OzwellAPI1[☁️ Ozwell API]
-    end
-    
-    subgraph "Option 2: Custom UI + Your Backend (Most Flexible)"
-        User2[👤 User] -->|Types| CustomUI[🎨 Your Custom UI]
-        CustomUI -->|in| Site2[🌐 Your Site]
-        CustomUI -->|Calls| YourBackend[🖥️ Your Backend API]
-        YourBackend -->|Proxies to| OzwellAPI2[☁️ Ozwell API]
-    end
-    
-    subgraph "Option 3: Backend Only (Automation)"
-        YourServer[⚙️ Your Server] -->|Automated| OzwellAPI3[☁️ Ozwell API]
-        OzwellAPI3 -.->|Results| YourServer
-    end
-```
+
 
 ### Which Option Should You Choose?
 
@@ -118,19 +99,19 @@ graph TB
 **Scenario A: Marketing Website**
 > "I want to add AI chat to my marketing site for customer support"
 
-→ **Use Option 1 (CDN Embed)** - Quick, no backend needed
+→ **[Use Option 1 (CDN Embed)](./frontend/cdn-embed.md)** - Quick, no backend needed
 
 **Scenario B: SaaS Application**
 > "I'm building a custom app and want AI chat that matches my design and integrates with my user accounts"
 
-→ **Use Option 2 (Your Frontend + Backend)** - Full control, custom UX
+→ **[Use Option 2 (Your Frontend + Backend)](./backend/overview.md)** - Full control, custom UX
 
 ⚠️ **Important:** Brand it as YOUR application's assistant. Users must understand they're talking to your app (which uses Ozwell's AI behind the scenes), not directly to Ozwell. This affects their privacy expectations - data flows through YOUR system.
 
 **Scenario C: Document Processing Service**
 > "I need to automatically analyze uploaded documents and extract information"
 
-→ **Use Option 3 (Backend API Only)** - No UI needed, pure automation
+→ **[Use Option 3 (Backend API Only)](./backend/overview.md)** - No UI needed, pure automation
 
 ---
 
