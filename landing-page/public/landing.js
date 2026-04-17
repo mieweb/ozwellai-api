@@ -325,7 +325,7 @@
 
         if (updates.length > 0) {
           logEvent('postmessage', '[Handler] Form data updated', `Updated: ${updates.join(', ')}`);
-          respond({ success: true, message: `Updated: ${updates.join(', ')}` });
+          respond({ success: true, updated: updates });
         } else {
           respond({ success: false, error: 'No fields provided to update' });
         }
