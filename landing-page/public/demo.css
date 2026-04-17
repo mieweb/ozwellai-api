@@ -309,6 +309,99 @@ body {
   font-weight: bold;
 }
 
+/* Method Accordion */
+.method-accordion {
+  margin: 1rem 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.method-tab {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.method-tab:last-child {
+  border-bottom: none;
+}
+
+.method-tab-header {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.method-tab-header:hover {
+  background: #f3f4f6;
+}
+
+.method-arrow {
+  font-size: 0.7rem;
+  color: #6b7280;
+  transition: transform 0.2s;
+}
+
+.method-tab-content {
+  display: none;
+  padding: 1rem;
+  background: #ffffff;
+}
+
+.method-tab-content.open {
+  display: block;
+}
+
+.method-tab-content .code-block {
+  margin: 0;
+}
+
+/* Swagger UI embed overrides */
+#swagger-ui-embed {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+#swagger-ui-embed .swagger-ui .topbar,
+#swagger-ui-embed .swagger-ui .info,
+#swagger-ui-embed .swagger-ui .opblock-tag-section > .opblock-tag,
+#swagger-ui-embed .swagger-ui .operation-servers,
+#swagger-ui-embed .swagger-ui .responses-inner > .responses-table {
+  display: none;
+}
+
+#swagger-ui-embed .swagger-ui .scheme-container {
+  padding: 0.5rem 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#swagger-ui-embed .swagger-ui .opblock {
+  box-shadow: none;
+}
+
+#swagger-ui-embed .swagger-ui textarea.body-param__text {
+  min-height: 150px;
+  font-size: 0.85rem;
+}
+
+.swagger-loading-hint {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem 0;
+}
+
 /* Main Container */
 .main-container {
   min-height: 100vh;
@@ -366,6 +459,19 @@ body {
 
 .demo-link:active {
   transform: translateY(0);
+}
+
+/* Coming soon nav button */
+.demo-link-coming-soon {
+  background: #94a3b8;
+  cursor: default;
+  position: relative;
+}
+
+.demo-link-coming-soon:hover {
+  background: #94a3b8;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Demo Content */
