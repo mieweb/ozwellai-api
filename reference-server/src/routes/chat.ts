@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken } from '../util';
-import { agentStore } from '../storage/agents';
+import { agentStore, type PageToolsPolicy } from '../storage/agents';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -316,7 +316,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as ChatCompletionRequestWithTools;
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; model: string | null; temperature: number | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null } | null = null;
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
@@ -349,9 +349,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
       agentConfig = {
         systemPrompt,
-        allowedTools: agent.tools && Array.isArray(agent.tools)
+        allowedTools: agent.tools && Array.isArray(agent.tools) && agent.tools.length > 0
           ? agent.tools.map(t => typeof t === 'string' ? t : t.name)
-          : [],
+          : null,
+        pageTools: agent.pageTools ?? 'all',
         model: agent.model || null,
         temperature: agent.temperature ?? null,
       };
@@ -401,18 +402,40 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // --- Agent: filter tools by allowed list ---
+    // --- Agent: filter tools ---
+    // Tools arriving from the widget use two namespaces:
+    //   • bare names       — server-side tools (defined in the agent's tools array)
+    //   • postMessage:name — page-provided tools (prefixed by the loader)
+    //
+    // allowedTools (from agent.tools) gates bare-name tools.
+    // pageTools policy gates postMessage:-prefixed tools.
+    const PM_PREFIX = 'postMessage:';
     let filteredTools = tools;
     if (agentConfig !== null && tools) {
-      const allowed = agentConfig.allowedTools ?? [];
-      filteredTools = tools.filter(
-        (t) =>
-          t &&
-          t.type === 'function' &&
-          t.function &&
-          typeof t.function.name === 'string' &&
-          allowed.includes(t.function.name)
-      );
+      const allowed = agentConfig.allowedTools;          // null = no server tools defined
+      const pagePolicy = agentConfig.pageTools;          // 'all' | { restricted: [...] } | { blocked: [...] }
+
+      filteredTools = tools.filter((t) => {
+        if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
+        const name = t.function.name;
+
+        if (name.startsWith(PM_PREFIX)) {
+          // Page tool — apply pageTools policy
+          const bare = name.slice(PM_PREFIX.length);
+          if (pagePolicy === 'all') return true;
+          if (typeof pagePolicy === 'object' && 'restricted' in pagePolicy) {
+            return pagePolicy.restricted.includes(bare);
+          }
+          if (typeof pagePolicy === 'object' && 'blocked' in pagePolicy) {
+            return !pagePolicy.blocked.includes(bare);
+          }
+          return true;  // unrecognized policy → allow
+        } else {
+          // Server-side tool — apply allowedTools allowlist
+          if (allowed === null) return true;    // no allowlist → pass all
+          return allowed.includes(name);
+        }
+      });
     }
 
     // Use Ollama if available (checked independently of auth token)

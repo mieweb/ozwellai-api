@@ -92,7 +92,7 @@ Content-Security-Policy:
 
 ## Communication Protocol
 
-The host page and iframe communicate via the [PostMessage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage).
+The host page and iframe communicate via the [PostMessage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage), implementing an *inverted* MCP postMessage transport pattern. See [MCP postMessage Standard](./mcp-postmessage-standard.md) for the community proposals that inspired this design.
 
 ### Message Format
 
@@ -329,6 +329,7 @@ Only one Ozwell iframe should be active per page. If you need different agents o
 
 ## Next Steps
 
+- [MCP postMessage Standard](./mcp-postmessage-standard.md) — How MCP proposals inspired this architecture
 - [CDN Embed](./cdn-embed.md) — Quick script-based integration
 - [Framework Guides](./overview.md) — React, Vue, Svelte
 - [Backend API](../backend/overview.md) — Server-side integration

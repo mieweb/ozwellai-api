@@ -75,8 +75,31 @@ function parseYamlInput(yamlInput: string) {
     const temperature = parsed.temperature as number | undefined;
     const tools = parsed.tools as (string | { name: string; description?: string; inputSchema?: Record<string, unknown>; parameters?: Record<string, unknown> })[] | undefined;
     const behavior = parsed.behavior as Record<string, unknown> | undefined;
+    const pageTools = parsePageTools(parsed.pageTools);
 
-    return { name, instructions, model, temperature, tools, behavior };
+    return { name, instructions, model, temperature, tools, behavior, pageTools };
+}
+
+/** Validate and normalize the pageTools YAML field.
+ *  Accepted forms:
+ *    pageTools: all                          → 'all'
+ *    pageTools: { restricted: [tool1, …] }   → { restricted: [...] }
+ *    pageTools: { blocked: [tool1, …] }      → { blocked: [...] }
+ *    (omitted / undefined)                   → undefined  (treated as 'all')
+ */
+function parsePageTools(raw: unknown): import('../storage/agents.js').PageToolsPolicy | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (raw === 'all') return 'all';
+    if (typeof raw === 'object' && raw !== null) {
+        const obj = raw as Record<string, unknown>;
+        if (Array.isArray(obj.restricted)) {
+            return { restricted: obj.restricted.filter((s): s is string => typeof s === 'string') };
+        }
+        if (Array.isArray(obj.blocked)) {
+            return { blocked: obj.blocked.filter((s): s is string => typeof s === 'string') };
+        }
+    }
+    return undefined;
 }
 
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
@@ -222,6 +245,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             name: agent.name,
             model: agent.model,
             tools: normalizeTools(agent.tools),
+            pageTools: agent.pageTools,
         };
     });
 
@@ -244,6 +268,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                     model: a.model,
                     tools: a.tools,
                     behavior: a.behavior,
+                    pageTools: a.pageTools,
                     created_at: a.created_at,
                 })),
             };
@@ -279,6 +304,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 temperature: agent.temperature,
                 tools: agent.tools,
                 behavior: agent.behavior,
+                pageTools: agent.pageTools,
             };
         } catch (error) {
             fastify.log.error(error);
@@ -323,6 +349,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 model: updated.model,
                 tools: updated.tools,
                 behavior: updated.behavior,
+                pageTools: updated.pageTools,
                 updated: true,
             };
         } catch (error) {
