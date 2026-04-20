@@ -168,6 +168,81 @@
       border-radius: 4px;
       font-size: 12px;
     }
+
+    /* Agents list */
+    .agents-section { display: none; }
+    .agents-section.visible { display: block; }
+    .agents-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .new-agent-btn {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #374151;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .new-agent-btn:hover { background: #f3f4f6; }
+    .new-agent-btn:disabled { opacity: 0.5; cursor: default; }
+    .agent-list { list-style: none; }
+    .agent-list li {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .agent-list li:hover { background: #f9fafb; }
+    .agent-list li.active {
+      border-color: #0066ff;
+      background: #eff6ff;
+    }
+    .agent-list-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .agent-list-key {
+      font-family: monospace;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .agent-list-row-actions { display: flex; gap: 8px; align-items: center; }
+    .delete-icon-btn {
+      background: none;
+      border: none;
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .delete-icon-btn:hover { background: #fee2e2; }
+    .agents-empty {
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 8px 0;
+    }
+    .editing-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #1e40af;
+    }
+    .editing-banner.hidden { display: none; }
   </style>
   <!-- Q agent config generator (bundled via esbuild) -->
   <link rel="stylesheet" href="/vendor/q-bundle.css" />
@@ -179,8 +254,8 @@
       <div class="back-link-container">
         <a href="/" class="back-link">&larr; Back to demos</a>
       </div>
-      <h1 class="header-title">Create an Agent</h1>
-      <p class="header-subtitle">Configure your agent visually, then hit Submit to register.</p>
+      <h1 class="header-title">Agents</h1>
+      <p class="header-subtitle">Create a new agent or edit an existing one.</p>
     </header>
 
     <!-- 1. API Key -->
@@ -194,9 +269,20 @@
       <div id="key-status" class="key-status"></div>
     </div>
 
-    <!-- 2. Q sandbox -->
+    <!-- 2. Existing agents -->
+    <div id="agents-section" class="section agents-section">
+      <div class="agents-header">
+        <h3 style="margin:0;">Your agents</h3>
+        <button id="new-agent-btn" class="new-agent-btn" disabled>+ New agent</button>
+      </div>
+      <ul id="agent-list" class="agent-list"></ul>
+      <div id="agents-empty" class="agents-empty" style="display:none;">No agents yet. The form below creates a new one.</div>
+    </div>
+
+    <!-- 3. Q sandbox -->
     <div class="section q-section">
-      <h3>2. Configure your agent</h3>
+      <h3 id="q-section-title">Configure your agent</h3>
+      <div id="editing-banner" class="editing-banner hidden"></div>
       <div id="q-overlay" class="q-overlay">
         <span>Enter your API key above to unlock</span>
       </div>
@@ -205,10 +291,10 @@
       </div>
     </div>
 
-    <!-- 3. Result -->
+    <!-- 4. Result -->
     <div id="result-section" class="section result-section">
-      <h3>Your agent key</h3>
-      <p>Use this key in the widget embed code to connect to your agent.</p>
+      <h3 id="result-title">Your agent key</h3>
+      <p id="result-sub">Use this key in the widget embed code to connect to your agent.</p>
       <div class="agent-key-box">
         <span id="agent-key-value" class="agent-key-value"></span>
         <button id="copy-btn" class="copy-btn">Copy</button>
@@ -223,14 +309,34 @@
 
     let apiKeyValidated = false;
     let currentYaml = null;
+    let editingAgentId = null; // null = create mode; string = editing that agent
+    let agents = [];
 
     const apiKeyInput = document.getElementById('api-key-input');
     const validateBtn = document.getElementById('validate-btn');
     const keyStatus = document.getElementById('key-status');
     const qOverlay = document.getElementById('q-overlay');
     const resultSection = document.getElementById('result-section');
+    const resultTitle = document.getElementById('result-title');
+    const resultSub = document.getElementById('result-sub');
     const agentKeyValue = document.getElementById('agent-key-value');
     const copyBtn = document.getElementById('copy-btn');
+    const agentsSection = document.getElementById('agents-section');
+    const agentList = document.getElementById('agent-list');
+    const agentsEmpty = document.getElementById('agents-empty');
+    const newAgentBtn = document.getElementById('new-agent-btn');
+    const editingBanner = document.getElementById('editing-banner');
+    const qSectionTitle = document.getElementById('q-section-title');
+
+    function maskKey(key) {
+      if (!key) return '';
+      const last4 = key.slice(-4);
+      return '••••' + last4;
+    }
+
+    function authHeaders(extra) {
+      return { 'Authorization': `Bearer ${apiKeyInput.value.trim()}`, ...(extra || {}) };
+    }
 
     // Reset validated state if key is edited after validation
     apiKeyInput.addEventListener('input', () => {
@@ -256,6 +362,9 @@
           keyStatus.textContent = 'Valid key';
           keyStatus.className = 'key-status valid';
           qOverlay.classList.add('hidden');
+          agentsSection.classList.add('visible');
+          newAgentBtn.disabled = false;
+          await loadAgents();
           mountQ();
         } else {
           keyStatus.textContent = 'Invalid key';
@@ -344,7 +453,15 @@
     let qGenerator = null;
     let isCreating = false;
 
-    async function mountQ() {
+    async function remountQ(extraOpts) {
+      if (qGenerator) {
+        try { qGenerator.destroy(); } catch { /* ignore */ }
+        qGenerator = null;
+      }
+      await mountQ(extraOpts);
+    }
+
+    async function mountQ(extraOpts) {
       if (qGenerator) return;
       const mount = document.getElementById('q-mount');
       mount.textContent = '';
@@ -356,9 +473,7 @@
 
       // Fetch available models from the server and update schema
       try {
-        const modelsResp = await fetch(normalizedBase + '/v1/models', {
-          headers: { 'Authorization': `Bearer ${apiKeyInput.value.trim()}` }
-        });
+        const modelsResp = await fetch(normalizedBase + '/v1/models', { headers: authHeaders() });
         if (modelsResp.ok) {
           const modelsData = await modelsResp.json();
           const models = modelsData.data || [];
@@ -379,6 +494,7 @@
       qGenerator = new window.UniversalAgentConfigGenerator(mount, {
         schema: ozwellSchema,
         showEditor: true,
+        ...(extraOpts || {}),
       });
 
       mount.addEventListener('config-change', (e) => {
@@ -399,26 +515,38 @@
       if (!apiKeyValidated || isCreating) return;
 
       const yaml = currentYaml || DEFAULT_YAML;
-
       isCreating = true;
 
       try {
-        const resp = await fetch(normalizedBase + '/v1/agents', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKeyInput.value.trim()}`,
-            'Content-Type': 'application/yaml',
-          },
-          body: yaml,
-        });
-
-        const data = await resp.json();
-
-        if (resp.ok && data.agent_key) {
-          agentKeyValue.textContent = data.agent_key;
-          resultSection.classList.add('visible');
+        if (editingAgentId) {
+          const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(editingAgentId), {
+            method: 'PUT',
+            headers: authHeaders({ 'Content-Type': 'application/yaml' }),
+            body: yaml,
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            alert('Failed to save: ' + (data.error?.message || JSON.stringify(data)));
+          } else {
+            showResult(data.agent_key, 'saved');
+            await loadAgents();
+          }
         } else {
-          alert('Failed to create agent: ' + (data.error?.message || JSON.stringify(data)));
+          const resp = await fetch(normalizedBase + '/v1/agents', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/yaml' }),
+            body: yaml,
+          });
+          const data = await resp.json();
+          if (resp.ok && data.agent_key) {
+            showResult(data.agent_key, 'created');
+            // Switch into edit mode for the just-created agent
+            editingAgentId = data.agent_id;
+            await loadAgents();
+            renderEditingUI();
+          } else {
+            alert('Failed to create agent: ' + (data.error?.message || JSON.stringify(data)));
+          }
         }
       } catch (e) {
         alert('Error: ' + e.message);
@@ -426,6 +554,140 @@
 
       isCreating = false;
     }
+
+    function showResult(key, mode) {
+      agentKeyValue.textContent = key;
+      if (mode === 'saved') {
+        resultTitle.textContent = 'Saved';
+        resultSub.textContent = 'Agent updated. The agent key stays the same.';
+      } else {
+        resultTitle.textContent = 'Your agent key';
+        resultSub.textContent = 'Use this key in the widget embed code to connect to your agent.';
+      }
+      resultSection.classList.add('visible');
+    }
+
+    async function loadAgents() {
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents', { headers: authHeaders() });
+        if (!resp.ok) throw new Error('list failed');
+        const data = await resp.json();
+        agents = data.data || [];
+        renderAgentList();
+      } catch {
+        agents = [];
+        renderAgentList();
+      }
+    }
+
+    function renderAgentList() {
+      agentList.innerHTML = '';
+      if (!agents.length) {
+        agentsEmpty.style.display = 'block';
+        return;
+      }
+      agentsEmpty.style.display = 'none';
+      for (const a of agents) {
+        const li = document.createElement('li');
+        if (a.id === editingAgentId) li.classList.add('active');
+
+        const left = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'agent-list-name';
+        name.textContent = a.name || '(unnamed)';
+        left.appendChild(name);
+
+        const right = document.createElement('div');
+        right.className = 'agent-list-row-actions';
+        const keySpan = document.createElement('span');
+        keySpan.className = 'agent-list-key';
+        keySpan.textContent = maskKey(a.agent_key);
+        const del = document.createElement('button');
+        del.className = 'delete-icon-btn';
+        del.textContent = 'Delete';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteAgent(a.id, a.name);
+        });
+        right.appendChild(keySpan);
+        right.appendChild(del);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        li.addEventListener('click', () => loadAgentIntoForm(a.id));
+        agentList.appendChild(li);
+      }
+    }
+
+    async function loadAgentIntoForm(id) {
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(id), { headers: authHeaders() });
+        if (!resp.ok) throw new Error('load failed');
+        const data = await resp.json();
+
+        editingAgentId = id;
+        currentYaml = data.yaml || null;
+
+        const initialConfig = {
+          name: data.name,
+          instructions: data.instructions,
+          model: data.model,
+          temperature: data.temperature,
+          tools: data.tools,
+          behavior: data.behavior,
+        };
+
+        await remountQ({ initialConfig });
+
+        renderAgentList();
+        renderEditingUI();
+        resultSection.classList.remove('visible');
+      } catch (e) {
+        alert('Failed to load agent: ' + e.message);
+      }
+    }
+
+    async function deleteAgent(id, name) {
+      if (!confirm(`Delete agent "${name || id}"? This cannot be undone.`)) return;
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(id), {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          alert('Failed to delete: ' + (data.error?.message || resp.status));
+          return;
+        }
+        if (editingAgentId === id) resetToCreateMode();
+        await loadAgents();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function resetToCreateMode() {
+      editingAgentId = null;
+      currentYaml = null;
+      await remountQ();
+      renderEditingUI();
+      renderAgentList();
+      resultSection.classList.remove('visible');
+    }
+
+    function renderEditingUI() {
+      if (editingAgentId) {
+        const a = agents.find(x => x.id === editingAgentId);
+        editingBanner.textContent = `Editing "${a?.name || editingAgentId}" — submit to save changes. Agent key stays the same.`;
+        editingBanner.classList.remove('hidden');
+        qSectionTitle.textContent = 'Edit agent';
+      } else {
+        editingBanner.classList.add('hidden');
+        qSectionTitle.textContent = 'Configure your agent';
+      }
+    }
+
+    newAgentBtn.addEventListener('click', resetToCreateMode);
 
     // Copy agent key
     copyBtn.addEventListener('click', async () => {

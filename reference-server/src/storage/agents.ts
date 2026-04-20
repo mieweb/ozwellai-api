@@ -6,13 +6,7 @@ interface DbAgentRow {
     id: string;
     agent_key: string;
     parent_key: string;
-    name: string;
-    instructions: string;
-    model: string | null;
-    temperature: number | null;
-    tools: string | null;
-    behavior: string | null;
-    page_tools: string | null;
+    yaml: string;
     created_at: number;
 }
 
@@ -68,34 +62,25 @@ export function seedDemoData(db: Database.Database): void {
 
 // ── Agent model ─────────────────────────────────────────────────────
 
+/**
+ * pageTools policy gates the postMessage:-prefixed tools an agent may call.
+ * Stored inside the agent YAML blob; chat.ts reads it after parsing.
+ */
 export type PageToolsPolicy =
     | 'all'                           // allow all page tools (default)
     | { restricted: string[] }        // only these page tools
     | { blocked: string[] };          // all page tools except these
 
-export interface ToolDefinition {
-    name: string;
-    description?: string;
-    inputSchema?: Record<string, unknown>;
-}
-
 export interface Agent {
     id: string;
     agent_key: string;
     parent_key: string;
-    name: string;
-    instructions: string;
-    model?: string;
-    temperature?: number;
-    tools?: (string | ToolDefinition)[];
-    behavior?: Record<string, unknown>;
-    pageTools?: PageToolsPolicy;
+    yaml: string;
     created_at: number;
 }
 
 export class AgentStore {
     private db: Database.Database;
-    // Cached prepared statements
     private stmtInsert: Database.Statement;
     private stmtGetByKey: Database.Statement;
     private stmtGetById: Database.Statement;
@@ -112,15 +97,14 @@ export class AgentStore {
         this.initTable();
 
         this.stmtInsert = this.db.prepare(`
-          INSERT INTO agents (id, agent_key, parent_key, name, instructions, model, temperature, tools, behavior, page_tools, created_at)
-          VALUES (@id, @agent_key, @parent_key, @name, @instructions, @model, @temperature, @tools, @behavior, @page_tools, @created_at)
+          INSERT INTO agents (id, agent_key, parent_key, yaml, created_at)
+          VALUES (@id, @agent_key, @parent_key, @yaml, @created_at)
         `);
         this.stmtGetByKey = this.db.prepare('SELECT * FROM agents WHERE agent_key = ?');
         this.stmtGetById = this.db.prepare('SELECT * FROM agents WHERE id = ?');
         this.stmtListByParent = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
         this.stmtUpdate = this.db.prepare(`
-          UPDATE agents SET name = @name, instructions = @instructions, model = @model,
-            temperature = @temperature, tools = @tools, behavior = @behavior, page_tools = @page_tools
+          UPDATE agents SET yaml = @yaml
           WHERE id = @id AND parent_key = @parent_key
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
@@ -133,24 +117,12 @@ export class AgentStore {
         id TEXT PRIMARY KEY,
         agent_key TEXT UNIQUE NOT NULL,
         parent_key TEXT NOT NULL,
-        name TEXT NOT NULL,
-        instructions TEXT NOT NULL,
-        model TEXT,
-        temperature REAL,
-        tools TEXT,
-        behavior TEXT,
-        page_tools TEXT,
+        yaml TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
     `);
-        // Migration: add page_tools column if missing (existing DBs)
-        try {
-            this.db.exec('ALTER TABLE agents ADD COLUMN page_tools TEXT');
-        } catch {
-            // Column already exists — ignore
-        }
     }
 
     /** Check if a token is a valid parent or agent key (single query) */
@@ -174,77 +146,38 @@ export class AgentStore {
         return this._stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
     }
 
-    createAgent(agent: Omit<Agent, 'created_at'>): Agent {
+    createAgent(params: { id: string; agent_key: string; parent_key: string; yaml: string }): Agent {
         const created_at = Math.floor(Date.now() / 1000);
-
-        this.stmtInsert.run({
-            id: agent.id,
-            agent_key: agent.agent_key,
-            parent_key: agent.parent_key,
-            name: agent.name,
-            instructions: agent.instructions,
-            model: agent.model || null,
-            temperature: agent.temperature ?? null,
-            tools: agent.tools ? JSON.stringify(agent.tools) : null,
-            behavior: agent.behavior ? JSON.stringify(agent.behavior) : null,
-            page_tools: agent.pageTools ? JSON.stringify(agent.pageTools) : null,
-            created_at
-        });
-
-        return { ...agent, created_at };
+        this.stmtInsert.run({ ...params, created_at });
+        return { ...params, created_at };
     }
 
     getByKey(agentKey: string): Agent | null {
         const row = this.stmtGetByKey.get(agentKey) as DbAgentRow | undefined;
-        return row ? this.deserialize(row) : null;
+        return row ?? null;
     }
 
     getById(agentId: string): Agent | null {
         const row = this.stmtGetById.get(agentId) as DbAgentRow | undefined;
-        return row ? this.deserialize(row) : null;
+        return row ?? null;
     }
 
     /** Get agent only if owned by parentKey */
     getOwned(agentId: string, parentKey: string): Agent | null {
         const row = this.stmtGetOwned.get(agentId, parentKey) as DbAgentRow | undefined;
-        return row ? this.deserialize(row) : null;
+        return row ?? null;
     }
 
     listByParent(parentKey: string): Agent[] {
-        const rows = this.stmtListByParent.all(parentKey) as DbAgentRow[];
-        return rows.map(row => this.deserialize(row));
+        return this.stmtListByParent.all(parentKey) as DbAgentRow[];
     }
 
-    updateAgent(agentId: string, parentKey: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior' | 'pageTools'>>): Agent | null {
+    /** Replace the YAML blob of an owned agent. Returns updated row or null. */
+    updateAgent(agentId: string, parentKey: string, yaml: string): Agent | null {
         const existing = this.getOwned(agentId, parentKey);
         if (!existing) return null;
-
-        const merged = {
-            name: updates.name ?? existing.name,
-            instructions: updates.instructions ?? existing.instructions,
-            model: updates.model ?? existing.model,
-            temperature: updates.temperature ?? existing.temperature,
-            tools: updates.tools ?? existing.tools,
-            behavior: updates.behavior ?? existing.behavior,
-            pageTools: updates.pageTools ?? existing.pageTools,
-        };
-
-        this.stmtUpdate.run({
-            id: agentId,
-            parent_key: parentKey,
-            name: merged.name,
-            instructions: merged.instructions,
-            model: merged.model || null,
-            temperature: merged.temperature ?? null,
-            tools: merged.tools ? JSON.stringify(merged.tools) : null,
-            behavior: merged.behavior ? JSON.stringify(merged.behavior) : null,
-            page_tools: merged.pageTools ? JSON.stringify(merged.pageTools) : null,
-        });
-
-        return {
-            ...existing,
-            ...merged,
-        };
+        this.stmtUpdate.run({ id: agentId, parent_key: parentKey, yaml });
+        return { ...existing, yaml };
     }
 
     /** Delete agent only if owned by parentKey. Returns true if deleted. */
@@ -252,23 +185,6 @@ export class AgentStore {
         const result = this.stmtDeleteOwned.run(agentId, parentKey);
         return result.changes > 0;
     }
-
-    private deserialize(row: DbAgentRow): Agent {
-        return {
-            id: row.id,
-            agent_key: row.agent_key,
-            parent_key: row.parent_key,
-            name: row.name,
-            instructions: row.instructions,
-            model: row.model ?? undefined,
-            temperature: row.temperature ?? undefined,
-            tools: row.tools ? JSON.parse(row.tools) : undefined,
-            behavior: row.behavior ? JSON.parse(row.behavior) : undefined,
-            pageTools: row.page_tools ? JSON.parse(row.page_tools) : undefined,
-            created_at: row.created_at
-        };
-    }
-
 }
 
 // Singleton instance

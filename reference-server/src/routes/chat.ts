@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
 import { agentStore, type PageToolsPolicy } from '../storage/agents';
+import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
@@ -367,14 +368,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
       }
 
+      // Parse the YAML blob once — the source of truth for agent config
+      let parsed: Record<string, unknown> = {};
+      try {
+        const p = yaml.parse(agent.yaml);
+        if (p && typeof p === 'object') parsed = p as Record<string, unknown>;
+      } catch (err) {
+        request.log.warn({ err, agentId: agent.id }, 'Failed to parse agent YAML');
+      }
+
       // Use agent instructions as the system prompt
-      let systemPrompt = agent.instructions || '';
+      let systemPrompt = (parsed.instructions as string | undefined) || '';
 
       // Append behavior metadata (tone, language, rules) as a structured
       // supplement AFTER the instructions so they don't dilute or compete
       // with the primary prompt.
-      if (agent.behavior && typeof agent.behavior === 'object') {
-        const b = agent.behavior as Record<string, unknown>;
+      const behavior = parsed.behavior;
+      if (behavior && typeof behavior === 'object') {
+        const b = behavior as Record<string, unknown>;
         const extras: string[] = [];
         if (b.tone) extras.push(`- Respond with a ${b.tone} tone.`);
         if (b.language && b.language !== 'en') extras.push(`- Respond in ${b.language}.`);
@@ -388,14 +399,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      const tools = parsed.tools;
       agentConfig = {
         systemPrompt,
-        allowedTools: agent.tools && Array.isArray(agent.tools) && agent.tools.length > 0
-          ? agent.tools.map(t => typeof t === 'string' ? t : t.name)
+        allowedTools: Array.isArray(tools) && tools.length > 0
+          ? (tools as unknown[]).map((t) => typeof t === 'string' ? t : (t as { name: string }).name)
           : null,
-        pageTools: agent.pageTools ?? 'all',
-        model: agent.model || null,
-        temperature: agent.temperature ?? null,
+        pageTools: (parsed.pageTools as PageToolsPolicy) ?? 'all',
+        model: (parsed.model as string | undefined) || null,
+        temperature: (parsed.temperature as number | undefined) ?? null,
       };
     }
 
