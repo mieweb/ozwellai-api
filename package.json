@@ -7,7 +7,6 @@
   "workspaces": [
     "spec",
     "reference-server",
-    "landing-page",
     "clients/typescript",
     "docs"
   ],
