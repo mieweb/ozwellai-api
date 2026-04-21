@@ -62,14 +62,11 @@ sequenceDiagram
     Widget->>Widget: Parse tool calls from response
     end
 
-    Widget->>Handler: 4. postMessage: tool_call
+    Widget->>Handler: 4. MCP JSON-RPC: tools/call
     Note over Widget,Handler: Only tool calls cross boundary
     Handler->>Handler: 5. Execute tool (update form)
 
-    Handler-->>Widget: 6. postMessage: tool_result
-
-    Browser->>Widget: 7. iframe-sync: state update
-    Note over Browser,Widget: Widget always has page context
+    Handler-->>Widget: 6. MCP JSON-RPC response
 ```
 
 **Key Components:**
@@ -78,7 +75,7 @@ sequenceDiagram
 - **Ollama Container**: Runs LLM models (qwen2.5-coder:3b, llama3.1:8b, etc.)
 - **Widget**: Embeddable chat UI with iframe isolation
 - **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
-- **Tool Calls**: Extracted from streamed responses and sent to parent page via postMessage
+- **Tool Calls**: Extracted from streamed responses and sent to parent page via MCP JSON-RPC 2.0 over postMessage
 
 ### Agent Mode (PoC)
 
@@ -137,6 +134,8 @@ sequenceDiagram
 | `GET` | `/v1/agents` | Parent key | List agents under this key |
 | `GET` | `/v1/agents/:id` | Parent key | Get a specific agent |
 | `PUT` | `/v1/agents/:id` | Parent key | Update an agent definition |
+| `DELETE` | `/v1/agents/:id` | Parent key | Delete an agent |
+| `GET` | `/v1/keys/validate` | Any key | Validate an API key (returns 200 or 401) |
 
 #### Agent Definition Schema
 
@@ -551,7 +550,7 @@ src/
 embed/                  # Embeddable chat widget files
 ├── ozwell-loader.js    # Widget loader script to be embedded in parent pages
 ├── ozwell.html         # Widget iframe entry point (minimal HTML loader)
-└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and IframeSyncClient
+└── ozwell.js           # Self-contained widget with bundled CSS, HTML, and MCP JSON-RPC messaging
 ```
 
 ### Adding New Endpoints

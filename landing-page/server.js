@@ -18,8 +18,13 @@ const showcaseAgentKey = process.env.SHOWCASE_AGENT_KEY || '';
 
 const publicDir = path.join(__dirname, 'public');
 
+// Serve Swagger UI static files (lazy-loaded by integration guide)
+const swaggerUiDir = path.join(__dirname, '..', 'node_modules', '@fastify', 'swagger-ui', 'static');
+app.use('/swagger-ui', express.static(swaggerUiDir));
+
 // Serve static assets from public directory
 app.use('/assets', express.static(publicDir));
+app.use('/vendor', express.static(path.join(publicDir, 'vendor')));
 
 // Serve landing page assets
 app.get('/assets/landing-app.js', (req, res) => {
@@ -62,6 +67,10 @@ app.get('/tictactoe.html', (req, res) => {
 
 app.get('/agent.html', (req, res) => {
   res.type('html').send(renderHtml('agent.html'));
+});
+
+app.get('/register.html', (req, res) => {
+  res.type('html').send(renderHtml('register.html'));
 });
 
 app.get('*', (req, res, next) => {
