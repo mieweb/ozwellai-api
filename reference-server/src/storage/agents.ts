@@ -12,6 +12,7 @@ interface DbAgentRow {
     temperature: number | null;
     tools: string | null;
     behavior: string | null;
+    page_tools: string | null;
     created_at: number;
 }
 
@@ -67,6 +68,11 @@ export function seedDemoData(db: Database.Database): void {
 
 // ── Agent model ─────────────────────────────────────────────────────
 
+export type PageToolsPolicy =
+    | 'all'                           // allow all page tools (default)
+    | { restricted: string[] }        // only these page tools
+    | { blocked: string[] };          // all page tools except these
+
 export interface ToolDefinition {
     name: string;
     description?: string;
@@ -83,6 +89,7 @@ export interface Agent {
     temperature?: number;
     tools?: (string | ToolDefinition)[];
     behavior?: Record<string, unknown>;
+    pageTools?: PageToolsPolicy;
     created_at: number;
 }
 
@@ -105,15 +112,15 @@ export class AgentStore {
         this.initTable();
 
         this.stmtInsert = this.db.prepare(`
-          INSERT INTO agents (id, agent_key, parent_key, name, instructions, model, temperature, tools, behavior, created_at)
-          VALUES (@id, @agent_key, @parent_key, @name, @instructions, @model, @temperature, @tools, @behavior, @created_at)
+          INSERT INTO agents (id, agent_key, parent_key, name, instructions, model, temperature, tools, behavior, page_tools, created_at)
+          VALUES (@id, @agent_key, @parent_key, @name, @instructions, @model, @temperature, @tools, @behavior, @page_tools, @created_at)
         `);
         this.stmtGetByKey = this.db.prepare('SELECT * FROM agents WHERE agent_key = ?');
         this.stmtGetById = this.db.prepare('SELECT * FROM agents WHERE id = ?');
         this.stmtListByParent = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
         this.stmtUpdate = this.db.prepare(`
           UPDATE agents SET name = @name, instructions = @instructions, model = @model,
-            temperature = @temperature, tools = @tools, behavior = @behavior
+            temperature = @temperature, tools = @tools, behavior = @behavior, page_tools = @page_tools
           WHERE id = @id AND parent_key = @parent_key
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
@@ -132,11 +139,18 @@ export class AgentStore {
         temperature REAL,
         tools TEXT,
         behavior TEXT,
+        page_tools TEXT,
         created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
     `);
+        // Migration: add page_tools column if missing (existing DBs)
+        try {
+            this.db.exec('ALTER TABLE agents ADD COLUMN page_tools TEXT');
+        } catch {
+            // Column already exists — ignore
+        }
     }
 
     /** Check if a token is a valid parent or agent key (single query) */
@@ -173,6 +187,7 @@ export class AgentStore {
             temperature: agent.temperature ?? null,
             tools: agent.tools ? JSON.stringify(agent.tools) : null,
             behavior: agent.behavior ? JSON.stringify(agent.behavior) : null,
+            page_tools: agent.pageTools ? JSON.stringify(agent.pageTools) : null,
             created_at
         });
 
@@ -200,7 +215,7 @@ export class AgentStore {
         return rows.map(row => this.deserialize(row));
     }
 
-    updateAgent(agentId: string, parentKey: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior'>>): Agent | null {
+    updateAgent(agentId: string, parentKey: string, updates: Partial<Pick<Agent, 'name' | 'instructions' | 'model' | 'temperature' | 'tools' | 'behavior' | 'pageTools'>>): Agent | null {
         const existing = this.getOwned(agentId, parentKey);
         if (!existing) return null;
 
@@ -211,6 +226,7 @@ export class AgentStore {
             temperature: updates.temperature ?? existing.temperature,
             tools: updates.tools ?? existing.tools,
             behavior: updates.behavior ?? existing.behavior,
+            pageTools: updates.pageTools ?? existing.pageTools,
         };
 
         this.stmtUpdate.run({
@@ -222,6 +238,7 @@ export class AgentStore {
             temperature: merged.temperature ?? null,
             tools: merged.tools ? JSON.stringify(merged.tools) : null,
             behavior: merged.behavior ? JSON.stringify(merged.behavior) : null,
+            page_tools: merged.pageTools ? JSON.stringify(merged.pageTools) : null,
         });
 
         return {
@@ -247,6 +264,7 @@ export class AgentStore {
             temperature: row.temperature ?? undefined,
             tools: row.tools ? JSON.parse(row.tools) : undefined,
             behavior: row.behavior ? JSON.parse(row.behavior) : undefined,
+            pageTools: row.page_tools ? JSON.parse(row.page_tools) : undefined,
             created_at: row.created_at
         };
     }

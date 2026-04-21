@@ -9,22 +9,78 @@ on:
       - '.github/workflows/deploy-demo.yml'
       - 'reference-server/embed/**'
 
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: true
+
 jobs:
-  deploy:
-    name: Deploy to ozwellai-embedtest
+  build:
+    name: Build Demo Site
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to container
-        uses: appleboy/ssh-action@v1.0.0
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create deployment package
+        run: ./scripts/build-demo-package.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: landing-page-build
+          path: landing-page-build.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to ozwellai-embedtest
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: landing-page-build
+
+      # v0.1.7
+      - name: Upload to server
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
+        with:
+          host: ${{ secrets.EMBEDTEST_HOST }}
+          port: 2240
+          username: ${{ secrets.EMBEDTEST_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: landing-page-build.tar.gz
+          target: /tmp/
+
+      # v1.0.0
+      - name: Extract and restart service
+        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
         with:
           host: ${{ secrets.EMBEDTEST_HOST }}
           port: 2240
           username: ${{ secrets.EMBEDTEST_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
+
+            # Ensure directory structure exists (no git repo needed)
+            mkdir -p ~/ozwellai-api/landing-page
             cd ~/ozwellai-api
-            git fetch origin
-            git checkout main
-            git pull origin main
-            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org ./scripts/deploy-demo.sh
+
+            # Extract the pre-built package
+            tar -xzf /tmp/landing-page-build.tar.gz
+
+            # Install production dependencies only
+            cd landing-page
+            npm ci --omit=dev
+
+            # Restart service with reference server URL
+            pm2 stop embedtest || true
+            pm2 delete embedtest || true
+            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org pm2 start server.js --name embedtest
+            pm2 save
+
+            # Cleanup
+            rm /tmp/landing-page-build.tar.gz

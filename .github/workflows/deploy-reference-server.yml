@@ -87,27 +87,26 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
+
+            # Ensure directory structure exists (no git repo needed)
+            mkdir -p ~/ozwellai-api/reference-server
+            mkdir -p ~/ozwellai-api/clients/typescript
+            mkdir -p ~/ozwellai-api/spec
             cd ~/ozwellai-api
 
             # Clean old build outputs to prevent stale files
-            echo "🧹 Cleaning old build outputs..."
             rm -rf reference-server/dist clients/typescript/dist spec/dist
 
             # Extract the pre-built package
-            echo "📦 Extracting build package..."
-            tar -xzvf /tmp/reference-server-build.tar.gz
+            tar -xzf /tmp/reference-server-build.tar.gz
 
             # Install production dependencies only (no build needed)
-            echo "📥 Installing production dependencies..."
             cd reference-server
-            npm ci --production --ignore-scripts
+            npm ci --omit=dev
 
             # Restart service
-            echo "🔄 Restarting service..."
             pm2 restart refserver
             pm2 save
 
             # Cleanup
             rm /tmp/reference-server-build.tar.gz
-
-            echo "✅ Reference server deployed successfully!"

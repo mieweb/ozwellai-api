@@ -6,9 +6,119 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 # Frontend Integration Overview
 
-This guide covers how to integrate Ozwell's AI chat interface into your website or web application. All frontend integrations use **scoped API keys** that are restricted to specific agents and their assigned permissions, making them safe for client-side use.
+Ozwell is an embeddable AI assistant that runs inside an iframe on your website. Users chat with it. The AI can call **tools you define** — JavaScript functions that read from or write to your page. Conversations are private by default; your page only sees tool calls and lifecycle events, never message content.
 
 > **Try it live:** See Ozwell in action at the [demo site](https://ozwellai-embedtest.opensource.mieweb.org/).
+
+## What You're Building
+
+There are two parts: **define tools** on your page so the AI knows what it can do, then **handle tool calls** when the AI invokes them.
+
+### 1. Define Tools and Load the Widget
+
+Your page declares the tools the AI can call — their names, descriptions, and parameter schemas. By default, **an agent can call any tool the page presents**. No server-side configuration needed.
+
+Here's a page that exposes two tools: one that reads the current email (get) and one that updates it (set):
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'agnt_key-your-agent-key',
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'get_user_email',
+          description: 'Reads the current email address from the page',
+          parameters: { type: 'object', properties: {} }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'set_user_email',
+          description: 'Updates the email address on the page',
+          parameters: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', description: 'The new email address' }
+            },
+            required: ['email']
+          }
+        }
+      }
+    ]
+  };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+### 2. Handle Tool Calls
+
+When the AI calls a tool, the loader dispatches an `ozwell-tool-call` event. Listen for it and call `respond()` with the result:
+
+```html
+<script>
+  document.addEventListener('ozwell-tool-call', (e) => {
+    const { name, arguments: args, respond } = e.detail;
+
+    if (name === 'get_user_email') {
+      // READ from your page
+      respond({ email: document.getElementById('email').value });
+
+    } else if (name === 'set_user_email') {
+      // WRITE to your page
+      document.getElementById('email').value = args.email;
+      respond({ success: true });
+    }
+  });
+</script>
+```
+
+**You must call `respond()`.** The AI waits for the result — if you don't respond, the conversation hangs.
+
+### Where Tools Can Be Defined
+
+| Approach | Tools defined in | Best for |
+|----------|-----------------|----------|
+| **Page-defined** (above) | `OzwellChatConfig.tools` | Pages that declare their own capabilities |
+| **Agent-defined** | [Agent definition](../backend/agents.md) server-side | Centrally managed tools with full schemas and descriptions |
+| **Both** | Agent definition + `OzwellChatConfig.tools` | Agent owns core tools; page adds context-specific tools |
+
+**How it works:**
+- If the agent has **no tools** in its server-side definition, it can call **any tool the page provides**. This is the default.
+- If the agent has a **tools list** defined server-side, those tools are always available. The page can provide **additional** tools alongside them.
+- Agent-defined tool schemas take priority — if the same tool name appears in both, the agent's definition wins.
+
+### Tool Namespacing
+
+Page-provided tools are automatically prefixed with `postMessage:` on the wire so they can't collide with tools the agent server implements natively. This is transparent to your page — the prefix is added by the loader when the widget discovers tools, and stripped before your `ozwell-tool-call` handler fires. You never see the prefix in your code.
+
+### Controlling Page Tools
+
+By default, agents accept all page-provided tools. The agent definition can restrict this with the `pageTools` field:
+
+```yaml
+# Allow all page tools (default — can be omitted)
+pageTools: all
+
+# Only allow specific page tools
+pageTools:
+  restricted:
+    - get_user_email
+    - set_user_email
+
+# Allow all page tools except these
+pageTools:
+  blocked:
+    - dangerous_tool
+```
+
+See [Agent Registration API → pageTools](../backend/agents.md#yaml-fields) for details.
+
+The widget runs in a sandboxed iframe — it cannot touch your DOM, read your cookies, or access your JavaScript directly. Only tool calls and their responses cross the iframe boundary.
+
+➡️ **[Full tutorial with tool calling](./cdn-embed.md#tool-calling)** — the CDN embed guide walks through this step by step.
 
 ## Integration Approaches
 
@@ -38,16 +148,16 @@ graph LR
 
 ## CDN Embed (Fastest)
 
-Add Ozwell to any website with a single script tag. No build step required.
+Add Ozwell to any website with a single script tag. No build step required. Supports tool calling out of the box — define what your AI can do, then handle tool calls in a simple event listener.
 
 ```html
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="agnt_key-your-agent-key"
-></script>
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-➡️ [Full CDN documentation](./cdn-embed.md)
+➡️ [Full CDN documentation with tool calling tutorial](./cdn-embed.md)
 
 ---
 
@@ -69,6 +179,8 @@ All framework integrations render Ozwell within an **isolated iframe**, ensuring
 - 🔒 **Security isolation** from your host page
 - 🎨 **Consistent styling** that won't conflict with your CSS
 - 📱 **Responsive behavior** out of the box
+
+> **Standards-inspired:** Ozwell's iframe architecture implements an *inverted* MCP postMessage transport, drawing from proposals by [Josh Mandel](https://github.com/jmandel) and the [W3C WebMCP](https://github.com/webmachinelearning/webmcp) community. Learn more in [MCP postMessage Standard](./mcp-postmessage-standard.md).
 
 ---
 
@@ -208,4 +320,5 @@ This ensures users always feel comfortable asking questions—even ones they mig
 1. **Quick start:** Try the [CDN embed](./cdn-embed.md) first
 2. **Production app:** Follow your framework guide above
 3. **Custom needs:** Review [iframe integration](./iframe-integration.md)
-4. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security)
+4. **Standards context:** Read about the [MCP postMessage Standard](./mcp-postmessage-standard.md) that inspired Ozwell's architecture
+5. **Security deep-dive:** Understand the [iframe security model](./iframe-integration.md#security--privacy-checklist)

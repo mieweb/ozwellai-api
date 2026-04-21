@@ -50,6 +50,10 @@ jobs:
       - name: Install all dependencies
         run: npm ci
 
+      - name: Install landing-page dependencies
+        working-directory: ./landing-page
+        run: npm ci
+
       - name: Build spec
         working-directory: ./spec
         run: npm run build

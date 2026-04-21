@@ -65,48 +65,8 @@ const config: Config = {
     // Social card image
     image: 'img/ozwell-social-card.png',
 
-    // Mermaid diagram theming with MIE brand colors
     mermaid: {
-      theme: { light: 'base', dark: 'dark' },
-      options: {
-        themeVariables: {
-          // MIE Navy Blue - primary nodes (white text for contrast)
-          primaryColor: '#0b1844',
-          primaryTextColor: '#ffffff',
-          primaryBorderColor: '#091336',
-          
-          // MIE Green - secondary nodes (white text for contrast)
-          secondaryColor: '#04a454',
-          secondaryTextColor: '#ffffff',
-          secondaryBorderColor: '#038a46',
-          
-          // MIE Yellow - tertiary/highlights (navy text for contrast)
-          tertiaryColor: '#ffd100',
-          tertiaryTextColor: '#0b1844',
-          tertiaryBorderColor: '#e6bc00',
-          
-          // General styling - dark text on light backgrounds
-          lineColor: '#0b1844',
-          textColor: '#1a1a1a',
-          
-          // Node backgrounds - white for readability
-          mainBkg: '#ffffff',
-          nodeBorder: '#0b1844',
-          nodeTextColor: '#1a1a1a',
-          
-          // Cluster/subgraph styling
-          clusterBkg: '#f8f9fa',
-          clusterBorder: '#0b1844',
-          
-          // Notes
-          noteBkgColor: '#ffd100',
-          noteTextColor: '#0b1844',
-          noteBorderColor: '#e6bc00',
-          
-          // Labels and edges
-          edgeLabelBackground: '#ffffff',
-        },
-      },
+      theme: { light: 'default', dark: 'dark' },
     },
     
     navbar: {
@@ -190,6 +150,12 @@ const config: Config = {
       backgroundColor: '#04a454',
       textColor: '#ffffff',
       isCloseable: true,
+    },
+
+    colorMode: {
+      defaultMode: 'light',
+      disableSwitch: false,
+      respectPrefersColorScheme: true,
     },
 
     // Algolia search (optional - can configure later)

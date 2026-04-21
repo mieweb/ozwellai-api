@@ -19,7 +19,7 @@
 
 Experience the Ozwell AI chat widget with:
 - Real-time SSE streaming with Ollama
-- MCP tool calling via postMessage
+- MCP tool calling via [inverted postMessage transport](docs/frontend/mcp-postmessage-standard.md)
 - Interactive demo with live event logging
 - Secure iframe isolation
 
