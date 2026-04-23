@@ -2,6 +2,8 @@
 
 The fastest way to add Ozwell to any website. No build step, no framework required — just a single script tag.
 
+The widget sends requests to the reference server, which routes them to whichever AI backend is configured (LLM gateway, Ollama, or mock). No backend configuration is needed in the embed code itself.
+
 ## Quick Start
 
 :::info Getting an Agent Key

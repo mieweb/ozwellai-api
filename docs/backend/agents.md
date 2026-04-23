@@ -9,6 +9,8 @@ The Ozwell Dashboard for key provisioning is **coming soon**. In the meantime, t
 
 Agents let you define a persona, model, temperature, and allowed tools server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
 
+Agent chat requests are processed by whichever backend the server has configured (LLM gateway, Ollama, or mock). See the reference server README for backend configuration details.
+
 ## Base URLs
 
 | Environment | URL |
@@ -129,7 +131,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name for the agent |
 | `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
-| `model` | string | No | Model ID (default: `llama3.1:latest`) |
+| `model` | string | No | Model ID (default: server's configured model). On the LLM backend, if the model doesn't exist on the current provider, the server falls back to `LLM_MODEL`. |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
 | `tools` | array | No | Server-side tool definitions. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. These are always available to the agent. Page-provided tools are separate and controlled by `pageTools`. |
 | `pageTools` | string or object | No | Controls which page-provided tools (via `postMessage:`) the agent can call. `all` (default) — accept everything. `{ restricted: [...] }` — only these page tools. `{ blocked: [...] }` — all page tools except these. |

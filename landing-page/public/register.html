@@ -267,6 +267,9 @@
       }
     });
 
+    const SCHEMA_MODEL_SECTION_ID = 'sec-model';
+    const SCHEMA_MODEL_FIELD_ID = 'model';
+
     // Ozwell agent schema for Q form builder
     const ozwellSchema = {
       schemaType: 'mieforms-v1.0',
@@ -341,7 +344,7 @@
     let qGenerator = null;
     let isCreating = false;
 
-    function mountQ() {
+    async function mountQ() {
       if (qGenerator) return;
       const mount = document.getElementById('q-mount');
       mount.textContent = '';
@@ -350,6 +353,28 @@
       mount.style.justifyContent = '';
       mount.style.border = 'none';
       mount.style.background = 'transparent';
+
+      // Fetch available models from the server and update schema
+      try {
+        const modelsResp = await fetch(normalizedBase + '/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKeyInput.value.trim()}` }
+        });
+        if (modelsResp.ok) {
+          const modelsData = await modelsResp.json();
+          const models = modelsData.data || [];
+          if (models.length > 0) {
+            const modelField = ozwellSchema.fields
+              .find(f => f.id === SCHEMA_MODEL_SECTION_ID)?.fields
+              .find(f => f.id === SCHEMA_MODEL_FIELD_ID);
+            if (modelField) {
+              modelField.options = models.map((m, i) => ({ id: `m-${i}`, label: m.id, value: m.id }));
+              modelField.answer = models[0].id;
+            }
+          }
+        }
+      } catch {
+        // fallback: keep hardcoded options
+      }
 
       qGenerator = new window.UniversalAgentConfigGenerator(mount, {
         schema: ozwellSchema,

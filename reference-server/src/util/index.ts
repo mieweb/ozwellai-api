@@ -271,33 +271,39 @@ export async function isOllamaAvailable(): Promise<boolean> {
 }
 
 /**
+ * Check if an LLM backend is configured via LLM_BASE_URL.
+ */
+export function isLLMBackendConfigured(): boolean {
+  return !!process.env.LLM_BASE_URL;
+}
+
+/**
  * Get the first available Ollama model, or a fallback
  */
 export function getOllamaDefaultModel(): string {
-  // Prefer models in this order - llama3.x and gpt-oss have better tool calling support
+  // If OLLAMA_MODEL is set in .env, use it
+  if (process.env.OLLAMA_MODEL) {
+    return process.env.OLLAMA_MODEL;
+  }
+
+  // Auto-detect: prefer models with better tool calling support
   const preferredModels = [
     'llama3.2:latest',
-    'llama3.1:latest', 
+    'llama3.1:latest',
     'llama3:latest',
     'gpt-oss:latest',
     'gpt-oss:20b',
     'mistral:latest',
-    'llama2:latest', 
+    'llama2:latest',
     'qwen2.5-coder:3b'
   ];
-  
-  // Check if any preferred model is available
+
   for (const model of preferredModels) {
     if (ollamaModels.includes(model)) {
       return model;
     }
   }
-  
+
   // Return first available model, or fallback
-  if (ollamaModels.length > 0) {
-    return ollamaModels[0];
-  }
-  
-  // Fallback if no models cached yet
-  return process.env.OLLAMA_MODEL || 'llama3.2:latest';
+  return ollamaModels.length > 0 ? ollamaModels[0] : 'llama3.2:latest';
 }
