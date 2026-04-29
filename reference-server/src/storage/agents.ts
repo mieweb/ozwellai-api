@@ -86,6 +86,7 @@ export class AgentStore {
     private stmtGetById: Database.Statement;
     private stmtListByParent: Database.Statement;
     private stmtUpdate: Database.Statement;
+    private stmtRotateKey: Database.Statement;
     private stmtDeleteOwned: Database.Statement;
     private stmtGetOwned: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
@@ -105,6 +106,10 @@ export class AgentStore {
         this.stmtListByParent = this.db.prepare('SELECT * FROM agents WHERE parent_key = ?');
         this.stmtUpdate = this.db.prepare(`
           UPDATE agents SET yaml = @yaml
+          WHERE id = @id AND parent_key = @parent_key
+        `);
+        this.stmtRotateKey = this.db.prepare(`
+          UPDATE agents SET agent_key = @new_key
           WHERE id = @id AND parent_key = @parent_key
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
@@ -178,6 +183,14 @@ export class AgentStore {
         if (!existing) return null;
         this.stmtUpdate.run({ id: agentId, parent_key: parentKey, yaml });
         return { ...existing, yaml };
+    }
+
+    /** Replace the agent_key of an owned agent. Returns updated row or null. */
+    rotateKey(agentId: string, parentKey: string, newKey: string): Agent | null {
+        const existing = this.getOwned(agentId, parentKey);
+        if (!existing) return null;
+        this.stmtRotateKey.run({ id: agentId, parent_key: parentKey, new_key: newKey });
+        return { ...existing, agent_key: newKey };
     }
 
     /** Delete agent only if owned by parentKey. Returns true if deleted. */

@@ -228,6 +228,44 @@
       border-radius: 4px;
     }
     .delete-icon-btn:hover { background: #fee2e2; }
+    .show-key-btn, .rotate-icon-btn {
+      background: none;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 8px;
+      color: #374151;
+    }
+    .show-key-btn:hover { background: #f3f4f6; }
+    .rotate-icon-btn { color: #b45309; border-color: #fde68a; }
+    .rotate-icon-btn:hover { background: #fef3c7; }
+    .agent-list-key.revealed {
+      color: #16a34a;
+      background: #f0fdf4;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .copy-inline-btn {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .copy-inline-btn:hover { background: #f3f4f6; }
+    .result-warning {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .result-warning.hidden { display: none; }
     .agents-empty {
       color: #9ca3af;
       font-size: 13px;
@@ -295,11 +333,14 @@
     <div id="result-section" class="section result-section">
       <h3 id="result-title">Your agent key</h3>
       <p id="result-sub">Use this key in the widget embed code to connect to your agent.</p>
-      <div class="agent-key-box">
+      <div id="result-warning" class="result-warning hidden">
+        Copy this key for your widget embed. You can re-reveal it any time from the agent list, or rotate it to generate a new one.
+      </div>
+      <div id="agent-key-box" class="agent-key-box">
         <span id="agent-key-value" class="agent-key-value"></span>
         <button id="copy-btn" class="copy-btn">Copy</button>
       </div>
-      <p class="result-hint">Paste this as the <code>data-api-key</code> in your widget script tag.</p>
+      <p id="result-hint" class="result-hint">Paste this as the <code>data-api-key</code> in your widget script tag.</p>
     </div>
   </div>
 
@@ -327,12 +368,6 @@
     const newAgentBtn = document.getElementById('new-agent-btn');
     const editingBanner = document.getElementById('editing-banner');
     const qSectionTitle = document.getElementById('q-section-title');
-
-    function maskKey(key) {
-      if (!key) return '';
-      const last4 = key.slice(-4);
-      return '••••' + last4;
-    }
 
     function authHeaders(extra) {
       return { 'Authorization': `Bearer ${apiKeyInput.value.trim()}`, ...(extra || {}) };
@@ -528,7 +563,7 @@
           if (!resp.ok) {
             alert('Failed to save: ' + (data.error?.message || JSON.stringify(data)));
           } else {
-            showResult(data.agent_key, 'saved');
+            showResult(null, 'saved');
             await loadAgents();
           }
         } else {
@@ -555,16 +590,34 @@
       isCreating = false;
     }
 
+    const resultWarning = document.getElementById('result-warning');
+    const agentKeyBox = document.getElementById('agent-key-box');
+    const resultHint = document.getElementById('result-hint');
+
     function showResult(key, mode) {
-      agentKeyValue.textContent = key;
       if (mode === 'saved') {
         resultTitle.textContent = 'Saved';
-        resultSub.textContent = 'Agent updated. The agent key stays the same.';
+        resultSub.textContent = 'Agent updated. The agent key is unchanged.';
+        agentKeyBox.style.display = 'none';
+        resultWarning.classList.add('hidden');
+        resultHint.style.display = 'none';
+      } else if (mode === 'rotated') {
+        agentKeyValue.textContent = key;
+        resultTitle.textContent = 'New agent key';
+        resultSub.textContent = 'The previous key is now invalid. Update embedded widgets with this new key. You can re-reveal it any time from the agent list.';
+        agentKeyBox.style.display = 'flex';
+        resultWarning.classList.remove('hidden');
+        resultHint.style.display = 'block';
       } else {
+        agentKeyValue.textContent = key;
         resultTitle.textContent = 'Your agent key';
         resultSub.textContent = 'Use this key in the widget embed code to connect to your agent.';
+        agentKeyBox.style.display = 'flex';
+        resultWarning.classList.remove('hidden');
+        resultHint.style.display = 'block';
       }
       resultSection.classList.add('visible');
+      resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     async function loadAgents() {
@@ -577,6 +630,28 @@
       } catch {
         agents = [];
         renderAgentList();
+      }
+    }
+
+    const revealTimers = new Map(); // agentId -> setTimeout handle
+
+    async function rotateAgentKey(agentId, agentName) {
+      const ok = confirm('Rotate key for "' + (agentName || 'this agent') + '"? The current key will stop working immediately. Embedded widgets using the old key will need to be updated.');
+      if (!ok) return;
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(agentId) + '/rotate-key', {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.agent_key) {
+          alert('Failed to rotate key: ' + (data.error?.message || 'unknown'));
+          return;
+        }
+        showResult(data.agent_key, 'rotated');
+        await loadAgents();
+      } catch (e) {
+        alert('Rotate failed: ' + e.message);
       }
     }
 
@@ -599,9 +674,75 @@
 
         const right = document.createElement('div');
         right.className = 'agent-list-row-actions';
+
         const keySpan = document.createElement('span');
         keySpan.className = 'agent-list-key';
-        keySpan.textContent = maskKey(a.agent_key);
+        keySpan.textContent = a.key_hint || '—';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-inline-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.style.display = 'none';
+
+        const showBtn = document.createElement('button');
+        showBtn.className = 'show-key-btn';
+        showBtn.textContent = 'Show';
+
+        const hintText = a.key_hint || '—';
+        let revealedKey = null;
+
+        const hide = () => {
+          keySpan.textContent = hintText;
+          keySpan.classList.remove('revealed');
+          copyBtn.style.display = 'none';
+          showBtn.textContent = 'Show';
+          revealedKey = null;
+          const t = revealTimers.get(a.id);
+          if (t) { clearTimeout(t); revealTimers.delete(a.id); }
+        };
+
+        const reveal = async () => {
+          try {
+            const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(a.id) + '/reveal-key', {
+              method: 'POST', headers: authHeaders(),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.agent_key) {
+              alert('Failed to reveal key: ' + (data.error?.message || 'unknown'));
+              return;
+            }
+            revealedKey = data.agent_key;
+            keySpan.textContent = revealedKey;
+            keySpan.classList.add('revealed');
+            copyBtn.style.display = 'inline-block';
+            showBtn.textContent = 'Hide';
+            revealTimers.set(a.id, setTimeout(hide, 30000));
+          } catch (err) {
+            alert('Reveal failed: ' + err.message);
+          }
+        };
+
+        showBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (revealedKey) hide(); else reveal();
+        });
+
+        copyBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!revealedKey) return;
+          try { await navigator.clipboard.writeText(revealedKey); } catch { /* clipboard blocked */ }
+          copyBtn.textContent = 'Copied';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+
+        const rot = document.createElement('button');
+        rot.className = 'rotate-icon-btn';
+        rot.textContent = 'Rotate';
+        rot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          rotateAgentKey(a.id, a.name);
+        });
+
         const del = document.createElement('button');
         del.className = 'delete-icon-btn';
         del.textContent = 'Delete';
@@ -609,7 +750,11 @@
           e.stopPropagation();
           deleteAgent(a.id, a.name);
         });
+
         right.appendChild(keySpan);
+        right.appendChild(copyBtn);
+        right.appendChild(showBtn);
+        right.appendChild(rot);
         right.appendChild(del);
 
         li.appendChild(left);
