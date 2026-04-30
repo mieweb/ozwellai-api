@@ -16,6 +16,14 @@ const DB_PATH = process.env.DB_PATH
 // Demo parent API key
 export const DEMO_API_KEY = 'ozw_demo_localhost_key_for_testing';
 
+// Fixed mock agent — deterministic responses for testing the API pipeline without an LLM.
+export const MOCK_AGENT_ID = 'mock-agent';
+export const MOCK_AGENT_KEY = 'agnt_key-mock-test';
+export const MOCK_AGENT_YAML = `name: Mock Test Agent
+type: mock
+instructions: Deterministic mock agent for API testing. No LLM is called.
+`;
+
 // ── Database singleton ──────────────────────────────────────────────
 
 let _db: Database.Database | null = null;
@@ -58,6 +66,21 @@ export function seedDemoData(db: Database.Database): void {
     `).run(demoKeyId, 'Demo Key', DEMO_API_KEY, keyHint, now);
 
     console.log('[auth] Demo API key seeded');
+}
+
+/**
+ * Seed the fixed mock agent. Idempotent — skips if already present.
+ * Anyone can use MOCK_AGENT_KEY to exercise the chat pipeline without an LLM.
+ */
+export function seedMockAgent(): void {
+    if (agentStore.getById(MOCK_AGENT_ID)) return;
+    agentStore.createAgent({
+        id: MOCK_AGENT_ID,
+        agent_key: MOCK_AGENT_KEY,
+        parent_key: DEMO_API_KEY,
+        yaml: MOCK_AGENT_YAML,
+    });
+    console.log('[mock] Mock agent seeded');
 }
 
 // ── Agent model ─────────────────────────────────────────────────────
