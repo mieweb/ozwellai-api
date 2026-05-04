@@ -74,6 +74,7 @@ export function seedDemoData(db: Database.Database): void {
  */
 export function seedMockAgent(): void {
     if (agentStore.getById(MOCK_AGENT_ID)) return;
+    if (agentStore.getByKey(MOCK_AGENT_KEY)) return;
     agentStore.createAgent({
         id: MOCK_AGENT_ID,
         agent_key: MOCK_AGENT_KEY,

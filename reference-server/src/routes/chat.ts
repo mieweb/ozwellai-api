@@ -299,6 +299,7 @@ async function dispatchMock(
   const hasResult = hasToolResult(messages as MockChatMessage[]);
   const toolResult = hasResult ? extractToolResult(messages as MockChatMessage[]) : null;
   const assistantMsg = generateMockResponse(userMsg, hasResult, toolResult);
+  const finishReason = assistantMsg.tool_calls?.length ? 'tool_calls' : 'stop';
 
   const id = generateId('chatcmpl');
   const created = Math.floor(Date.now() / 1000);
@@ -313,7 +314,7 @@ async function dispatchMock(
       object: 'chat.completion' as const,
       created,
       model,
-      choices: [{ index: 0, message: assistantMsg, finish_reason: 'stop' as const }],
+      choices: [{ index: 0, message: assistantMsg, finish_reason: finishReason }],
       usage: {
         prompt_tokens: promptTokens,
         completion_tokens: completionTokens,
@@ -351,7 +352,7 @@ async function dispatchMock(
     writeChunk({ tool_calls: withIndex });
   }
 
-  writeChunk({}, 'stop');
+  writeChunk({}, finishReason);
   reply.raw.write('data: [DONE]\n\n');
   reply.raw.end();
   return;
