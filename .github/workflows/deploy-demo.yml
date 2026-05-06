@@ -33,7 +33,7 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to ozwellai-embedtest
+    name: Deploy to ozwell-prod landing
     needs: build
     runs-on: ubuntu-latest
 
@@ -48,7 +48,7 @@ jobs:
         uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
         with:
           host: ${{ secrets.EMBEDTEST_HOST }}
-          port: 2240
+          port: 2061
           username: ${{ secrets.EMBEDTEST_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: landing-page-build.tar.gz
@@ -59,7 +59,7 @@ jobs:
         uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
         with:
           host: ${{ secrets.EMBEDTEST_HOST }}
-          port: 2240
+          port: 2061
           username: ${{ secrets.EMBEDTEST_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
@@ -77,9 +77,9 @@ jobs:
             npm ci --omit=dev
 
             # Restart service with reference server URL
-            pm2 stop embedtest || true
-            pm2 delete embedtest || true
-            REFERENCE_SERVER_URL=https://ozwellai-reference-server.opensource.mieweb.org pm2 start server.js --name embedtest
+            pm2 stop landing || true
+            pm2 delete landing || true
+            REFERENCE_SERVER_URL=https://ozwellapi.opensource.mieweb.org pm2 start server.js --name landing
             pm2 save
 
             # Cleanup
