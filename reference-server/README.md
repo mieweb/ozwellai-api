@@ -235,7 +235,7 @@ The server will start at `http://localhost:3000`
 **Simple (one line):**
 
 ```html
-<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
 ```
 
 **Advanced (with config):**
@@ -243,11 +243,17 @@ The server will start at `http://localhost:3000`
 ```html
 <script>
   window.OzwellChatConfig = {
-    endpoint: 'https://ozwellapi.opensource.mieweb.org/v1/chat/completions',
+    endpoint: 'http://localhost:3000/v1/chat/completions',
     welcomeMessage: 'Hi! How can I help?',
     debug: false  // Set to true to see tool execution details (developer mode)
   };
 </script>
+<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
+```
+
+**Hosted/public environment:**
+
+```html
 <script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 

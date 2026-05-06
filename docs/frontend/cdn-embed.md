@@ -451,7 +451,7 @@ If your site uses CSP headers, add Ozwell's domains:
 
 ```
 Content-Security-Policy: 
-  script-src 'self' https://cdn.ozwell.ai;
+  script-src 'self' https://ozwellapi.opensource.mieweb.org https://cdn.ozwell.ai;
   frame-src 'self' https://embed.ozwell.ai;
   connect-src 'self' https://ozwellapi.opensource.mieweb.org;
 ```

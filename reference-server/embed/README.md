@@ -7,7 +7,7 @@ Add an AI chatbot to any website with one script tag.
 Add this to your HTML:
 
 ```html
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 The chat button appears automatically in the bottom-right corner.
@@ -25,7 +25,7 @@ Customize the widget with `window.OzwellChatConfig`:
     system: 'You are a helpful assistant.'
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 ## With Custom UI
@@ -42,7 +42,7 @@ Use your own button and layout by disabling the default floating button:
     containerId: 'my-chat-container'
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **How it works:** Setting `defaultUI: false` disables the automatic floating button and wrapper. The widget iframe mounts directly in your custom container instead.
@@ -64,7 +64,7 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
     document.getElementById('my-note').value = event.detail.text;
   });
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **How it works:** User asks AI to improve their text, clicks "Save & Close" in widget, and the AI's response gets inserted into the textarea.
@@ -101,7 +101,7 @@ Send page data to the widget so the AI can answer questions about current state:
     });
   });
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
@@ -145,7 +145,7 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
     }
   });
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 Now users can type: "update my email to john@example.com" and the field updates automatically.
@@ -266,7 +266,7 @@ Disable auto-mount and control when/where the widget appears. Useful for:
     autoMount: false
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 
 <script>
   // Mount when user clicks button
@@ -290,7 +290,7 @@ The reference server automatically detects and routes to the best available back
     apiKey: 'agnt_key-your-agent-key'  // or 'ozw_your-parent-key'
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 To use Ollama as the backend, configure the server's `.env` file — set `OLLAMA_BASE_URL` (and optionally `OLLAMA_MODEL`). No client-side changes needed; the widget talks to the reference server and the server handles backend routing. See `../.env.example` for details.
@@ -307,7 +307,7 @@ Use `openaiApiKey` or custom headers for API authentication:
     model: 'gpt-4o'
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 Or use custom headers for any authentication scheme:
@@ -322,7 +322,7 @@ Or use custom headers for any authentication scheme:
     }
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 ## MCP Tool Flow
@@ -509,7 +509,7 @@ Enable debug mode during development to visualize tool executions:
     debug: true  // Shows tool execution details
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **How it works:** Clickable tool pills appear before AI responses. Click a pill to expand and see:
@@ -535,8 +535,8 @@ The widget handles all mobile optimizations automatically.
 
 ## Live Demo
 
-- **Demo:** <https://ozwellai-embedtest.opensource.mieweb.org>
-- **Reference Server:** <https://ozwellai-reference-server.opensource.mieweb.org>
+- **Demo:** <https://ozwelldemo.opensource.mieweb.org>
+- **Reference Server:** <https://ozwellapi.opensource.mieweb.org>
 
 ## Local Development
 
