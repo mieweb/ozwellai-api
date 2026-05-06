@@ -30,6 +30,7 @@ async function buildServer() {
   await fastify.register(cors, {
     origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
   // Register multipart for file uploads

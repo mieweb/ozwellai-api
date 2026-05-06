@@ -168,6 +168,119 @@
       border-radius: 4px;
       font-size: 12px;
     }
+
+    /* Agents list */
+    .agents-section { display: none; }
+    .agents-section.visible { display: block; }
+    .agents-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .new-agent-btn {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #374151;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .new-agent-btn:hover { background: #f3f4f6; }
+    .new-agent-btn:disabled { opacity: 0.5; cursor: default; }
+    .agent-list { list-style: none; }
+    .agent-list li {
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .agent-list li:hover { background: #f9fafb; }
+    .agent-list li.active {
+      border-color: #0066ff;
+      background: #eff6ff;
+    }
+    .agent-list-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .agent-list-key {
+      font-family: monospace;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .agent-list-row-actions { display: flex; gap: 8px; align-items: center; }
+    .delete-icon-btn {
+      background: none;
+      border: none;
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .delete-icon-btn:hover { background: #fee2e2; }
+    .show-key-btn, .rotate-icon-btn {
+      background: none;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 2px 8px;
+      color: #374151;
+    }
+    .show-key-btn:hover { background: #f3f4f6; }
+    .rotate-icon-btn { color: #b45309; border-color: #fde68a; }
+    .rotate-icon-btn:hover { background: #fef3c7; }
+    .agent-list-key.revealed {
+      color: #16a34a;
+      background: #f0fdf4;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .copy-inline-btn {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .copy-inline-btn:hover { background: #f3f4f6; }
+    .result-warning {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .result-warning.hidden { display: none; }
+    .agents-empty {
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 8px 0;
+    }
+    .editing-banner {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #1e40af;
+    }
+    .editing-banner.hidden { display: none; }
   </style>
   <!-- Q agent config generator (bundled via esbuild) -->
   <link rel="stylesheet" href="/vendor/q-bundle.css" />
@@ -179,8 +292,8 @@
       <div class="back-link-container">
         <a href="/" class="back-link">&larr; Back to demos</a>
       </div>
-      <h1 class="header-title">Create an Agent</h1>
-      <p class="header-subtitle">Configure your agent visually, then hit Submit to register.</p>
+      <h1 class="header-title">Agents</h1>
+      <p class="header-subtitle">Create a new agent or edit an existing one.</p>
     </header>
 
     <!-- 1. API Key -->
@@ -194,9 +307,20 @@
       <div id="key-status" class="key-status"></div>
     </div>
 
-    <!-- 2. Q sandbox -->
+    <!-- 2. Existing agents -->
+    <div id="agents-section" class="section agents-section">
+      <div class="agents-header">
+        <h3 style="margin:0;">Your agents</h3>
+        <button id="new-agent-btn" class="new-agent-btn" disabled>+ New agent</button>
+      </div>
+      <ul id="agent-list" class="agent-list"></ul>
+      <div id="agents-empty" class="agents-empty" style="display:none;">No agents yet. The form below creates a new one.</div>
+    </div>
+
+    <!-- 3. Q sandbox -->
     <div class="section q-section">
-      <h3>2. Configure your agent</h3>
+      <h3 id="q-section-title">Configure your agent</h3>
+      <div id="editing-banner" class="editing-banner hidden"></div>
       <div id="q-overlay" class="q-overlay">
         <span>Enter your API key above to unlock</span>
       </div>
@@ -205,15 +329,18 @@
       </div>
     </div>
 
-    <!-- 3. Result -->
+    <!-- 4. Result -->
     <div id="result-section" class="section result-section">
-      <h3>Your agent key</h3>
-      <p>Use this key in the widget embed code to connect to your agent.</p>
-      <div class="agent-key-box">
+      <h3 id="result-title">Your agent key</h3>
+      <p id="result-sub">Use this key in the widget embed code to connect to your agent.</p>
+      <div id="result-warning" class="result-warning hidden">
+        Copy this key for your widget embed. You can re-reveal it any time from the agent list, or rotate it to generate a new one.
+      </div>
+      <div id="agent-key-box" class="agent-key-box">
         <span id="agent-key-value" class="agent-key-value"></span>
         <button id="copy-btn" class="copy-btn">Copy</button>
       </div>
-      <p class="result-hint">Paste this as the <code>data-api-key</code> in your widget script tag.</p>
+      <p id="result-hint" class="result-hint">Paste this as the <code>data-api-key</code> in your widget script tag.</p>
     </div>
   </div>
 
@@ -223,14 +350,28 @@
 
     let apiKeyValidated = false;
     let currentYaml = null;
+    let editingAgentId = null; // null = create mode; string = editing that agent
+    let agents = [];
 
     const apiKeyInput = document.getElementById('api-key-input');
     const validateBtn = document.getElementById('validate-btn');
     const keyStatus = document.getElementById('key-status');
     const qOverlay = document.getElementById('q-overlay');
     const resultSection = document.getElementById('result-section');
+    const resultTitle = document.getElementById('result-title');
+    const resultSub = document.getElementById('result-sub');
     const agentKeyValue = document.getElementById('agent-key-value');
     const copyBtn = document.getElementById('copy-btn');
+    const agentsSection = document.getElementById('agents-section');
+    const agentList = document.getElementById('agent-list');
+    const agentsEmpty = document.getElementById('agents-empty');
+    const newAgentBtn = document.getElementById('new-agent-btn');
+    const editingBanner = document.getElementById('editing-banner');
+    const qSectionTitle = document.getElementById('q-section-title');
+
+    function authHeaders(extra) {
+      return { 'Authorization': `Bearer ${apiKeyInput.value.trim()}`, ...(extra || {}) };
+    }
 
     // Reset validated state if key is edited after validation
     apiKeyInput.addEventListener('input', () => {
@@ -256,6 +397,9 @@
           keyStatus.textContent = 'Valid key';
           keyStatus.className = 'key-status valid';
           qOverlay.classList.add('hidden');
+          agentsSection.classList.add('visible');
+          newAgentBtn.disabled = false;
+          await loadAgents();
           mountQ();
         } else {
           keyStatus.textContent = 'Invalid key';
@@ -344,7 +488,15 @@
     let qGenerator = null;
     let isCreating = false;
 
-    async function mountQ() {
+    async function remountQ(extraOpts) {
+      if (qGenerator) {
+        try { qGenerator.destroy(); } catch { /* ignore */ }
+        qGenerator = null;
+      }
+      await mountQ(extraOpts);
+    }
+
+    async function mountQ(extraOpts) {
       if (qGenerator) return;
       const mount = document.getElementById('q-mount');
       mount.textContent = '';
@@ -356,9 +508,7 @@
 
       // Fetch available models from the server and update schema
       try {
-        const modelsResp = await fetch(normalizedBase + '/v1/models', {
-          headers: { 'Authorization': `Bearer ${apiKeyInput.value.trim()}` }
-        });
+        const modelsResp = await fetch(normalizedBase + '/v1/models', { headers: authHeaders() });
         if (modelsResp.ok) {
           const modelsData = await modelsResp.json();
           const models = modelsData.data || [];
@@ -379,6 +529,7 @@
       qGenerator = new window.UniversalAgentConfigGenerator(mount, {
         schema: ozwellSchema,
         showEditor: true,
+        ...(extraOpts || {}),
       });
 
       mount.addEventListener('config-change', (e) => {
@@ -399,26 +550,38 @@
       if (!apiKeyValidated || isCreating) return;
 
       const yaml = currentYaml || DEFAULT_YAML;
-
       isCreating = true;
 
       try {
-        const resp = await fetch(normalizedBase + '/v1/agents', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKeyInput.value.trim()}`,
-            'Content-Type': 'application/yaml',
-          },
-          body: yaml,
-        });
-
-        const data = await resp.json();
-
-        if (resp.ok && data.agent_key) {
-          agentKeyValue.textContent = data.agent_key;
-          resultSection.classList.add('visible');
+        if (editingAgentId) {
+          const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(editingAgentId), {
+            method: 'PUT',
+            headers: authHeaders({ 'Content-Type': 'application/yaml' }),
+            body: yaml,
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            alert('Failed to save: ' + (data.error?.message || JSON.stringify(data)));
+          } else {
+            showResult(null, 'saved');
+            await loadAgents();
+          }
         } else {
-          alert('Failed to create agent: ' + (data.error?.message || JSON.stringify(data)));
+          const resp = await fetch(normalizedBase + '/v1/agents', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/yaml' }),
+            body: yaml,
+          });
+          const data = await resp.json();
+          if (resp.ok && data.agent_key) {
+            showResult(data.agent_key, 'created');
+            // Switch into edit mode for the just-created agent
+            editingAgentId = data.agent_id;
+            await loadAgents();
+            renderEditingUI();
+          } else {
+            alert('Failed to create agent: ' + (data.error?.message || JSON.stringify(data)));
+          }
         }
       } catch (e) {
         alert('Error: ' + e.message);
@@ -426,6 +589,250 @@
 
       isCreating = false;
     }
+
+    const resultWarning = document.getElementById('result-warning');
+    const agentKeyBox = document.getElementById('agent-key-box');
+    const resultHint = document.getElementById('result-hint');
+
+    function showResult(key, mode) {
+      if (mode === 'saved') {
+        resultTitle.textContent = 'Saved';
+        resultSub.textContent = 'Agent updated. The agent key is unchanged.';
+        agentKeyBox.style.display = 'none';
+        resultWarning.classList.add('hidden');
+        resultHint.style.display = 'none';
+      } else if (mode === 'rotated') {
+        agentKeyValue.textContent = key;
+        resultTitle.textContent = 'New agent key';
+        resultSub.textContent = 'The previous key is now invalid. Update embedded widgets with this new key. You can re-reveal it any time from the agent list.';
+        agentKeyBox.style.display = 'flex';
+        resultWarning.classList.remove('hidden');
+        resultHint.style.display = 'block';
+      } else {
+        agentKeyValue.textContent = key;
+        resultTitle.textContent = 'Your agent key';
+        resultSub.textContent = 'Use this key in the widget embed code to connect to your agent.';
+        agentKeyBox.style.display = 'flex';
+        resultWarning.classList.remove('hidden');
+        resultHint.style.display = 'block';
+      }
+      resultSection.classList.add('visible');
+      resultSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function loadAgents() {
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents', { headers: authHeaders() });
+        if (!resp.ok) throw new Error('list failed');
+        const data = await resp.json();
+        agents = data.data || [];
+        renderAgentList();
+      } catch {
+        agents = [];
+        renderAgentList();
+      }
+    }
+
+    const revealTimers = new Map(); // agentId -> setTimeout handle
+
+    async function rotateAgentKey(agentId, agentName) {
+      const ok = confirm('Rotate key for "' + (agentName || 'this agent') + '"? The current key will stop working immediately. Embedded widgets using the old key will need to be updated.');
+      if (!ok) return;
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(agentId) + '/rotate-key', {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.agent_key) {
+          alert('Failed to rotate key: ' + (data.error?.message || 'unknown'));
+          return;
+        }
+        showResult(data.agent_key, 'rotated');
+        await loadAgents();
+      } catch (e) {
+        alert('Rotate failed: ' + e.message);
+      }
+    }
+
+    function renderAgentList() {
+      agentList.innerHTML = '';
+      if (!agents.length) {
+        agentsEmpty.style.display = 'block';
+        return;
+      }
+      agentsEmpty.style.display = 'none';
+      for (const a of agents) {
+        const li = document.createElement('li');
+        if (a.id === editingAgentId) li.classList.add('active');
+
+        const left = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'agent-list-name';
+        name.textContent = a.name || '(unnamed)';
+        left.appendChild(name);
+
+        const right = document.createElement('div');
+        right.className = 'agent-list-row-actions';
+
+        const keySpan = document.createElement('span');
+        keySpan.className = 'agent-list-key';
+        keySpan.textContent = a.key_hint || '—';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-inline-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.style.display = 'none';
+
+        const showBtn = document.createElement('button');
+        showBtn.className = 'show-key-btn';
+        showBtn.textContent = 'Show';
+
+        const hintText = a.key_hint || '—';
+        let revealedKey = null;
+
+        const hide = () => {
+          keySpan.textContent = hintText;
+          keySpan.classList.remove('revealed');
+          copyBtn.style.display = 'none';
+          showBtn.textContent = 'Show';
+          revealedKey = null;
+          const t = revealTimers.get(a.id);
+          if (t) { clearTimeout(t); revealTimers.delete(a.id); }
+        };
+
+        const reveal = async () => {
+          try {
+            const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(a.id) + '/reveal-key', {
+              method: 'POST', headers: authHeaders(),
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.agent_key) {
+              alert('Failed to reveal key: ' + (data.error?.message || 'unknown'));
+              return;
+            }
+            revealedKey = data.agent_key;
+            keySpan.textContent = revealedKey;
+            keySpan.classList.add('revealed');
+            copyBtn.style.display = 'inline-block';
+            showBtn.textContent = 'Hide';
+            revealTimers.set(a.id, setTimeout(hide, 30000));
+          } catch (err) {
+            alert('Reveal failed: ' + err.message);
+          }
+        };
+
+        showBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (revealedKey) hide(); else reveal();
+        });
+
+        copyBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!revealedKey) return;
+          try { await navigator.clipboard.writeText(revealedKey); } catch { /* clipboard blocked */ }
+          copyBtn.textContent = 'Copied';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+
+        const rot = document.createElement('button');
+        rot.className = 'rotate-icon-btn';
+        rot.textContent = 'Rotate';
+        rot.addEventListener('click', (e) => {
+          e.stopPropagation();
+          rotateAgentKey(a.id, a.name);
+        });
+
+        const del = document.createElement('button');
+        del.className = 'delete-icon-btn';
+        del.textContent = 'Delete';
+        del.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteAgent(a.id, a.name);
+        });
+
+        right.appendChild(keySpan);
+        right.appendChild(copyBtn);
+        right.appendChild(showBtn);
+        right.appendChild(rot);
+        right.appendChild(del);
+
+        li.appendChild(left);
+        li.appendChild(right);
+        li.addEventListener('click', () => loadAgentIntoForm(a.id));
+        agentList.appendChild(li);
+      }
+    }
+
+    async function loadAgentIntoForm(id) {
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(id), { headers: authHeaders() });
+        if (!resp.ok) throw new Error('load failed');
+        const data = await resp.json();
+
+        editingAgentId = id;
+        currentYaml = data.yaml || null;
+
+        const initialConfig = {
+          name: data.name,
+          instructions: data.instructions,
+          model: data.model,
+          temperature: data.temperature,
+          tools: data.tools,
+          behavior: data.behavior,
+        };
+
+        await remountQ({ initialConfig });
+
+        renderAgentList();
+        renderEditingUI();
+        resultSection.classList.remove('visible');
+      } catch (e) {
+        alert('Failed to load agent: ' + e.message);
+      }
+    }
+
+    async function deleteAgent(id, name) {
+      if (!confirm(`Delete agent "${name || id}"? This cannot be undone.`)) return;
+      try {
+        const resp = await fetch(normalizedBase + '/v1/agents/' + encodeURIComponent(id), {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          alert('Failed to delete: ' + (data.error?.message || resp.status));
+          return;
+        }
+        if (editingAgentId === id) resetToCreateMode();
+        await loadAgents();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    async function resetToCreateMode() {
+      editingAgentId = null;
+      currentYaml = null;
+      await remountQ();
+      renderEditingUI();
+      renderAgentList();
+      resultSection.classList.remove('visible');
+    }
+
+    function renderEditingUI() {
+      if (editingAgentId) {
+        const a = agents.find(x => x.id === editingAgentId);
+        editingBanner.textContent = `Editing "${a?.name || editingAgentId}" — submit to save changes. Agent key stays the same.`;
+        editingBanner.classList.remove('hidden');
+        qSectionTitle.textContent = 'Edit agent';
+      } else {
+        editingBanner.classList.add('hidden');
+        qSectionTitle.textContent = 'Configure your agent';
+      }
+    }
+
+    newAgentBtn.addEventListener('click', resetToCreateMode);
 
     // Copy agent key
     copyBtn.addEventListener('click', async () => {

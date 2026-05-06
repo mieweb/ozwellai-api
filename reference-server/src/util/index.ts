@@ -9,6 +9,11 @@ export function getKeyHint(key: string): string {
   return key.slice(-4);
 }
 
+/** Format an agent key as a display hint: agnt_key-...XXXX */
+export function formatAgentKeyHint(key: string): string {
+  return `${AGENT_KEY_PREFIX}key-...${getKeyHint(key)}`;
+}
+
 /** Check if a key has a valid parent key prefix */
 export function isValidApiKey(key: string): boolean {
   return key.startsWith(KEY_PREFIX);

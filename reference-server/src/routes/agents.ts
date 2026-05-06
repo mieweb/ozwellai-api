@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { createError, generateId, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX } from '../util';
+import { createError, generateId, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
 import * as yaml from 'yaml';
-import { agentStore } from '../storage/agents';
+import { agentStore, Agent } from '../storage/agents';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -55,51 +55,82 @@ function generateAgentKey(): string {
 }
 
 /** Normalize tools: plain strings become { name } objects */
-function normalizeTools(tools: unknown[] | undefined): { name: string; [k: string]: unknown }[] {
-    if (!tools) return [];
+function normalizeTools(tools: unknown): { name: string; [k: string]: unknown }[] {
+    if (!Array.isArray(tools)) return [];
     return tools.map(t => typeof t === 'string' ? { name: t } : t as { name: string });
 }
 
-/** Extract and validate YAML input from request body */
+/** Extract YAML string from request body (string or {yaml} wrapper). Returns null if empty. */
 function extractYamlInput(body: string | { yaml: string }): string | null {
     const raw = typeof body === 'string' ? body : body?.yaml;
-    return raw?.trim() || null;
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    return raw;
 }
 
-// Parse YAML input into structured fields (returns undefined for missing fields — caller validates)
-function parseYamlInput(yamlInput: string) {
+interface ParsedAgentFields {
+    name?: string;
+    instructions?: string;
+    model?: string;
+    temperature?: number;
+    tools?: unknown;
+    behavior?: Record<string, unknown>;
+    [k: string]: unknown;
+}
+
+/** Parse YAML into a loose object. Throws on invalid YAML. */
+function parseAgentYaml(yamlInput: string): ParsedAgentFields {
     const parsed = yaml.parse(yamlInput);
-    const name = (parsed.name as string | undefined)?.trim() || undefined;
-    const instructions = (parsed.instructions as string | undefined)?.trim() || undefined;
-    const model = parsed.model as string | undefined;
-    const temperature = parsed.temperature as number | undefined;
-    const tools = parsed.tools as (string | { name: string; description?: string; inputSchema?: Record<string, unknown>; parameters?: Record<string, unknown> })[] | undefined;
-    const behavior = parsed.behavior as Record<string, unknown> | undefined;
-    const pageTools = parsePageTools(parsed.pageTools);
-
-    return { name, instructions, model, temperature, tools, behavior, pageTools };
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error('YAML must parse to an object');
+    }
+    return parsed as ParsedAgentFields;
 }
 
-/** Validate and normalize the pageTools YAML field.
- *  Accepted forms:
- *    pageTools: all                          → 'all'
- *    pageTools: { restricted: [tool1, …] }   → { restricted: [...] }
- *    pageTools: { blocked: [tool1, …] }      → { blocked: [...] }
- *    (omitted / undefined)                   → undefined  (treated as 'all')
+/**
+ * Parse YAML and enforce required fields. On failure, set reply.code and
+ * return an error payload. On success, return the parsed fields.
  */
-function parsePageTools(raw: unknown): import('../storage/agents.js').PageToolsPolicy | undefined {
-    if (raw === undefined || raw === null) return undefined;
-    if (raw === 'all') return 'all';
-    if (typeof raw === 'object' && raw !== null) {
-        const obj = raw as Record<string, unknown>;
-        if (Array.isArray(obj.restricted)) {
-            return { restricted: obj.restricted.filter((s): s is string => typeof s === 'string') };
-        }
-        if (Array.isArray(obj.blocked)) {
-            return { blocked: obj.blocked.filter((s): s is string => typeof s === 'string') };
-        }
+function parseAndValidate(
+    yamlInput: string,
+    reply: FastifyReply
+): { parsed: ParsedAgentFields; error: null } | { parsed: null; error: ReturnType<typeof createError> } {
+    let parsed: ParsedAgentFields;
+    try {
+        parsed = parseAgentYaml(yamlInput);
+    } catch {
+        reply.code(400);
+        return { parsed: null, error: createError('Invalid YAML format', 'invalid_request_error') };
     }
-    return undefined;
+    if (!parsed.name || typeof parsed.name !== 'string' || !parsed.name.trim()) {
+        reply.code(400);
+        return { parsed: null, error: createError("'name' is required", 'invalid_request_error') };
+    }
+    if (!parsed.instructions || typeof parsed.instructions !== 'string' || !parsed.instructions.trim()) {
+        reply.code(400);
+        return { parsed: null, error: createError("'instructions' is required", 'invalid_request_error') };
+    }
+    return { parsed, error: null };
+}
+
+/**
+ * Build a JSON-friendly view of an agent row (parses YAML for convenience fields).
+ * Throws on malformed stored YAML — callers wrap in try/catch returning 500.
+ * Should not happen in practice: writes validate via parseAndValidate before insert.
+ */
+function toAgentView(agent: Agent) {
+    const parsed = parseAgentYaml(agent.yaml);
+    return {
+        agent_id: agent.id,
+        key_hint: formatAgentKeyHint(agent.agent_key),
+        created_at: agent.created_at,
+        yaml: agent.yaml,
+        name: parsed.name,
+        instructions: parsed.instructions,
+        model: parsed.model,
+        temperature: parsed.temperature,
+        tools: parsed.tools,
+        behavior: parsed.behavior,
+    };
 }
 
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
@@ -182,39 +213,22 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError("'yaml' field is required", 'invalid_request_error');
             }
 
-            let agent;
-            try {
-                const fields = parseYamlInput(yamlInput);
+            const validation = parseAndValidate(yamlInput, reply);
+            if (validation.error) return validation.error;
 
-                if (!fields.name) {
-                    reply.code(400);
-                    return createError("'name' is required", 'invalid_request_error');
-                }
-                if (!fields.instructions) {
-                    reply.code(400);
-                    return createError("'instructions' is required", 'invalid_request_error');
-                }
-
-                const agentId = generateId('agent');
-                const agentKey = generateAgentKey();
-
-                agent = agentStore.createAgent({
-                    id: agentId,
-                    agent_key: agentKey,
-                    parent_key: parentKey,
-                    ...fields,
-                    name: fields.name,
-                    instructions: fields.instructions,
-                });
-            } catch {
-                reply.code(400);
-                return createError('Invalid YAML format', 'invalid_request_error');
-            }
+            const agent = agentStore.createAgent({
+                id: generateId('agent'),
+                agent_key: generateAgentKey(),
+                parent_key: parentKey,
+                yaml: yamlInput,
+            });
 
             reply.code(201);
+            reply.header('Cache-Control', 'no-store');
             return {
                 agent_id: agent.id,
                 agent_key: agent.agent_key,
+                key_hint: formatAgentKeyHint(agent.agent_key),
                 created_at: agent.created_at,
             };
         } catch (error) {
@@ -240,13 +254,19 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             return createError('Agent not found', 'invalid_request_error', null, 'not_found');
         }
 
-        return {
-            id: agent.id,
-            name: agent.name,
-            model: agent.model,
-            tools: normalizeTools(agent.tools),
-            pageTools: agent.pageTools,
-        };
+        try {
+            const parsed = parseAgentYaml(agent.yaml);
+            return {
+                id: agent.id,
+                name: parsed.name,
+                model: parsed.model,
+                tools: normalizeTools(parsed.tools),
+            };
+        } catch (error) {
+            fastify.log.error({ err: error, agentId: agent.id }, 'agent yaml parse failed');
+            reply.code(500);
+            return createError('Failed to parse agent', 'server_error');
+        }
     });
 
     // GET /v1/agents (list agents)
@@ -257,20 +277,21 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         const parentKey = request.apiKey!.id;
 
         try {
-            const agentRows = agentStore.listByParent(parentKey);
-
+            const agents = agentStore.listByParent(parentKey);
             return {
                 object: 'list',
-                data: agentRows.map(a => ({
-                    id: a.id,
-                    agent_key: a.agent_key,
-                    name: a.name,
-                    model: a.model,
-                    tools: a.tools,
-                    behavior: a.behavior,
-                    pageTools: a.pageTools,
-                    created_at: a.created_at,
-                })),
+                data: agents.map(a => {
+                    const view = toAgentView(a);
+                    return {
+                        id: view.agent_id,
+                        key_hint: view.key_hint,
+                        name: view.name,
+                        model: view.model,
+                        tools: view.tools,
+                        behavior: view.behavior,
+                        created_at: view.created_at,
+                    };
+                }),
             };
         } catch (error) {
             fastify.log.error(error);
@@ -289,23 +310,11 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
         try {
             const agent = agentStore.getOwned(agent_id, parentKey);
-
             if (!agent) {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
-
-            return {
-                agent_id: agent.id,
-                created_at: agent.created_at,
-                name: agent.name,
-                instructions: agent.instructions,
-                model: agent.model,
-                temperature: agent.temperature,
-                tools: agent.tools,
-                behavior: agent.behavior,
-                pageTools: agent.pageTools,
-            };
+            return toAgentView(agent);
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
@@ -328,35 +337,69 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError("'yaml' field is required", 'invalid_request_error');
             }
 
-            let updated;
-            try {
-                const fields = parseYamlInput(yamlInput);
-                updated = agentStore.updateAgent(agent_id, parentKey, fields);
-            } catch {
-                reply.code(400);
-                return createError('Invalid YAML format', 'invalid_request_error');
-            }
+            const validation = parseAndValidate(yamlInput, reply);
+            if (validation.error) return validation.error;
 
+            const updated = agentStore.updateAgent(agent_id, parentKey, yamlInput);
             if (!updated) {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            return {
-                agent_id: updated.id,
-                agent_key: updated.agent_key,
-                name: updated.name,
-                model: updated.model,
-                tools: updated.tools,
-                behavior: updated.behavior,
-                pageTools: updated.pageTools,
-                updated: true,
-            };
+            return { ...toAgentView(updated), updated: true };
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
             return createError('Agent update failed', 'server_error');
         }
+    });
+
+    // POST /v1/agents/:agent_id/reveal-key (return full agent_key — explicit user action)
+    fastify.post<{ Params: { agent_id: string } }>('/v1/agents/:agent_id/reveal-key', {
+        schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Reveal full agent key (parent key auth required)' },
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        const agent = agentStore.getOwned(agent_id, parentKey);
+        if (!agent) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+
+        reply.header('Cache-Control', 'no-store');
+        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'agent_key revealed');
+        return {
+            agent_id: agent.id,
+            agent_key: agent.agent_key,
+            key_hint: formatAgentKeyHint(agent.agent_key),
+        };
+    });
+
+    // POST /v1/agents/:agent_id/rotate-key (generate new key, invalidate old)
+    fastify.post<{ Params: { agent_id: string } }>('/v1/agents/:agent_id/rotate-key', {
+        schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Rotate agent key (invalidates old key)' },
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        const newKey = generateAgentKey();
+        const updated = agentStore.rotateKey(agent_id, parentKey, newKey);
+        if (!updated) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+
+        reply.header('Cache-Control', 'no-store');
+        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'agent_key rotated');
+        return {
+            agent_id: updated.id,
+            agent_key: newKey,
+            key_hint: formatAgentKeyHint(newKey),
+            rotated_at: Math.floor(Date.now() / 1000),
+        };
     });
 
     // DELETE /v1/agents/:agent_id (delete agent)
