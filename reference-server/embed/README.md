@@ -141,7 +141,7 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
 
     if (name === 'update_email') {
       document.getElementById('user-email').value = args.email;
-      respond({ success: true, message: 'Email updated successfully' });
+      respond({ success: true, updated: { email: args.email } });
     }
   });
 </script>
@@ -396,11 +396,11 @@ After receiving an `ozwell-tool-call` DOM event, call `respond()` from the event
 document.addEventListener('ozwell-tool-call', (e) => {
   const { name, arguments: args, respond } = e.detail;
   // execute the tool, then:
-  respond({ success: true, message: 'Action completed' });
+  respond({ success: true, result: { action: name, completed: true } });
 });
 ```
 
-The loader automatically sends the correct JSON-RPC 2.0 response back to the widget.
+The loader automatically sends the correct JSON-RPC 2.0 response back to the widget. The widget then appends that result as a `tool` message and sends it back to the model, matching OpenAI-style tool continuation.
 
 ### Widget → Parent Messages
 

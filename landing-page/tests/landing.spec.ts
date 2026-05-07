@@ -214,6 +214,33 @@ test.describe('Tic-Tac-Toe Demo', () => {
     // Verify the difficulty selector is present
     await expect(page.locator('#difficulty')).toBeVisible();
   });
+
+  test('make_move tool accepts natural language positions and returns continuation data', async ({ page }) => {
+    await page.goto('/tictactoe.html');
+    await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
+
+    const result = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        document.dispatchEvent(new CustomEvent('ozwell-tool-call', {
+          detail: {
+            name: 'make_move',
+            arguments: { position: 'center' },
+            respond: resolve,
+            error: (message: string) => resolve({ success: false, error: message }),
+          },
+        }));
+      });
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      move: 4,
+      position: 'middle-center',
+      nextPlayer: 'O',
+      shouldCallAiMove: true,
+    });
+    await expect(page.locator('.cell').nth(4)).toHaveText('X');
+  });
 });
 
 test.describe('Console Errors', () => {

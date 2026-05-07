@@ -1888,114 +1888,6 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
   }
 }
 
-async function continueConversationWithToolResult(result) {
-  if (state.sending) return;
-
-  console.log('[widget.js] Continuing conversation with tool result:', result);
-
-  // Add tool result to conversation history
-  const toolResultMessage = {
-    role: 'tool',
-    content: typeof result === 'string' ? result : JSON.stringify(result)
-  };
-  state.messages.push(toolResultMessage);
-
-  setStatus('Processing...', true);
-  state.sending = true;
-  formEl?.classList.add('is-sending');
-
-  // Build MCP tools from parent config (same as sendMessage)
-  let tools = [];
-  if (state.config.tools && Array.isArray(state.config.tools)) {
-    tools = state.config.tools.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: tool.function.parameters
-      }
-    }));
-  }
-
-  // Build system prompt (same as sendMessage - respects custom prompts)
-  const systemPrompt = buildSystemPrompt();
-
-  try {
-    const headers = getRequestHeaders();
-
-    // Build messages for request (OpenAI format: system message in messages array)
-    const requestMessages = buildMessages();
-    if (systemPrompt) {
-      // Add system message at the beginning
-      requestMessages.unshift({ role: 'system', content: systemPrompt });
-    }
-
-    // Build request body (always use OpenAI format)
-    // Only include model if explicitly configured - server chooses default otherwise
-    const requestBody = {
-      messages: requestMessages,
-      tools: tools,
-    };
-    if (state.config.model) {
-      requestBody.model = state.config.model;
-    }
-
-    console.log('[widget.js] Sending tool result to API:', requestBody);
-
-    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[widget.js] API error:', errorText);
-      throw new Error(`Request failed with status ${response.status}: ${errorText}`);
-    }
-
-    const payload = await response.json();
-    console.log('[widget.js] API response with tool result:', payload);
-
-    // Handle errors
-    if (payload.error) {
-      throw new Error(payload.error.message || 'Model request failed');
-    }
-
-    // Parse OpenAI response format
-    const choice = payload.choices?.[0];
-    if (!choice) {
-      throw new Error('Invalid response format: missing choices array');
-    }
-
-    const assistantContent = choice.message?.content || '';
-
-    // Add assistant's final response to conversation
-    const assistantMessage = {
-      role: 'assistant',
-      content: assistantContent || '(no response)',
-    };
-    state.messages.push(assistantMessage);
-    addMessage('assistant', assistantContent || '(no response)');
-
-    // Notify parent of assistant response (signal only — no message content)
-    postToParent({
-      source: 'ozwell-chat-widget',
-      type: 'assistant_response',
-      hadToolCalls: false
-    });
-
-    setStatus('', false);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected error';
-    addMessage('system', `Error: ${message}`);
-    setStatus('Error', false);
-  } finally {
-    state.sending = false;
-    formEl?.classList.remove('is-sending');
-  }
-}
-
 function handleSubmit(event) {
   event.preventDefault();
   if (!inputEl) return;
@@ -2024,53 +1916,34 @@ function handleParentMessage(event) {
       updateToolExecutionResult(toolCallId, result);
     }
 
-    // Check if this is an update tool (has success/message) or a get tool (raw data)
-    if (result.success && result.message) {
-      // Update tool - just display the message (no LLM continuation needed)
-      addMessage('assistant', result.message);
+    console.log('[widget.js] Sending tool result to LLM');
 
-      // Notify parent of assistant response (signal only — no message content)
-      postToParent({
-        source: 'ozwell-chat-widget',
-        type: 'assistant_response',
-        hadToolCalls: false
-      });
-
-      // After displaying the tool result message, send any queued user message (if present)
-      if (state.queuedMessage) {
-        sendQueuedMessage();
-      }
-    } else {
-      // No display message — send tool result back to LLM for continuation
-      console.log('[widget.js] Sending tool result to LLM');
-
-      // Get tool_call_id from parent response (required for OpenAI protocol)
-      if (!toolCallId) {
-        console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
-        addMessage('system', 'Error: Tool result missing ID');
-        return;
-      }
-
-      // Add tool result to conversation history with tool_call_id
-      state.messages.push({
-        role: 'tool',
-        tool_call_id: toolCallId,
-        content: JSON.stringify(result)
-      });
-
-      // Continue conversation by calling LLM with tool result
-      const tools = state.config.tools?.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.function.name,
-          description: tool.function.description,
-          parameters: tool.function.parameters
-        }
-      })) || [];
-
-      // Send empty user message - we're just continuing the conversation with tool result
-      sendMessageStreaming('', tools);
+    // Get tool_call_id from parent response (required for OpenAI protocol)
+    if (!toolCallId) {
+      console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
+      addMessage('system', 'Error: Tool result missing ID');
+      return;
     }
+
+    // Add tool result to conversation history with tool_call_id
+    state.messages.push({
+      role: 'tool',
+      tool_call_id: toolCallId,
+      content: JSON.stringify(result)
+    });
+
+    // Continue conversation by calling LLM with tool result
+    const tools = state.config.tools?.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
+      }
+    })) || [];
+
+    // Send empty user message - we're just continuing the conversation with tool result
+    sendMessageStreaming('', tools);
 
     return;
   }
