@@ -56,6 +56,8 @@ test('mock agent — non-stream returns deterministic content for greeting', asy
     assert.equal(j1.choices[0].finish_reason, 'stop');
     assert.equal(j1.choices[0].message.role, 'assistant');
     assert.match(j1.choices[0].message.content, /Hello/);
+    assert.equal(j1.warning?.type, 'mock_response');
+    assert.equal(j1.warning?.reason, 'mock_agent');
 
     const r2 = await fetch(`${BASE}/v1/chat/completions`, { method: 'POST', headers: H, body });
     const j2 = await r2.json();
@@ -93,6 +95,8 @@ test('mock agent — streaming text response ends with stop', async () => {
     assert.ok(text.includes('data: [DONE]'), 'stream terminates with [DONE]');
     assert.ok(text.includes('"role":"assistant"'), 'role chunk emitted');
     assert.ok(text.includes('"finish_reason":"stop"'), 'final chunk has stop');
+    assert.ok(text.includes('event: warning'), 'warning event emitted');
+    assert.ok(text.includes('"reason":"mock_agent"'), 'warning reason is mock_agent');
 });
 
 test('mock agent — streaming tool-call response ends with tool_calls', async () => {

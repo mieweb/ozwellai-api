@@ -1405,8 +1405,8 @@ async function sendMessageNonStreaming(text, tools) {
     const payload = await response.json();
     console.log('[widget.js] API response:', payload);
 
-    // Show toast for model fallback warnings
-    if (payload.warning && payload.warning.type === 'model_fallback') {
+    // Show toast for model fallback / mock-response warnings
+    if (payload.warning && (payload.warning.type === 'model_fallback' || payload.warning.type === 'mock_response')) {
       showToast(payload.warning.message);
     }
 
@@ -1651,7 +1651,7 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
           if (currentEventType === 'warning') {
             try {
               const warning = JSON.parse(data);
-              if (warning.type === 'model_fallback') {
+              if (warning.type === 'model_fallback' || warning.type === 'mock_response') {
                 showToast(warning.message);
               }
             } catch (e) { /* ignore malformed warning */ }

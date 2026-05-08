@@ -263,6 +263,17 @@ function buildFallbackWarning(originalModel: string, fallbackModel: string) {
   };
 }
 
+// Marks every mock response so callers (and the chat widget) can always tell a deterministic
+// mock from a real LLM answer. Three reasons cover all paths that emit a mock body.
+function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', model: string) {
+  const messages = {
+    no_backend: `No LLM backend configured or reachable — deterministic mock returned for model ${model}.`,
+    llm_error: `LLM backend errored — deterministic mock returned as fallback for model ${model}.`,
+    mock_agent: `Agent is configured as type: mock — response is deterministic, no LLM called.`,
+  };
+  return { type: 'mock_response' as const, reason, model, message: messages[reason] };
+}
+
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -286,42 +297,56 @@ const ollamaClient = new OzwellAI({
   timeout: 120000,
 });
 
-// Mock dispatch — handles `type: mock` agents and the no-backend fallback.
-// Returns a non-streaming completion body, or writes SSE chunks to reply and returns void.
-async function dispatchMock(
-  messages: NonNullableMessage[],
-  model: string,
-  stream: boolean,
-  reply: FastifyReply,
-  origin: string | undefined,
-): Promise<unknown> {
+// Mock dispatch — split into stream / non-stream variants so the call-site
+// contract is enforced by the type system (no more silent `if (stream) return` footgun).
+// Both variants attach a structured warning so callers always know the response is mock.
+
+type MockWarning = ReturnType<typeof buildMockWarning>;
+
+function buildMockAssistant(messages: NonNullableMessage[]) {
   const userMsg = extractUserMessage(messages as MockChatMessage[]);
   const hasResult = hasToolResult(messages as MockChatMessage[]);
   const toolResult = hasResult ? extractToolResult(messages as MockChatMessage[]) : null;
   const assistantMsg = generateMockResponse(userMsg, hasResult, toolResult);
   const finishReason = assistantMsg.tool_calls?.length ? 'tool_calls' : 'stop';
+  return { assistantMsg, finishReason };
+}
 
+function dispatchMockNonStream(
+  messages: NonNullableMessage[],
+  model: string,
+  warning: MockWarning,
+) {
+  const { assistantMsg, finishReason } = buildMockAssistant(messages);
+  const promptText = messages.map((m) => m.content).join(' ');
+  const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
+  const promptTokens = countTokens(promptText);
+  const completionTokens = countTokens(completionText);
+  return {
+    id: generateId('chatcmpl'),
+    object: 'chat.completion' as const,
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [{ index: 0, message: assistantMsg, finish_reason: finishReason }],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
+    },
+    warning,
+  };
+}
+
+function dispatchMockStream(
+  messages: NonNullableMessage[],
+  model: string,
+  reply: FastifyReply,
+  origin: string | undefined,
+  warning: MockWarning,
+): void {
+  const { assistantMsg, finishReason } = buildMockAssistant(messages);
   const id = generateId('chatcmpl');
   const created = Math.floor(Date.now() / 1000);
-
-  if (!stream) {
-    const promptText = messages.map((m) => m.content).join(' ');
-    const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
-    const promptTokens = countTokens(promptText);
-    const completionTokens = countTokens(completionText);
-    return {
-      id,
-      object: 'chat.completion' as const,
-      created,
-      model,
-      choices: [{ index: 0, message: assistantMsg, finish_reason: finishReason }],
-      usage: {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-        total_tokens: promptTokens + completionTokens,
-      },
-    };
-  }
 
   reply.raw.writeHead(200, {
     'content-type': 'text/event-stream',
@@ -331,10 +356,13 @@ async function dispatchMock(
     'access-control-allow-credentials': 'true',
   });
 
-  const writeChunk = (delta: Record<string, unknown>, finishReason: string | null = null) => {
+  // Emit warning event before chunks so widget can react before content streams in
+  reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
+
+  const writeChunk = (delta: Record<string, unknown>, finish: string | null = null) => {
     reply.raw.write(`data: ${JSON.stringify({
       id, object: 'chat.completion.chunk', created, model,
-      choices: [{ index: 0, delta, finish_reason: finishReason }],
+      choices: [{ index: 0, delta, finish_reason: finish }],
     })}\n\n`);
   };
 
@@ -355,7 +383,6 @@ async function dispatchMock(
   writeChunk({}, finishReason);
   reply.raw.write('data: [DONE]\n\n');
   reply.raw.end();
-  return;
 }
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -431,7 +458,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as ChatCompletionRequestWithTools;
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | undefined } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
@@ -481,7 +508,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         pageTools: (parsed.pageTools as PageToolsPolicy) ?? 'all',
         model: (parsed.model as string | undefined) || null,
         temperature: (parsed.temperature as number | undefined) ?? null,
-        type: parsed.type === 'mock' ? 'mock' : undefined,
+        type: parsed.type === 'mock' ? 'mock' : null,
       };
     }
 
@@ -497,9 +524,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
       }
       const mockModel = agentConfig.model || 'mock';
-      const result = await dispatchMock(mockMessages, mockModel, stream, reply, request.headers.origin);
-      if (stream) return;
-      return result;
+      const warning = buildMockWarning('mock_agent', mockModel);
+      if (stream) {
+        dispatchMockStream(mockMessages, mockModel, reply, request.headers.origin, warning);
+        return;
+      }
+      return dispatchMockNonStream(mockMessages, mockModel, warning);
     }
 
     // Backend selection priority:
@@ -578,9 +608,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // No backend reachable — fall through to deterministic mock so client always gets a valid response.
     if (backend === 'fallback') {
-      const result = await dispatchMock(normalizedMessages, model, stream, reply, request.headers.origin);
-      if (stream) return;
-      return result;
+      const warning = buildMockWarning('no_backend', model);
+      if (stream) {
+        dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
+        return;
+      }
+      return dispatchMockNonStream(normalizedMessages, model, warning);
     }
 
     // Use a real LLM backend
@@ -830,9 +863,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // LLM error final fallback: dispatch deterministic mock so the client always gets a valid response.
-    const result = await dispatchMock(normalizedMessages, model, stream, reply, request.headers.origin);
-    if (stream) return;
-    return result;
+    // Warning marker tells caller the configured LLM failed — never silent.
+    const warning = buildMockWarning('llm_error', model);
+    if (stream) {
+      dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
+      return;
+    }
+    return dispatchMockNonStream(normalizedMessages, model, warning);
   });
 };
 
