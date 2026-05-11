@@ -220,7 +220,7 @@ document.addEventListener('ozwell-tool-call', (e) => {
 });
 ```
 
-**You must call `respond()`.** The AI is waiting for the result. If you don't respond, the conversation will hang.
+**You must call `respond()` or `error()`.** The AI is waiting for the result. If you don't respond, the loader returns a tool error after a timeout.
 
 ### Step 3: That's It
 
@@ -267,7 +267,7 @@ If you're using a parent API key (`ozw_...`) instead of an agent key, you can de
 <script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-You still handle `ozwell-tool-call` the same way — the event listener code doesn't change.
+`tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
 
 ### Security: What Crosses the Iframe Boundary
 

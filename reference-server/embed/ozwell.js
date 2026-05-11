@@ -677,6 +677,19 @@ function trackPendingToolCall(id) {
   setTimeout(() => { delete mcpPendingToolCalls[id]; }, MCP_TOOL_TIMEOUT_MS);
 }
 
+function ensureToolCallId(toolCall) {
+  if (toolCall.id == null) {
+    toolCall.id = `ozwell_call_${++mcpRequestId}`;
+  }
+  return toolCall.id;
+}
+
+function serializeToolResult(result) {
+  if (typeof result === 'string') return result;
+  const serialized = JSON.stringify(result);
+  return serialized === undefined ? 'null' : serialized;
+}
+
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
   const extConf = window.OZWELL_CONFIG;
@@ -1449,9 +1462,11 @@ async function sendMessageNonStreaming(text, tools) {
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
+            const toolCallId = ensureToolCallId(toolCall);
+
             // Send tool call to parent via MCP tools/call
-            trackPendingToolCall(toolCall.id);
-            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
+            trackPendingToolCall(toolCallId);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCallId);
         }
       }
 
@@ -1779,13 +1794,14 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
 
         if (toolName) {
             const args = parseToolArgs(toolCall.function.arguments);
+            const toolCallId = ensureToolCallId(toolCall);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Track tool execution in debug mode
             if (state.config.debug) {
               state.toolExecutions.push({
-                toolCallId: toolCall.id,
+                toolCallId: toolCallId,
                 toolName: toolName,
                 arguments: args,
                 result: null,
@@ -1798,11 +1814,11 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
             // In debug mode, pills show the execution instead
 
             // Store tool_call_id for later use in tool message
-            state.activeToolCalls[toolName] = toolCall.id;
+            state.activeToolCalls[toolName] = toolCallId;
 
             // Send tool call to parent via MCP tools/call
-            trackPendingToolCall(toolCall.id);
-            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
+            trackPendingToolCall(toolCallId);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCallId);
         }
       }
 
@@ -1911,25 +1927,23 @@ function handleParentMessage(event) {
     const result = data.error ? { error: data.error.message } : data.result;
     const toolCallId = data.id;
 
-    // Update tool execution result in debug mode
-    if (toolCallId) {
-      updateToolExecutionResult(toolCallId, result);
-    }
-
-    console.log('[widget.js] Sending tool result to LLM');
-
     // Get tool_call_id from parent response (required for OpenAI protocol)
-    if (!toolCallId) {
+    if (toolCallId == null) {
       console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
       addMessage('system', 'Error: Tool result missing ID');
       return;
     }
 
+    // Update tool execution result in debug mode
+    updateToolExecutionResult(toolCallId, result);
+
+    console.log('[widget.js] Sending tool result to LLM');
+
     // Add tool result to conversation history with tool_call_id
     state.messages.push({
       role: 'tool',
       tool_call_id: toolCallId,
-      content: JSON.stringify(result)
+      content: serializeToolResult(result)
     });
 
     // Continue conversation by calling LLM with tool result
@@ -2001,7 +2015,7 @@ notifyReady();
 // runtime via the MCP protocol instead of being passed in config.
 
 function mcpSend(method, params, explicitId) {
-  const id = explicitId !== undefined ? explicitId : ++mcpRequestId;
+  const id = explicitId != null ? explicitId : ++mcpRequestId;
   window.parent.postMessage({
     jsonrpc: '2.0',
     id: id,
