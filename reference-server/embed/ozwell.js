@@ -1003,32 +1003,26 @@ function buildMessages() {
   return state.messages.map(({ thinking, ...rest }) => rest);
 }
 
+const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
+const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
+
+function isAgentKeyConfigured() {
+  return getAuthKey().startsWith('agnt_key-');
+}
+
 function buildSystemPrompt() {
-  // Start with custom system prompt from parent config
-  let systemPrompt = state.config.system || 'You are a helpful assistant.';
-
-  // Add generic tool usage guidance if tools are available
-  if (state.config.tools && state.config.tools.length > 0) {
-    systemPrompt += `\n\n=== TOOL USAGE GUIDELINES ===
-
-You have access to tools. Use them wisely:
-
-**Default behavior:** Respond naturally with conversation. Only use tools when truly necessary.
-
-**Do NOT use tools for:**
-- Simple greetings, pleasantries, or casual conversation
-- Questions you can answer from information already provided in the context above
-- General knowledge questions within your training
-- Clarifications or follow-up conversation
-
-**DO use tools when:**
-- User explicitly requests current/live data that isn't in the context above
-- User asks you to perform an action (update, change, modify, set, etc.)
-- You genuinely need information not available in the current context
-
-**After calling a tool:** Use the result to answer the user's question. Do not call the same tool repeatedly.`;
+  if (isAgentKeyConfigured()) {
+    return '';
   }
 
+  if (state.config.system) {
+    return state.config.system;
+  }
+
+  let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;
+  if (state.config.tools && state.config.tools.length > 0) {
+    systemPrompt += ` ${DEFAULT_PARENT_TOOL_HINT}`;
+  }
   return systemPrompt;
 }
 
