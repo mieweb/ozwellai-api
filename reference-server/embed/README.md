@@ -71,33 +71,38 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
 
 **Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
 
-## Providing Page Context
+## Reading Page Context With Tools
 
-Send page data to the widget so the AI can answer questions about current state:
+Expose current page data as a tool so the AI can request it when needed:
 
 ```html
 <input id="user-name" value="Alice">
 <input id="user-email" value="alice@example.com">
 
 <script>
-  window.OzwellChatConfig = {};
-
-  // Send context when inputs change
-  function updateContext() {
-    OzwellChat.updateContext({
-      formData: {
-        name: document.getElementById('user-name').value,
-        email: document.getElementById('user-email').value
+  window.OzwellChatConfig = {
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'get_form_data',
+          description: 'Read the current form values',
+          parameters: {
+            type: 'object',
+            properties: {}
+          }
+        }
       }
-    });
-  }
+    ]
+  };
 
-  // Wait for widget to load, then send initial context and listen for changes
-  document.addEventListener('DOMContentLoaded', () => {
-    OzwellChat.ready().then(() => {
-      updateContext();
-      document.getElementById('user-name').addEventListener('input', updateContext);
-      document.getElementById('user-email').addEventListener('input', updateContext);
+  document.addEventListener('ozwell-tool-call', (event) => {
+    const { name, respond } = event.detail;
+    if (name !== 'get_form_data') return;
+
+    respond({
+      name: document.getElementById('user-name').value,
+      email: document.getElementById('user-email').value
     });
   });
 </script>
@@ -106,7 +111,7 @@ Send page data to the widget so the AI can answer questions about current state:
 
 Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
 
-**How it works:** Context is included in the system prompt for every message, so the AI always sees current page state.
+**How it works:** The tool schema tells the AI what page data it can request. When the AI calls the tool, the page responds with the current values through the `ozwell-tool-call` event.
 
 ## With MCP Tools
 
