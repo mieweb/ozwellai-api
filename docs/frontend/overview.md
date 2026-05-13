@@ -8,7 +8,10 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 Ozwell is an embeddable AI assistant that runs inside an iframe on your website. Users chat with it. The AI can call **tools you define** — JavaScript functions that read from or write to your page. Conversations are private by default; your page only sees tool calls and lifecycle events, never message content.
 
-> **Try it live:** See Ozwell in action at the [demo site](https://ozwellai-embedtest.opensource.mieweb.org/).
+> **Try it live:** See Ozwell in action at the [demo site](https://ozwelldemo.opensource.mieweb.org/).
+>
+> **Current official public API:** `https://ozwellapi.opensource.mieweb.org`  
+> **Beta / development API:** `https://ozwellapi.os.mieweb.org` *(unstable, active development — prefer the `opensource` host for normal use)*
 
 ## What You're Building
 
@@ -50,7 +53,7 @@ Here's a page that exposes two tools: one that reads the current email (get) and
     ]
   };
 </script>
-<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 ### 2. Handle Tool Calls
@@ -154,7 +157,7 @@ Add Ozwell to any website with a single script tag. No build step required. Supp
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 ➡️ [Full CDN documentation with tool calling tutorial](./cdn-embed.md)

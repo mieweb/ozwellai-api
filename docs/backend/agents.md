@@ -1,5 +1,14 @@
 # Agent Registration API
 
+:::tip Fastest Way to Create an Agent
+The easiest path is to open `https://ozwelldemo.opensource.mieweb.org/register.html` and create/manage your agents through the register page UI.
+
+To get an Ozwell API key (`ozw_` prefix) for agent creation, contact:
+
+- **`horner@mieweb.com`** (Doug Horner)
+- **`adamerla128@gmail.com`** (Aditya Damerla)
+:::
+
 :::info Getting an API Key
 The Ozwell Dashboard for key provisioning is **coming soon**. In the meantime, to get an API key (`ozw_` prefix), contact:
 
@@ -15,8 +24,11 @@ Agent chat requests are processed by whichever backend the server has configured
 
 | Environment | URL |
 |-------------|-----|
-| **Development** | `https://ozwell-dev-refserver.opensource.mieweb.org` |
+| **Current official public** | `https://ozwellapi.opensource.mieweb.org` |
+| **Beta / development** | `https://ozwellapi.os.mieweb.org` *(unstable, active development)* |
 | **Production** | `https://api.ozwell.ai` *(coming soon)* |
+
+Use the current official public environment above for normal testing and integrations. The beta / development URL may change or break and should only be used if you specifically need the latest in-progress changes.
 
 ## Authentication
 
@@ -28,10 +40,21 @@ Authorization: Bearer ozw_your_api_key_here
 
 ## Quick Start
 
+### Option A — Create an agent in the UI
+
+1. Get an Ozwell API key by contacting **`horner@mieweb.com`** or **`adamerla128@gmail.com`**
+2. Open `https://ozwelldemo.opensource.mieweb.org/register.html`
+3. Create or edit your agent in the register page
+4. Copy the returned `agent_key` and use it in your widget embed
+
+### Option B — Create an agent via API
+
+If you want the lower-level/manual flow, use the API directly:
+
 ### Step 1 — Set your server and key
 
 ```bash
-BASE="https://ozwell-dev-refserver.opensource.mieweb.org"
+BASE="https://ozwellapi.opensource.mieweb.org"
 AUTH="Authorization: Bearer ozw_your_api_key_here"
 ```
 
@@ -89,7 +112,7 @@ curl -s -X POST "$BASE/v1/agents" \
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-abc123...' };
 </script>
-<script src="https://ozwell-dev-refserver.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 That's it — 4 steps: set credentials, create agent, copy the key, embed it.

@@ -235,7 +235,7 @@ The server will start at `http://localhost:3000`
 **Simple (one line):**
 
 ```html
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
 ```
 
 **Advanced (with config):**
@@ -243,15 +243,21 @@ The server will start at `http://localhost:3000`
 ```html
 <script>
   window.OzwellChatConfig = {
-    endpoint: 'https://ozwellai-reference-server.opensource.mieweb.org/v1/chat/completions',
+    endpoint: 'http://localhost:3000/v1/chat/completions',
     welcomeMessage: 'Hi! How can I help?',
     debug: false  // Set to true to see tool execution details (developer mode)
   };
 </script>
-<script src="https://ozwellai-reference-server.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
 ```
 
-**Live Demo:** <https://ozwellai-embedtest.opensource.mieweb.org>
+**Hosted/public environment:**
+
+```html
+<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**Live Demo:** <https://ozwelldemo.opensource.mieweb.org>
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 

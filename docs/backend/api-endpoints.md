@@ -6,11 +6,12 @@ Complete reference for all Ozwell API endpoints.
 
 | Environment | URL |
 |-------------|-----|
-| **Development** | `https://ozwell-dev-refserver.opensource.mieweb.org` |
+| **Current official public** | `https://ozwellapi.opensource.mieweb.org` |
+| **Beta / development** | `https://ozwellapi.os.mieweb.org` *(unstable, active development)* |
 | **Production** | `https://api.ozwell.ai` *(coming soon)* |
 
 :::tip
-All examples below use `https://api.ozwell.ai` as the base URL. For development and testing, replace with the development URL above.
+All examples below use `https://ozwellapi.opensource.mieweb.org` as the current official public base URL. Use the beta / development URL only if you specifically need the latest in-progress changes.
 :::
 
 ## Chat
@@ -55,7 +56,7 @@ POST /v1/chat/completions
 #### Example Request
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.opensource.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -117,7 +118,7 @@ POST /v1/embeddings
 #### Example Request
 
 ```bash
-curl https://api.ozwell.ai/v1/embeddings \
+curl https://ozwellapi.opensource.mieweb.org/v1/embeddings \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -168,7 +169,7 @@ POST /v1/files
 #### Example Request
 
 ```bash
-curl https://api.ozwell.ai/v1/files \
+curl https://ozwellapi.opensource.mieweb.org/v1/files \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -F "file=@document.pdf" \
   -F "purpose=assistants"
@@ -312,7 +313,7 @@ Includes all `chat/completions` parameters plus:
 #### Example Request
 
 ```bash
-curl https://api.ozwell.ai/v1/responses \
+curl https://ozwellapi.opensource.mieweb.org/v1/responses \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -368,11 +369,11 @@ List endpoints support pagination:
 
 ```bash
 # First page
-curl "https://api.ozwell.ai/v1/files?limit=10" \
+curl "https://ozwellapi.opensource.mieweb.org/v1/files?limit=10" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 
 # Next page
-curl "https://api.ozwell.ai/v1/files?limit=10&after=file-abc123" \
+curl "https://ozwellapi.opensource.mieweb.org/v1/files?limit=10&after=file-abc123" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
