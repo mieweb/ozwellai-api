@@ -13,9 +13,8 @@ import chatRoute from './routes/chat';
 import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
-import mockChatRoute from './routes/mock-chat';
 import agentsRoute from './routes/agents';
-import { getDatabase, initializeAuthTables, seedDemoData } from './storage/agents';
+import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -141,7 +140,6 @@ async function buildServer() {
   await fastify.register(responsesRoute);
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
-  await fastify.register(mockChatRoute);  // Mock AI for demos
   await fastify.register(agentsRoute);  // Agent registration CRUD
 
   // Serve public assets (documentation, misc)
@@ -214,6 +212,7 @@ if (require.main === module) {
       if (process.env.NODE_ENV !== 'production') {
         try {
           seedDemoData(db);
+          seedMockAgent();
         } catch (_e) {
           // Seeding may fail on repeated starts — that's fine
         }

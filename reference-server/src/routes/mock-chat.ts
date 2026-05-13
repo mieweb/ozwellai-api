@@ -1,71 +1,13 @@
-import { FastifyPluginAsync } from 'fastify';
-import { generateId, countTokens } from '../util';
+// Pure helpers for deterministic mock chat responses.
+// Used by the chat route to bypass the LLM for `type: mock` agents
+// and as a final fallback when no LLM backend is reachable.
 
-interface ChatMessage {
+export interface ChatMessage {
   role: string;
   content: string;
 }
 
-interface StreamingConfig {
-  initialDelayMs: number;    // Delay before first token (simulates TTFB)
-  perChunkDelayMs: number;   // Delay between each chunk
-  chunkSize: number;         // Characters per chunk
-  enableJitter: boolean;     // Add random variance to delays
-}
-
-/**
- * Sleep helper for simulating delays
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Split text into chunks for streaming
- */
-function splitIntoChunks(text: string, chunkSize: number): string[] {
-  const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
-
-/**
- * Get streaming configuration from query parameters
- */
-function getStreamingConfig(queryParams: Record<string, unknown>): StreamingConfig {
-  // Preset modes
-  if (queryParams.slow === 'true') {
-    return { initialDelayMs: 2000, perChunkDelayMs: 150, chunkSize: 3, enableJitter: true };
-  }
-  if (queryParams.fast === 'true') {
-    return { initialDelayMs: 100, perChunkDelayMs: 30, chunkSize: 5, enableJitter: false };
-  }
-  if (queryParams.realistic === 'true' || !queryParams.initialDelay) {
-    // Default realistic mode
-    return { initialDelayMs: 500, perChunkDelayMs: 50, chunkSize: 3, enableJitter: true };
-  }
-
-  // Custom params
-  return {
-    initialDelayMs: parseInt(String(queryParams.initialDelay || '500'), 10),
-    perChunkDelayMs: parseInt(String(queryParams.chunkDelay || '50'), 10),
-    chunkSize: parseInt(String(queryParams.chunkSize || '3'), 10),
-    enableJitter: queryParams.jitter === 'true'
-  };
-}
-
-interface Tool {
-  type: string;
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-}
-
-interface ToolCall {
+export interface ToolCall {
   id: string;
   type: 'function';
   function: {
@@ -74,32 +16,13 @@ interface ToolCall {
   };
 }
 
-interface MockChatRequest {
-  model: string;
-  messages: ChatMessage[];
-  tools?: Tool[];
-  temperature?: number;
-  max_tokens?: number;
-  stream?: boolean;
-}
-
-/**
- * Mock AI Chat Endpoint
- *
- * This endpoint simulates AI responses using keyword matching and switch-case logic.
- * It's designed for reliable demos - always returns predictable, correct responses.
- *
- * Purpose: Prove MCP tool calling works via iframe-sync + postMessage without
- * relying on unpredictable LLM behavior.
- */
-
-function extractUserMessage(messages: ChatMessage[]): string {
+export function extractUserMessage(messages: ChatMessage[]): string {
   // Get the last user message
   const lastUserMsg = messages.filter(msg => msg.role === 'user').pop();
   return lastUserMsg?.content || '';
 }
 
-function hasToolResult(messages: ChatMessage[]): boolean {
+export function hasToolResult(messages: ChatMessage[]): boolean {
   // Check if the LAST non-system message is a tool result (second round of OpenAI protocol)
   // We need to check recency, not just existence, to avoid treating all messages after
   // the first tool call as tool results
@@ -108,7 +31,7 @@ function hasToolResult(messages: ChatMessage[]): boolean {
   return lastMessage?.role === 'tool';
 }
 
-function extractToolResult(messages: ChatMessage[]): Record<string, unknown> | null {
+export function extractToolResult(messages: ChatMessage[]): Record<string, unknown> | null {
   // Get the LAST tool result from messages (most recent)
   const toolMessages = messages.filter(msg => msg.role === 'tool');
   const toolMsg = toolMessages[toolMessages.length - 1];
@@ -121,7 +44,7 @@ function extractToolResult(messages: ChatMessage[]): Record<string, unknown> | n
   }
 }
 
-function generateMockResponse(userMessage: string, hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
+export function generateMockResponse(userMessage: string, hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
   const msg = userMessage.toLowerCase();
 
   // If this is the second round (after tool execution), generate final response
@@ -328,175 +251,3 @@ function generateMockResponse(userMessage: string, hasToolResult: boolean, toolR
   };
 }
 
-const mockChatRoute: FastifyPluginAsync = async (fastify) => {
-  fastify.post('/mock/chat', {
-    schema: {
-      body: {
-        type: 'object',
-        properties: {
-          model: { type: 'string' },
-          messages: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                role: { type: 'string' },
-                content: { type: 'string' },
-              },
-              required: ['role', 'content'],
-            },
-          },
-          tools: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                type: { type: 'string' },
-                function: {
-                  type: 'object',
-                  properties: {
-                    name: { type: 'string' },
-                    description: { type: 'string' },
-                    parameters: { type: 'object' },
-                  },
-                },
-              },
-            },
-          },
-          temperature: { type: 'number' },
-          max_tokens: { type: 'number' },
-          stream: { type: 'boolean' },
-        },
-        required: ['messages'],
-      },
-    },
-  }, async (request, _reply) => {
-    const body = request.body as MockChatRequest;
-    const model = body.model || 'mock-ai';  // Default to mock-ai if not specified
-
-    // Use messages as-is (OpenAI format)
-    const messages: ChatMessage[] = body.messages;
-
-    // Extract user message and tool result
-    const userMessage = extractUserMessage(messages);
-    const hasResult = hasToolResult(messages);
-    const toolResult = hasResult ? extractToolResult(messages) : null;
-
-    // Generate mock response
-    const assistantMessage = generateMockResponse(userMessage, hasResult, toolResult);
-
-    const requestId = generateId('mockcmpl');
-    const created = Math.floor(Date.now() / 1000);
-
-    // Calculate mock token usage
-    const prompt = messages.map(msg => msg.content).join(' ');
-    const completion = assistantMessage.content || JSON.stringify(assistantMessage.tool_calls || []);
-
-    // Handle streaming response
-    if (body.stream) {
-      _reply.raw.setHeader('Content-Type', 'text/event-stream');
-      _reply.raw.setHeader('Cache-Control', 'no-cache');
-      _reply.raw.setHeader('Connection', 'keep-alive');
-      _reply.raw.setHeader('Access-Control-Allow-Origin', '*');
-
-      // Get streaming config from query params
-      const streamingConfig = getStreamingConfig(request.query as Record<string, unknown>);
-
-      // Initial delay (simulate TTFB/model loading)
-      await sleep(streamingConfig.initialDelayMs);
-
-      // Stream text content in chunks
-      if (assistantMessage.content) {
-        const chunks = splitIntoChunks(
-          assistantMessage.content,
-          streamingConfig.chunkSize
-        );
-
-        for (const chunk of chunks) {
-          const delay = streamingConfig.perChunkDelayMs;
-          const actualDelay = streamingConfig.enableJitter
-            ? delay * (0.7 + Math.random() * 0.6)  // ±30% variance
-            : delay;
-
-          await sleep(actualDelay);
-
-          _reply.raw.write(`data: ${JSON.stringify({
-            id: requestId,
-            object: 'chat.completion.chunk',
-            created,
-            model,
-            choices: [{
-              index: 0,
-              delta: { content: chunk },
-              finish_reason: null
-            }]
-          })}\n\n`);
-        }
-      }
-
-      // Send tool calls if present (streaming format requires index on each tool call)
-      if (assistantMessage.tool_calls) {
-        // Brief pause before tool call appears
-        await sleep(200);
-
-        const toolCallsWithIndex = assistantMessage.tool_calls.map((tc: ToolCall, idx: number) => ({
-          index: idx,
-          id: tc.id,
-          type: tc.type,
-          function: tc.function
-        }));
-
-        _reply.raw.write(`data: ${JSON.stringify({
-          id: requestId,
-          object: 'chat.completion.chunk',
-          created,
-          model,
-          choices: [{
-            index: 0,
-            delta: { tool_calls: toolCallsWithIndex },
-            finish_reason: null
-          }]
-        })}\n\n`);
-      }
-
-      // Send final chunk
-      await sleep(100); // Small delay before finish
-      _reply.raw.write(`data: ${JSON.stringify({
-        id: requestId,
-        object: 'chat.completion.chunk',
-        created,
-        model,
-        choices: [{
-          index: 0,
-          delta: {},
-          finish_reason: 'stop'
-        }]
-      })}\n\n`);
-      _reply.raw.write('data: [DONE]\n\n');
-      _reply.raw.end();
-      return _reply;
-    }
-
-    // Non-streaming response (existing behavior)
-    return {
-      id: requestId,
-      object: 'chat.completion',
-      created,
-      model,
-      choices: [
-        {
-          index: 0,
-          message: assistantMessage,
-          finish_reason: 'stop'
-        }
-      ],
-      usage: {
-        prompt_tokens: countTokens(prompt),
-        completion_tokens: countTokens(completion),
-        total_tokens: countTokens(prompt) + countTokens(completion),
-      },
-    };
-  });
-};
-
-export default mockChatRoute;

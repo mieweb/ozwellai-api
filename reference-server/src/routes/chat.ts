@@ -1,10 +1,11 @@
-import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
+import { FastifyPluginAsync, FastifyReply } from 'fastify';
+import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
 import { agentStore, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
+import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, type ChatMessage as MockChatMessage } from './mock-chat';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -262,6 +263,17 @@ function buildFallbackWarning(originalModel: string, fallbackModel: string) {
   };
 }
 
+// Marks every mock response so callers (and the chat widget) can always tell a deterministic
+// mock from a real LLM answer. Three reasons cover all paths that emit a mock body.
+function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', model: string) {
+  const messages = {
+    no_backend: `No LLM backend configured or reachable — deterministic mock returned for model ${model}.`,
+    llm_error: `LLM backend errored — deterministic mock returned as fallback for model ${model}.`,
+    mock_agent: `Agent is configured as type: mock — response is deterministic, no LLM called.`,
+  };
+  return { type: 'mock_response' as const, reason, model, message: messages[reason] };
+}
+
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -284,6 +296,94 @@ const ollamaClient = new OzwellAI({
   baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
   timeout: 120000,
 });
+
+// Mock dispatch — split into stream / non-stream variants so the call-site
+// contract is enforced by the type system (no more silent `if (stream) return` footgun).
+// Both variants attach a structured warning so callers always know the response is mock.
+
+type MockWarning = ReturnType<typeof buildMockWarning>;
+
+function buildMockAssistant(messages: NonNullableMessage[]) {
+  const userMsg = extractUserMessage(messages as MockChatMessage[]);
+  const hasResult = hasToolResult(messages as MockChatMessage[]);
+  const toolResult = hasResult ? extractToolResult(messages as MockChatMessage[]) : null;
+  const assistantMsg = generateMockResponse(userMsg, hasResult, toolResult);
+  const finishReason = assistantMsg.tool_calls?.length ? 'tool_calls' : 'stop';
+  return { assistantMsg, finishReason };
+}
+
+function dispatchMockNonStream(
+  messages: NonNullableMessage[],
+  model: string,
+  warning: MockWarning,
+) {
+  const { assistantMsg, finishReason } = buildMockAssistant(messages);
+  const promptText = messages.map((m) => m.content).join(' ');
+  const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
+  const promptTokens = countTokens(promptText);
+  const completionTokens = countTokens(completionText);
+  return {
+    id: generateId('chatcmpl'),
+    object: 'chat.completion' as const,
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [{ index: 0, message: assistantMsg, finish_reason: finishReason }],
+    usage: {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
+    },
+    warning,
+  };
+}
+
+function dispatchMockStream(
+  messages: NonNullableMessage[],
+  model: string,
+  reply: FastifyReply,
+  origin: string | undefined,
+  warning: MockWarning,
+): void {
+  const { assistantMsg, finishReason } = buildMockAssistant(messages);
+  const id = generateId('chatcmpl');
+  const created = Math.floor(Date.now() / 1000);
+
+  reply.raw.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    'connection': 'keep-alive',
+    'access-control-allow-origin': origin || '*',
+    'access-control-allow-credentials': 'true',
+  });
+
+  // Emit warning event before chunks so widget can react before content streams in
+  reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
+
+  const writeChunk = (delta: Record<string, unknown>, finish: string | null = null) => {
+    reply.raw.write(`data: ${JSON.stringify({
+      id, object: 'chat.completion.chunk', created, model,
+      choices: [{ index: 0, delta, finish_reason: finish }],
+    })}\n\n`);
+  };
+
+  writeChunk({ role: 'assistant' });
+
+  if (assistantMsg.content) {
+    const CHUNK = 3;
+    for (let i = 0; i < assistantMsg.content.length; i += CHUNK) {
+      writeChunk({ content: assistantMsg.content.slice(i, i + CHUNK) });
+    }
+  }
+
+  if (assistantMsg.tool_calls) {
+    const withIndex = assistantMsg.tool_calls.map((tc, idx) => ({ index: idx, ...tc }));
+    writeChunk({ tool_calls: withIndex });
+  }
+
+  writeChunk({}, finishReason);
+  reply.raw.write('data: [DONE]\n\n');
+  reply.raw.end();
+}
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/chat/completions
@@ -358,7 +458,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as ChatCompletionRequestWithTools;
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (isAgentKey(request.headers.authorization)) {
       const agentKey = extractToken(request.headers.authorization);
@@ -408,7 +508,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         pageTools: (parsed.pageTools as PageToolsPolicy) ?? 'all',
         model: (parsed.model as string | undefined) || null,
         temperature: (parsed.temperature as number | undefined) ?? null,
+        type: parsed.type === 'mock' ? 'mock' : null,
       };
+    }
+
+    // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
+    if (agentConfig?.type === 'mock') {
+      const { messages: rawMessages, stream = false } = body as ChatCompletionRequestWithTools;
+      const mockMessages: NonNullableMessage[] = (rawMessages as Message[]).map((m) => ({
+        role: m.role,
+        content: m.content ?? '',
+        name: m.name,
+      }));
+      if (agentConfig.systemPrompt) {
+        mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
+      }
+      const mockModel = agentConfig.model || 'mock';
+      const warning = buildMockWarning('mock_agent', mockModel);
+      if (stream) {
+        dispatchMockStream(mockMessages, mockModel, reply, request.headers.origin, warning);
+        return;
+      }
+      return dispatchMockNonStream(mockMessages, mockModel, warning);
     }
 
     // Backend selection priority:
@@ -485,59 +606,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // If no real backend is available, redirect to mock endpoint
+    // No backend reachable — fall through to deterministic mock so client always gets a valid response.
     if (backend === 'fallback') {
-      // Forward to mock chat endpoint (use normalizedMessages which includes agent system prompt)
-      const mockUrl = `http://localhost:${process.env.PORT || 3000}/mock/chat`;
-      const mockBody = { ...body, messages: normalizedMessages, ...(filteredTools ? { tools: filteredTools } : {}) };
-      try {
-        const mockResponse = await fetch(mockUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': request.headers.authorization || 'Bearer mock'
-          },
-          body: JSON.stringify(mockBody)
-        });
-        
-        if (stream) {
-          // Forward SSE stream from mock
-          reply.raw.writeHead(mockResponse.status, {
-            'content-type': 'text/event-stream',
-            'cache-control': 'no-cache',
-            'connection': 'keep-alive',
-            'access-control-allow-origin': request.headers.origin || '*',
-            'access-control-allow-credentials': 'true',
-          });
-          
-          if (mockResponse.body) {
-            const reader = mockResponse.body.getReader();
-            try {
-              let done = false;
-              while (!done) {
-                const result = await reader.read();
-                done = result.done;
-                if (!done) {
-                  reply.raw.write(result.value);
-                }
-              }
-            } finally {
-              reply.raw.end();
-            }
-          }
-          return;
-        } else {
-          const mockData = await mockResponse.json();
-          return mockData;
-        }
-      } catch (mockError) {
-        request.log.error({ err: mockError }, 'Mock endpoint failed, using simple generator');
-        // Fall through to simple generator below
+      const warning = buildMockWarning('no_backend', model);
+      if (stream) {
+        dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
+        return;
       }
+      return dispatchMockNonStream(normalizedMessages, model, warning);
     }
 
     // Use a real LLM backend
-    if (backend !== 'fallback') {
+    {
       try {
         // Select pre-constructed client based on backend
         const client = llmConfigured ? llmClient! : ollamaClient;
@@ -782,111 +862,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // Create prompt from messages
-    const prompt = (messages as Message[]).map((msg) => `${msg.role}: ${msg.content}`).join('\n');
-    const requestId = generateId('chatcmpl');
-    const created = Math.floor(Date.now() / 1000);
-
-    // Add OpenAI-compatible headers
-    reply.headers({
-      'x-request-id': `req_${Date.now()}`,
-      'openai-processing-ms': '150',
-      'openai-version': '2020-10-01',
-    });
-
+    // LLM error final fallback: dispatch deterministic mock so the client always gets a valid response.
+    // Warning marker tells caller the configured LLM failed — never silent.
+    const warning = buildMockWarning('llm_error', model);
     if (stream) {
-      // Streaming response with CORS headers
-      reply.raw.writeHead(200, {
-        'content-type': 'text/event-stream',
-        'cache-control': 'no-cache',
-        'connection': 'keep-alive',
-        'access-control-allow-origin': request.headers.origin || '*',
-        'access-control-allow-credentials': 'true',
-        'x-request-id': `req_${Date.now()}`,
-        'openai-processing-ms': '150',
-        'openai-version': '2020-10-01',
-      });
-
-      const generator = SimpleTextGenerator.generateStream(prompt, max_tokens);
-
-      // Send initial chunk with role
-      const initialChunk = {
-        id: requestId,
-        object: 'chat.completion.chunk' as const,
-        created,
-        model,
-        choices: [{
-          index: 0,
-          delta: { role: 'assistant' },
-          finish_reason: null,
-        }],
-      };
-      reply.raw.write(`data: ${JSON.stringify(initialChunk)}\n\n`);
-
-      // Send content chunks
-      for (const token of generator) {
-        const chunk = {
-          id: requestId,
-          object: 'chat.completion.chunk' as const,
-          created,
-          model,
-          choices: [{
-            index: 0,
-            delta: { content: token },
-            finish_reason: null,
-          }],
-        };
-        reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        // Add small delay to simulate streaming
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      // Send final chunk
-      const finalChunk = {
-        id: requestId,
-        object: 'chat.completion.chunk' as const,
-        created,
-        model,
-        choices: [{
-          index: 0,
-          delta: {},
-          finish_reason: 'stop' as const,
-        }],
-      };
-      reply.raw.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
-      reply.raw.write('data: [DONE]\n\n');
-      reply.raw.end();
+      dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
       return;
     }
-
-    // Non-streaming response
-    const content = SimpleTextGenerator.generate(prompt, max_tokens, temperature);
-    const promptTokens = countTokens(prompt);
-    const completionTokens = countTokens(content);
-
-    return {
-      id: requestId,
-      object: 'chat.completion' as const,
-      created,
-      model,
-      choices: [{
-        index: 0,
-        message: {
-          role: 'assistant' as const,
-          content,
-          name: undefined,
-          function_call: undefined,
-          tool_calls: undefined,
-          tool_call_id: undefined,
-        },
-        finish_reason: 'stop' as const,
-      }],
-      usage: {
-        prompt_tokens: promptTokens,
-        completion_tokens: completionTokens,
-        total_tokens: promptTokens + completionTokens,
-      },
-    };
+    return dispatchMockNonStream(normalizedMessages, model, warning);
   });
 };
 

@@ -527,6 +527,23 @@ The server auto-detects which backend to use at startup:
 
 Only one backend is active at a time. Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — LLM takes priority.
 
+### Mock response labeling
+
+Every mock response — whether from a `type: mock` agent or a fallback path — includes a `warning` field on the JSON body (non-stream) or an SSE `event: warning` chunk emitted before content (stream), so callers can always detect the response did not come from a real LLM:
+
+```json
+{
+  "type": "mock_response",
+  "reason": "mock_agent" | "no_backend" | "llm_error",
+  "model": "<model>",
+  "message": "..."
+}
+```
+
+- `mock_agent` — agent YAML declares `type: mock`. Intentional, no LLM ever called.
+- `no_backend` — no LLM configured and Ollama unreachable. Dev/demo fallback.
+- `llm_error` — configured LLM errored after retry. Mock served so the client always gets a valid response, but the warning surfaces the failure (the chat widget shows a toast so end-users can report it).
+
 **Ollama auto-detection:** When `OLLAMA_MODEL` is not set, the server queries Ollama for installed models and picks the best available one, preferring in order:
 
 - `llama3.2:latest`
