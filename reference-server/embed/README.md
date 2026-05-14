@@ -81,6 +81,7 @@ Expose current page data as a tool so the AI can request it when needed:
 
 <script>
   window.OzwellChatConfig = {
+    ...window.OzwellChatConfig,
     tools: [
       {
         type: 'function',
@@ -122,6 +123,7 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
 
 <script>
   window.OzwellChatConfig = {
+    ...window.OzwellChatConfig,
     tools: [
       {
         type: 'function',

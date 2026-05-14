@@ -114,6 +114,7 @@ OzwellChat.close();
 
 ```javascript
 window.OzwellChatConfig = {
+  ...window.OzwellChatConfig,
   tools: [
     {
       type: 'function',
