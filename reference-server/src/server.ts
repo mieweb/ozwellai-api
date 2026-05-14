@@ -14,6 +14,7 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
+import audioRoute from './routes/audio';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
@@ -88,6 +89,8 @@ async function buildServer() {
           EmbeddingResponse: schemas.EmbeddingResponseSchema,
           FileObject: schemas.FileObjectSchema,
           FileListResponse: schemas.FileListResponseSchema,
+          AudioTranscriptionRequest: schemas.AudioTranscriptionRequestSchema,
+          AudioTranscriptionResponse: schemas.AudioTranscriptionResponseSchema,
         },
       },
       security: [
@@ -141,6 +144,7 @@ async function buildServer() {
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
   await fastify.register(agentsRoute);  // Agent registration CRUD
+  await fastify.register(audioRoute);   // Audio transcription
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {

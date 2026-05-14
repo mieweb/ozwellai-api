@@ -9,6 +9,8 @@ import type {
   FileListResponse,
   ResponseRequest,
   Response,
+  AudioTranscriptionRequest,
+  AudioTranscriptionResponse,
 } from './types.ts';
 
 /**
@@ -283,6 +285,34 @@ export class OzwellAI {
       body: JSON.stringify(request),
     });
   }
+
+  /**
+   * Create an audio transcription.
+   * Transcribes audio into text using the specified model (e.g., whisper-1).
+   */
+  async createTranscription(
+    request: AudioTranscriptionRequest
+  ): Promise<AudioTranscriptionResponse> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('model', request.model);
+    if (request.response_format) formData.append('response_format', request.response_format);
+    if (request.language) formData.append('language', request.language);
+    if (request.temperature !== undefined) formData.append('temperature', String(request.temperature));
+    if (request.timestamp_granularities) {
+      for (const g of request.timestamp_granularities) {
+        formData.append('timestamp_granularities[]', g);
+      }
+    }
+
+    return this.makeRequest<AudioTranscriptionResponse>('/v1/audio/transcriptions', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
+      },
+    });
+  }
 }
 
 export default OzwellAI;
@@ -299,4 +329,6 @@ export type {
   FileListResponse,
   ResponseRequest,
   Response,
+  AudioTranscriptionRequest,
+  AudioTranscriptionResponse,
 } from './types.ts';
