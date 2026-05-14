@@ -16,7 +16,7 @@ export interface ChatCompletionRequest {
     content: string;
     /** The name of the author of this message */
     name?: string;
-  }>;
+  }>; 
   /** The maximum number of tokens to generate in the chat completion */
   max_tokens?: number;
   /** What sampling temperature to use, between 0 and 2 */
