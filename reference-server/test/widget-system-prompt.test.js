@@ -35,7 +35,9 @@ test('parent-key widgets keep a small neutral default prompt and tool hint', asy
 
 test('parent-key custom system prompt is preserved without widget tool rules', async () => {
   const source = await readWidgetSource();
-  const promptFunction = source.match(/function buildSystemPrompt\(\) {[\s\S]*?\n}\n\n\/\*\* Get configured auth key/)[0];
+  const promptFunctionMatch = source.match(/function buildSystemPrompt\(\) {[\s\S]*?\n}\n\n\/\*\* Get configured auth key/);
+  assert.ok(promptFunctionMatch, 'could not extract buildSystemPrompt function body');
+  const promptFunction = promptFunctionMatch[0];
 
   assert.match(promptFunction, /if \(state\.config\.system\) {\s*return state\.config\.system;\s*}/);
   assert.ok(
