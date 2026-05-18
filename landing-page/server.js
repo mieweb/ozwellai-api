@@ -73,6 +73,14 @@ app.get('/register.html', (req, res) => {
   res.type('html').send(renderHtml('register.html'));
 });
 
+app.get('/keys.html', (req, res) => {
+  res.type('html').send(renderHtml('keys.html'));
+});
+
+app.get('/keys-demo.html', (req, res) => {
+  res.type('html').send(renderHtml('keys-demo.html'));
+});
+
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
     return res.type('html').send(renderHtml('landing.html'));

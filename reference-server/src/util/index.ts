@@ -14,6 +14,11 @@ export function formatAgentKeyHint(key: string): string {
   return `${AGENT_KEY_PREFIX}key-...${getKeyHint(key)}`;
 }
 
+/** Format a parent API key as a display hint: ozw_...XXXX */
+export function formatApiKeyHint(key: string): string {
+  return `${KEY_PREFIX}...${getKeyHint(key)}`;
+}
+
 /** Check if a key has a valid parent key prefix */
 export function isValidApiKey(key: string): boolean {
   return key.startsWith(KEY_PREFIX);

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Keys Demo — Ozwell</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #fafafa;
+      min-height: 100vh;
+      padding: 20px;
+      color: #1a1a1a;
+    }
+    .main-container { max-width: 1040px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 32px; position: relative; }
+    .back-link-container { position: absolute; left: 0; top: 10px; }
+    .back-link {
+      color: #0066ff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .back-link:hover { text-decoration: underline; }
+    .header-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.025em;
+    }
+    .header-subtitle { font-size: 16px; color: #6b7280; }
+    .demo-note {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    h3 { font-size: 16px; font-weight: 700; }
+    p { color: #6b7280; font-size: 14px; margin-bottom: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row.wrap { flex-wrap: wrap; }
+    input, select {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #1a1a1a;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #0066ff; }
+    .key-input { flex: 1; min-width: 280px; font-family: monospace; }
+    .name-input { flex: 1; min-width: 220px; }
+    .owner-input { width: 180px; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: #e5e7eb;
+      color: #111827;
+    }
+    button.primary { background: #0066ff; color: #fff; }
+    button.danger { background: #dc2626; color: #fff; }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 8px;
+      min-height: 18px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+    .status.ok { color: #16a34a; }
+    .status.error { color: #dc2626; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .stat-label { color: #6b7280; font-size: 13px; margin-bottom: 4px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px 8px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    th { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    td.name-cell { min-width: 220px; }
+    .key-hint {
+      font-family: monospace;
+      color: #374151;
+    }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge.active { color: #166534; background: #dcfce7; }
+    .badge.revoked { color: #991b1b; background: #fee2e2; }
+    .badge.demo { color: #1d4ed8; background: #dbeafe; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .new-key-box {
+      display: none;
+      margin-top: 12px;
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+      color: #1e3a8a;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .new-key-box.visible { display: block; }
+    .new-key-value {
+      display: block;
+      margin-top: 6px;
+      font-family: monospace;
+      overflow-wrap: anywhere;
+    }
+    @media (max-width: 760px) {
+      .header { text-align: left; padding-top: 36px; }
+      .back-link-container { top: 0; }
+      .row { align-items: stretch; flex-direction: column; }
+      .key-input, .name-input, .owner-input { min-width: 0; width: 100%; }
+      .section-header { align-items: flex-start; flex-direction: column; }
+      .stats { grid-template-columns: 1fr; }
+      .actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <header class="header">
+      <div class="back-link-container">
+        <a href="/" class="back-link">&larr; Back to demos</a>
+      </div>
+      <h1 class="header-title">API Keys Demo</h1>
+      <p class="header-subtitle">Mocked admin workflow for team feedback.</p>
+    </header>
+
+    <div class="demo-note">
+      Demo only. This page uses local mock data and does not call the server.
+    </div>
+
+    <section class="section">
+      <h3>Admin key</h3>
+      <p>Mock login for reviewing the intended page flow.</p>
+      <div class="row">
+        <input id="admin-key-input" class="key-input" type="password" value="ozw_demo_admin_key_for_review" />
+        <button id="validate-btn" class="primary">Validate</button>
+      </div>
+      <div id="auth-status" class="status ok">Valid demo key.</div>
+    </section>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Active keys</div>
+        <div id="active-count" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Revoked keys</div>
+        <div id="revoked-count" class="stat-value">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total keys</div>
+        <div id="total-count" class="stat-value">0</div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h3>Create key</h3>
+          <p>Create a new parent key and copy it immediately.</p>
+        </div>
+      </div>
+      <div class="row wrap">
+        <input id="new-key-name" class="name-input" type="text" placeholder="Key name, e.g. Aaron Demo Key" />
+        <input id="new-key-owner" class="owner-input" type="text" placeholder="Owner" />
+        <button id="create-key-btn" class="primary">Create key</button>
+      </div>
+      <div id="new-key-box" class="new-key-box">
+        New key created. Copy it now.
+        <span id="new-key-value" class="new-key-value"></span>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <div>
+          <h3>Parent keys</h3>
+          <p>Rename keys, revoke access, and scan current ownership.</p>
+        </div>
+        <button id="reset-demo-btn">Reset mock data</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Owner</th>
+              <th>Key hint</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="keys-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const seedKeys = [
+      {
+        id: 'key_demo',
+        name: 'Demo Localhost Key',
+        owner: 'Aditya',
+        key_hint: 'ozw_...ting',
+        created_at: '2026-05-08T16:34:00Z',
+        revoked_at: null
+      },
+      {
+        id: 'key_aaron',
+        name: 'Aaron Review Key',
+        owner: 'Aaron',
+        key_hint: 'ozw_...9f2a',
+        created_at: '2026-05-13T13:22:00Z',
+        revoked_at: null
+      },
+      {
+        id: 'key_old',
+        name: 'Old Embed Test Key',
+        owner: 'Legacy',
+        key_hint: 'ozw_...1c8d',
+        created_at: '2026-04-21T18:11:00Z',
+        revoked_at: '2026-05-14T18:00:00Z'
+      }
+    ];
+
+    let keys = seedKeys.map(k => ({ ...k }));
+
+    const adminKeyInput = document.getElementById('admin-key-input');
+    const authStatus = document.getElementById('auth-status');
+    const activeCount = document.getElementById('active-count');
+    const revokedCount = document.getElementById('revoked-count');
+    const totalCount = document.getElementById('total-count');
+    const newKeyName = document.getElementById('new-key-name');
+    const newKeyOwner = document.getElementById('new-key-owner');
+    const newKeyBox = document.getElementById('new-key-box');
+    const newKeyValue = document.getElementById('new-key-value');
+    const keysTbody = document.getElementById('keys-tbody');
+
+    function formatDate(value) {
+      if (!value) return '-';
+      return new Date(value).toLocaleString();
+    }
+
+    function randomKey() {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      let suffix = '';
+      for (let i = 0; i < 32; i += 1) {
+        suffix += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return 'ozw_' + suffix;
+    }
+
+    function renderStats() {
+      const active = keys.filter(k => !k.revoked_at).length;
+      activeCount.textContent = String(active);
+      revokedCount.textContent = String(keys.length - active);
+      totalCount.textContent = String(keys.length);
+    }
+
+    function renderKeys() {
+      keysTbody.innerHTML = '';
+      for (const key of keys) {
+        const revoked = !!key.revoked_at;
+        const tr = document.createElement('tr');
+
+        const name = document.createElement('td');
+        name.className = 'name-cell';
+        name.textContent = key.name;
+
+        const owner = document.createElement('td');
+        owner.textContent = key.owner || '-';
+
+        const hint = document.createElement('td');
+        hint.className = 'key-hint';
+        hint.textContent = key.key_hint;
+
+        const status = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (revoked ? 'revoked' : 'active');
+        badge.textContent = revoked ? 'Revoked' : 'Active';
+        status.appendChild(badge);
+
+        const created = document.createElement('td');
+        created.textContent = formatDate(key.created_at);
+
+        const actions = document.createElement('td');
+        const actionWrap = document.createElement('div');
+        actionWrap.className = 'actions';
+
+        const rename = document.createElement('button');
+        rename.textContent = 'Rename';
+        rename.disabled = revoked;
+        rename.addEventListener('click', () => renameKey(key.id));
+
+        const revoke = document.createElement('button');
+        revoke.className = 'danger';
+        revoke.textContent = 'Revoke';
+        revoke.disabled = revoked;
+        revoke.addEventListener('click', () => revokeKey(key.id));
+
+        actionWrap.appendChild(rename);
+        actionWrap.appendChild(revoke);
+        actions.appendChild(actionWrap);
+
+        tr.appendChild(name);
+        tr.appendChild(owner);
+        tr.appendChild(hint);
+        tr.appendChild(status);
+        tr.appendChild(created);
+        tr.appendChild(actions);
+        keysTbody.appendChild(tr);
+      }
+      renderStats();
+    }
+
+    function validateDemoKey() {
+      if (!adminKeyInput.value.trim().startsWith('ozw_')) {
+        authStatus.textContent = 'Invalid demo key.';
+        authStatus.className = 'status error';
+        return;
+      }
+      authStatus.textContent = 'Valid demo key.';
+      authStatus.className = 'status ok';
+    }
+
+    function createKey() {
+      const name = newKeyName.value.trim();
+      const owner = newKeyOwner.value.trim();
+      if (!name) {
+        authStatus.textContent = 'Enter a key name first.';
+        authStatus.className = 'status error';
+        return;
+      }
+
+      const key = randomKey();
+      keys.unshift({
+        id: 'key_' + Date.now().toString(36),
+        name,
+        owner: owner || 'Unassigned',
+        key_hint: 'ozw_...' + key.slice(-4),
+        created_at: new Date().toISOString(),
+        revoked_at: null
+      });
+      newKeyValue.textContent = key;
+      newKeyBox.classList.add('visible');
+      newKeyName.value = '';
+      newKeyOwner.value = '';
+      authStatus.textContent = 'Mock key created.';
+      authStatus.className = 'status ok';
+      renderKeys();
+    }
+
+    function renameKey(id) {
+      const key = keys.find(k => k.id === id);
+      if (!key) return;
+      const nextName = prompt('Key name', key.name);
+      if (nextName == null) return;
+      const nextOwner = prompt('Owner', key.owner || '');
+      if (nextOwner == null) return;
+      key.name = nextName.trim() || key.name;
+      key.owner = nextOwner.trim() || 'Unassigned';
+      renderKeys();
+    }
+
+    function revokeKey(id) {
+      const key = keys.find(k => k.id === id);
+      if (!key) return;
+      if (!confirm(`Revoke "${key.name}"?`)) return;
+      key.revoked_at = new Date().toISOString();
+      renderKeys();
+    }
+
+    function resetDemo() {
+      keys = seedKeys.map(k => ({ ...k }));
+      newKeyBox.classList.remove('visible');
+      renderKeys();
+    }
+
+    document.getElementById('validate-btn').addEventListener('click', validateDemoKey);
+    document.getElementById('create-key-btn').addEventListener('click', createKey);
+    document.getElementById('reset-demo-btn').addEventListener('click', resetDemo);
+
+    renderKeys();
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { getKeyHint } from '../util';
+import { formatApiKeyHint } from '../util';
 
 interface DbAgentRow {
     id: string;
@@ -46,24 +46,40 @@ export function initializeAuthTables(db: Database.Database): void {
       );
       CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
     `);
+    ensureColumn(db, 'api_keys', 'owner', 'TEXT');
+    ensureColumn(db, 'api_keys', 'role', "TEXT NOT NULL DEFAULT 'user'");
+    ensureColumn(db, 'api_keys', 'revoked_at', 'TEXT');
+    ensureColumn(db, 'api_keys', 'created_by', 'TEXT');
     console.log('[auth] Auth tables initialized');
+}
+
+function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some(c => c.name === column)) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
 }
 
 export function seedDemoData(db: Database.Database): void {
     const demoKeyId = 'demo-key';
     const existing = db.prepare('SELECT id FROM api_keys WHERE id = ?').get(demoKeyId);
     if (existing) {
+        db.prepare(`
+          UPDATE api_keys
+          SET key_hint = ?, owner = COALESCE(owner, ?), role = ?
+          WHERE id = ?
+        `).run(formatApiKeyHint(DEMO_API_KEY), 'Local Demo', 'admin', demoKeyId);
         console.log('[auth] Demo data already exists');
         return;
     }
 
     const now = new Date().toISOString();
-    const keyHint = getKeyHint(DEMO_API_KEY);
+    const keyHint = formatApiKeyHint(DEMO_API_KEY);
 
     db.prepare(`
-      INSERT INTO api_keys (id, name, key, key_hint, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(demoKeyId, 'Demo Key', DEMO_API_KEY, keyHint, now);
+      INSERT INTO api_keys (id, name, key, key_hint, created_at, owner, role)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(demoKeyId, 'Demo Key', DEMO_API_KEY, keyHint, now, 'Local Demo', 'admin');
 
     console.log('[auth] Demo API key seeded');
 }
@@ -103,6 +119,20 @@ export interface Agent {
     created_at: number;
 }
 
+export type ApiKeyRole = 'admin' | 'user';
+
+export interface ApiKeyRecord {
+    id: string;
+    name: string;
+    owner: string | null;
+    key: string;
+    key_hint: string;
+    role: ApiKeyRole;
+    created_at: string;
+    revoked_at: string | null;
+    created_by: string | null;
+}
+
 export class AgentStore {
     private db: Database.Database;
     private stmtInsert: Database.Statement;
@@ -113,6 +143,11 @@ export class AgentStore {
     private stmtRotateKey: Database.Statement;
     private stmtDeleteOwned: Database.Statement;
     private stmtGetOwned: Database.Statement;
+    private stmtListApiKeys: Database.Statement;
+    private stmtInsertApiKey: Database.Statement;
+    private stmtGetApiKeyById: Database.Statement;
+    private stmtUpdateApiKey: Database.Statement;
+    private stmtRevokeApiKey: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -138,6 +173,30 @@ export class AgentStore {
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
         this.stmtGetOwned = this.db.prepare('SELECT * FROM agents WHERE id = ? AND parent_key = ?');
+        this.stmtListApiKeys = this.db.prepare(`
+          SELECT id, name, owner, key, key_hint, role, created_at, revoked_at, created_by
+          FROM api_keys
+          ORDER BY revoked_at IS NOT NULL, created_at DESC
+        `);
+        this.stmtInsertApiKey = this.db.prepare(`
+          INSERT INTO api_keys (id, name, owner, key, key_hint, role, created_at, created_by)
+          VALUES (@id, @name, @owner, @key, @key_hint, @role, @created_at, @created_by)
+        `);
+        this.stmtGetApiKeyById = this.db.prepare(`
+          SELECT id, name, owner, key, key_hint, role, created_at, revoked_at, created_by
+          FROM api_keys
+          WHERE id = ?
+        `);
+        this.stmtUpdateApiKey = this.db.prepare(`
+          UPDATE api_keys
+          SET name = @name, owner = @owner, role = @role
+          WHERE id = @id AND revoked_at IS NULL
+        `);
+        this.stmtRevokeApiKey = this.db.prepare(`
+          UPDATE api_keys
+          SET revoked_at = @revoked_at
+          WHERE id = @id AND revoked_at IS NULL
+        `);
     }
 
     private initTable() {
@@ -152,6 +211,7 @@ export class AgentStore {
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
     `);
+        initializeAuthTables(this.db);
     }
 
     /** Check if a token is a valid parent or agent key (single query) */
@@ -159,6 +219,7 @@ export class AgentStore {
         if (!this._stmtValidateKey) {
             this._stmtValidateKey = this.db.prepare(`
               SELECT 1 FROM api_keys WHERE key = ?
+                AND revoked_at IS NULL
               UNION ALL
               SELECT 1 FROM agents WHERE agent_key = ?
               LIMIT 1
@@ -167,12 +228,50 @@ export class AgentStore {
         return !!this._stmtValidateKey.get(token, token);
     }
 
-    /** Look up a parent API key — returns { id, name } or undefined */
-    lookupApiKey(key: string): { id: string; name: string } | undefined {
+    /** Look up an active parent API key. */
+    lookupApiKey(key: string): Pick<ApiKeyRecord, 'id' | 'name' | 'role'> | undefined {
         if (!this._stmtLookupApiKey) {
-            this._stmtLookupApiKey = this.db.prepare('SELECT id, name FROM api_keys WHERE key = ?');
+            this._stmtLookupApiKey = this.db.prepare('SELECT id, name, role FROM api_keys WHERE key = ? AND revoked_at IS NULL');
         }
-        return this._stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
+        return this._stmtLookupApiKey.get(key) as Pick<ApiKeyRecord, 'id' | 'name' | 'role'> | undefined;
+    }
+
+    listApiKeys(): ApiKeyRecord[] {
+        return this.stmtListApiKeys.all() as ApiKeyRecord[];
+    }
+
+    createApiKey(params: {
+        id: string;
+        name: string;
+        owner: string | null;
+        key: string;
+        role: ApiKeyRole;
+        created_by: string | null;
+    }): ApiKeyRecord {
+        const created_at = new Date().toISOString();
+        const key_hint = formatApiKeyHint(params.key);
+        const record = { ...params, key_hint, created_at, revoked_at: null };
+        this.stmtInsertApiKey.run(record);
+        return record;
+    }
+
+    updateApiKey(id: string, updates: { name: string; owner: string | null; role: ApiKeyRole }): ApiKeyRecord | null {
+        const existing = this.getApiKeyById(id);
+        if (!existing || existing.revoked_at) return null;
+        this.stmtUpdateApiKey.run({ id, ...updates });
+        return this.getApiKeyById(id);
+    }
+
+    revokeApiKey(id: string): ApiKeyRecord | null {
+        const existing = this.getApiKeyById(id);
+        if (!existing || existing.revoked_at) return null;
+        this.stmtRevokeApiKey.run({ id, revoked_at: new Date().toISOString() });
+        return this.getApiKeyById(id);
+    }
+
+    getApiKeyById(id: string): ApiKeyRecord | null {
+        const row = this.stmtGetApiKeyById.get(id) as ApiKeyRecord | undefined;
+        return row ?? null;
     }
 
     createAgent(params: { id: string; agent_key: string; parent_key: string; yaml: string }): Agent {

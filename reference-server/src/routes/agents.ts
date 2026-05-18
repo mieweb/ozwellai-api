@@ -9,6 +9,7 @@ declare module 'fastify' {
         apiKey?: {
             id: string;
             name: string;
+            role?: string;
         };
     }
 }

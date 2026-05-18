@@ -14,6 +14,7 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
+import adminApiKeysRoute from './routes/admin-api-keys';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
@@ -141,6 +142,7 @@ async function buildServer() {
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
   await fastify.register(agentsRoute);  // Agent registration CRUD
+  await fastify.register(adminApiKeysRoute);  // Admin parent-key management
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {
