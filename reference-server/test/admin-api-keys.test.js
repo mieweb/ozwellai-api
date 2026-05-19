@@ -128,3 +128,65 @@ test('admin API keys route — non-admin parent key cannot manage keys', async (
         stopServer(server, tmp);
     }
 });
+
+test('admin API keys route — list includes agents created by each parent key', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+
+        const createKey = await jsonFetch('/v1/admin/api-keys', {
+            method: 'POST',
+            headers: headers(DEMO_KEY, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ name: 'Agent Owner Key', owner: 'Agent Owner', role: 'user' })
+        });
+        assert.equal(createKey.response.status, 201);
+
+        const createAgent = await jsonFetch('/v1/agents', {
+            method: 'POST',
+            headers: headers(createKey.body.key, { 'Content-Type': 'application/yaml' }),
+            body: [
+                'name: Intake Assistant',
+                'instructions: Help with intake questions.',
+                'model: gpt-4.1-mini',
+                ''
+            ].join('\n')
+        });
+        assert.equal(createAgent.response.status, 201);
+
+        const list = await jsonFetch('/v1/admin/api-keys', { headers: headers() });
+        assert.equal(list.response.status, 200);
+
+        const row = list.body.data.find(k => k.id === createKey.body.id);
+        assert.ok(row, 'created key appears in admin key list');
+        assert.ok(Array.isArray(row.agents), 'admin key row includes agents array');
+        assert.equal(row.agents.length, 1);
+        assert.equal(row.agents[0].id, createAgent.body.agent_id);
+        assert.equal(row.agents[0].name, 'Intake Assistant');
+        assert.equal(row.agents[0].model, 'gpt-4.1-mini');
+        assert.equal(row.agents[0].key_hint, createAgent.body.key_hint);
+        assert.equal(row.agents[0].agent_key, undefined, 'admin key list does not expose full agent keys');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('admin API keys route — CORS preflight allows editing parent keys', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+
+        const response = await fetch(`${BASE}/v1/admin/api-keys/demo-key`, {
+            method: 'OPTIONS',
+            headers: {
+                Origin: 'http://localhost:8080',
+                'Access-Control-Request-Method': 'PATCH',
+                'Access-Control-Request-Headers': 'authorization,content-type',
+            },
+        });
+
+        assert.equal(response.status, 204);
+        assert.match(response.headers.get('access-control-allow-methods') || '', /\bPATCH\b/);
+    } finally {
+        stopServer(server, tmp);
+    }
+});

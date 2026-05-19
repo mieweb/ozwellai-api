@@ -115,6 +115,22 @@
       white-space: nowrap;
     }
     th { color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .expand-cell { width: 34px; }
+    .expand-btn {
+      align-items: center;
+      border-radius: 6px;
+      display: inline-flex;
+      justify-content: center;
+      min-height: 28px;
+      padding: 0;
+      width: 28px;
+    }
+    .expand-btn[disabled] { visibility: hidden; }
+    .chevron {
+      display: inline-block;
+      transition: transform 0.15s ease;
+    }
+    tr.expanded .chevron { transform: rotate(90deg); }
     td.name-cell { min-width: 220px; }
     .key-hint {
       font-family: monospace;
@@ -132,6 +148,57 @@
     .badge.admin { color: #1d4ed8; background: #dbeafe; }
     .badge.user { color: #374151; background: #f3f4f6; }
     .actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .agent-row td {
+      background: #fbfcfe;
+      padding: 0;
+    }
+    .agent-panel {
+      border-top: 1px solid #e5e7eb;
+      display: none;
+      padding: 0 12px 8px 44px;
+    }
+    tr.expanded + .agent-row .agent-panel { display: block; }
+    .agent-panel-title {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      min-height: 34px;
+      font-weight: 700;
+    }
+    .agent-count-badge {
+      background: #eef2ff;
+      border-radius: 999px;
+      color: #3730a3;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 2px 7px;
+    }
+    .agent-list {
+      font-size: 13px;
+    }
+    .agent-list-row {
+      align-items: center;
+      border-bottom: 1px solid #edf0f5;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(210px, 1.5fr) minmax(150px, 1fr) 120px 120px;
+      min-height: 32px;
+      padding: 5px 8px;
+    }
+    .agent-list-row:last-child { border-bottom: 0; }
+    .agent-list-head {
+      color: #6b7280;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .agent-name { font-weight: 600; }
+    .empty-agents {
+      color: #6b7280;
+      font-size: 13px;
+      padding: 8px 0;
+    }
     .empty {
       display: none;
       padding: 20px;
@@ -157,6 +224,60 @@
       font-family: monospace;
       overflow-wrap: anywhere;
     }
+    .modal-backdrop {
+      align-items: center;
+      background: rgba(17, 24, 39, 0.45);
+      display: none;
+      inset: 0;
+      justify-content: center;
+      padding: 20px;
+      position: fixed;
+      z-index: 10;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+      max-width: 460px;
+      padding: 22px;
+      width: 100%;
+    }
+    .modal h3 { margin-bottom: 6px; }
+    .modal-form {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field label {
+      color: #374151;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .field input, .field select {
+      width: 100%;
+    }
+    .role-note {
+      display: none;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      color: #92400e;
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 10px;
+    }
+    .role-note.visible { display: block; }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
     @media (max-width: 760px) {
       .header { text-align: left; padding-top: 36px; }
       .back-link-container { top: 0; }
@@ -165,6 +286,16 @@
       .section-header { align-items: flex-start; flex-direction: column; }
       .stats.visible { display: grid; grid-template-columns: 1fr; }
       .actions { justify-content: flex-start; }
+      .agent-panel { padding-left: 12px; }
+      .agent-list-row {
+        grid-template-columns: 1fr;
+        gap: 2px;
+        padding: 8px 0;
+      }
+      .agent-list-head { display: none; }
+      .modal-actions {
+        flex-direction: column-reverse;
+      }
     }
   </style>
 </head>
@@ -212,7 +343,7 @@
       </div>
       <div class="row wrap">
         <input id="new-key-name" class="name-input" type="text" placeholder="Key name, e.g. Aaron Demo Key" />
-        <input id="new-key-owner" class="owner-input" type="text" placeholder="Owner" />
+        <input id="new-key-owner" class="owner-input" type="text" placeholder="User name" />
         <select id="new-key-role" class="role-select">
           <option value="user">User</option>
           <option value="admin">Admin</option>
@@ -229,7 +360,7 @@
       <div class="section-header">
         <div>
           <h3>Parent keys</h3>
-          <p>Rename keys, change owner/role, revoke access, and scan current ownership.</p>
+          <p>Rename keys, change user/role, revoke access, and scan current ownership.</p>
         </div>
         <button id="refresh-btn">Refresh</button>
       </div>
@@ -238,10 +369,12 @@
         <table id="keys-table">
           <thead>
             <tr>
+              <th></th>
               <th>Name</th>
-              <th>Owner</th>
+              <th>User name</th>
               <th>Role</th>
               <th>Key hint</th>
+              <th>Agents</th>
               <th>Status</th>
               <th>Created</th>
               <th style="text-align: right;">Actions</th>
@@ -251,6 +384,37 @@
         </table>
       </div>
     </section>
+  </div>
+
+  <div id="edit-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div class="modal">
+      <h3 id="edit-modal-title">Edit parent key</h3>
+      <p>Update the display details and access role for this parent key.</p>
+      <div class="modal-form">
+        <div class="field">
+          <label for="edit-key-name">Key name</label>
+          <input id="edit-key-name" type="text" />
+        </div>
+        <div class="field">
+          <label for="edit-user-name">User name</label>
+          <input id="edit-user-name" type="text" />
+        </div>
+        <div class="field">
+          <label for="edit-key-role">Role</label>
+          <select id="edit-key-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div id="edit-role-note" class="role-note">
+          Admins can access this console and manage parent keys.
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="edit-cancel-btn">Cancel</button>
+        <button id="edit-save-btn" class="primary">Save changes</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -276,9 +440,18 @@
     const keysEmpty = document.getElementById('keys-empty');
     const keysTable = document.getElementById('keys-table');
     const keysTbody = document.getElementById('keys-tbody');
+    const editModal = document.getElementById('edit-modal');
+    const editKeyName = document.getElementById('edit-key-name');
+    const editUserName = document.getElementById('edit-user-name');
+    const editKeyRole = document.getElementById('edit-key-role');
+    const editRoleNote = document.getElementById('edit-role-note');
+    const editCancelBtn = document.getElementById('edit-cancel-btn');
+    const editSaveBtn = document.getElementById('edit-save-btn');
 
     let validated = false;
     let keys = [];
+    let editingKeyId = null;
+    const expandedKeys = new Set();
 
     function authHeaders(extra) {
       return { Authorization: `Bearer ${adminKeyInput.value.trim()}`, ...(extra || {}) };
@@ -375,31 +548,54 @@
       }
     }
 
-    async function editKey(id) {
+    function syncRoleNote() {
+      editRoleNote.classList.toggle('visible', editKeyRole.value === 'admin');
+    }
+
+    function closeEditDialog() {
+      editingKeyId = null;
+      editModal.classList.remove('visible');
+    }
+
+    function openEditDialog(id) {
       const key = keys.find(k => k.id === id);
       if (!key) return;
-      const name = prompt('Key name', key.name || '');
-      if (name == null) return;
-      const owner = prompt('Owner', key.owner || '');
-      if (owner == null) return;
-      const role = prompt('Role: user or admin', key.role || 'user');
-      if (role == null) return;
-      const normalizedRole = role.trim().toLowerCase();
+
+      editingKeyId = id;
+      editKeyName.value = key.name || '';
+      editUserName.value = key.owner || '';
+      editKeyRole.value = key.role === 'admin' ? 'admin' : 'user';
+      syncRoleNote();
+      editModal.classList.add('visible');
+      editKeyName.focus();
+    }
+
+    async function saveEditDialog() {
+      if (!editingKeyId) return;
+
+      const name = editKeyName.value.trim();
+      if (!name) {
+        setStatus('Key name is required.', 'error');
+        return;
+      }
+
+      const normalizedRole = editKeyRole.value;
       if (!['user', 'admin'].includes(normalizedRole)) {
         setStatus('Role must be user or admin.', 'error');
         return;
       }
 
       try {
-        await requestJson(`/v1/admin/api-keys/${encodeURIComponent(id)}`, {
+        await requestJson(`/v1/admin/api-keys/${encodeURIComponent(editingKeyId)}`, {
           method: 'PATCH',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
-            name: name.trim(),
-            owner: owner.trim(),
+            name,
+            owner: editUserName.value.trim(),
             role: normalizedRole
           })
         });
+        closeEditDialog();
         await loadKeys();
       } catch (err) {
         setStatus(err.message, 'error');
@@ -427,6 +623,75 @@
       totalCount.textContent = String(keys.length);
     }
 
+    function createTextCell(value, className) {
+      const cell = document.createElement('td');
+      if (className) cell.className = className;
+      cell.textContent = value || '-';
+      return cell;
+    }
+
+    function renderAgentList(agents) {
+      const panel = document.createElement('div');
+      panel.className = 'agent-panel';
+
+      const title = document.createElement('div');
+      title.className = 'agent-panel-title';
+      title.textContent = 'Agents';
+      const count = document.createElement('span');
+      count.className = 'agent-count-badge';
+      count.textContent = String(agents.length);
+      title.appendChild(count);
+      panel.appendChild(title);
+
+      if (!agents.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-agents';
+        empty.textContent = 'No agents have been created with this parent key yet.';
+        panel.appendChild(empty);
+        return panel;
+      }
+
+      const list = document.createElement('div');
+      list.className = 'agent-list';
+
+      const header = document.createElement('div');
+      header.className = 'agent-list-row agent-list-head';
+      for (const label of ['Agent name', 'Agent key', 'Model', 'Created']) {
+        const item = document.createElement('span');
+        item.textContent = label;
+        header.appendChild(item);
+      }
+      list.appendChild(header);
+
+      for (const agent of agents) {
+        const row = document.createElement('div');
+        row.className = 'agent-list-row';
+
+        const name = document.createElement('span');
+        name.className = 'agent-name';
+        name.textContent = agent.name || 'Unnamed agent';
+
+        const hint = document.createElement('span');
+        hint.className = 'key-hint';
+        hint.textContent = agent.key_hint || '-';
+
+        const model = document.createElement('span');
+        model.textContent = agent.model || '-';
+
+        const created = document.createElement('span');
+        created.textContent = formatDate(agent.created_at);
+
+        row.appendChild(name);
+        row.appendChild(hint);
+        row.appendChild(model);
+        row.appendChild(created);
+        list.appendChild(row);
+      }
+
+      panel.appendChild(list);
+      return panel;
+    }
+
     function renderKeys() {
       keysTbody.innerHTML = '';
       keysEmpty.classList.toggle('visible', keys.length === 0);
@@ -434,7 +699,29 @@
 
       for (const key of keys) {
         const revoked = !!key.revoked_at;
+        const agents = Array.isArray(key.agents) ? key.agents : [];
         const tr = document.createElement('tr');
+        tr.classList.toggle('expanded', expandedKeys.has(key.id));
+
+        const expand = document.createElement('td');
+        expand.className = 'expand-cell';
+        const expandButton = document.createElement('button');
+        expandButton.className = 'expand-btn';
+        expandButton.disabled = agents.length === 0;
+        expandButton.setAttribute('aria-label', `Show agents for ${key.name || key.id}`);
+        const chevron = document.createElement('span');
+        chevron.className = 'chevron';
+        chevron.textContent = '›';
+        expandButton.appendChild(chevron);
+        expandButton.addEventListener('click', () => {
+          if (expandedKeys.has(key.id)) {
+            expandedKeys.delete(key.id);
+          } else {
+            expandedKeys.add(key.id);
+          }
+          renderKeys();
+        });
+        expand.appendChild(expandButton);
 
         const name = document.createElement('td');
         name.className = 'name-cell';
@@ -453,14 +740,16 @@
         hint.className = 'key-hint';
         hint.textContent = key.key_hint || '-';
 
+        const agentsCell = document.createElement('td');
+        agentsCell.textContent = agents.length === 1 ? '1 agent' : `${agents.length} agents`;
+
         const status = document.createElement('td');
         const statusBadge = document.createElement('span');
         statusBadge.className = 'badge ' + (revoked ? 'revoked' : 'active');
         statusBadge.textContent = revoked ? 'Revoked' : 'Active';
         status.appendChild(statusBadge);
 
-        const created = document.createElement('td');
-        created.textContent = formatDate(key.created_at);
+        const created = createTextCell(formatDate(key.created_at));
 
         const actions = document.createElement('td');
         const actionWrap = document.createElement('div');
@@ -469,7 +758,7 @@
         const edit = document.createElement('button');
         edit.textContent = 'Edit';
         edit.disabled = revoked;
-        edit.addEventListener('click', () => editKey(key.id));
+        edit.addEventListener('click', () => openEditDialog(key.id));
 
         const revoke = document.createElement('button');
         revoke.className = 'danger';
@@ -481,14 +770,24 @@
         actionWrap.appendChild(revoke);
         actions.appendChild(actionWrap);
 
+        tr.appendChild(expand);
         tr.appendChild(name);
         tr.appendChild(owner);
         tr.appendChild(role);
         tr.appendChild(hint);
+        tr.appendChild(agentsCell);
         tr.appendChild(status);
         tr.appendChild(created);
         tr.appendChild(actions);
         keysTbody.appendChild(tr);
+
+        const agentRow = document.createElement('tr');
+        agentRow.className = 'agent-row';
+        const agentCell = document.createElement('td');
+        agentCell.colSpan = 9;
+        agentCell.appendChild(renderAgentList(agents));
+        agentRow.appendChild(agentCell);
+        keysTbody.appendChild(agentRow);
       }
 
       renderStats();
@@ -503,6 +802,12 @@
     validateBtn.addEventListener('click', validateKey);
     refreshBtn.addEventListener('click', loadKeys);
     createKeyBtn.addEventListener('click', createKey);
+    editCancelBtn.addEventListener('click', closeEditDialog);
+    editSaveBtn.addEventListener('click', saveEditDialog);
+    editKeyRole.addEventListener('change', syncRoleNote);
+    editModal.addEventListener('click', event => {
+      if (event.target === editModal) closeEditDialog();
+    });
   </script>
 </body>
 </html>

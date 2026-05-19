@@ -1,7 +1,8 @@
 import { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import crypto from 'crypto';
-import { agentStore, ApiKeyRole } from '../storage/agents';
-import { createError, extractToken, generateId, isValidApiKey, KEY_PREFIX } from '../util';
+import * as yaml from 'yaml';
+import { agentStore, Agent, ApiKeyRole } from '../storage/agents';
+import { createError, extractToken, formatAgentKeyHint, generateId, isValidApiKey, KEY_PREFIX } from '../util';
 
 async function adminKeyAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const authorization = request.headers.authorization;
@@ -46,8 +47,45 @@ function parseRole(value: unknown): ApiKeyRole | null {
 
 function publicKeyView(key: ReturnType<typeof agentStore.getApiKeyById>) {
     if (!key) return null;
-    const { key: _fullKey, ...rest } = key;
-    return rest;
+    return {
+        id: key.id,
+        name: key.name,
+        owner: key.owner,
+        key_hint: key.key_hint,
+        role: key.role,
+        created_at: key.created_at,
+        revoked_at: key.revoked_at,
+        created_by: key.created_by,
+    };
+}
+
+function publicAgentView(agent: Agent) {
+    let parsed: { name?: unknown; model?: unknown } = {};
+    try {
+        const value = yaml.parse(agent.yaml);
+        if (value && typeof value === 'object') {
+            parsed = value as { name?: unknown; model?: unknown };
+        }
+    } catch {
+        parsed = {};
+    }
+
+    return {
+        id: agent.id,
+        key_hint: formatAgentKeyHint(agent.agent_key),
+        name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name : 'Unnamed agent',
+        model: typeof parsed.model === 'string' && parsed.model.trim() ? parsed.model : null,
+        created_at: agent.created_at,
+    };
+}
+
+function publicKeyViewWithAgents(key: ReturnType<typeof agentStore.getApiKeyById>) {
+    const view = publicKeyView(key);
+    if (!view) return null;
+    return {
+        ...view,
+        agents: agentStore.listByParent(view.id).map(publicAgentView),
+    };
 }
 
 const adminApiKeysRoute: FastifyPluginAsync = async (fastify) => {
@@ -69,7 +107,7 @@ const adminApiKeysRoute: FastifyPluginAsync = async (fastify) => {
     }, async () => {
         return {
             object: 'list',
-            data: agentStore.listApiKeys().map(publicKeyView),
+            data: agentStore.listApiKeys().map(publicKeyViewWithAgents),
         };
     });
 
