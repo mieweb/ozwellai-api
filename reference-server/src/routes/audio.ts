@@ -1,5 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError } from '../util';
+import { validateAuth, createError, isLLMBackendConfigured } from '../util';
+
+const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
+const LLM_API_KEY = process.env.LLM_API_KEY || '';
+const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 
 const audioRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/audio/transcriptions
@@ -72,7 +76,56 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
       'openai-version': '2020-10-01',
     });
 
-    // Mock transcription response
+    // Forward to real backend if configured, otherwise return mock
+    if (isLLMBackendConfigured()) {
+      const upstreamForm = new FormData();
+      upstreamForm.append('file', new Blob([Buffer.concat(chunks)], { type: data.mimetype }), data.filename);
+      upstreamForm.append('model', model);
+      if (responseFormat) upstreamForm.append('response_format', responseFormat);
+      if (language) upstreamForm.append('language', language);
+
+      const temperature = fields.temperature?.value as string | undefined;
+      if (temperature) upstreamForm.append('temperature', temperature);
+
+      const timestampGranularities = fields.timestamp_granularities?.value;
+      if (timestampGranularities) {
+        const granularities = Array.isArray(timestampGranularities) ? timestampGranularities : [timestampGranularities];
+        for (const g of granularities) {
+          upstreamForm.append('timestamp_granularities[]', g);
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${LLM_API_KEY}`,
+      };
+      if (LLM_PROVIDER) headers['x-portkey-provider'] = LLM_PROVIDER;
+
+      const upstreamResp = await fetch(`${LLM_BASE_URL}/v1/audio/transcriptions`, {
+        method: 'POST',
+        headers,
+        body: upstreamForm,
+      });
+
+      if (!upstreamResp.ok) {
+        const errBody = await upstreamResp.text();
+        reply.code(upstreamResp.status);
+        try {
+          return JSON.parse(errBody);
+        } catch {
+          return createError(errBody, 'upstream_error');
+        }
+      }
+
+      // For text-based formats, return as plain text
+      if (['text', 'srt', 'vtt'].includes(responseFormat)) {
+        reply.type('text/plain');
+        return upstreamResp.text();
+      }
+
+      return upstreamResp.json();
+    }
+
+    // ── Mock fallback (no LLM backend configured) ──
     const mockText = 'This is a mock transcription from the reference server.';
 
     if (responseFormat === 'text') {
