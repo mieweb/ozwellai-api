@@ -342,6 +342,54 @@ await client.files.delete('file-abc123');
 
 ---
 
+## Audio
+
+### Transcribe Audio
+
+```typescript
+import fs from 'fs';
+
+const transcription = await client.audio.transcriptions.create({
+  file: fs.createReadStream('recording.mp3'),
+  model: 'whisper-1',
+});
+
+console.log(transcription.text);
+```
+
+### Response Formats
+
+```typescript
+// Get verbose JSON with timestamps
+const verbose = await client.audio.transcriptions.create({
+  file: fs.createReadStream('audio.mp3'),
+  model: 'whisper-1',
+  response_format: 'verbose_json',
+  timestamp_granularities: ['word', 'segment'],
+});
+
+console.log('Duration:', verbose.duration);
+for (const word of verbose.words) {
+  console.log(`${word.word}: ${word.start}s - ${word.end}s`);
+}
+
+// Get plain text
+const text = await client.audio.transcriptions.create({
+  file: fs.createReadStream('audio.mp3'),
+  model: 'whisper-1',
+  response_format: 'text',
+});
+
+// Get SRT subtitles
+const srt = await client.audio.transcriptions.create({
+  file: fs.createReadStream('audio.mp3'),
+  model: 'whisper-1',
+  response_format: 'srt',
+});
+```
+
+---
+
 ## Error Handling
 
 ### Error Types
