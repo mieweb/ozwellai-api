@@ -281,6 +281,28 @@ test.describe('Tic-Tac-Toe Demo', () => {
     const iframe = page.frameLocator('#ozwell-chat-container iframe');
     await expect(iframe.locator('#chat-input')).toBeVisible({ timeout: 10000 });
 
+    await page.evaluate(() => {
+      (window as any).OzwellChat.configure({
+        apiKey: 'ozw_playwright_test',
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'make_move',
+              description: 'Place the player move on the board',
+              parameters: {
+                type: 'object',
+                properties: {
+                  position: { type: 'string' },
+                },
+                required: ['position'],
+              },
+            },
+          },
+        ],
+      });
+    });
+
     await iframe.locator('#chat-input').fill('play center');
     await iframe.locator('#chat-input').press('Enter');
 
