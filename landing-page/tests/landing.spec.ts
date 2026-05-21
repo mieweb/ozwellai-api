@@ -241,6 +241,70 @@ test.describe('Tic-Tac-Toe Demo', () => {
     });
     await expect(page.locator('.cell').nth(4)).toHaveText('X');
   });
+
+  test('typed make_move continues with matching OpenAI tool result message', async ({ page }) => {
+    const chatRequests: any[] = [];
+
+    await page.route('**/v1/chat/completions', async (route) => {
+      const requestBody = route.request().postDataJSON();
+      chatRequests.push(requestBody);
+
+      if (chatRequests.length === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body: [
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_center_1","type":"function","function":{"name":"make_move","arguments":"{\\"position\\":\\"center\\"}"}}]}}]}',
+            '',
+            'data: [DONE]',
+            '',
+          ].join('\n'),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          'data: {"choices":[{"delta":{"content":"Placed X in the center."}}]}',
+          '',
+          'data: [DONE]',
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.goto('/tictactoe.html');
+    await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
+
+    const iframe = page.frameLocator('#ozwell-chat-container iframe');
+    await expect(iframe.locator('#chat-input')).toBeVisible({ timeout: 10000 });
+
+    await iframe.locator('#chat-input').fill('play center');
+    await iframe.locator('#chat-input').press('Enter');
+
+    await expect(page.locator('.cell').nth(4)).toHaveText('X');
+    await expect.poll(() => chatRequests.length, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
+
+    const followUpMessages = chatRequests[1].messages;
+    const assistantToolMessageIndex = followUpMessages.findIndex((message: any) => {
+      return message.role === 'assistant' && message.tool_calls?.[0]?.id === 'call_center_1';
+    });
+    expect(assistantToolMessageIndex).toBeGreaterThanOrEqual(0);
+
+    const toolResultMessage = followUpMessages[assistantToolMessageIndex + 1];
+    expect(toolResultMessage).toMatchObject({
+      role: 'tool',
+      tool_call_id: 'call_center_1',
+    });
+    expect(typeof toolResultMessage.content).toBe('string');
+    expect(JSON.parse(toolResultMessage.content)).toMatchObject({
+      success: true,
+      move: 4,
+      position: 'middle-center',
+    });
+  });
 });
 
 test.describe('Console Errors', () => {
