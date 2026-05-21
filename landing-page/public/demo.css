@@ -414,8 +414,28 @@ body {
   background: #ffffff;
   color: #1a1a1a;
   padding: 1.5rem 2rem;
+  position: relative;
   text-align: center;
   border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-console-link {
+  position: absolute;
+  right: 2rem;
+  top: 1.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.admin-console-link:hover {
+  border-color: #0066ff;
+  color: #0066ff;
 }
 
 .header-title {
@@ -783,6 +803,12 @@ body {
 
   .header-subtitle {
     font-size: 0.85rem;
+  }
+
+  .admin-console-link {
+    display: inline-block;
+    margin-bottom: 1rem;
+    position: static;
   }
 
   .demo-content {
