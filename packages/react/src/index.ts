@@ -29,5 +29,6 @@ export type {
   OzwellParentMessage,
   OzwellToolCallMessage,
   OzwellToolResultMessage,
+  OzwellToolCallEventDetail,
   ScriptLoadStatus,
 } from './types';

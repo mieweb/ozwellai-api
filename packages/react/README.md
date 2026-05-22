@@ -40,27 +40,28 @@ function App() {
 }
 ```
 
-> **Note:** This package wraps the existing Ozwell widget. API key authentication and agent configuration are coming soon. Currently uses local endpoint configuration.
+> **Note:** This package wraps the framework-neutral Ozwell embed widget. Prefer `apiKey="agnt_key-..."` for configured agents. You can also use `apiKey="ozw_..."` directly when you provide `system`, `tools`, and other config yourself.
 
 ## Feature Support
 
 ### Currently Available
 - Custom endpoints (`endpoint` prop)
+- Configured agents via `apiKey="agnt_key-..."`
+- Direct Ozwell API keys via `apiKey="ozw_..."` with explicit config
 - Model selection (`model` prop)
 - MCP tool/function calling (`tools` prop, `onToolCall` callback)
-- Context updates (`context` prop)
 - System prompts (`system` prop)
 - Welcome messages (`welcomeMessage` prop)
+- Reasoning UI controls (`thinkingEnabled`, `thinkingDefaultMode`)
 - Debug mode (`debug` prop)
 - OpenAI API compatibility (`openaiApiKey` prop)
 - Custom headers (`headers` prop)
 - Auto-open on AI reply (`autoOpenOnReply` prop)
-- Lifecycle callbacks (`onReady`, `onOpen`, `onClose`, `onInsert`)
+- Lifecycle callbacks (`onReady`, `onOpen`, `onClose`)
 - Error callback for mount errors (`onError` - partial)
 
 ### Coming Soon
-- Scoped API keys (`apiKey` prop)
-- Agent management (`agentId` prop)
+- Separate agent-id configuration (`agentId` prop)
 - Theme customization (`theme`, `primaryColor` props)
 - Position control (`position` prop)
 - Auto-open behavior (`autoOpen` prop)
@@ -175,13 +176,13 @@ The `onToolCall` callback receives:
 - `args` - The arguments passed to the tool
 - `sendResult` - A function to send the result back to the AI
 
-This handles all the postMessage complexity internally, so you just focus on your tool logic.
+The React wrapper listens to the loader's `ozwell-tool-call` DOM event and handles the MCP response callback for you, so you just focus on your tool logic.
 
 ## Documentation
 
 For full documentation, see [React Integration Guide](../../docs/frontend/react.md).
 
-> **Note:** The documentation describes the planned API including `apiKey` and `agentId` props. The current implementation supports `endpoint` and `tools` configuration matching the vanilla JS widget.
+> **Note:** The current embed widget uses `apiKey` for configured agents. `agentId` is kept as a deprecated type for older examples but is not used by the widget.
 
 ## Development
 

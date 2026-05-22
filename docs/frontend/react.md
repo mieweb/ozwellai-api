@@ -21,11 +21,8 @@ function App() {
   return (
     <div>
       <h1>My App</h1>
-      {/* apiKey and agentId are coming soon - use endpoint for now */}
       <OzwellChat
-        endpoint="/v1/chat/completions"
-        // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-        // agentId="agent_xxxxxxxx"      // Coming soon
+        apiKey="agnt_key-xxxxxxxx"
       />
     </div>
   );
@@ -44,15 +41,14 @@ The main chat widget component.
 import { OzwellChat } from '@ozwell/react';
 
 <OzwellChat
-  apiKey="ozw_scoped_xxxxxxxx"
-  agentId="agent_xxxxxxxx"
+  apiKey="agnt_key-xxxxxxxx"
   theme="auto"
   position="bottom-right"
   primaryColor="#4f46e5"
   width="400px"
   height="600px"
   autoOpen={false}
-  greeting="Hello! How can I help?"
+  welcomeMessage="Hello! How can I help?"
   placeholder="Type a message..."
   onReady={() => console.log('Ready')}
   onOpen={() => console.log('Opened')}
@@ -65,22 +61,23 @@ import { OzwellChat } from '@ozwell/react';
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `apiKey` | `string` | — | Scoped API key (coming soon, will be required) |
-| `agentId` | `string` | — | Agent ID (coming soon, will be required) |
+| `apiKey` | `string` | — | Ozwell auth key. Prefer `agnt_key-*` for configured agents; use `ozw_*` with explicit `system`, `tools`, and other config |
+| `agentId` | `string` | — | Deprecated; current widget uses `apiKey` for configured agents |
 | `endpoint` | `string` | — | API endpoint URL |
 | `model` | `string` | — | Model name (optional, auto-selected if not specified) |
 | `system` | `string` | — | System prompt for the assistant |
 | `welcomeMessage` | `string` | — | Welcome message shown when chat opens |
 | `title` | `string` | — | Chat widget title |
+| `thinkingEnabled` | `boolean` | `false` | Show reasoning/thinking UI when supported by the model |
+| `thinkingDefaultMode` | `0 \| 1 \| 2 \| 3` | `2` | Reasoning display mode: None, Peek, Smart, Expanded |
+| `exposeUnreadEvent` | `boolean` | `false` | Opt in to `ozwell-chat-unread` events from the loader |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Color theme (coming soon) |
 | `position` | `'bottom-right' \| 'bottom-left'` | `'bottom-right'` | Widget position (coming soon) |
 | `primaryColor` | `string` | `'#4f46e5'` | Accent color (coming soon) |
 | `width` | `string \| number` | `360` | Chat window width |
 | `height` | `string \| number` | `420` | Chat window height |
 | `autoOpen` | `boolean` | `false` | Open on mount (coming soon) |
-| `greeting` | `string` | Agent default | Initial message |
 | `placeholder` | `string` | `'Type a message...'` | Input placeholder |
-| `context` | `Record<string, unknown>` | `{}` | Context data for agent |
 | `tools` | `OzwellTool[]` | `[]` | MCP tools available to the AI |
 | `debug` | `boolean` | `false` | Enable debug mode |
 | `openaiApiKey` | `string` | — | OpenAI API key (for direct OpenAI endpoint) |
@@ -90,8 +87,7 @@ import { OzwellChat } from '@ozwell/react';
 | `onReady` | `() => void` | — | Widget ready callback |
 | `onOpen` | `() => void` | — | Chat opened callback |
 | `onClose` | `() => void` | — | Chat closed callback |
-| `onInsert` | `(data: { text: string; close: boolean }) => void` | — | User inserts text to parent page |
-| `onToolCall` | `(tool, args, sendResult) => void` | — | Tool call handler (see below) |
+| `onToolCall` | `(tool, args, sendResult, sendError?) => void` | — | Tool call handler (see below) |
 | `onUserShare` | `(data: unknown) => void` | — | User shared data callback (requires widget support - coming soon) |
 | `onError` | `(error: OzwellError) => void` | — | Error callback (works for mount errors, more error types coming soon) |
 
@@ -140,45 +136,41 @@ interface UseOzwellReturn {
   open: () => void;
   close: () => void;
   toggle: () => void;
-  sendMessage: (content: string) => void;  // Not yet implemented
-  setContext: (context: Record<string, unknown>) => void;
+  sendMessage: (content: string) => void;
   iframe: HTMLIFrameElement | null;
 }
 ```
 
-> **Note:** `sendMessage` is not yet implemented in the vanilla widget. It will log a warning if called.
+> **Note:** `sendMessage` posts the current widget `send-message` JSON-RPC command into the iframe. The widget must already be mounted and ready.
 
 ---
 
 ## Examples
 
-### With Context Data
-
-Pass user information and page context to the agent:
+### With Agent Key
 
 ```tsx
 import { OzwellChat } from '@ozwell/react';
-import { useUser } from './auth';
-import { useLocation } from 'react-router-dom';
 
 function App() {
-  const user = useUser();
-  const location = useLocation();
-  
   return (
     <OzwellChat
-      endpoint="/v1/chat/completions"
-      // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-      // agentId="agent_xxxxxxxx"      // Coming soon
-      context={{
-        userId: user?.id,
-        email: user?.email,
-        page: location.pathname,
-        timestamp: Date.now()
-      }}
+      apiKey="agnt_key-xxxxxxxx"
+      thinkingEnabled={true}
+      thinkingDefaultMode={2}
     />
   );
 }
+```
+
+### With Ozwell API Key
+
+```tsx
+<OzwellChat
+  apiKey="ozw_..."
+  system="You are a helpful assistant."
+  tools={tools}
+/>
 ```
 
 ### Custom Trigger Button
@@ -228,8 +220,7 @@ function App() {
   return (
     <OzwellChat
       endpoint="/v1/chat/completions"
-      // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-      // agentId="agent_xxxxxxxx"      // Coming soon
+      apiKey="agnt_key-xxxxxxxx"
       onOpen={() => {
         analytics.track('Chat Opened');
       }}
@@ -358,9 +349,7 @@ The package includes full TypeScript definitions:
 import type { OzwellChatProps, OzwellError } from '@ozwell/react';
 
 const config: OzwellChatProps = {
-  endpoint: '/v1/chat/completions',
-  // apiKey: 'ozw_scoped_xxxxxxxx',  // Coming soon
-  // agentId: 'agent_xxxxxxxx',      // Coming soon
+  apiKey: 'agnt_key-xxxxxxxx',
   // theme: 'dark',                  // Coming soon
   onUserShare: (data: unknown) => {
     // Only fires when user explicitly shares (coming soon)
@@ -382,23 +371,8 @@ const config: OzwellChatProps = {
 ### Widget Not Appearing
 
 1. Ensure the component is mounted in the DOM
-2. Check that the `endpoint` prop is correct (or `apiKey`/`agentId` once available)
+2. Check that the `endpoint` or `apiKey` prop is correct
 3. Look for console errors
-
-### Context Not Updating
-
-The `context` prop is not deeply compared. To trigger updates:
-
-```tsx
-// ❌ Won't trigger update (same object reference)
-const context = { page: location.pathname };
-
-// ✅ Will trigger update (new object)
-const context = useMemo(
-  () => ({ page: location.pathname }),
-  [location.pathname]
-);
-```
 
 ### Multiple Instances
 
