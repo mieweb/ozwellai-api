@@ -263,6 +263,12 @@ function buildFallbackWarning(originalModel: string, fallbackModel: string) {
   };
 }
 
+// Identifier used as the `model` field on every mock response so callers can immediately
+// distinguish a deterministic mock from a real LLM answer (mirrors how the fallback path
+// sets the response `model` to the actual fallback model rather than the originally
+// requested one). The original requested model is preserved on the warning payload.
+const MOCK_MODEL_ID = 'ozwell-mock';
+
 // Marks every mock response so callers (and the chat widget) can always tell a deterministic
 // mock from a real LLM answer. Three reasons cover all paths that emit a mock body.
 function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', model: string) {
@@ -326,7 +332,7 @@ function dispatchMockNonStream(
     id: generateId('chatcmpl'),
     object: 'chat.completion' as const,
     created: Math.floor(Date.now() / 1000),
-    model,
+    model: MOCK_MODEL_ID,
     choices: [{ index: 0, message: assistantMsg, finish_reason: finishReason }],
     usage: {
       prompt_tokens: promptTokens,
@@ -361,7 +367,7 @@ function dispatchMockStream(
 
   const writeChunk = (delta: Record<string, unknown>, finish: string | null = null) => {
     reply.raw.write(`data: ${JSON.stringify({
-      id, object: 'chat.completion.chunk', created, model,
+      id, object: 'chat.completion.chunk', created, model: MOCK_MODEL_ID,
       choices: [{ index: 0, delta, finish_reason: finish }],
     })}\n\n`);
   };
