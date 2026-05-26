@@ -573,11 +573,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // --- Agent: filter tools ---
     // Tools arriving from the widget use two namespaces:
     //   • bare names       — server-side tools (defined in the agent's tools array)
-    //   • postMessage:name — page-provided tools (prefixed by the loader)
+    //   • postMessage_name — page-provided tools (prefixed by the loader)
     //
     // allowedTools (from agent.tools) gates bare-name tools.
-    // pageTools policy gates postMessage:-prefixed tools.
-    const PM_PREFIX = 'postMessage:';
+    // pageTools policy gates postMessage_-prefixed tools.
+    const PM_PREFIX = 'postMessage_';
     let filteredTools = tools;
     if (agentConfig !== null && tools) {
       const allowed = agentConfig.allowedTools;          // null = no server tools defined
