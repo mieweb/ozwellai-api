@@ -543,7 +543,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Determine default model based on backend
     const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
 
-    const { model: requestedModel, messages, tools, stream = false, max_tokens = 150, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
+    const { model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
     // Agent-configured model takes precedence, then client request, then server default
     const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request

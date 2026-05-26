@@ -31,7 +31,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as any;
-    const { model, input, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    const { model, input, stream = false, max_tokens, temperature = 0.7 } = body;
 
     // Validate model
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
