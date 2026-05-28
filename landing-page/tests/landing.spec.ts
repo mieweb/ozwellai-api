@@ -7,7 +7,7 @@ import { test, expect, type Page, type FrameLocator } from '@playwright/test';
  * - Widget loading and auto-detection
  * - Chat interactions with AI
  * - Tool calls (update_form_data)
- * - State synchronization via iframe-sync
+ * - State synchronization via postMessage tool calls
  */
 
 test.describe('Ozwell Embed Widget', () => {

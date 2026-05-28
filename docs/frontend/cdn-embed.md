@@ -110,14 +110,34 @@ OzwellChat.close();
 // OzwellChat.toggle();
 ```
 
-### Update Context
+### Read Page Data With Tools
 
 ```javascript
-// Set context data (passed to the agent)
-OzwellChat.updateContext({
-  userId: 'user_123',
-  page: window.location.pathname,
-  customData: { ... }
+window.OzwellChatConfig = {
+  ...window.OzwellChatConfig,
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'get_page_data',
+        description: 'Read current page data',
+        parameters: {
+          type: 'object',
+          properties: {}
+        }
+      }
+    }
+  ]
+};
+
+document.addEventListener('ozwell-tool-call', (event) => {
+  const { name, respond } = event.detail;
+  if (name !== 'get_page_data') return;
+
+  respond({
+    userId: 'user_123',
+    page: window.location.pathname
+  });
 });
 
 // Send a message as the user (coming soon)
