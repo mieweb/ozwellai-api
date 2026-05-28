@@ -347,10 +347,8 @@ await client.files.delete('file-abc123');
 ### Transcribe Audio
 
 ```typescript
-import fs from 'fs';
-
-const transcription = await client.audio.transcriptions.create({
-  file: fs.createReadStream('recording.mp3'),
+const transcription = await client.createTranscription({
+  file: new File([audioBuffer], 'recording.mp3', { type: 'audio/mpeg' }),
   model: 'whisper-1',
 });
 
@@ -361,8 +359,8 @@ console.log(transcription.text);
 
 ```typescript
 // Get verbose JSON with timestamps
-const verbose = await client.audio.transcriptions.create({
-  file: fs.createReadStream('audio.mp3'),
+const verbose = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
   model: 'whisper-1',
   response_format: 'verbose_json',
   timestamp_granularities: ['word', 'segment'],
@@ -374,15 +372,15 @@ for (const word of verbose.words) {
 }
 
 // Get plain text
-const text = await client.audio.transcriptions.create({
-  file: fs.createReadStream('audio.mp3'),
+const text = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
   model: 'whisper-1',
   response_format: 'text',
 });
 
 // Get SRT subtitles
-const srt = await client.audio.transcriptions.create({
-  file: fs.createReadStream('audio.mp3'),
+const srt = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
   model: 'whisper-1',
   response_format: 'srt',
 });

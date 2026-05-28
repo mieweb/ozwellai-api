@@ -9,6 +9,9 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/audio/transcriptions
   fastify.post('/v1/audio/transcriptions', {
     schema: {
+      summary: 'Transcribe audio to text',
+      description: 'Transcribes audio into text using the specified model. Accepts multipart/form-data with fields: file (required, audio binary), model (required, e.g. "whisper-1"), response_format (json|text|srt|verbose_json|vtt), language (ISO-639-1), temperature (0-1), timestamp_granularities (word|segment).',
+      tags: ['Audio'],
       headers: {
         type: 'object',
         properties: {
@@ -24,23 +27,43 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid API key provided', 'invalid_request_error');
     }
 
-    const data = await request.file();
-    if (!data) {
+    // Parse all multipart parts in order-independent fashion
+    const fields: Record<string, any> = {};
+    const chunks: Buffer[] = [];
+    let fileMimetype = '';
+    let filename = '';
+    let hasFile = false;
+
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        if (!hasFile) {
+          hasFile = true;
+          fileMimetype = part.mimetype;
+          filename = part.filename;
+          for await (const chunk of part.file) {
+            chunks.push(chunk);
+          }
+        } else {
+          // Drain extra file streams
+          for await (const _ of part.file) { /* drain */ }
+        }
+      } else {
+        fields[part.fieldname] = { value: part.value };
+      }
+    }
+
+    if (!hasFile) {
       reply.code(400);
       return createError('Missing required parameter: file', 'invalid_request_error', 'file');
     }
-
-    // Consume the file stream
-    const chunks: Buffer[] = [];
-    for await (const chunk of data.file) {
-      chunks.push(chunk);
-    }
-
-    // Extract fields from multipart
-    const fields = data.fields as Record<string, any>;
     const model = fields.model?.value as string | undefined;
     const responseFormat = (fields.response_format?.value as string) || 'json';
     const language = fields.language?.value as string | undefined;
+    const temperature = fields.temperature?.value as string | undefined;
+    const rawGranularities = fields.timestamp_granularities?.value;
+    const granularities: string[] = rawGranularities
+      ? (Array.isArray(rawGranularities) ? rawGranularities : [rawGranularities])
+      : ['segment'];
 
     if (!model) {
       reply.code(400);
@@ -60,7 +83,7 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
       'audio/m4a', 'audio/wav', 'audio/webm', 'audio/x-m4a',
       'audio/x-wav', 'video/mp4', 'video/webm',
     ];
-    if (data.mimetype && !allowedMimeTypes.includes(data.mimetype)) {
+    if (fileMimetype && !allowedMimeTypes.includes(fileMimetype)) {
       reply.code(400);
       return createError(
         `Invalid file format. Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm`,
@@ -79,17 +102,13 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     // Forward to real backend if configured, otherwise return mock
     if (isLLMBackendConfigured()) {
       const upstreamForm = new FormData();
-      upstreamForm.append('file', new Blob([Buffer.concat(chunks)], { type: data.mimetype }), data.filename);
+      upstreamForm.append('file', new Blob([Buffer.concat(chunks)], { type: fileMimetype }), filename);
       upstreamForm.append('model', model);
       if (responseFormat) upstreamForm.append('response_format', responseFormat);
       if (language) upstreamForm.append('language', language);
-
-      const temperature = fields.temperature?.value as string | undefined;
       if (temperature) upstreamForm.append('temperature', temperature);
 
-      const timestampGranularities = fields.timestamp_granularities?.value;
-      if (timestampGranularities) {
-        const granularities = Array.isArray(timestampGranularities) ? timestampGranularities : [timestampGranularities];
+      if (rawGranularities) {
         for (const g of granularities) {
           upstreamForm.append('timestamp_granularities[]', g);
         }
@@ -151,11 +170,6 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     };
 
     if (responseFormat === 'verbose_json') {
-      const timestampGranularities = fields.timestamp_granularities?.value;
-      const granularities = timestampGranularities
-        ? (Array.isArray(timestampGranularities) ? timestampGranularities : [timestampGranularities])
-        : ['segment'];
-
       if (granularities.includes('word')) {
         response.words = [
           { word: 'This', start: 0.0, end: 0.2 },

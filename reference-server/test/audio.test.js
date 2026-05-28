@@ -28,11 +28,16 @@ async function waitForReady(maxMs = 10_000) {
 before(async () => {
   tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-audio-test-'));
   const dbPath = path.join(tmp, 'ozwell.db');
+  const env = { ...process.env, PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development' };
+  // Force mock mode — override LLM env vars so dotenv/.env can't set them
+  env.LLM_BASE_URL = '';
+  env.LLM_API_KEY = '';
+  env.LLM_PROVIDER = '';
   server = spawn('npm', ['run', 'dev'], {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,
-    env: { ...process.env, PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development' },
+    env,
   });
   await waitForReady();
 });
@@ -44,7 +49,12 @@ after(() => {
 
 function createAudioFormData({ file, model, responseFormat, language, temperature, granularities } = {}) {
   const formData = new FormData();
-  // Append non-file fields BEFORE the file so fastify multipart captures them in data.fields
+  // Append file first (matches SDK behavior — @fastify/multipart handles field order)
+  if (file !== undefined) {
+    formData.append('file', file);
+  } else {
+    formData.append('file', new Blob([new Uint8Array(100)], { type: 'audio/mpeg' }), 'test.mp3');
+  }
   if (model !== undefined) formData.append('model', model);
   if (responseFormat) formData.append('response_format', responseFormat);
   if (language) formData.append('language', language);
@@ -53,12 +63,6 @@ function createAudioFormData({ file, model, responseFormat, language, temperatur
     for (const g of granularities) {
       formData.append('timestamp_granularities', g);
     }
-  }
-  // File last
-  if (file !== undefined) {
-    formData.append('file', file);
-  } else {
-    formData.append('file', new Blob([new Uint8Array(100)], { type: 'audio/mpeg' }), 'test.mp3');
   }
   return formData;
 }
