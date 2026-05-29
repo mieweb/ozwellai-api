@@ -110,14 +110,34 @@ OzwellChat.close();
 // OzwellChat.toggle();
 ```
 
-### Update Context
+### Read Page Data With Tools
 
 ```javascript
-// Set context data (passed to the agent)
-OzwellChat.updateContext({
-  userId: 'user_123',
-  page: window.location.pathname,
-  customData: { ... }
+window.OzwellChatConfig = {
+  ...window.OzwellChatConfig,
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'get_page_data',
+        description: 'Read current page data',
+        parameters: {
+          type: 'object',
+          properties: {}
+        }
+      }
+    }
+  ]
+};
+
+document.addEventListener('ozwell-tool-call', (event) => {
+  const { name, respond } = event.detail;
+  if (name !== 'get_page_data') return;
+
+  respond({
+    userId: 'user_123',
+    page: window.location.pathname
+  });
 });
 
 // Send a message as the user (coming soon)
@@ -172,6 +192,7 @@ sequenceDiagram
     Ozwell->>Page: ozwell-tool-call event
     Page->>Page: Your handler runs (updates the input)
     Page->>Ozwell: respond({ success: true })
+    Ozwell->>Ozwell: Sends tool result back to AI
     Ozwell->>User: "Done! I've updated your name to Bob."
 ```
 
@@ -204,7 +225,7 @@ document.addEventListener('ozwell-tool-call', (e) => {
     if (args.email) document.getElementById('input-email').value = args.email;
 
     // Tell Ozwell what happened
-    respond({ success: true, message: 'Fields updated' });
+    respond({ success: true, updated: { name: args.name, email: args.email } });
 
   } else if (name === 'get_form_data') {
     // Tools can also READ from your page
@@ -219,7 +240,7 @@ document.addEventListener('ozwell-tool-call', (e) => {
 });
 ```
 
-**You must call `respond()`.** The AI is waiting for the result. If you don't respond, the conversation will hang.
+**You must call `respond()` or `error()`.** The AI is waiting for the result. If you don't respond, the loader returns a tool error after a timeout.
 
 ### Step 3: That's It
 
@@ -266,7 +287,7 @@ If you're using a parent API key (`ozw_...`) instead of an agent key, you can de
 <script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-You still handle `ozwell-tool-call` the same way — the event listener code doesn't change.
+`tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
 
 ### Security: What Crosses the Iframe Boundary
 
@@ -286,7 +307,7 @@ The AI can only call tools you've defined. It cannot access your page's DOM, mak
 
 - **Write good tool descriptions.** The AI reads them to decide when to use a tool. "Updates user profile fields on the page" is better than "updates stuff."
 - **Validate arguments.** The AI usually gets the schema right, but treat the incoming `args` like any untrusted input — check types and ranges before acting on them.
-- **Return useful results.** The AI uses `respond()` data to craft its reply. If you return `{ success: true }`, the AI can only say "done." If you return `{ success: true, message: "Name changed from Alice to Bob" }`, the AI can confirm the details.
+- **Return useful results.** The AI uses `respond()` data to craft its reply. If you return `{ success: true }`, the AI can only say "done." If you return `{ success: true, updated: { name: { from: "Alice", to: "Bob" } } }`, the AI can confirm the details.
 - **Use `debug: true` during development.** It shows tool execution pills in the chat UI so you can see what's happening.
 
 For the full postMessage protocol details (useful if you're building a custom integration without the loader), see the [Embed Widget README](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed). For the design inspiration behind this architecture, see [MCP postMessage Standard](./mcp-postmessage-standard.md).
@@ -404,7 +425,7 @@ A full working example — an AI assistant that can read and update form fields 
         if (args.name)  document.getElementById('input-name').value = args.name;
         if (args.email) document.getElementById('input-email').value = args.email;
         if (args.zip)   document.getElementById('input-zip').value = args.zip;
-        respond({ success: true, message: 'Profile updated' });
+        respond({ success: true, updated: { name: args.name, email: args.email, zip: args.zip } });
 
       } else {
         respond({ success: false, error: `Unknown tool: ${name}` });

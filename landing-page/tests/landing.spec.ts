@@ -9,7 +9,7 @@ import path from 'node:path';
  * - Widget loading and auto-detection
  * - Chat interactions with AI
  * - Tool calls (update_form_data)
- * - State synchronization via iframe-sync
+ * - State synchronization via postMessage tool calls
  */
 
 test.describe('Ozwell Embed Widget', () => {
@@ -228,6 +228,119 @@ test.describe('Tic-Tac-Toe Demo', () => {
 
     // Verify the difficulty selector is present
     await expect(page.locator('#difficulty')).toBeVisible();
+  });
+
+  test('make_move tool accepts natural language positions and returns continuation data', async ({ page }) => {
+    await page.goto('/tictactoe.html');
+    await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
+
+    const result = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        document.dispatchEvent(new CustomEvent('ozwell-tool-call', {
+          detail: {
+            name: 'make_move',
+            arguments: { position: 'center' },
+            respond: resolve,
+            error: (message: string) => resolve({ success: false, error: message }),
+          },
+        }));
+      });
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      move: 4,
+      position: 'middle-center',
+      nextPlayer: 'O',
+      shouldCallAiMove: true,
+    });
+    await expect(page.locator('.cell').nth(4)).toHaveText('X');
+  });
+
+  test('typed make_move continues with matching OpenAI tool result message', async ({ page }) => {
+    const chatRequests: any[] = [];
+
+    await page.route('**/v1/chat/completions', async (route) => {
+      const requestBody = route.request().postDataJSON();
+      chatRequests.push(requestBody);
+
+      if (chatRequests.length === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          body: [
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_center_1","type":"function","function":{"name":"make_move","arguments":"{\\"position\\":\\"center\\"}"}}]}}]}',
+            '',
+            'data: [DONE]',
+            '',
+          ].join('\n'),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          'data: {"choices":[{"delta":{"content":"Placed X in the center."}}]}',
+          '',
+          'data: [DONE]',
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.goto('/tictactoe.html');
+    await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
+
+    const iframe = page.frameLocator('#ozwell-chat-container iframe');
+    await expect(iframe.locator('#chat-input')).toBeVisible({ timeout: 10000 });
+
+    await page.evaluate(() => {
+      (window as any).OzwellChat.configure({
+        apiKey: 'ozw_playwright_test',
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'make_move',
+              description: 'Place the player move on the board',
+              parameters: {
+                type: 'object',
+                properties: {
+                  position: { type: 'string' },
+                },
+                required: ['position'],
+              },
+            },
+          },
+        ],
+      });
+    });
+
+    await iframe.locator('#chat-input').fill('play center');
+    await iframe.locator('#chat-input').press('Enter');
+
+    await expect(page.locator('.cell').nth(4)).toHaveText('X');
+    await expect.poll(() => chatRequests.length, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
+
+    const followUpMessages = chatRequests[1].messages;
+    const assistantToolMessageIndex = followUpMessages.findIndex((message: any) => {
+      return message.role === 'assistant' && message.tool_calls?.[0]?.id === 'call_center_1';
+    });
+    expect(assistantToolMessageIndex).toBeGreaterThanOrEqual(0);
+
+    const toolResultMessage = followUpMessages[assistantToolMessageIndex + 1];
+    expect(toolResultMessage).toMatchObject({
+      role: 'tool',
+      tool_call_id: 'call_center_1',
+    });
+    expect(typeof toolResultMessage.content).toBe('string');
+    expect(JSON.parse(toolResultMessage.content)).toMatchObject({
+      success: true,
+      move: 4,
+      position: 'middle-center',
+    });
   });
 });
 

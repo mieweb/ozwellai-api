@@ -523,9 +523,21 @@ function handleMakeMove(position, respond) {
     return;
   }
 
-  const index = typeof position === 'number' ? position : parseInt(position);
-  if (isNaN(index) || index < 0 || index > 8) {
-    respond({ success: false, error: `Invalid position: ${position}. Must be 0-8.` });
+  let index;
+  let positionName;
+  if (typeof position === 'number' || (typeof position === 'string' && /^\d+$/.test(position.trim()))) {
+    index = typeof position === 'number' ? position : parseInt(position, 10);
+    positionName = indexToPosition[index];
+  } else {
+    positionName = normalizePosition(position);
+    index = positionName ? positionMap[positionName] : NaN;
+  }
+
+  if (isNaN(index) || index < 0 || index > 8 || !positionName) {
+    respond({
+      success: false,
+      error: `Invalid position: ${position}. Use a board index 0-8 or a position like center, top-left, or bottom-right.`
+    });
     return;
   }
 
@@ -548,16 +560,19 @@ function handleMakeMove(position, respond) {
   }
 
   // Place piece and check for winner
-  const positionName = indexToPosition[index];
   const gameEnded = placePieceAndCheckWin(index, positionName);
 
-  // Return success message (NOT raw data) so widget doesn't auto-continue
-  respond({ success: true, message: `Placed X at ${positionName}.` });
-
-  // If game continues and it's now O's turn, trigger AI the same way as clicks
-  if (!gameEnded && currentPlayer === 'O') {
-    sendUserMessageToWidget(`I placed X at ${positionName}. Your turn.`);
-  }
+  respond({
+    success: true,
+    move: index,
+    position: positionName,
+    message: `Placed X at ${positionName}.`,
+    board: boardState.map((v, i) => v || i),
+    gameOver: gameOver,
+    winner: winner,
+    nextPlayer: currentPlayer,
+    shouldCallAiMove: !gameEnded && currentPlayer === 'O'
+  });
 }
 
 function handleResetGame() {
@@ -608,7 +623,14 @@ document.addEventListener('ozwell-tool-call', (e) => {
     handleAiMove(respond);
   } else if (name === 'reset_game') {
     handleResetGame();
-    respond({ success: true, message: 'Game reset successfully' });
+    respond({
+      success: true,
+      message: 'Game reset successfully',
+      board: boardState.map((v, i) => v || i),
+      currentPlayer: currentPlayer,
+      gameOver: gameOver,
+      winner: winner
+    });
   }
 });
 

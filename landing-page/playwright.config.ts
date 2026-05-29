@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test';
  * - Widget loading and initialization
  * - Chat interactions with the AI
  * - Tool calls (update_form_data)
- * - iframe-sync state synchronization
+ * - postMessage tool-call flow
  */
 export default defineConfig({
   testDir: './tests',

@@ -71,33 +71,39 @@ Use the AI to improve text, then get it back with the "Save & Close" button:
 
 **Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
 
-## Providing Page Context
+## Reading Page Context With Tools
 
-Send page data to the widget so the AI can answer questions about current state:
+Expose current page data as a tool so the AI can request it when needed:
 
 ```html
 <input id="user-name" value="Alice">
 <input id="user-email" value="alice@example.com">
 
 <script>
-  window.OzwellChatConfig = {};
-
-  // Send context when inputs change
-  function updateContext() {
-    OzwellChat.updateContext({
-      formData: {
-        name: document.getElementById('user-name').value,
-        email: document.getElementById('user-email').value
+  window.OzwellChatConfig = {
+    ...window.OzwellChatConfig,
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'get_form_data',
+          description: 'Read the current form values',
+          parameters: {
+            type: 'object',
+            properties: {}
+          }
+        }
       }
-    });
-  }
+    ]
+  };
 
-  // Wait for widget to load, then send initial context and listen for changes
-  document.addEventListener('DOMContentLoaded', () => {
-    OzwellChat.ready().then(() => {
-      updateContext();
-      document.getElementById('user-name').addEventListener('input', updateContext);
-      document.getElementById('user-email').addEventListener('input', updateContext);
+  document.addEventListener('ozwell-tool-call', (event) => {
+    const { name, respond } = event.detail;
+    if (name !== 'get_form_data') return;
+
+    respond({
+      name: document.getElementById('user-name').value,
+      email: document.getElementById('user-email').value
     });
   });
 </script>
@@ -106,7 +112,7 @@ Send page data to the widget so the AI can answer questions about current state:
 
 Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
 
-**How it works:** Context is included in the system prompt for every message, so the AI always sees current page state.
+**How it works:** The tool schema tells the AI what page data it can request. When the AI calls the tool, the page responds with the current values through the `ozwell-tool-call` event.
 
 ## With MCP Tools
 
@@ -117,6 +123,7 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
 
 <script>
   window.OzwellChatConfig = {
+    ...window.OzwellChatConfig,
     tools: [
       {
         type: 'function',
@@ -141,12 +148,14 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
 
     if (name === 'update_email') {
       document.getElementById('user-email').value = args.email;
-      respond({ success: true, message: 'Email updated successfully' });
+      respond({ success: true, updated: { email: args.email } });
     }
   });
 </script>
 <script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
 ```
+
+The `tools[].function` object above is a schema only. Actual JavaScript execution stays in your `ozwell-tool-call` event listener.
 
 Now users can type: "update my email to john@example.com" and the field updates automatically.
 
@@ -396,11 +405,13 @@ After receiving an `ozwell-tool-call` DOM event, call `respond()` from the event
 document.addEventListener('ozwell-tool-call', (e) => {
   const { name, arguments: args, respond } = e.detail;
   // execute the tool, then:
-  respond({ success: true, message: 'Action completed' });
+  respond({ success: true, result: { action: name, completed: true } });
 });
 ```
 
-The loader automatically sends the correct JSON-RPC 2.0 response back to the widget.
+The loader automatically sends the correct JSON-RPC 2.0 response back to the widget. The widget then appends that result as a `tool` message and sends it back to the model, matching OpenAI-style tool continuation.
+
+If the page never calls `respond()` or `error()`, the loader returns a normal tool error after a timeout so one missing handler does not leave the widget waiting forever.
 
 ### Widget → Parent Messages
 

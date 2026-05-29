@@ -677,6 +677,19 @@ function trackPendingToolCall(id) {
   setTimeout(() => { delete mcpPendingToolCalls[id]; }, MCP_TOOL_TIMEOUT_MS);
 }
 
+function ensureToolCallId(toolCall) {
+  if (toolCall.id == null) {
+    toolCall.id = `ozwell_call_${++mcpRequestId}`;
+  }
+  return toolCall.id;
+}
+
+function serializeToolResult(result) {
+  if (typeof result === 'string') return result;
+  const serialized = JSON.stringify(result);
+  return serialized === undefined ? 'null' : serialized;
+}
+
 // Read OZWELL_CONFIG from window (set by embedding page before widget loads)
 if (typeof window !== 'undefined' && window.OZWELL_CONFIG) {
   const extConf = window.OZWELL_CONFIG;
@@ -1003,32 +1016,26 @@ function buildMessages() {
   return state.messages.map(({ thinking, ...rest }) => rest);
 }
 
+const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
+const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
+
+function isAgentKeyConfigured() {
+  return getAuthKey().startsWith('agnt_key-');
+}
+
 function buildSystemPrompt() {
-  // Start with custom system prompt from parent config
-  let systemPrompt = state.config.system || 'You are a helpful assistant.';
-
-  // Add generic tool usage guidance if tools are available
-  if (state.config.tools && state.config.tools.length > 0) {
-    systemPrompt += `\n\n=== TOOL USAGE GUIDELINES ===
-
-You have access to tools. Use them wisely:
-
-**Default behavior:** Respond naturally with conversation. Only use tools when truly necessary.
-
-**Do NOT use tools for:**
-- Simple greetings, pleasantries, or casual conversation
-- Questions you can answer from information already provided in the context above
-- General knowledge questions within your training
-- Clarifications or follow-up conversation
-
-**DO use tools when:**
-- User explicitly requests current/live data that isn't in the context above
-- User asks you to perform an action (update, change, modify, set, etc.)
-- You genuinely need information not available in the current context
-
-**After calling a tool:** Use the result to answer the user's question. Do not call the same tool repeatedly.`;
+  if (isAgentKeyConfigured()) {
+    return '';
   }
 
+  if (state.config.system) {
+    return state.config.system;
+  }
+
+  let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;
+  if (state.config.tools && state.config.tools.length > 0) {
+    systemPrompt += ` ${DEFAULT_PARENT_TOOL_HINT}`;
+  }
   return systemPrompt;
 }
 
@@ -1449,9 +1456,11 @@ async function sendMessageNonStreaming(text, tools) {
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
+            const toolCallId = ensureToolCallId(toolCall);
+
             // Send tool call to parent via MCP tools/call
-            trackPendingToolCall(toolCall.id);
-            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
+            trackPendingToolCall(toolCallId);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCallId);
         }
       }
 
@@ -1779,13 +1788,14 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
 
         if (toolName) {
             const args = parseToolArgs(toolCall.function.arguments);
+            const toolCallId = ensureToolCallId(toolCall);
 
             console.log(`[widget.js] Executing tool '${toolName}' with args:`, args);
 
             // Track tool execution in debug mode
             if (state.config.debug) {
               state.toolExecutions.push({
-                toolCallId: toolCall.id,
+                toolCallId: toolCallId,
                 toolName: toolName,
                 arguments: args,
                 result: null,
@@ -1798,11 +1808,11 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
             // In debug mode, pills show the execution instead
 
             // Store tool_call_id for later use in tool message
-            state.activeToolCalls[toolName] = toolCall.id;
+            state.activeToolCalls[toolName] = toolCallId;
 
             // Send tool call to parent via MCP tools/call
-            trackPendingToolCall(toolCall.id);
-            mcpSend('tools/call', { name: toolName, arguments: args }, toolCall.id);
+            trackPendingToolCall(toolCallId);
+            mcpSend('tools/call', { name: toolName, arguments: args }, toolCallId);
         }
       }
 
@@ -1888,114 +1898,6 @@ async function sendMessageStreaming(text, tools, _thinkingRetryCount = 0) {
   }
 }
 
-async function continueConversationWithToolResult(result) {
-  if (state.sending) return;
-
-  console.log('[widget.js] Continuing conversation with tool result:', result);
-
-  // Add tool result to conversation history
-  const toolResultMessage = {
-    role: 'tool',
-    content: typeof result === 'string' ? result : JSON.stringify(result)
-  };
-  state.messages.push(toolResultMessage);
-
-  setStatus('Processing...', true);
-  state.sending = true;
-  formEl?.classList.add('is-sending');
-
-  // Build MCP tools from parent config (same as sendMessage)
-  let tools = [];
-  if (state.config.tools && Array.isArray(state.config.tools)) {
-    tools = state.config.tools.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.function.name,
-        description: tool.function.description,
-        parameters: tool.function.parameters
-      }
-    }));
-  }
-
-  // Build system prompt (same as sendMessage - respects custom prompts)
-  const systemPrompt = buildSystemPrompt();
-
-  try {
-    const headers = getRequestHeaders();
-
-    // Build messages for request (OpenAI format: system message in messages array)
-    const requestMessages = buildMessages();
-    if (systemPrompt) {
-      // Add system message at the beginning
-      requestMessages.unshift({ role: 'system', content: systemPrompt });
-    }
-
-    // Build request body (always use OpenAI format)
-    // Only include model if explicitly configured - server chooses default otherwise
-    const requestBody = {
-      messages: requestMessages,
-      tools: tools,
-    };
-    if (state.config.model) {
-      requestBody.model = state.config.model;
-    }
-
-    console.log('[widget.js] Sending tool result to API:', requestBody);
-
-    const response = await fetch(state.config.endpoint || '/v1/chat/completions', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[widget.js] API error:', errorText);
-      throw new Error(`Request failed with status ${response.status}: ${errorText}`);
-    }
-
-    const payload = await response.json();
-    console.log('[widget.js] API response with tool result:', payload);
-
-    // Handle errors
-    if (payload.error) {
-      throw new Error(payload.error.message || 'Model request failed');
-    }
-
-    // Parse OpenAI response format
-    const choice = payload.choices?.[0];
-    if (!choice) {
-      throw new Error('Invalid response format: missing choices array');
-    }
-
-    const assistantContent = choice.message?.content || '';
-
-    // Add assistant's final response to conversation
-    const assistantMessage = {
-      role: 'assistant',
-      content: assistantContent || '(no response)',
-    };
-    state.messages.push(assistantMessage);
-    addMessage('assistant', assistantContent || '(no response)');
-
-    // Notify parent of assistant response (signal only — no message content)
-    postToParent({
-      source: 'ozwell-chat-widget',
-      type: 'assistant_response',
-      hadToolCalls: false
-    });
-
-    setStatus('', false);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected error';
-    addMessage('system', `Error: ${message}`);
-    setStatus('Error', false);
-  } finally {
-    state.sending = false;
-    formEl?.classList.remove('is-sending');
-  }
-}
-
 function handleSubmit(event) {
   event.preventDefault();
   if (!inputEl) return;
@@ -2019,58 +1921,37 @@ function handleParentMessage(event) {
     const result = data.error ? { error: data.error.message } : data.result;
     const toolCallId = data.id;
 
+    // Get tool_call_id from parent response (required for OpenAI protocol)
+    if (toolCallId == null) {
+      console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
+      addMessage('system', 'Error: Tool result missing ID');
+      return;
+    }
+
     // Update tool execution result in debug mode
-    if (toolCallId) {
-      updateToolExecutionResult(toolCallId, result);
-    }
+    updateToolExecutionResult(toolCallId, result);
 
-    // Check if this is an update tool (has success/message) or a get tool (raw data)
-    if (result.success && result.message) {
-      // Update tool - just display the message (no LLM continuation needed)
-      addMessage('assistant', result.message);
+    console.log('[widget.js] Sending tool result to LLM');
 
-      // Notify parent of assistant response (signal only — no message content)
-      postToParent({
-        source: 'ozwell-chat-widget',
-        type: 'assistant_response',
-        hadToolCalls: false
-      });
+    // Add tool result to conversation history with tool_call_id
+    state.messages.push({
+      role: 'tool',
+      tool_call_id: toolCallId,
+      content: serializeToolResult(result)
+    });
 
-      // After displaying the tool result message, send any queued user message (if present)
-      if (state.queuedMessage) {
-        sendQueuedMessage();
+    // Continue conversation by calling LLM with tool result
+    const tools = state.config.tools?.map(tool => ({
+      type: 'function',
+      function: {
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
       }
-    } else {
-      // No display message — send tool result back to LLM for continuation
-      console.log('[widget.js] Sending tool result to LLM');
+    })) || [];
 
-      // Get tool_call_id from parent response (required for OpenAI protocol)
-      if (!toolCallId) {
-        console.error('[widget.js] tool_call_id missing from parent response - cannot continue conversation');
-        addMessage('system', 'Error: Tool result missing ID');
-        return;
-      }
-
-      // Add tool result to conversation history with tool_call_id
-      state.messages.push({
-        role: 'tool',
-        tool_call_id: toolCallId,
-        content: JSON.stringify(result)
-      });
-
-      // Continue conversation by calling LLM with tool result
-      const tools = state.config.tools?.map(tool => ({
-        type: 'function',
-        function: {
-          name: tool.function.name,
-          description: tool.function.description,
-          parameters: tool.function.parameters
-        }
-      })) || [];
-
-      // Send empty user message - we're just continuing the conversation with tool result
-      sendMessageStreaming('', tools);
-    }
+    // Send empty user message - we're just continuing the conversation with tool result
+    sendMessageStreaming('', tools);
 
     return;
   }
@@ -2128,7 +2009,7 @@ notifyReady();
 // runtime via the MCP protocol instead of being passed in config.
 
 function mcpSend(method, params, explicitId) {
-  const id = explicitId !== undefined ? explicitId : ++mcpRequestId;
+  const id = explicitId != null ? explicitId : ++mcpRequestId;
   window.parent.postMessage({
     jsonrpc: '2.0',
     id: id,

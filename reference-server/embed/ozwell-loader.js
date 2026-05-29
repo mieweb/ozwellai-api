@@ -64,6 +64,10 @@
     agentTools: null, // Tools fetched from server via agent key (MCP discovery)
   };
 
+  const EMPTY_SCHEMA = { type: 'object', properties: {} };
+  const PAGE_TOOL_PREFIX = 'postMessage:';
+  const TOOL_RESPONSE_TIMEOUT_MS = 29000;
+
   function readGlobalConfig() {
     const { OzwellChatConfig } = window;
     if (OzwellChatConfig && typeof OzwellChatConfig === 'object') {
@@ -78,6 +82,68 @@
       ...readGlobalConfig(),
       ...state.runtimeConfig,
     };
+  }
+
+  const warnedToolConfigNames = new Set();
+
+  function warnCallableToolFunction(toolName) {
+    const key = toolName || '<unnamed>';
+    if (warnedToolConfigNames.has(key)) return;
+    warnedToolConfigNames.add(key);
+    console.warn(
+      `[OzwellChat] Ignoring callable JavaScript function in tools[].function for "${key}". ` +
+      'OpenAI-style tools[].function must be a schema object. Execute browser tools with the ozwell-tool-call event instead.'
+    );
+  }
+
+  function normalizeTool(tool) {
+    if (typeof tool === 'string') {
+      return { name: tool, description: '', inputSchema: EMPTY_SCHEMA };
+    }
+    if (!tool || typeof tool !== 'object') return null;
+    if (typeof tool.function === 'function') {
+      warnCallableToolFunction(tool.name || tool.function.name);
+      return tool.name ? {
+        name: tool.name,
+        description: tool.description || '',
+        inputSchema: tool.inputSchema || tool.parameters || EMPTY_SCHEMA,
+      } : null;
+    }
+    if (tool.function && typeof tool.function === 'object') {
+      return {
+        name: tool.function.name,
+        description: tool.function.description || '',
+        inputSchema: tool.function.parameters || EMPTY_SCHEMA,
+      };
+    }
+    return tool.name ? {
+      name: tool.name,
+      description: tool.description || '',
+      inputSchema: tool.inputSchema || tool.parameters || EMPTY_SCHEMA,
+    } : null;
+  }
+
+  function toolSchemaForWidget(tool) {
+    const normalized = normalizeTool(tool);
+    if (!normalized) return null;
+    return {
+      type: 'function',
+      function: {
+        name: normalized.name,
+        description: normalized.description,
+        parameters: normalized.inputSchema,
+      },
+    };
+  }
+
+  function sanitizeConfigForWidget(config) {
+    const sanitized = { ...config };
+    if (Array.isArray(config.tools)) {
+      sanitized.tools = config.tools
+        .map(toolSchemaForWidget)
+        .filter(Boolean);
+    }
+    return sanitized;
   }
 
   function ensureIframe(options = {}) {
@@ -151,7 +217,7 @@
     postToWidget({
       type: 'config',
       payload: {
-        config: currentConfig(),
+        config: sanitizeConfigForWidget(currentConfig()),
       },
     });
   }
@@ -166,27 +232,6 @@
     iframeWindow.postMessage(message, '*');
   }
 
-  const EMPTY_SCHEMA = { type: 'object', properties: {} };
-  const PAGE_TOOL_PREFIX = 'postMessage:';
-
-  function normalizeTool(tool) {
-    if (typeof tool === 'string') {
-      return { name: tool, description: '', inputSchema: EMPTY_SCHEMA };
-    }
-    if (tool.function) {
-      return {
-        name: tool.function.name,
-        description: tool.function.description || '',
-        inputSchema: tool.function.parameters || EMPTY_SCHEMA,
-      };
-    }
-    return {
-      name: tool.name,
-      description: tool.description || '',
-      inputSchema: tool.inputSchema || tool.parameters || EMPTY_SCHEMA,
-    };
-  }
-
   /** Add postMessage: prefix to a page tool so it can't collide with server-side tools. */
   function prefixPageTool(tool) {
     return { ...tool, name: PAGE_TOOL_PREFIX + tool.name };
@@ -194,12 +239,15 @@
 
   function getMcpTools() {
     const agentTools = (state.agentTools && state.agentTools.length > 0)
-      ? state.agentTools.map(normalizeTool)
+      ? state.agentTools.map(normalizeTool).filter(Boolean)
       : [];
     // Page tools are prefixed so they occupy a separate namespace from
     // server-implemented tools. The prefix is transparent to page authors —
     // it is stripped before dispatching ozwell-tool-call events.
-    const pageTools = (currentConfig().tools || []).map(normalizeTool).map(prefixPageTool);
+    const pageTools = (currentConfig().tools || [])
+      .map(normalizeTool)
+      .filter(Boolean)
+      .map(prefixPageTool);
 
     // Merge: agent-defined tools first, then page tools that don't collide.
     // If the agent defines no tools, all page tools are available.
@@ -244,6 +292,13 @@
         const rawToolName = data.params?.name;
         const toolArgs = data.params?.arguments || {};
         const requestId = data.id;
+        let settled = false;
+
+        function finishToolCall(message) {
+          if (settled) return;
+          settled = true;
+          postJsonRpc(message);
+        }
 
         // Strip postMessage: prefix so page handlers see the original name
         const toolName = rawToolName && rawToolName.startsWith(PAGE_TOOL_PREFIX)
@@ -256,14 +311,14 @@
             name: toolName,
             arguments: toolArgs,
             respond: (result) => {
-              postJsonRpc({
+              finishToolCall({
                 jsonrpc: '2.0',
                 id: requestId,
                 result: result,
               });
             },
             error: (message) => {
-              postJsonRpc({
+              finishToolCall({
                 jsonrpc: '2.0',
                 id: requestId,
                 error: { code: -32000, message: message },
@@ -272,6 +327,18 @@
           },
         });
         document.dispatchEvent(toolEvent);
+        setTimeout(() => {
+          if (!settled) {
+            finishToolCall({
+              jsonrpc: '2.0',
+              id: requestId,
+              error: {
+                code: -32000,
+                message: `Tool "${toolName}" did not respond. Add an ozwell-tool-call handler and call respond() or error().`,
+              },
+            });
+          }
+        }, TOOL_RESPONSE_TIMEOUT_MS);
         break;
       }
 
