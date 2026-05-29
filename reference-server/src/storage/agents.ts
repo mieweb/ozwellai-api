@@ -10,6 +10,20 @@ interface DbAgentRow {
     created_at: number;
 }
 
+interface DbManagerUserRow {
+    id: string;
+    external_user_id: string;
+    username: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    groups: string | null;
+    status: string;
+    is_admin: number;
+    created_at: string;
+    last_seen_at: string;
+}
+
 const DB_PATH = process.env.DB_PATH
     ?? path.join(process.cwd(), 'data', 'ozwell.db');
 
@@ -35,6 +49,12 @@ export function getDatabase(): Database.Database {
 
 // ── Auth tables (api_keys) ──────────────────────────────────────────
 
+function ensureColumn(db: Database.Database, table: string, column: string, definition: string): void {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (columns.some(c => c.name === column)) return;
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
 export function initializeAuthTables(db: Database.Database): void {
     db.exec(`
       CREATE TABLE IF NOT EXISTS api_keys (
@@ -45,7 +65,27 @@ export function initializeAuthTables(db: Database.Database): void {
         created_at TEXT DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        external_user_id TEXT NOT NULL UNIQUE,
+        username TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        email TEXT,
+        groups TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        is_admin INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        last_seen_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_users_external_user_id ON users(external_user_id);
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     `);
+    ensureColumn(db, 'api_keys', 'user_id', 'TEXT');
+    ensureColumn(db, 'api_keys', 'status', "TEXT DEFAULT 'active'");
+    ensureColumn(db, 'api_keys', 'revoked_at', 'TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
     console.log('[auth] Auth tables initialized');
 }
 
@@ -103,6 +143,40 @@ export interface Agent {
     created_at: number;
 }
 
+export interface ManagerIdentity {
+    external_user_id: string;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    groups?: string;
+}
+
+export interface ManagerUser {
+    id: string;
+    external_user_id: string;
+    username: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    groups: string | null;
+    status: string;
+    is_admin: boolean;
+    created_at: string;
+    last_seen_at: string;
+}
+
+function toManagerUser(row: DbManagerUserRow): ManagerUser {
+    return {
+        ...row,
+        is_admin: Boolean(row.is_admin),
+    };
+}
+
+function managerUserId(externalUserId: string): string {
+    return `mgr_${externalUserId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
 export class AgentStore {
     private db: Database.Database;
     private stmtInsert: Database.Statement;
@@ -113,6 +187,9 @@ export class AgentStore {
     private stmtRotateKey: Database.Statement;
     private stmtDeleteOwned: Database.Statement;
     private stmtGetOwned: Database.Statement;
+    private stmtUpsertManagerUser: Database.Statement;
+    private stmtGetManagerUserByExternalId: Database.Statement;
+    private stmtGetActiveApiKeyForUser: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -138,9 +215,31 @@ export class AgentStore {
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
         this.stmtGetOwned = this.db.prepare('SELECT * FROM agents WHERE id = ? AND parent_key = ?');
+        this.stmtUpsertManagerUser = this.db.prepare(`
+          INSERT INTO users (id, external_user_id, username, first_name, last_name, email, groups, last_seen_at)
+          VALUES (@id, @external_user_id, @username, @first_name, @last_name, @email, @groups, datetime('now'))
+          ON CONFLICT(external_user_id) DO UPDATE SET
+            username = excluded.username,
+            first_name = excluded.first_name,
+            last_name = excluded.last_name,
+            email = excluded.email,
+            groups = excluded.groups,
+            last_seen_at = datetime('now')
+        `);
+        this.stmtGetManagerUserByExternalId = this.db.prepare('SELECT * FROM users WHERE external_user_id = ?');
+        this.stmtGetActiveApiKeyForUser = this.db.prepare(`
+          SELECT id, name
+          FROM api_keys
+          WHERE user_id = ?
+            AND COALESCE(status, 'active') = 'active'
+            AND revoked_at IS NULL
+          ORDER BY created_at ASC
+          LIMIT 1
+        `);
     }
 
     private initTable() {
+        initializeAuthTables(this.db);
         this.db.exec(`
       CREATE TABLE IF NOT EXISTS agents (
         id TEXT PRIMARY KEY,
@@ -158,7 +257,10 @@ export class AgentStore {
     validateKey(token: string): boolean {
         if (!this._stmtValidateKey) {
             this._stmtValidateKey = this.db.prepare(`
-              SELECT 1 FROM api_keys WHERE key = ?
+              SELECT 1 FROM api_keys
+              WHERE key = ?
+                AND COALESCE(status, 'active') = 'active'
+                AND revoked_at IS NULL
               UNION ALL
               SELECT 1 FROM agents WHERE agent_key = ?
               LIMIT 1
@@ -170,9 +272,37 @@ export class AgentStore {
     /** Look up a parent API key — returns { id, name } or undefined */
     lookupApiKey(key: string): { id: string; name: string } | undefined {
         if (!this._stmtLookupApiKey) {
-            this._stmtLookupApiKey = this.db.prepare('SELECT id, name FROM api_keys WHERE key = ?');
+            this._stmtLookupApiKey = this.db.prepare(`
+              SELECT id, name
+              FROM api_keys
+              WHERE key = ?
+                AND COALESCE(status, 'active') = 'active'
+                AND revoked_at IS NULL
+            `);
         }
         return this._stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
+    }
+
+    upsertManagerUser(identity: ManagerIdentity): ManagerUser {
+        this.stmtUpsertManagerUser.run({
+            id: managerUserId(identity.external_user_id),
+            external_user_id: identity.external_user_id,
+            username: identity.username ?? null,
+            first_name: identity.first_name ?? null,
+            last_name: identity.last_name ?? null,
+            email: identity.email ?? null,
+            groups: identity.groups ?? null,
+        });
+        return this.getManagerUserByExternalId(identity.external_user_id)!;
+    }
+
+    getManagerUserByExternalId(externalUserId: string): ManagerUser | null {
+        const row = this.stmtGetManagerUserByExternalId.get(externalUserId) as DbManagerUserRow | undefined;
+        return row ? toManagerUser(row) : null;
+    }
+
+    getActiveApiKeyForUser(userId: string): { id: string; name: string } | undefined {
+        return this.stmtGetActiveApiKeyForUser.get(userId) as { id: string; name: string } | undefined;
     }
 
     createAgent(params: { id: string; agent_key: string; parent_key: string; yaml: string }): Agent {
