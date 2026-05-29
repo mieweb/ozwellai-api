@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -30,7 +30,9 @@ async function waitForReady(maxMs = 10_000) {
 before(async () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-mock-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
-    server = spawn('npm', ['run', 'dev'], {
+    // Spawn the prebuilt server with node directly (not `npm start`): npm is
+    // npm.cmd on Windows and `spawn('npm')` fails with ENOENT without a shell.
+    server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
@@ -40,7 +42,7 @@ before(async () => {
 });
 
 after(() => {
-    try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
