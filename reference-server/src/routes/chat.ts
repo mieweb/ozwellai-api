@@ -284,6 +284,13 @@ function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', mod
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
 const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+// Mock responses are OFF by default — keep real LLM errors visible in production.
+// Set ALLOW_MOCK=true to return deterministic mock replies (no LLM configured,
+// LLM errored, or an agent declares type: mock).
+const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
+// No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
+// that sends its own max_tokens always overrides this.
+const LLM_MAX_TOKENS = process.env.LLM_MAX_TOKENS ? Number(process.env.LLM_MAX_TOKENS) : undefined;
 
 // Pre-construct LLM clients once (reused across all requests)
 const llmClient = isLLMBackendConfigured()
@@ -389,6 +396,34 @@ function dispatchMockStream(
   writeChunk({}, finishReason);
   reply.raw.write('data: [DONE]\n\n');
   reply.raw.end();
+}
+
+// Single decision point for every mock path (mock_agent, no_backend, llm_error).
+// When ALLOW_MOCK is off, return a real 503 instead of a deterministic mock so
+// failures stay visible. All three call sites are reached before any response
+// headers are sent, so a JSON error is always safe here.
+// Returns a value to `return` for the non-stream case; streams end internally.
+function respondMockOrError(
+  reason: Parameters<typeof buildMockWarning>[0],
+  model: string,
+  messages: NonNullableMessage[],
+  stream: boolean,
+  reply: FastifyReply,
+  origin: string | undefined,
+) {
+  if (!MOCK_ENABLED) {
+    reply.code(503);
+    return createError(
+      `No LLM response available (${reason}) and mock responses are disabled. Set ALLOW_MOCK=true to return deterministic mock responses.`,
+      'server_error',
+    );
+  }
+  const warning = buildMockWarning(reason, model);
+  if (stream) {
+    dispatchMockStream(messages, model, reply, origin, warning);
+    return undefined;
+  }
+  return dispatchMockNonStream(messages, model, warning);
 }
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -530,12 +565,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
       }
       const mockModel = agentConfig.model || 'mock';
-      const warning = buildMockWarning('mock_agent', mockModel);
-      if (stream) {
-        dispatchMockStream(mockMessages, mockModel, reply, request.headers.origin, warning);
-        return;
-      }
-      return dispatchMockNonStream(mockMessages, mockModel, warning);
+      return respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin);
     }
 
     // Backend selection priority:
@@ -554,6 +584,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
+    // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
+    const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -612,14 +644,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    // No backend reachable — fall through to deterministic mock so client always gets a valid response.
+    // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
-      const warning = buildMockWarning('no_backend', model);
-      if (stream) {
-        dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
-        return;
-      }
-      return dispatchMockNonStream(normalizedMessages, model, warning);
+      return respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin);
     }
 
     // Use a real LLM backend
@@ -632,7 +659,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-          ...(max_tokens && { max_tokens }),
+          ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
           ...(temperature !== undefined && { temperature }),
           ...(response_format && { response_format }),
         };
@@ -836,7 +863,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const retryRequest = {
               model: DEFAULT_MODEL,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-              ...(max_tokens && { max_tokens }),
+              ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
               ...(temperature !== undefined && { temperature }),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
@@ -868,14 +895,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // LLM error final fallback: dispatch deterministic mock so the client always gets a valid response.
-    // Warning marker tells caller the configured LLM failed — never silent.
-    const warning = buildMockWarning('llm_error', model);
-    if (stream) {
-      dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
-      return;
-    }
-    return dispatchMockNonStream(normalizedMessages, model, warning);
+    // LLM error final fallback: deterministic mock (if enabled), else a real 503.
+    // Reached only from the non-stream path — streaming failures end the stream above.
+    return respondMockOrError('llm_error', model, normalizedMessages, stream, reply, request.headers.origin);
   });
 };
 

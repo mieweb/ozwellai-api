@@ -261,12 +261,14 @@ The server will start at `http://localhost:3000`
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
-The demo runs in mock AI mode by default (keyword-based pattern matching via `/mock/chat`). To use real LLM responses, configure a backend in your `.env` file:
+To get real AI responses, configure a backend in your `.env` file:
 
 - **Any provider:** Set `LLM_BASE_URL` and `LLM_API_KEY` to point at OpenAI, Portkey Gateway, or any OpenAI-compatible API.
 - **Ollama:** Set `OLLAMA_BASE_URL` to a local or remote Ollama instance.
 
 No code changes needed — just set the environment variables and restart.
+
+For local dev or demos without a backend, set `ALLOW_MOCK=true` to use deterministic mock responses (keyword pattern matching). Mock is off by default, so without it an unconfigured server returns a 503. See [Mock responses](#mock-responses-allow_mock) below.
 
 See [embed/README.md](embed/README.md) for full documentation.
 
@@ -517,19 +519,29 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 
 **Model fallback (LLM backend only):** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
 
+**Output limit:** No completion-token cap by default — the provider's own default applies. Set `LLM_MAX_TOKENS` to impose a server-wide ceiling. A client that sends its own `max_tokens` always overrides the env value.
+
 ### Backend Selection
 
 The server auto-detects which backend to use at startup:
 
 1. **LLM Backend** — if `LLM_BASE_URL` is set, all requests go through it (OpenAI, Portkey Gateway, etc.)
 2. **Ollama** — if `LLM_BASE_URL` is not set and Ollama is reachable at `OLLAMA_BASE_URL`
-3. **Mock responses** — fallback when neither backend is available (deterministic, no AI)
+3. **Mock responses** — only if `ALLOW_MOCK=true` (see below); otherwise the request returns a 503
 
 Only one backend is active at a time. Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — LLM takes priority.
 
-### Mock response labeling
+### Mock responses (`ALLOW_MOCK`)
 
-Every mock response — whether from a `type: mock` agent or a fallback path — includes a `warning` field on the JSON body (non-stream) or an SSE `event: warning` chunk emitted before content (stream), so callers can always detect the response did not come from a real LLM:
+Mock responses are **off by default**. When no backend is configured, the backend errors, or an agent is `type: mock`, the server returns a `503` so the failure stays visible:
+
+```json
+{ "error": { "message": "No LLM response available (llm_error) and mock responses are disabled. Set ALLOW_MOCK=true to return deterministic mock responses.", "type": "server_error" } }
+```
+
+Set `ALLOW_MOCK=true` to enable deterministic mock replies instead (useful for local dev, demos, and CI without an LLM). Keep it **off in production** so real failures aren't masked by fake answers.
+
+When enabled, every mock response — whether from a `type: mock` agent or a fallback path — includes a `warning` field on the JSON body (non-stream) or an SSE `event: warning` chunk emitted before content (stream), and the response `model` is set to `ozwell-mock`, so callers can always detect the response did not come from a real LLM:
 
 ```json
 {
