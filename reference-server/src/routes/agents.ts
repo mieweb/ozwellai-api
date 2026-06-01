@@ -1,7 +1,8 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { createError, generateId, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
+import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
 import * as yaml from 'yaml';
 import { agentStore, Agent, ManagerIdentity, ManagerUser } from '../storage/agents';
+import { getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -88,26 +89,18 @@ async function managerHeaderAuth(
         return;
     }
 
-    const user = agentStore.upsertManagerUser(identity);
+    const { user, parentKey } = agentStore.ensureManagerUserProvisioned(identity);
     request.managerUser = user;
-
-    if (user.status !== 'active') {
-        reply.code(403).send(createError('User is not provisioned for Ozwell agent management', 'permission_error', null, 'user_not_provisioned'));
-        return;
-    }
-
-    const apiKey = agentStore.getActiveApiKeyForUser(user.id);
-    if (!apiKey) {
-        reply.code(403).send(createError('User does not have an active parent key', 'permission_error', null, 'parent_key_required'));
-        return;
-    }
-
-    request.apiKey = apiKey;
+    request.apiKey = parentKey;
 }
 
 // Generate agent key
 function generateAgentKey(): string {
     return `${AGENT_KEY_PREFIX}${generateId('key')}`;
+}
+
+function formatParentKeyHint(key: string): string {
+    return `ozw_...${getKeyHint(key)}`;
 }
 
 /** Normalize tools: plain strings become { name } objects */
@@ -189,6 +182,39 @@ function toAgentView(agent: Agent) {
     };
 }
 
+async function getManagerMe(request: FastifyRequest, reply: FastifyReply) {
+    if (!trustedForwardAuthHeadersEnabled()) {
+        reply.code(401);
+        return createError('Trusted forwarded auth headers are disabled', 'authentication_error', null, 'trusted_headers_disabled');
+    }
+
+    const identity = readForwardedIdentity(request);
+    if (!identity) {
+        reply.code(401);
+        return createError('Missing trusted forwarded identity', 'authentication_error', null, 'missing_trusted_identity');
+    }
+
+    const { user, parentKey } = agentStore.ensureManagerUserProvisioned(identity);
+
+    reply.header('Cache-Control', 'no-store');
+    return {
+        identity: {
+            id: user.id,
+            external_user_id: user.external_user_id,
+            username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email,
+        },
+        status: user.status,
+        is_admin: user.is_admin,
+        has_parent_key: true,
+        parent_key_id: parentKey.id,
+        parent_key_hint: formatParentKeyHint(parentKey.key),
+        provisioned: true,
+    };
+}
+
 const agentsRoute: FastifyPluginAsync = async (fastify) => {
     // Accept raw YAML bodies (application/yaml, text/yaml)
     fastify.addContentTypeParser(['application/yaml', 'text/yaml'], { parseAs: 'string' }, (_req, body, done) => {
@@ -207,40 +233,80 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         required: ['agent_id']
     };
 
-    // GET /v1/me — trusted manager-console identity bridge.
+    // GET /v1/manager/me — trusted manager-console identity bridge.
+    fastify.get('/v1/manager/me', {
+        schema: { tags: ['Manager Auth'], summary: 'Get manager-console authenticated user status' },
+    }, getManagerMe);
+
+    // Backward-compatible alias for the first manager frontend POC.
     fastify.get('/v1/me', {
         schema: { tags: ['Manager Auth'], summary: 'Get manager-console authenticated user status' },
+    }, getManagerMe);
+
+    // GET /v1/manager/models — model list through manager-console auth.
+    fastify.get('/v1/manager/models', {
+        schema: { tags: ['Manager Auth'], summary: 'List models for manager-console authenticated UI' },
+        preHandler: managerHeaderAuth,
+    }, async () => {
+        return getModelsList();
+    });
+
+    // POST /v1/manager/parent-key/reveal — explicit reveal for the user's parent key.
+    fastify.post('/v1/manager/parent-key/reveal', {
+        schema: { tags: ['Manager Auth'], summary: 'Reveal active manager parent key' },
+        preHandler: managerHeaderAuth,
     }, async (request, reply) => {
-        if (!trustedForwardAuthHeadersEnabled()) {
-            reply.code(401);
-            return createError('Trusted forwarded auth headers are disabled', 'authentication_error', null, 'trusted_headers_disabled');
-        }
-
-        const identity = readForwardedIdentity(request);
-        if (!identity) {
-            reply.code(401);
-            return createError('Missing trusted forwarded identity', 'authentication_error', null, 'missing_trusted_identity');
-        }
-
-        const user = agentStore.upsertManagerUser(identity);
-        const apiKey = agentStore.getActiveApiKeyForUser(user.id);
-        const hasParentKey = Boolean(apiKey);
-
+        const parentKey = agentStore.getActiveApiKeyForUser(request.managerUser!.id)!;
         reply.header('Cache-Control', 'no-store');
         return {
-            identity: {
-                id: user.id,
-                external_user_id: user.external_user_id,
-                username: user.username,
-                first_name: user.first_name,
-                last_name: user.last_name,
-                email: user.email,
-            },
-            status: user.status,
-            is_admin: user.is_admin,
-            has_parent_key: hasParentKey,
-            provisioned: user.status === 'active' && hasParentKey,
+            parent_key_id: parentKey.id,
+            parent_key: parentKey.key,
+            parent_key_hint: formatParentKeyHint(parentKey.key),
         };
+    });
+
+    // POST /v1/manager/claim-key — claim an existing parent key and migrate temporary agents.
+    fastify.post<{ Body: { parent_key?: string } }>('/v1/manager/claim-key', {
+        schema: {
+            tags: ['Manager Auth'],
+            summary: 'Claim an existing parent key for the manager-console user',
+            body: {
+                type: 'object',
+                properties: { parent_key: { type: 'string' } },
+                required: ['parent_key'],
+            },
+        },
+        preHandler: managerHeaderAuth,
+    }, async (request, reply) => {
+        const parentKey = request.body?.parent_key;
+        if (!parentKey || !isValidApiKey(parentKey)) {
+            reply.code(400);
+            return createError('A valid parent key is required', 'invalid_request_error', 'parent_key', 'invalid_parent_key');
+        }
+
+        try {
+            const result = agentStore.claimParentApiKey(request.managerUser!.id, parentKey);
+            reply.header('Cache-Control', 'no-store');
+            return {
+                parent_key_id: result.parentKey.id,
+                parent_key_hint: formatParentKeyHint(result.parentKey.key),
+                migrated_agents: result.migratedAgents,
+                revoked_parent_key_id: result.revokedParentKeyId,
+            };
+        } catch (error) {
+            const code = error instanceof Error ? error.message : 'claim_failed';
+            if (code === 'parent_key_already_claimed') {
+                reply.code(409);
+                return createError('Parent key is already claimed by another user', 'invalid_request_error', 'parent_key', code);
+            }
+            if (code === 'parent_key_not_found') {
+                reply.code(404);
+                return createError('Parent key not found', 'invalid_request_error', 'parent_key', code);
+            }
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Parent key claim failed', 'server_error');
+        }
     });
 
     // GET /v1/keys/validate — lightweight auth check, accepts both ozw_ and agnt_key-

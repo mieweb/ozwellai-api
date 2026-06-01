@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
-import { getKeyHint } from '../util';
+import { generateId, getKeyHint, KEY_PREFIX } from '../util';
 
 interface DbAgentRow {
     id: string;
@@ -85,6 +85,7 @@ export function initializeAuthTables(db: Database.Database): void {
     ensureColumn(db, 'api_keys', 'user_id', 'TEXT');
     ensureColumn(db, 'api_keys', 'status', "TEXT DEFAULT 'active'");
     ensureColumn(db, 'api_keys', 'revoked_at', 'TEXT');
+    ensureColumn(db, 'api_keys', 'source', 'TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
     console.log('[auth] Auth tables initialized');
 }
@@ -166,6 +167,23 @@ export interface ManagerUser {
     last_seen_at: string;
 }
 
+export interface ParentApiKey {
+    id: string;
+    name: string;
+    key: string;
+    key_hint: string;
+    user_id: string | null;
+    status: string;
+    source: string | null;
+    revoked_at: string | null;
+}
+
+export interface ClaimParentKeyResult {
+    parentKey: ParentApiKey;
+    migratedAgents: number;
+    revokedParentKeyId: string | null;
+}
+
 function toManagerUser(row: DbManagerUserRow): ManagerUser {
     return {
         ...row,
@@ -190,6 +208,11 @@ export class AgentStore {
     private stmtUpsertManagerUser: Database.Statement;
     private stmtGetManagerUserByExternalId: Database.Statement;
     private stmtGetActiveApiKeyForUser: Database.Statement;
+    private stmtCreateParentApiKey: Database.Statement;
+    private stmtGetApiKeyByKey: Database.Statement;
+    private stmtMoveAgentsToParent: Database.Statement;
+    private stmtAttachApiKeyToUser: Database.Statement;
+    private stmtRevokeApiKey: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -228,13 +251,36 @@ export class AgentStore {
         `);
         this.stmtGetManagerUserByExternalId = this.db.prepare('SELECT * FROM users WHERE external_user_id = ?');
         this.stmtGetActiveApiKeyForUser = this.db.prepare(`
-          SELECT id, name
+          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
           FROM api_keys
           WHERE user_id = ?
             AND COALESCE(status, 'active') = 'active'
             AND revoked_at IS NULL
           ORDER BY created_at ASC
           LIMIT 1
+        `);
+        this.stmtCreateParentApiKey = this.db.prepare(`
+          INSERT INTO api_keys (id, name, key, key_hint, user_id, status, source, created_at)
+          VALUES (@id, @name, @key, @key_hint, @user_id, @status, @source, @created_at)
+        `);
+        this.stmtGetApiKeyByKey = this.db.prepare(`
+          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+          FROM api_keys
+          WHERE key = ?
+        `);
+        this.stmtMoveAgentsToParent = this.db.prepare(`
+          UPDATE agents SET parent_key = @to_parent_key
+          WHERE parent_key = @from_parent_key
+        `);
+        this.stmtAttachApiKeyToUser = this.db.prepare(`
+          UPDATE api_keys
+          SET user_id = @user_id, status = 'active', source = @source, revoked_at = NULL
+          WHERE id = @id
+        `);
+        this.stmtRevokeApiKey = this.db.prepare(`
+          UPDATE api_keys
+          SET user_id = NULL, status = 'revoked', revoked_at = @revoked_at
+          WHERE id = @id
         `);
     }
 
@@ -301,8 +347,95 @@ export class AgentStore {
         return row ? toManagerUser(row) : null;
     }
 
-    getActiveApiKeyForUser(userId: string): { id: string; name: string } | undefined {
-        return this.stmtGetActiveApiKeyForUser.get(userId) as { id: string; name: string } | undefined;
+    getActiveApiKeyForUser(userId: string): ParentApiKey | undefined {
+        return this.stmtGetActiveApiKeyForUser.get(userId) as ParentApiKey | undefined;
+    }
+
+    createParentApiKeyForUser(user: ManagerUser): ParentApiKey {
+        const key = `${KEY_PREFIX}${generateId('manager')}`;
+        const parentKey: ParentApiKey = {
+            id: generateId('api-key'),
+            name: `${user.username || user.email || user.external_user_id} Manager Key`,
+            key,
+            key_hint: getKeyHint(key),
+            user_id: user.id,
+            status: 'active',
+            source: 'auto',
+            revoked_at: null,
+        };
+        this.stmtCreateParentApiKey.run({
+            ...parentKey,
+            created_at: new Date().toISOString(),
+        });
+        return parentKey;
+    }
+
+    ensureManagerUserProvisioned(identity: ManagerIdentity): { user: ManagerUser; parentKey: ParentApiKey } {
+        const provision = this.db.transaction((managerIdentity: ManagerIdentity) => {
+            let user = this.upsertManagerUser(managerIdentity);
+            if (user.status !== 'active') {
+                this.db.prepare('UPDATE users SET status = ? WHERE id = ?').run('active', user.id);
+                user = this.getManagerUserByExternalId(user.external_user_id)!;
+            }
+
+            let parentKey = this.getActiveApiKeyForUser(user.id);
+            if (!parentKey) {
+                parentKey = this.createParentApiKeyForUser(user);
+            }
+            return { user, parentKey };
+        });
+        return provision(identity);
+    }
+
+    getApiKeyByKey(key: string): ParentApiKey | undefined {
+        return this.stmtGetApiKeyByKey.get(key) as ParentApiKey | undefined;
+    }
+
+    claimParentApiKey(userId: string, parentKey: string): ClaimParentKeyResult {
+        const claim = this.db.transaction(() => {
+            const target = this.getApiKeyByKey(parentKey);
+            if (!target || target.status === 'revoked' || target.revoked_at) {
+                throw new Error('parent_key_not_found');
+            }
+            if (target.user_id && target.user_id !== userId) {
+                throw new Error('parent_key_already_claimed');
+            }
+
+            const current = this.getActiveApiKeyForUser(userId);
+            let migratedAgents = 0;
+            let revokedParentKeyId: string | null = null;
+
+            if (current && current.id !== target.id) {
+                const result = this.stmtMoveAgentsToParent.run({
+                    from_parent_key: current.id,
+                    to_parent_key: target.id,
+                });
+                migratedAgents = result.changes;
+
+                if (current.source === 'auto') {
+                    this.stmtRevokeApiKey.run({
+                        id: current.id,
+                        revoked_at: new Date().toISOString(),
+                    });
+                    revokedParentKeyId = current.id;
+                }
+            }
+
+            this.stmtAttachApiKeyToUser.run({
+                id: target.id,
+                user_id: userId,
+                source: target.source || 'claimed',
+            });
+
+            const claimed = this.db.prepare(`
+              SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+              FROM api_keys WHERE id = ?
+            `).get(target.id) as ParentApiKey;
+
+            return { parentKey: claimed, migratedAgents, revokedParentKeyId };
+        });
+
+        return claim();
     }
 
     createAgent(params: { id: string; agent_key: string; parent_key: string; yaml: string }): Agent {
