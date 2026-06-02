@@ -95,12 +95,19 @@ export interface OzwellConfig {
   /** Auto-open chat window when AI replies (default: false) */
   autoOpenOnReply?: boolean;
 
-  // Planned Features (Documented but not yet implemented)
+  /** Dispatch ozwell-chat-unread DOM events when assistant replies while closed (default: false) */
+  exposeUnreadEvent?: boolean;
 
-  /** Scoped API key for authentication */
+  /** Display model reasoning/thinking tokens in the widget UI (default: false) */
+  thinkingEnabled?: boolean;
+
+  /** Reasoning display mode: 0=None, 1=Peek, 2=Smart, 3=Expanded */
+  thinkingDefaultMode?: 0 | 1 | 2 | 3;
+
+  /** Ozwell auth key. Prefer agnt_key-* for configured agents; use ozw_* with explicit config. */
   apiKey?: string;
 
-  /** Agent ID for agent-specific configuration */
+  /** @deprecated The current embed widget uses apiKey for configured agents. */
   agentId?: string;
 }
 
@@ -147,7 +154,8 @@ export interface OzwellChatProps extends Omit<OzwellConfig, 'autoMount'> {
   onToolCall?: (
     tool: string,
     args: Record<string, unknown>,
-    sendResult: (result: unknown) => void
+    sendResult: (result: unknown) => void,
+    sendError?: (message: string) => void
   ) => void;
 
   // Future Callbacks (Documented but not yet implemented)
@@ -258,6 +266,20 @@ export interface OzwellChatAPI {
 }
 
 /**
+ * Detail payload from the loader's ozwell-tool-call DOM event.
+ */
+export interface OzwellToolCallEventDetail {
+  /** Tool function name, with any internal postMessage namespace removed */
+  name: string;
+  /** Tool arguments from the MCP tools/call request */
+  arguments: Record<string, unknown>;
+  /** Send a successful tool result back through the loader's MCP transport */
+  respond: (result: unknown) => void;
+  /** Send a tool error back through the loader's MCP transport */
+  error?: (message: string) => void;
+}
+
+/**
  * Extend Window interface for TypeScript
  */
 declare global {
@@ -281,7 +303,7 @@ export type ScriptLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface OzwellWidgetMessage {
   source: 'ozwell-chat-widget';
-  type: 'ready' | 'request-config' | 'closed' | 'opened' | 'tool_call' | 'assistant_response' | 'user-share' | 'error';
+  type: 'ready' | 'request-config' | 'closed' | 'assistant_response' | 'user-share' | 'error';
   payload?: unknown;
 }
 

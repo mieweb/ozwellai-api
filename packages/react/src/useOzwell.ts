@@ -34,8 +34,10 @@ export function useOzwell(): UseOzwellReturn {
   useEffect(() => {
     // Check if already ready
     if (window.OzwellChat) {
-      setIsReady(true);
-      setIframe(window.OzwellChat.iframe);
+      window.OzwellChat.ready().then(() => {
+        setIsReady(true);
+        setIframe(window.OzwellChat?.iframe || null);
+      });
       return;
     }
 
@@ -58,38 +60,39 @@ export function useOzwell(): UseOzwellReturn {
       return;
     }
 
-    const handleMessage = (event: MessageEvent) => {
-      // Validate message comes from our widget iframe
-      const widgetIframe = window.OzwellChat?.iframe;
-      if (widgetIframe && event.source !== widgetIframe.contentWindow) {
-        return;
-      }
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
 
-      const data = event.data;
-
-      if (!data || typeof data !== 'object' || data.source !== 'ozwell-chat-widget') {
-        return;
-      }
-
-      // Track open/close state
-      if (data.type === 'opened') {
-        setIsOpen(true);
-        setHasUnread(false); // Clear unread when opened
-      } else if (data.type === 'closed') {
-        setIsOpen(false);
+    const syncOpenState = () => {
+      const nextIsOpen = window.OzwellChat?.isOpen ?? wrapper?.classList.contains('visible') ?? false;
+      setIsOpen(nextIsOpen);
+      if (nextIsOpen) {
+        setHasUnread(false);
       }
     };
+
+    syncOpenState();
 
     // Listen for unread notification events from the loader
     const handleUnread = () => {
       setHasUnread(true);
     };
 
-    window.addEventListener('message', handleMessage);
+    const handleClosed = () => {
+      setIsOpen(false);
+    };
+
+    let observer: MutationObserver | undefined;
+    if (wrapper) {
+      observer = new MutationObserver(syncOpenState);
+      observer.observe(wrapper, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    document.addEventListener('ozwell-chat-closed', handleClosed);
     document.addEventListener('ozwell-chat-unread', handleUnread);
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      observer?.disconnect();
+      document.removeEventListener('ozwell-chat-closed', handleClosed);
       document.removeEventListener('ozwell-chat-unread', handleUnread);
     };
   }, [isReady]);
@@ -105,6 +108,8 @@ export function useOzwell(): UseOzwellReturn {
     }
 
     window.OzwellChat?.open?.();
+    setIsOpen(window.OzwellChat?.isOpen ?? true);
+    setHasUnread(false);
   }, [isReady]);
 
   /**
@@ -118,6 +123,7 @@ export function useOzwell(): UseOzwellReturn {
     }
 
     window.OzwellChat?.close?.();
+    setIsOpen(window.OzwellChat?.isOpen ?? false);
   }, [isReady]);
 
   /**
@@ -132,9 +138,8 @@ export function useOzwell(): UseOzwellReturn {
   }, [isOpen, open, close]);
 
   /**
-   * Send a message programmatically
-   * Note: Not yet implemented in vanilla widget
-   * Future: Will send message via widget API
+   * Send a message programmatically.
+   * The iframe supports the current JSON-RPC send-message method.
    */
   const sendMessage = useCallback((content: string) => {
     if (!isReady) {
@@ -147,11 +152,20 @@ export function useOzwell(): UseOzwellReturn {
       return;
     }
 
-    // Placeholder for future implementation
-    console.warn('[useOzwell] sendMessage() not yet implemented in vanilla widget');
+    const iframe = window.OzwellChat?.iframe;
+    const iframeWindow = iframe?.contentWindow;
+    if (!iframeWindow) {
+      console.warn('[useOzwell] Widget iframe not available');
+      return;
+    }
+    const targetOrigin = iframe.src ? new URL(iframe.src).origin : window.location.origin;
 
-    // Future implementation:
-    // window.OzwellChat?.sendMessage?.(content);
+    iframeWindow.postMessage({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'send-message',
+      params: { content },
+    }, targetOrigin);
   }, [isReady]);
 
   return {

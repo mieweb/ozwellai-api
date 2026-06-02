@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { OzwellChatProps, OzwellConfig, ScriptLoadStatus } from './types';
+import type {
+  OzwellChatProps,
+  OzwellConfig,
+  OzwellToolCallEventDetail,
+  ScriptLoadStatus,
+} from './types';
 
 /**
  * OzwellChat - React component wrapper for Ozwell chat widget
@@ -41,11 +46,12 @@ export function OzwellChat(props: OzwellChatProps) {
     headers,
     widgetUrl,
     autoOpenOnReply,
+    exposeUnreadEvent,
+    thinkingEnabled,
+    thinkingDefaultMode,
 
-    // Future props (not yet implemented in vanilla widget)
-    // These are accepted but ignored until backend support is added
     apiKey,
-    agentId,
+    agentId: _agentId,
     theme: _theme, // Prefix with _ to indicate intentionally unused
     position: _position,
     primaryColor: _primaryColor,
@@ -56,7 +62,7 @@ export function OzwellChat(props: OzwellChatProps) {
     onOpen,
     onClose,
     onToolCall,
-    onUserShare,
+    onUserShare: _onUserShare,
     onError,
 
     // React-specific
@@ -147,16 +153,17 @@ export function OzwellChat(props: OzwellChatProps) {
       openaiApiKey,
       headers,
       widgetUrl,
+      thinkingEnabled,
+      thinkingDefaultMode,
 
       // Layout config
       defaultUI,
       autoMount: false, // Prevent auto-mount, we'll mount manually
       autoOpenOnReply,
+      exposeUnreadEvent,
 
-      // Future props - passed to widget for forward compatibility
-      // When scoped API keys land (PR #53), these will work without React package changes
+      // Current embed uses apiKey for both direct API keys and agnt_key-* agent keys.
       apiKey,
-      agentId,
     };
 
     // Only add containerId if NOT using default UI
@@ -226,87 +233,78 @@ export function OzwellChat(props: OzwellChatProps) {
     widgetUrl,
     defaultUI,
     autoOpenOnReply,
+    exposeUnreadEvent,
+    thinkingEnabled,
+    thinkingDefaultMode,
     width,
     height,
     apiKey,
-    agentId,
     onReady,
     onError,
   ]);
 
-  // Listen for widget events via postMessage (single listener for all events)
+  // Listen for loader DOM events exposed by the current embed contract.
   useEffect(() => {
     if (!isWidgetReady) {
       return;
     }
 
-    const handleMessage = (event: MessageEvent) => {
-      // Validate message comes from our widget iframe
-      const iframe = window.OzwellChat?.iframe;
-      if (iframe && event.source !== iframe.contentWindow) {
-        return;
-      }
-
-      const data = event.data;
-
-      if (!data || typeof data !== 'object' || data.source !== 'ozwell-chat-widget') {
-        return;
-      }
-
-      switch (data.type) {
-        case 'closed':
-          onClose?.();
-          break;
-
-        case 'opened':
-          onOpen?.();
-          break;
-
-        case 'user-share':
-          onUserShare?.(data.payload);
-          break;
-
-        case 'error':
-          onError?.(data.payload);
-          break;
-
-        case 'tool_call':
-          if (onToolCall) {
-            const { tool, tool_call_id, payload: args } = data;
-
-            // Create sendResult function that handles postMessage internally
-            const sendResult = (result: unknown) => {
-              const iframe = window.OzwellChat?.iframe;
-
-              if (iframe?.contentWindow) {
-                // Use specific origin instead of wildcard for security
-                const targetOrigin = iframe.src ? new URL(iframe.src).origin : '*';
-                iframe.contentWindow.postMessage(
-                  {
-                    source: 'ozwell-chat-parent',
-                    type: 'tool_result',
-                    tool_call_id,
-                    result,
-                  },
-                  targetOrigin
-                );
-              } else {
-                console.error('[OzwellChat] Could not find widget iframe to send tool result');
-              }
-            };
-
-            onToolCall(tool, args || {}, sendResult);
-          }
-          break;
-      }
+    const handleClosed = () => {
+      onClose?.();
     };
 
-    window.addEventListener('message', handleMessage);
+    const handleToolCall = (event: Event) => {
+      if (!onToolCall) return;
+      const { detail } = event as CustomEvent<OzwellToolCallEventDetail>;
+      if (!detail || typeof detail.name !== 'string') return;
+      onToolCall(
+        detail.name,
+        detail.arguments || {},
+        detail.respond,
+        detail.error
+      );
+    };
+
+    document.addEventListener('ozwell-chat-closed', handleClosed);
+    document.addEventListener('ozwell-tool-call', handleToolCall);
 
     return () => {
-      window.removeEventListener('message', handleMessage);
+      document.removeEventListener('ozwell-chat-closed', handleClosed);
+      document.removeEventListener('ozwell-tool-call', handleToolCall);
     };
-  }, [isWidgetReady, onClose, onOpen, onUserShare, onError, onToolCall]);
+  }, [isWidgetReady, onClose, onToolCall]);
+
+  // The loader does not emit an open event yet. Track default UI visibility so
+  // React callers still get onOpen/onClose when the built-in button is used.
+  useEffect(() => {
+    if (!isWidgetReady || !defaultUI || (!onOpen && !onClose)) {
+      return;
+    }
+
+    const wrapper = document.getElementById('ozwell-chat-wrapper');
+    if (!wrapper) {
+      return;
+    }
+
+    let wasOpen = wrapper.classList.contains('visible');
+
+    const observer = new MutationObserver(() => {
+      const isOpen = wrapper.classList.contains('visible');
+      if (isOpen === wasOpen) return;
+      wasOpen = isOpen;
+      if (isOpen) {
+        onOpen?.();
+      } else {
+        onClose?.();
+      }
+    });
+
+    observer.observe(wrapper, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isWidgetReady, defaultUI, onOpen, onClose]);
 
   // Render container div (only if not using default UI)
   if (defaultUI) {
