@@ -152,18 +152,20 @@ export function useOzwell(): UseOzwellReturn {
       return;
     }
 
-    const iframeWindow = window.OzwellChat?.iframe?.contentWindow;
+    const iframe = window.OzwellChat?.iframe;
+    const iframeWindow = iframe?.contentWindow;
     if (!iframeWindow) {
       console.warn('[useOzwell] Widget iframe not available');
       return;
     }
+    const targetOrigin = iframe.src ? new URL(iframe.src).origin : window.location.origin;
 
     iframeWindow.postMessage({
       jsonrpc: '2.0',
       id: Date.now(),
       method: 'send-message',
       params: { content },
-    }, '*');
+    }, targetOrigin);
   }, [isReady]);
 
   return {
