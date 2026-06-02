@@ -14,7 +14,6 @@ const referenceBaseUrl = (process.env.REFERENCE_SERVER_URL || 'http://localhost:
 // Agent keys injected into HTML at serve time (keeps keys out of source control)
 const landingAgentKey = process.env.LANDING_AGENT_KEY || '';
 const tictactoeAgentKey = process.env.TICTACTOE_AGENT_KEY || '';
-const showcaseAgentKey = process.env.SHOWCASE_AGENT_KEY || '';
 
 const publicDir = path.join(__dirname, 'public');
 
@@ -49,8 +48,7 @@ function renderHtml(filename) {
   return html
     .replace(/__REFERENCE_BASE_URL__/g, referenceBaseUrl)
     .replace(/__LANDING_AGENT_KEY__/g, landingAgentKey)
-    .replace(/__TICTACTOE_AGENT_KEY__/g, tictactoeAgentKey)
-    .replace(/__SHOWCASE_AGENT_KEY__/g, showcaseAgentKey);
+    .replace(/__TICTACTOE_AGENT_KEY__/g, tictactoeAgentKey);
 }
 
 app.get('/', (req, res) => {
@@ -63,10 +61,6 @@ app.get('/landing.html', (req, res) => {
 
 app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
-});
-
-app.get('/agent.html', (req, res) => {
-  res.type('html').send(renderHtml('agent.html'));
 });
 
 app.get('/register.html', (req, res) => {
@@ -85,8 +79,8 @@ app.use(express.static(publicDir));
 app.listen(port, '0.0.0.0', () => {
   console.log(`Embed test host running on port ${port}`);
   console.log(`Using reference server base URL: ${referenceBaseUrl}`);
-  console.log(`Agent keys: landing=${landingAgentKey ? '✅ set' : '⚠️  not set'}, tictactoe=${tictactoeAgentKey ? '✅ set' : '⚠️  not set'}, showcase=${showcaseAgentKey ? '✅ set' : '⚠️  not set'}`);
-  if (!landingAgentKey || !tictactoeAgentKey || !showcaseAgentKey) {
-    console.log(`  → Set LANDING_AGENT_KEY / TICTACTOE_AGENT_KEY / SHOWCASE_AGENT_KEY in .env`);
+  console.log(`Agent keys: landing=${landingAgentKey ? '✅ set' : '⚠️  not set'}, tictactoe=${tictactoeAgentKey ? '✅ set' : '⚠️  not set'}`);
+  if (!landingAgentKey || !tictactoeAgentKey) {
+    console.log(`  → Set LANDING_AGENT_KEY / TICTACTOE_AGENT_KEY in .env`);
   }
 });
