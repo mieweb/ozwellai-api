@@ -19,7 +19,7 @@ const showcaseAgentKey = process.env.SHOWCASE_AGENT_KEY || '';
 const publicDir = path.join(__dirname, 'public');
 
 // Serve Swagger UI static files (lazy-loaded by integration guide)
-const swaggerUiDir = path.join(__dirname, '..', 'node_modules', '@fastify', 'swagger-ui', 'static');
+const swaggerUiDir = path.join(__dirname, 'node_modules', '@fastify', 'swagger-ui', 'static');
 app.use('/swagger-ui', express.static(swaggerUiDir));
 
 // Serve static assets from public directory
