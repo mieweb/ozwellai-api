@@ -7,11 +7,11 @@ const listenPort = Number(process.env.LOCAL_AUTH_PROXY_PORT || 3100);
 const target = new URL(process.env.LOCAL_AUTH_PROXY_TARGET || 'http://localhost:3000');
 
 const injectedHeaders = {
-  'x-user-id': process.env.LOCAL_AUTH_X_USER_ID || '2009',
-  'x-username': process.env.LOCAL_AUTH_X_USERNAME || 'adamerla',
-  'x-user-first-name': process.env.LOCAL_AUTH_X_USER_FIRST_NAME || 'A',
-  'x-user-last-name': process.env.LOCAL_AUTH_X_USER_LAST_NAME || 'Damerla',
-  'x-email': process.env.LOCAL_AUTH_X_EMAIL || 'adamerla128@gmail.com',
+  'x-user-id': process.env.LOCAL_AUTH_X_USER_ID || 'local-dev-user-1',
+  'x-username': process.env.LOCAL_AUTH_X_USERNAME || 'localdev',
+  'x-user-first-name': process.env.LOCAL_AUTH_X_USER_FIRST_NAME || 'Local',
+  'x-user-last-name': process.env.LOCAL_AUTH_X_USER_LAST_NAME || 'Developer',
+  'x-email': process.env.LOCAL_AUTH_X_EMAIL || 'localdev@example.test',
   'x-groups': process.env.LOCAL_AUTH_X_GROUPS || 'ldapusers',
 };
 

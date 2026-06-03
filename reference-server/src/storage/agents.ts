@@ -86,6 +86,8 @@ export function initializeAuthTables(db: Database.Database): void {
     ensureColumn(db, 'api_keys', 'status', "TEXT DEFAULT 'active'");
     ensureColumn(db, 'api_keys', 'revoked_at', 'TEXT');
     ensureColumn(db, 'api_keys', 'source', 'TEXT');
+    ensureColumn(db, 'api_keys', 'revoked_reason', 'TEXT');
+    ensureColumn(db, 'api_keys', 'replaced_by_key_id', 'TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
     console.log('[auth] Auth tables initialized');
 }
@@ -176,6 +178,8 @@ export interface ParentApiKey {
     status: string;
     source: string | null;
     revoked_at: string | null;
+    revoked_reason?: string | null;
+    replaced_by_key_id?: string | null;
 }
 
 export interface ClaimParentKeyResult {
@@ -279,7 +283,11 @@ export class AgentStore {
         `);
         this.stmtRevokeApiKey = this.db.prepare(`
           UPDATE api_keys
-          SET user_id = NULL, status = 'revoked', revoked_at = @revoked_at
+          SET user_id = NULL,
+              status = 'revoked',
+              revoked_at = @revoked_at,
+              revoked_reason = @revoked_reason,
+              replaced_by_key_id = @replaced_by_key_id
           WHERE id = @id
         `);
     }
@@ -352,7 +360,7 @@ export class AgentStore {
     }
 
     createParentApiKeyForUser(user: ManagerUser): ParentApiKey {
-        const key = `${KEY_PREFIX}${generateId('manager')}`;
+        const key = `${KEY_PREFIX}${generateId()}`;
         const parentKey: ParentApiKey = {
             id: generateId('api-key'),
             name: `${user.username || user.email || user.external_user_id} Manager Key`,
@@ -416,6 +424,8 @@ export class AgentStore {
                     this.stmtRevokeApiKey.run({
                         id: current.id,
                         revoked_at: new Date().toISOString(),
+                        revoked_reason: 'replaced_by_claimed_key',
+                        replaced_by_key_id: target.id,
                     });
                     revokedParentKeyId = current.id;
                 }

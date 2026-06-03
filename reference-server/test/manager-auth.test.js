@@ -145,6 +145,7 @@ test('manager auth — /v1/manager/me auto-provisions user and parent key from t
             const key = db.prepare('SELECT id, key, user_id, status FROM api_keys WHERE user_id = ?').get('mgr_2009');
             assert.ok(key.id);
             assert.match(key.key, /^ozw_/);
+            assert.doesNotMatch(key.key, /^ozw_manager-/);
             assert.equal(key.status, 'active');
         } finally {
             db.close();
@@ -297,10 +298,12 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
             assert.equal(claimedKey.status, 'active');
             assert.equal(claimedKey.revoked_at, null);
 
-            const oldAutoKey = db.prepare('SELECT user_id, status, revoked_at FROM api_keys WHERE id = ?').get(autoKey.id);
+            const oldAutoKey = db.prepare('SELECT user_id, status, revoked_at, revoked_reason, replaced_by_key_id FROM api_keys WHERE id = ?').get(autoKey.id);
             assert.equal(oldAutoKey.user_id, null);
             assert.equal(oldAutoKey.status, 'revoked');
             assert.ok(oldAutoKey.revoked_at);
+            assert.equal(oldAutoKey.revoked_reason, 'replaced_by_claimed_key');
+            assert.equal(oldAutoKey.replaced_by_key_id, 'existing-key');
 
             const movedAgent = db.prepare('SELECT parent_key FROM agents WHERE id = ?').get(createdBody.agent_id);
             assert.equal(movedAgent.parent_key, 'existing-key');
