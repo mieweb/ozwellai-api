@@ -63,8 +63,8 @@ async function buildServer() {
           description: 'Local development',
         },
         {
-          url: 'https://ozwell-dev-refserver.opensource.mieweb.org',
-          description: 'Development server',
+          url: 'https://ozwellapi-prod.os.mieweb.org',
+          description: 'Current official public server',
         },
       ],
       components: {
