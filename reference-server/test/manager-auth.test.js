@@ -24,6 +24,15 @@ const MANAGER_HEADERS = {
 };
 
 const H_YAML = { 'Content-Type': 'application/yaml', ...MANAGER_HEADERS };
+const OTHER_MANAGER_HEADERS = {
+    'x-user-id': '2010',
+    'x-username': 'otheruser',
+    'x-user-first-name': 'Other',
+    'x-user-last-name': 'User',
+    'x-email': 'other@example.test',
+    'x-groups': 'ldapusers',
+};
+const OTHER_H_YAML = { 'Content-Type': 'application/yaml', ...OTHER_MANAGER_HEADERS };
 
 async function waitForReady(maxMs = 10_000) {
     const start = Date.now();
@@ -252,6 +261,61 @@ test('manager auth — active users can create/list/update/reveal/rotate/delete 
         });
         assert.equal(del.status, 200);
         assert.deepEqual(await del.json(), { id: created.agent_id, deleted: true });
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager auth — users cannot access or mutate agents owned by another manager user', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Owner Bot\ninstructions: Owned by first manager user\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+
+        const otherList = await fetch(`${BASE}/v1/manager/agents`, { headers: OTHER_MANAGER_HEADERS });
+        assert.equal(otherList.status, 200);
+        const otherListBody = await otherList.json();
+        assert.ok(!otherListBody.data.some(agent => agent.id === created.agent_id));
+
+        const get = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: OTHER_MANAGER_HEADERS });
+        assert.equal(get.status, 404);
+
+        const update = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, {
+            method: 'PUT',
+            headers: OTHER_H_YAML,
+            body: `name: Stolen Bot\ninstructions: Should not update\n`,
+        });
+        assert.equal(update.status, 404);
+
+        const reveal = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}/reveal-key`, {
+            method: 'POST',
+            headers: OTHER_MANAGER_HEADERS,
+        });
+        assert.equal(reveal.status, 404);
+
+        const rotate = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}/rotate-key`, {
+            method: 'POST',
+            headers: OTHER_MANAGER_HEADERS,
+        });
+        assert.equal(rotate.status, 404);
+
+        const del = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, {
+            method: 'DELETE',
+            headers: OTHER_MANAGER_HEADERS,
+        });
+        assert.equal(del.status, 404);
+
+        const ownerGet = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: MANAGER_HEADERS });
+        assert.equal(ownerGet.status, 200);
     } finally {
         stopServer(server, tmp);
     }
