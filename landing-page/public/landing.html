@@ -396,6 +396,58 @@ instructions: |
       });
     });
   </script>
+
+  <!-- ===== Wake-word detection (Option B, on the real demo page) ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.0/dist/ort.min.js"></script>
+  <script src="/hey-buddy.min.js"></script>
+  <script>
+  (function () {
+    const HF = "https://huggingface.co/benjamin-paine/hey-buddy/resolve/main";
+    const WIDGET_TITLE = "Ozwell Assistant"; // must match OzwellChatConfig.title above
+
+    let widgetReady = false, pending = null;
+    window.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "ready") {
+        widgetReady = true;
+        if (pending) { sendToWidget(pending); pending = null; }
+      }
+    });
+    function sendToWidget(content) {
+      const f = document.querySelector('iframe[title="' + WIDGET_TITLE + '"]');
+      if (f && f.contentWindow) {
+        f.contentWindow.postMessage(
+          { source: "ozwell-chat-parent", type: "ozwell:send-message", payload: { content } }, "*");
+      }
+    }
+    function driveOzwell(content) {
+      window.OzwellChat.open();                 // open the real Ozwell widget on this page
+      if (widgetReady) sendToWidget(content);
+      else { pending = content; setTimeout(function () { if (pending) { sendToWidget(pending); pending = null; } }, 2500); }
+    }
+
+    // Wait for the bundle (window.HeyBuddy) AND the loader (window.OzwellChat, injected async), then start.
+    const waitFor = setInterval(function () {
+      if (!window.HeyBuddy || !window.OzwellChat) return;
+      clearInterval(waitFor);
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function () {
+        const heyBuddy = new HeyBuddy({
+          debug: true,
+          modelPath: ["/models/hey-ozwell.onnx", "/models/ozwell-i'm-done.onnx"],
+          vadModelPath: HF + "/pretrained/silero-vad.onnx",
+          spectrogramModelPath: HF + "/pretrained/mel-spectrogram.onnx",
+          embeddingModelPath: HF + "/pretrained/speech-embedding.onnx",
+        });
+        heyBuddy.onDetected("hey-ozwell", function () {
+          driveOzwell("Hey Ozwell — a clinician just started a session.");
+        });
+        heyBuddy.onDetected("ozwell-i'm-done", function () {
+          driveOzwell("Ozwell, I'm done — please wrap up and summarize the session.");
+        });
+        console.log("[wake] detection running — say 'hey ozwell'");
+      }).catch(function (e) { console.error("[wake] mic denied:", e); });
+    }, 200);
+  })();
+  </script>
 </body>
 
 </html>
