@@ -425,26 +425,179 @@ instructions: |
       else { pending = content; setTimeout(function () { if (pending) { sendToWidget(pending); pending = null; } }, 2500); }
     }
 
-    // Wait for the bundle (window.HeyBuddy) AND the loader (window.OzwellChat, injected async), then start.
+    // ---- Custom mic-permission UI (replaces the raw browser prompt on load) ----
+    // Doug's ask: no abrupt prompt on load; a clear, on-brand in-page control instead.
+    // "Always listening": we store the user's OPT-IN in localStorage; the browser keeps
+    // the actual permission grant. On return visits, if permission is still granted AND
+    // they opted in, we auto-start with no click. Styled to match the light page + #0066ff.
+    const PREF_KEY = "ozwellAlwaysListen";
+    const BLUE = "#0066ff";
+
+    // One-time styles. Gentle "live mic" pulse on the listening dot.
+    const css = document.createElement("style");
+    css.textContent =
+      "@keyframes ozwPulse{0%,100%{opacity:1}50%{opacity:.4}}" +
+      "#wake-ctl{position:fixed;left:16px;bottom:16px;z-index:2147483000;font:14px/1.45 system-ui,-apple-system,sans-serif}" +
+      "#wake-ctl .card{background:#fff;color:#1a1a1a;border:1px solid #e5e7eb;border-radius:12px;padding:13px 15px;max-width:300px;box-shadow:0 6px 20px rgba(16,24,40,.12)}" +
+      "#wake-ctl .sub{color:#6b7280;font-size:12.5px}" +
+      "#wake-ctl button.primary{font:600 13px system-ui;padding:8px 13px;border-radius:8px;cursor:pointer;border:0;margin-top:10px;background:" + BLUE + ";color:#fff}" +
+      "#wake-ctl .pill{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#1a1a1a;border:1px solid #e5e7eb;border-radius:999px;padding:7px 12px;box-shadow:0 4px 14px rgba(16,24,40,.1)}" +
+      "#wake-ctl .dot{width:9px;height:9px;border-radius:50%;background:#16a34a;animation:ozwPulse 1.6s ease-in-out infinite;transition:box-shadow .12s}" +
+      "#wake-ctl .dot.off{background:#9ca3af;animation:none;box-shadow:none}" +
+      "#wake-ctl .toggle{border:1px solid #e5e7eb;background:#fff;border-radius:7px;font:600 12px system-ui;cursor:pointer;padding:4px 9px;margin-left:2px}" +
+      "#wake-ctl .toggle.stop{color:#dc2626;border-color:#f3c2c2}" +
+      "#wake-ctl .toggle.start{color:" + BLUE + ";border-color:#bcd4ff}" +
+      "#wake-ctl .toggle:hover{filter:brightness(.97)}";
+    document.head.appendChild(css);
+
+    const ui = document.createElement("div");
+    ui.id = "wake-ctl";
+    document.body.appendChild(ui);
+
+    let dotEl = null;
+
+    // The library grabs its OWN mic internally and exposes no stop method. We wrap
+    // getUserMedia so we hold a handle to the exact stream it receives — that lets the
+    // Stop button truly end it (input stops, mic indicator goes off) without a reload.
+    let capturedStream = null;
+    const _gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = function (c) {
+      return _gum(c).then(function (s) { capturedStream = s; return s; });
+    };
+
+    function renderEnable() {
+      dotEl = null;
+      ui.innerHTML =
+        "<div class='card'>" +
+        "<div style='margin-bottom:6px'>🎙️ <b>Hands-free Ozwell</b></div>" +
+        "<div class='sub'>Enable your mic, then say <b>“Hey Ozwell”</b> to open the assistant.</div>" +
+        "<div class='sub' style='margin-top:6px'>🔒 Audio is processed on your device.</div>" +
+        "<button type='button' class='primary'>Enable voice</button>" +
+        "</div>";
+      ui.querySelector("button").onclick = requestAndStart;
+    }
+    function renderListening() {
+      ui.innerHTML =
+        "<div class='pill'><span class='dot'></span>" +
+        "<span><b>Listening</b> — “Hey Ozwell”</span>" +
+        "<button type='button' class='toggle stop' title='Turn off voice'>Stop</button>" +
+        "</div>";
+      dotEl = ui.querySelector(".dot");
+      ui.querySelector(".toggle").onclick = stopListening;
+    }
+    function renderOff() {
+      dotEl = null;
+      ui.innerHTML =
+        "<div class='pill'><span class='dot off'></span>" +
+        "<span><b>Voice off</b></span>" +
+        "<button type='button' class='toggle start' title='Turn voice back on'>Start</button>" +
+        "</div>";
+      ui.querySelector(".toggle").onclick = requestAndStart;
+    }
+    function renderRequesting() {
+      dotEl = null;
+      ui.innerHTML = "<div class='card'><div class='sub'>… requesting microphone …</div></div>";
+    }
+    function renderBlocked() {
+      dotEl = null;
+      ui.innerHTML =
+        "<div class='card'>" +
+        "<div style='margin-bottom:6px'>⚠️ <b>Microphone blocked</b></div>" +
+        "<div class='sub'>Allow mic access in your browser’s site settings, then retry.</div>" +
+        "<button type='button' class='primary'>Try again</button>" +
+        "</div>";
+      ui.querySelector("button").onclick = requestAndStart;
+    }
+
+    function stopListening() {
+      // Stop the actual stream the library captured -> audio input ends, detection
+      // halts, and the browser's mic indicator turns off. Also close the audio context.
+      // (MUST verify in-browser that the indicator goes off; that's the real test.)
+      try { if (capturedStream) capturedStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      try { if (heyBuddy && heyBuddy.audioContext) heyBuddy.audioContext.close(); } catch (e) {}
+      capturedStream = null; heyBuddy = null; started = false; dotEl = null;
+      try { localStorage.removeItem(PREF_KEY); } catch (e) {} // don't auto-start next load
+      renderOff();
+    }
+
+    let started = false, heyBuddy = null;
+    function startDetection() {
+      if (started) return;
+      started = true;
+      heyBuddy = new HeyBuddy({
+        debug: true,
+        modelPath: ["/models/hey-ozwell.onnx", "/models/ozwell-i'm-done.onnx"],
+        vadModelPath: HF + "/pretrained/silero-vad.onnx",
+        spectrogramModelPath: HF + "/pretrained/mel-spectrogram.onnx",
+        embeddingModelPath: HF + "/pretrained/speech-embedding.onnx",
+      });
+      // Subtle "I hear you" feedback: glow the dot while speech is active.
+      heyBuddy.onProcessed(function (result) {
+        if (!dotEl) return;
+        const speaking = result && result.speech && result.speech.active;
+        dotEl.style.boxShadow = speaking ? "0 0 0 5px rgba(22,163,74,.25)" : "none";
+      });
+      heyBuddy.onDetected("hey-ozwell", function () {
+        driveOzwell("Hey Ozwell — a clinician just started a session.");
+      });
+      heyBuddy.onDetected("ozwell-i'm-done", function () {
+        driveOzwell("Ozwell, I'm done — please wrap up and summarize the session.");
+        // Cue: the session ended, but wake detection stays alive so "hey ozwell" restarts
+        // hands-free (ending a session is NOT the same as turning the mic off).
+        const label = ui.querySelector(".pill span:nth-child(2)");
+        if (label) {
+          label.innerHTML = "Session ended — say <b>“Hey Ozwell”</b> to start another";
+          setTimeout(function () {
+            const l = ui.querySelector(".pill span:nth-child(2)");
+            if (l) l.innerHTML = "<b>Listening</b> — “Hey Ozwell”";
+          }, 6000);
+        }
+      });
+      renderListening();
+      console.log("[wake] detection running — say 'hey ozwell'");
+    }
+
+    // Click handler: request permission in-context, remember the opt-in, then start.
+    function requestAndStart() {
+      renderRequesting();
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        stream.getTracks().forEach(function (t) { t.stop(); }); // permission gained; HeyBuddy opens its own
+        try { localStorage.setItem(PREF_KEY, "1"); } catch (e) {}
+        startDetection();
+      }).catch(function (e) {
+        console.error("[wake] mic denied:", e);
+        renderBlocked();
+      });
+    }
+
+    // Pick the initial state once the bundle + loader are ready.
     const waitFor = setInterval(function () {
       if (!window.HeyBuddy || !window.OzwellChat) return;
       clearInterval(waitFor);
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(function () {
-        const heyBuddy = new HeyBuddy({
-          debug: true,
-          modelPath: ["/models/hey-ozwell.onnx", "/models/ozwell-i'm-done.onnx"],
-          vadModelPath: HF + "/pretrained/silero-vad.onnx",
-          spectrogramModelPath: HF + "/pretrained/mel-spectrogram.onnx",
-          embeddingModelPath: HF + "/pretrained/speech-embedding.onnx",
-        });
-        heyBuddy.onDetected("hey-ozwell", function () {
-          driveOzwell("Hey Ozwell — a clinician just started a session.");
-        });
-        heyBuddy.onDetected("ozwell-i'm-done", function () {
-          driveOzwell("Ozwell, I'm done — please wrap up and summarize the session.");
-        });
-        console.log("[wake] detection running — say 'hey ozwell'");
-      }).catch(function (e) { console.error("[wake] mic denied:", e); });
+
+      let optedIn = false;
+      try { optedIn = localStorage.getItem(PREF_KEY) === "1"; } catch (e) {}
+
+      // Auto-start only if they opted in before AND the browser still holds the grant.
+      if (optedIn && navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: "microphone" }).then(function (status) {
+          if (status.state === "granted") {
+            startDetection();
+            // Transparency: returning users auto-start, so flash a brief "voice on" cue
+            // rather than silently switching the mic on.
+            const label = ui.querySelector(".pill span:nth-child(2)");
+            if (label) {
+              label.innerHTML = "<b>Voice on</b> — listening";
+              setTimeout(function () {
+                const l = ui.querySelector(".pill span:nth-child(2)");
+                if (l) l.innerHTML = "<b>Listening</b> — “Hey Ozwell”";
+              }, 2500);
+            }
+          } else renderEnable();
+        }).catch(renderEnable);
+      } else {
+        renderEnable();
+      }
     }, 200);
   })();
   </script>
