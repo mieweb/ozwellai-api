@@ -63,6 +63,12 @@ type ChatMessage = {
   tool_calls?: ToolCall[];
 };
 
+type UsageContext = {
+  authType: 'parent' | 'agent';
+  parentKeyId: string | null;
+  agentId: string | null;
+};
+
 // Helper: try to detect tool calls from JSON content and convert to ToolCall[]
 function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
   if (!content) return null;
@@ -456,17 +462,21 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
+    const tokenIsAgentKey = isAgentKey(request.headers.authorization);
+    let usageContext: UsageContext | null = null;
 
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
 
-    if (isAgentKey(request.headers.authorization)) {
+    if (tokenIsAgentKey) {
       const agentKey = extractToken(request.headers.authorization);
-      const agent = agentStore.getByKey(agentKey);
-      if (!agent) {
+      const resolved = agentStore.getByKeyWithActiveParent(agentKey);
+      if (!resolved) {
         reply.code(401);
         return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
       }
+      const { agent, parentKey } = resolved;
+      usageContext = { authType: 'agent', parentKeyId: parentKey.id, agentId: agent.id };
 
       // Parse the YAML blob once — the source of truth for agent config
       let parsed: Record<string, unknown> = {};
@@ -510,7 +520,32 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         temperature: (parsed.temperature as number | undefined) ?? null,
         type: parsed.type === 'mock' ? 'mock' : null,
       };
+    } else {
+      const parentKey = agentStore.lookupApiKey(token);
+      usageContext = { authType: 'parent', parentKeyId: parentKey?.id ?? null, agentId: null };
     }
+
+    const recordUsage = (model: string | null, statusCode: number, response?: unknown) => {
+      if (!usageContext) return;
+      const usage = response && typeof response === 'object' && 'usage' in response
+        ? (response as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }).usage
+        : undefined;
+      try {
+        agentStore.recordUsageEvent({
+          parent_key_id: usageContext.parentKeyId,
+          agent_id: usageContext.agentId,
+          auth_type: usageContext.authType,
+          route: '/v1/chat/completions',
+          model,
+          status_code: statusCode,
+          prompt_tokens: usage?.prompt_tokens ?? null,
+          completion_tokens: usage?.completion_tokens ?? null,
+          total_tokens: usage?.total_tokens ?? null,
+        });
+      } catch (err) {
+        request.log.warn({ err }, 'Failed to record usage event');
+      }
+    };
 
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {
@@ -526,10 +561,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const mockModel = agentConfig.model || 'mock';
       const warning = buildMockWarning('mock_agent', mockModel);
       if (stream) {
+        recordUsage(mockModel, 200);
         dispatchMockStream(mockMessages, mockModel, reply, request.headers.origin, warning);
         return;
       }
-      return dispatchMockNonStream(mockMessages, mockModel, warning);
+      const response = dispatchMockNonStream(mockMessages, mockModel, warning);
+      recordUsage(mockModel, 200, response);
+      return response;
     }
 
     // Backend selection priority:
@@ -610,10 +648,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     if (backend === 'fallback') {
       const warning = buildMockWarning('no_backend', model);
       if (stream) {
+        recordUsage(model, 200);
         dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
         return;
       }
-      return dispatchMockNonStream(normalizedMessages, model, warning);
+      const response = dispatchMockNonStream(normalizedMessages, model, warning);
+      recordUsage(model, 200, response);
+      return response;
     }
 
     // Use a real LLM backend
@@ -737,6 +778,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
+            recordUsage(model, 200);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -774,6 +816,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
                   reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
+                recordUsage(DEFAULT_MODEL, 200);
               } catch (retryError) {
                 request.log.error({ err: retryError }, 'Fallback model also failed');
               }
@@ -813,6 +856,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           } catch (e) {
             // No-op: parsing fallback should not break the response
           }
+          recordUsage(model, 200, response);
           return response;
         }
       } catch (error: unknown) {
@@ -851,6 +895,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 }
               }
             }
+            recordUsage(DEFAULT_MODEL, 200, retryResponse);
             return {
               ...retryResponse,
               warning: buildFallbackWarning(model, DEFAULT_MODEL),
@@ -866,10 +911,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Warning marker tells caller the configured LLM failed — never silent.
     const warning = buildMockWarning('llm_error', model);
     if (stream) {
+      recordUsage(model, 200);
       dispatchMockStream(normalizedMessages, model, reply, request.headers.origin, warning);
       return;
     }
-    return dispatchMockNonStream(normalizedMessages, model, warning);
+    const response = dispatchMockNonStream(normalizedMessages, model, warning);
+    recordUsage(model, 200, response);
+    return response;
   });
 };
 

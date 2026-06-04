@@ -94,6 +94,17 @@ async function managerHeaderAuth(
     request.apiKey = parentKey;
 }
 
+async function requireManagerAdmin(
+    request: FastifyRequest,
+    reply: FastifyReply
+): Promise<void> {
+    await managerHeaderAuth(request, reply);
+    if ((reply as FastifyReply & { sent?: boolean }).sent) return;
+    if (!request.managerUser?.is_admin) {
+        reply.code(403).send(createError('Admin access required', 'authentication_error', null, 'admin_required'));
+    }
+}
+
 // Generate agent key
 function generateAgentKey(): string {
     return `${AGENT_KEY_PREFIX}${generateId('key')}`;
@@ -125,6 +136,51 @@ interface ParsedAgentFields {
     behavior?: Record<string, unknown>;
     [k: string]: unknown;
 }
+
+type AdminMetricRow = {
+    request_count?: number;
+    error_count?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    last_used_at?: string | null;
+};
+
+type AdminParentKeyRow = AdminMetricRow & {
+    id: string;
+    name: string;
+    key_hint: string | null;
+    user_id: string | null;
+    external_user_id?: string | null;
+    username?: string | null;
+    email?: string | null;
+    status?: string | null;
+    source?: string | null;
+    revoked_at?: string | null;
+    revoked_reason?: string | null;
+    replaced_by_key_id?: string | null;
+    created_at?: string | null;
+    agent_count?: number;
+};
+
+type AdminAgentRow = AdminMetricRow & {
+    id: string;
+    agent_key: string;
+    parent_key: string;
+    yaml: string;
+    created_at: number;
+    parent_key_name?: string | null;
+    parent_key_hint?: string | null;
+    user_id?: string | null;
+    external_user_id?: string | null;
+    username?: string | null;
+    email?: string | null;
+};
+
+type AdminUserRow = AdminMetricRow & {
+    id: string;
+    is_admin: number | boolean;
+};
 
 /** Parse YAML into a loose object. Throws on invalid YAML. */
 function parseAgentYaml(yamlInput: string): ParsedAgentFields {
@@ -179,6 +235,79 @@ function toAgentView(agent: Agent) {
         temperature: parsed.temperature,
         tools: parsed.tools,
         behavior: parsed.behavior,
+        metrics: agentStore.getAgentMetrics(agent.id),
+    };
+}
+
+function toMetrics(row: AdminMetricRow) {
+    return {
+        request_count: row.request_count ?? 0,
+        error_count: row.error_count ?? 0,
+        prompt_tokens: row.prompt_tokens ?? 0,
+        completion_tokens: row.completion_tokens ?? 0,
+        total_tokens: row.total_tokens ?? 0,
+        last_used_at: row.last_used_at ?? null,
+    };
+}
+
+function toAdminAgentView(agent: AdminAgentRow) {
+    let parsed: ParsedAgentFields = {};
+    try {
+        parsed = parseAgentYaml(agent.yaml);
+    } catch {
+        parsed = {};
+    }
+    return {
+        id: agent.id,
+        key_hint: formatAgentKeyHint(agent.agent_key),
+        parent_key_id: agent.parent_key,
+        parent_key_name: agent.parent_key_name ?? null,
+        parent_key_hint: agent.parent_key_hint ? `ozw_...${agent.parent_key_hint}` : null,
+        user_id: agent.user_id ?? null,
+        external_user_id: agent.external_user_id ?? null,
+        username: agent.username ?? null,
+        email: agent.email ?? null,
+        name: parsed.name ?? null,
+        model: parsed.model ?? null,
+        created_at: agent.created_at,
+        metrics: toMetrics(agent),
+    };
+}
+
+function toAdminParentKeyView(key: AdminParentKeyRow) {
+    return {
+        id: key.id,
+        name: key.name,
+        key_hint: key.key_hint ? `ozw_...${key.key_hint}` : null,
+        user_id: key.user_id ?? null,
+        external_user_id: key.external_user_id ?? null,
+        username: key.username ?? null,
+        email: key.email ?? null,
+        status: key.status ?? 'active',
+        source: key.source ?? null,
+        revoked_at: key.revoked_at ?? null,
+        revoked_reason: key.revoked_reason ?? null,
+        replaced_by_key_id: key.replaced_by_key_id ?? null,
+        created_at: key.created_at,
+        agent_count: key.agent_count ?? 0,
+        metrics: toMetrics(key),
+    };
+}
+
+function toAdminUserView(user: AdminUserRow, parentKeys: AdminParentKeyRow[]) {
+    const formattedParentKeys = parentKeys
+        .filter(key => key.user_id === user.id)
+        .map(toAdminParentKeyView);
+    const currentParentKey = formattedParentKeys.find(key => key.status === 'active' && !key.revoked_at) ?? null;
+    return {
+        ...user,
+        is_admin: Boolean(user.is_admin),
+        current_parent_key: currentParentKey,
+        metrics: {
+            request_count: user.request_count ?? 0,
+            total_tokens: user.total_tokens ?? 0,
+            last_used_at: user.last_used_at ?? null,
+        },
     };
 }
 
@@ -238,17 +367,134 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         schema: { tags: ['Manager Auth'], summary: 'Get manager-console authenticated user status' },
     }, getManagerMe);
 
-    // Backward-compatible alias for the first manager frontend POC.
-    fastify.get('/v1/me', {
-        schema: { tags: ['Manager Auth'], summary: 'Get manager-console authenticated user status' },
-    }, getManagerMe);
-
     // GET /v1/manager/models — model list through manager-console auth.
     fastify.get('/v1/manager/models', {
         schema: { tags: ['Manager Auth'], summary: 'List models for manager-console authenticated UI' },
         preHandler: managerHeaderAuth,
     }, async () => {
         return getModelsList();
+    });
+
+    // Basic admin console endpoints. Admin status comes from Ozwell DB, not x-groups.
+    fastify.get('/v1/manager/admin/summary', {
+        schema: { tags: ['Manager Admin'], summary: 'Get admin console summary metrics' },
+        preHandler: requireManagerAdmin,
+    }, async () => {
+        return agentStore.getAdminSummary();
+    });
+
+    fastify.get('/v1/manager/admin/users', {
+        schema: { tags: ['Manager Admin'], summary: 'List manager users' },
+        preHandler: requireManagerAdmin,
+    }, async () => {
+        const users = agentStore.listAdminUsers() as AdminUserRow[];
+        const parentKeys = agentStore.listAdminParentKeys() as AdminParentKeyRow[];
+        return {
+            object: 'list',
+            data: users.map(user => toAdminUserView(user, parentKeys)),
+        };
+    });
+
+    fastify.get<{ Params: { user_id: string } }>('/v1/manager/admin/users/:user_id', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get manager user detail',
+            params: {
+                type: 'object',
+                properties: { user_id: { type: 'string' } },
+                required: ['user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const detail = agentStore.getAdminUserDetail(request.params.user_id);
+        if (!detail) {
+            reply.code(404);
+            return createError('User not found', 'invalid_request_error', 'user_id', 'not_found');
+        }
+        return {
+            user: {
+                ...(detail.user as Record<string, unknown>),
+                is_admin: Boolean((detail.user as { is_admin?: number }).is_admin),
+            },
+            parent_keys: (detail.parent_keys as AdminParentKeyRow[]).map(toAdminParentKeyView),
+            agents: (detail.agents as unknown as AdminAgentRow[]).map(toAdminAgentView),
+        };
+    });
+
+    fastify.post<{ Params: { user_id: string } }>('/v1/manager/admin/users/:user_id/promote', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Promote user to manager admin',
+            params: {
+                type: 'object',
+                properties: { user_id: { type: 'string' } },
+                required: ['user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const user = agentStore.promoteManagerUser(request.params.user_id);
+        if (!user) {
+            reply.code(404);
+            return createError('User not found', 'invalid_request_error', 'user_id', 'not_found');
+        }
+        return user;
+    });
+
+    fastify.post<{ Params: { user_id: string } }>('/v1/manager/admin/users/:user_id/demote', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Demote manager admin user',
+            params: {
+                type: 'object',
+                properties: { user_id: { type: 'string' } },
+                required: ['user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        try {
+            const user = agentStore.demoteManagerUser(request.managerUser!.id, request.params.user_id);
+            if (!user) {
+                reply.code(404);
+                return createError('User not found', 'invalid_request_error', 'user_id', 'not_found');
+            }
+            return user;
+        } catch (error) {
+            const code = error instanceof Error ? error.message : 'demote_failed';
+            reply.code(code === 'cannot_remove_last_admin' ? 409 : 400);
+            return createError('User cannot be demoted', 'invalid_request_error', 'user_id', code);
+        }
+    });
+
+    fastify.post<{ Params: { key_id: string }; Body: { reason?: string } }>('/v1/manager/admin/parent-keys/:key_id/revoke', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Revoke a parent key',
+            params: {
+                type: 'object',
+                properties: { key_id: { type: 'string' } },
+                required: ['key_id'],
+            },
+            body: {
+                type: 'object',
+                properties: { reason: { type: 'string' } },
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const key = agentStore.revokeParentApiKey(request.params.key_id, request.body?.reason || 'admin_revoked');
+        if (!key) {
+            reply.code(404);
+            return createError('Parent key not found', 'invalid_request_error', 'key_id', 'not_found');
+        }
+        return {
+            id: key.id,
+            status: key.status,
+            revoked_at: key.revoked_at,
+            revoked_reason: key.revoked_reason,
+        };
     });
 
     // POST /v1/manager/parent-key/reveal — explicit reveal for the user's parent key.
@@ -448,6 +694,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         tools: view.tools,
                         behavior: view.behavior,
                         created_at: view.created_at,
+                        metrics: view.metrics,
                     };
                 }),
             };
@@ -479,6 +726,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         tools: view.tools,
                         behavior: view.behavior,
                         created_at: view.created_at,
+                        metrics: view.metrics,
                     };
                 }),
             };
