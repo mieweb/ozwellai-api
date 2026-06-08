@@ -4,7 +4,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 
 const filesRoute: FastifyPluginAsync = async (fastify) => {
-  const dataDir = path.join(process.cwd(), 'data', 'files');
+  const dataRoot = process.env.DATA_DIR ?? path.join(process.cwd(), 'data');
+  const dataDir = path.join(dataRoot, 'files');
   const indexFile = path.join(dataDir, 'index.json');
 
   // Ensure data directory exists
@@ -53,7 +54,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
       const fileId = generateId('file');
       const filename = data.filename || 'unnamed';
       const purpose = (data.fields as any)?.purpose?.value || 'assistants';
-      
+
       // Save file content
       const filePath = path.join(dataDir, fileId);
       const buffer = await data.toBuffer();
@@ -199,7 +200,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
     try {
       const filePath = path.join(dataDir, file_id);
       const fileContent = await fs.readFile(filePath);
-      
+
       reply.headers({
         'content-disposition': `attachment; filename="${file.filename}"`,
         'content-type': 'application/octet-stream',

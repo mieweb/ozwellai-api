@@ -14,7 +14,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 - **Swagger Documentation**: Interactive API docs at `/docs`
 - **TypeScript**: Fully typed with Zod schema validation
 - **Agent Mode** *(PoC)*: Register agents with custom personas, tool allowlists, and scoped API keys
-- **No Database**: All data stored in JSON files under `/data` (agent/auth data uses SQLite)
+- **Persistent Local Storage**: Uploaded files and SQLite state live under a configurable data directory
 
 ## Architecture
 
@@ -230,6 +230,74 @@ npm run dev
 
 The server will start at `http://localhost:3000`
 
+### Docker Deployment
+
+Build the production image from the repository root so Docker has access to the spec package, TypeScript client, and reference server:
+
+```bash
+docker build -f reference-server/Dockerfile -t ozwellai-reference-server .
+```
+
+Run it with a persistent data volume:
+
+```bash
+docker volume create ozwell-reference-data
+
+docker run --rm \
+  --name ozwell-reference-server \
+  --publish 3000:3000 \
+  --mount source=ozwell-reference-data,target=/data \
+  --env DATA_DIR=/data \
+  --env DB_PATH=/data/ozwell.db \
+  --env TRUST_FORWARD_AUTH_HEADERS=true \
+  --env ADMIN_EMAILS=admin@example.com \
+  --env LLM_BASE_URL=https://api.openai.com \
+  --env LLM_API_KEY=sk-... \
+  ozwellai-reference-server
+```
+
+The image builds the local `spec`, `clients/typescript`, and `reference-server` packages in that order, then installs production dependencies in the runtime stage. Local development state from `reference-server/data` is excluded from the image. New containers start with empty state unless you mount an existing volume.
+
+Set `TRUST_FORWARD_AUTH_HEADERS=true` only when the container is behind a trusted authentication proxy that controls the `x-user-*` headers used by the manager console. Admin users are assigned on first login when their forwarded `x-user-id` appears in `ADMIN_EXTERNAL_USER_IDS` or their forwarded `x-email` appears in `ADMIN_EMAILS`. Matching emails are case-insensitive.
+
+For a real deployment, keep secrets out of git. Commit only `.env.example`; provide real values with one of these deployment paths:
+
+```bash
+# Local/server-managed env file
+cp reference-server/.env.example reference-server/.env
+
+docker run --rm \
+  --name ozwell-reference-server \
+  --publish 3000:3000 \
+  --mount source=ozwell-reference-data,target=/data \
+  --env-file reference-server/.env \
+  ozwellai-reference-server
+```
+
+For GitHub Actions deployments, store sensitive values such as `LLM_API_KEY` in GitHub Secrets and non-sensitive values such as `ADMIN_EMAILS` or `LLM_BASE_URL` in GitHub Variables, then pass them as `-e` values or render a server-side env file during deploy:
+
+```bash
+docker run -d \
+  --name ozwell-reference-server \
+  --restart unless-stopped \
+  --publish 3000:3000 \
+  --mount source=ozwell-reference-data,target=/data \
+  -e DATA_DIR=/data \
+  -e DB_PATH=/data/ozwell.db \
+  -e TRUST_FORWARD_AUTH_HEADERS=true \
+  -e ADMIN_EMAILS="${ADMIN_EMAILS}" \
+  -e LLM_BASE_URL="${LLM_BASE_URL}" \
+  -e LLM_API_KEY="${LLM_API_KEY}" \
+  ozwellai-reference-server
+```
+
+Verify the container:
+
+```bash
+curl http://localhost:3000/health
+docker inspect --format='{{json .State.Health}}' ozwell-reference-server
+```
+
 ### Embeddable Chat Widget
 
 **Simple (one line):**
@@ -433,21 +501,30 @@ response = ozwellai.chat.completions.create(
 
 ## Data Storage
 
-All data is stored in the `/data` directory:
+Runtime state is stored under `DATA_DIR`, which defaults to `./data` for local development and `/data` in the Docker image:
 
 ```
 /data
+  ozwell.db       # SQLite agent/auth state
   /files
     index.json      # File metadata
     file-xxxxx      # Uploaded file content
 ```
 
+For Docker deployments, mount `/data` as a named volume or host bind mount. Do not bake local `reference-server/data` contents into the image.
+
 ### Reset State
 
-To reset all data, simply delete the `/data` directory:
+To reset local development state, delete the local data directory:
 
 ```bash
 rm -rf data/
+```
+
+To reset Docker state, remove the mounted volume:
+
+```bash
+docker volume rm ozwell-reference-data
 ```
 
 ## Text Generation

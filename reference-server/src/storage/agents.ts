@@ -30,7 +30,7 @@ interface DbAgentWithParentRow extends DbAgentRow {
 }
 
 const DB_PATH = process.env.DB_PATH
-    ?? path.join(process.cwd(), 'data', 'ozwell.db');
+    ?? path.join(process.env.DATA_DIR ?? path.join(process.cwd(), 'data'), 'ozwell.db');
 
 // Demo parent API key
 export const DEMO_API_KEY = 'ozw_demo_localhost_key_for_testing';
@@ -265,6 +265,21 @@ function adminExternalUserIds(): Set<string> {
     );
 }
 
+function adminEmails(): Set<string> {
+    return new Set(
+        (process.env.ADMIN_EMAILS || '')
+            .split(',')
+            .map(value => value.trim().toLowerCase())
+            .filter(Boolean),
+    );
+}
+
+function isConfiguredAdmin(identity: ManagerUser): boolean {
+    const email = identity.email?.trim().toLowerCase();
+    return adminExternalUserIds().has(identity.external_user_id)
+        || Boolean(email && adminEmails().has(email));
+}
+
 export class AgentStore {
     private db: Database.Database;
     private stmtInsert: Database.Statement;
@@ -452,10 +467,10 @@ export class AgentStore {
     ensureManagerUserProvisioned(identity: ManagerIdentity): { user: ManagerUser; parentKey: ParentApiKey } {
         const provision = this.db.transaction((managerIdentity: ManagerIdentity) => {
             let user = this.upsertManagerUser(managerIdentity);
-            const bootstrapAdmin = adminExternalUserIds().has(user.external_user_id);
-            if (user.status !== 'active' || (bootstrapAdmin && !user.is_admin)) {
+            const configuredAdmin = isConfiguredAdmin(user);
+            if (user.status !== 'active' || (configuredAdmin && !user.is_admin)) {
                 this.db.prepare('UPDATE users SET status = ?, is_admin = CASE WHEN ? THEN 1 ELSE is_admin END WHERE id = ?')
-                    .run('active', bootstrapAdmin ? 1 : 0, user.id);
+                    .run('active', configuredAdmin ? 1 : 0, user.id);
                 user = this.getManagerUserByExternalId(user.external_user_id)!;
             }
 
