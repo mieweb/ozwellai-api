@@ -5,7 +5,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 ## Features
 
 - **Full OpenAI API Compatibility**: Wire-compatible with OpenAI's API specification
-- **Multi-Backend LLM Support**: Connects to OpenAI, Portkey Gateway, Ollama, or falls back to deterministic mock responses
+- **Multi-Backend LLM Support**: Connects to OpenAI, Portkey Gateway, Ollama, or opt-in deterministic mock responses
 - **MCP Host**: Built-in WebSocket endpoint (`/mcp/ws`) and embeddable chat widget
 - **Streaming Support**: Server-Sent Events (SSE) for both `/v1/responses` and `/v1/chat/completions`
 - **File Management**: Complete file upload, download, and management system
@@ -515,7 +515,7 @@ If the client sends a `model` field in the request, it is used as-is. Otherwise 
 |---------|-----------------|----------------|------------------------------------------------------|
 | LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4.1-mini`, `gpt-4o`, `claude-sonnet-4-20250514` |
 | Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
-| Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | cosmetic — mock ignores it                           |
+| Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | fallback/default selection; mock responses report `ozwell-mock` |
 
 **Model fallback (LLM backend only):** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
 

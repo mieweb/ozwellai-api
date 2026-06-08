@@ -264,9 +264,8 @@ function buildFallbackWarning(originalModel: string, fallbackModel: string) {
 }
 
 // Identifier used as the `model` field on every mock response so callers can immediately
-// distinguish a deterministic mock from a real LLM answer (mirrors how the fallback path
-// sets the response `model` to the actual fallback model rather than the originally
-// requested one). The original requested model is preserved on the warning payload.
+// distinguish a deterministic mock from a real LLM answer. Mock warnings keep the selected
+// model that triggered the mock response.
 const MOCK_MODEL_ID = 'ozwell-mock';
 
 // Marks every mock response so callers (and the chat widget) can always tell a deterministic
@@ -280,6 +279,17 @@ function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', mod
   return { type: 'mock_response' as const, reason, model, message: messages[reason] };
 }
 
+function parsePositiveEnvNumber(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  console.warn(`[config] Ignoring ${name}=${JSON.stringify(value)}; expected a positive number.`);
+  return undefined;
+}
+
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -290,7 +300,7 @@ const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
 const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
 // that sends its own max_tokens always overrides this.
-const LLM_MAX_TOKENS = process.env.LLM_MAX_TOKENS ? Number(process.env.LLM_MAX_TOKENS) : undefined;
+const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 
 // Pre-construct LLM clients once (reused across all requests)
 const llmClient = isLLMBackendConfigured()
