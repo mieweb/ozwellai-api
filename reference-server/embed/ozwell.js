@@ -16529,7 +16529,7 @@ kbd {
     if (document.head.querySelector('style[data-ozwell-style="' + marker + '"]')) return;
     const style = document.createElement("style");
     style.dataset.ozwellStyle = marker;
-    style.textContent = ':root {\n  color-scheme: light;\n  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  background: #f7f9fc;\n}\n\nhtml,\nbody,\n#ozwell-widget-root {\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  overflow: hidden;\n}\n\nbody {\n  background: transparent;\n}\n\nbutton,\ntextarea {\n  font: inherit;\n}\n\n.ozwell-widget-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  height: 100%;\n  min-height: 0;\n  background: #f7f9fc;\n  color: #111827;\n}\n\n.ozwell-widget-shell [class*="ai-chat"],\n.ozwell-widget-shell [data-slot*="chat"] {\n  min-height: 0;\n}\n\n.ozwell-reasoning-bar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 10px;\n  border-bottom: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #334155;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ozwell-reasoning-controls {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 6px;\n  min-width: 0;\n  flex: 0 0 auto;\n}\n\n.ozwell-reasoning-controls button {\n  white-space: nowrap;\n}\n\n.ozwell-thinking-control {\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.ozwell-thinking-trigger {\n  min-height: 30px;\n  max-width: 190px;\n  border-radius: 8px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu {\n  max-width: min(248px, calc(100vw - 24px));\n  border-radius: 8px;\n}\n\n.ozwell-thinking-menu-content {\n  padding: 6px;\n}\n\n.ozwell-thinking-menu-item {\n  padding: 7px 8px !important;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] {\n  background: var(--mieweb-primary-50, #e6f7fc);\n  color: var(--mieweb-primary-800, #0f749c);\n}\n\n.ozwell-thinking-menu-item [data-slot="dropdown-item-label"] {\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option {\n  display: grid;\n  gap: 2px;\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option-label {\n  color: inherit;\n  font-size: 12px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n\n.ozwell-thinking-option-description {\n  overflow: hidden;\n  color: #64748b;\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.25;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] .ozwell-thinking-option-description {\n  color: var(--mieweb-primary-800, #0f749c);\n}\n\n.ozwell-messages-trigger {\n  min-height: 30px;\n  border-radius: 8px;\n}\n\n.ozwell-messages-trigger-flare {\n  animation: ozwell-message-flare 1.8s ease-out;\n}\n\n.ozwell-messages-menu {\n  max-width: min(260px, calc(100vw - 24px));\n  border-radius: 10px;\n}\n\n.ozwell-messages-menu-content {\n  max-height: 240px;\n  overflow-y: auto;\n  padding: 6px;\n}\n\n.ozwell-message-nav-item {\n  display: grid !important;\n  grid-template-columns: 22px minmax(0, 1fr);\n  gap: 8px !important;\n  padding: 7px 8px !important;\n}\n\n.ozwell-message-nav-item [data-slot="dropdown-item-label"] {\n  display: contents;\n}\n\n.ozwell-message-nav-index {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 22px;\n  height: 22px;\n  border-radius: 999px;\n  background: var(--mieweb-primary-50, #e6f7fc);\n  color: var(--mieweb-primary-800, #0f749c);\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.ozwell-message-nav-text {\n  min-width: 0;\n  overflow: hidden;\n  color: #1f2937;\n  font-size: 12px;\n  font-weight: 500;\n  line-height: 1.35;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n@keyframes ozwell-message-flare {\n  0% {\n    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0.34);\n    background: var(--mieweb-primary-50, #e6f7fc);\n    color: var(--mieweb-primary-800, #0f749c);\n  }\n  70% {\n    box-shadow: 0 0 0 8px rgba(15, 116, 156, 0);\n    background: var(--mieweb-primary-50, #e6f7fc);\n    color: var(--mieweb-primary-800, #0f749c);\n  }\n  100% {\n    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0);\n  }\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-call"] {\n  padding: 8px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-icon"] {\n  width: 28px;\n  height: 28px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-content"] {\n  font-size: 14px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-result"],\n.ozwell-widget-shell [data-slot="ai-tool-parameters"] {\n  font-size: 12px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] button {\n  padding: 7px 10px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] p {\n  font-size: 13px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] [class*="text-sm"] {\n  font-size: 14px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message"].flex-row-reverse > [data-slot="ai-message-avatar"] {\n  display: none;\n}\n\n.ozwell-toast-wrap {\n  border-bottom: 1px solid #f2c15d;\n  background: #fff7dd;\n  padding: 8px 10px;\n}\n\n.ozwell-toast-wrap [data-slot="toast"] {\n  min-width: 0;\n  max-width: none;\n  padding: 8px 10px;\n  border-radius: 8px;\n  box-shadow: none;\n}\n\n.ozwell-toast-wrap [data-slot="toast-message"] {\n  font-size: 12px;\n  line-height: 1.35;\n}\n\n.ozwell-footer {\n  padding: 8px 12px 10px;\n  border-top: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #64748b;\n  font-size: 11px;\n  line-height: 1;\n  text-align: center;\n}\n\n.ozwell-markdown {\n  display: grid;\n  gap: 0.7em;\n  max-width: 100%;\n  color: inherit;\n  font-size: 14px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ozwell-markdown > :first-child {\n  margin-top: 0;\n}\n\n.ozwell-markdown > :last-child {\n  margin-bottom: 0;\n}\n\n.ozwell-markdown p,\n.ozwell-markdown ul,\n.ozwell-markdown ol,\n.ozwell-markdown pre,\n.ozwell-markdown blockquote,\n.ozwell-markdown table {\n  margin: 0;\n}\n\n.ozwell-markdown ul,\n.ozwell-markdown ol {\n  padding-left: 1.25rem;\n}\n\n.ozwell-markdown a {\n  color: #0f766e;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\n\n.ozwell-markdown blockquote {\n  padding-left: 0.85rem;\n  border-left: 3px solid #9ca3af;\n  color: #475569;\n}\n\n.ozwell-markdown table {\n  width: 100%;\n  border-collapse: collapse;\n  font-size: 13px;\n}\n\n.ozwell-markdown th,\n.ozwell-markdown td {\n  padding: 6px 8px;\n  border: 1px solid #cbd5e1;\n  text-align: left;\n  vertical-align: top;\n}\n\n.ozwell-markdown th {\n  background: #eef2f7;\n  font-weight: 700;\n}\n\n.ozwell-markdown :not(pre) > code {\n  padding: 0.1rem 0.3rem;\n  border-radius: 5px;\n  background: #e8eef5;\n  color: #334155;\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 0.92em;\n}\n\n.ozwell-code-block {\n  max-width: 100%;\n  overflow: hidden;\n  border: 1px solid #1f2937;\n  border-radius: 8px;\n  background: #111827;\n  color: #e5e7eb;\n}\n\n.ozwell-code-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 9px;\n  border-bottom: 1px solid #374151;\n  color: #cbd5e1;\n  font-size: 12px;\n  line-height: 1;\n}\n\n.ozwell-code-copy {\n  border: 1px solid #475569;\n  border-radius: 6px;\n  background: #1f2937;\n  color: #f8fafc;\n  cursor: pointer;\n  font-size: 12px;\n  line-height: 1;\n  padding: 5px 8px;\n}\n\n.ozwell-code-copy:hover {\n  background: #334155;\n}\n\n.ozwell-code-block pre {\n  max-width: 100%;\n  overflow-x: auto;\n  padding: 12px;\n}\n\n.ozwell-code-block code {\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 12px;\n  line-height: 1.55;\n  white-space: pre;\n}\n';
+    style.textContent = ':root {\n  color-scheme: light;\n  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  background: #f7f9fc;\n}\n\nhtml,\nbody,\n#ozwell-widget-root {\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  overflow: hidden;\n}\n\nbody {\n  background: transparent;\n}\n\nbutton,\ntextarea {\n  font: inherit;\n}\n\n.ozwell-widget-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  height: 100%;\n  min-height: 0;\n  background: #f7f9fc;\n  color: #111827;\n}\n\n.ozwell-widget-shell [class*="ai-chat"],\n.ozwell-widget-shell [data-slot*="chat"] {\n  min-height: 0;\n}\n\n.ozwell-reasoning-bar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 10px;\n  border-bottom: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #334155;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ozwell-reasoning-controls {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 6px;\n  min-width: 0;\n  flex: 0 0 auto;\n}\n\n.ozwell-reasoning-controls button {\n  white-space: nowrap;\n}\n\n.ozwell-thinking-control {\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.ozwell-thinking-trigger {\n  min-height: 30px;\n  max-width: 190px;\n  border-radius: 8px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu {\n  max-width: min(248px, calc(100vw - 24px));\n  border-radius: 8px;\n}\n\n.ozwell-thinking-menu-content {\n  padding: 6px;\n}\n\n.ozwell-thinking-menu-item {\n  padding: 7px 8px !important;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] {\n  background: var(--mieweb-primary-50, #e6f7fc);\n  color: var(--mieweb-primary-800, #0f749c);\n}\n\n.ozwell-thinking-menu-item [data-slot="dropdown-item-label"] {\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option {\n  display: grid;\n  gap: 2px;\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option-label {\n  color: inherit;\n  font-size: 12px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n\n.ozwell-thinking-option-description {\n  overflow: hidden;\n  color: #64748b;\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.25;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] .ozwell-thinking-option-description {\n  color: var(--mieweb-primary-800, #0f749c);\n}\n\n.ozwell-messages-trigger {\n  min-height: 30px;\n  border-radius: 8px;\n}\n\n.ozwell-messages-trigger-flare {\n  animation: ozwell-message-flare 1.8s ease-out;\n}\n\n.ozwell-messages-menu {\n  max-width: min(260px, calc(100vw - 24px));\n  border-radius: 10px;\n}\n\n.ozwell-messages-menu-content {\n  max-height: 240px;\n  overflow-y: auto;\n  padding: 6px;\n}\n\n.ozwell-message-nav-item {\n  display: grid !important;\n  grid-template-columns: 22px minmax(0, 1fr);\n  gap: 8px !important;\n  padding: 7px 8px !important;\n}\n\n.ozwell-message-nav-item [data-slot="dropdown-item-label"] {\n  display: contents;\n}\n\n.ozwell-message-nav-index {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 22px;\n  height: 22px;\n  border-radius: 999px;\n  background: var(--mieweb-primary-50, #e6f7fc);\n  color: var(--mieweb-primary-800, #0f749c);\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.ozwell-message-nav-text {\n  min-width: 0;\n  overflow: hidden;\n  color: #1f2937;\n  font-size: 12px;\n  font-weight: 500;\n  line-height: 1.35;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n@keyframes ozwell-message-flare {\n  0% {\n    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0.34);\n    background: var(--mieweb-primary-50, #e6f7fc);\n    color: var(--mieweb-primary-800, #0f749c);\n  }\n  70% {\n    box-shadow: 0 0 0 8px rgba(15, 116, 156, 0);\n    background: var(--mieweb-primary-50, #e6f7fc);\n    color: var(--mieweb-primary-800, #0f749c);\n  }\n  100% {\n    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0);\n  }\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-call"] {\n  padding: 8px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-icon"] {\n  width: 28px;\n  height: 28px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-content"] {\n  font-size: 14px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-result"],\n.ozwell-widget-shell [data-slot="ai-tool-parameters"] {\n  font-size: 12px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] button {\n  padding: 7px 10px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] p {\n  font-size: 13px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] [class*="text-sm"] {\n  font-size: 14px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message"].flex-row-reverse > [data-slot="ai-message-avatar"] {\n  display: none;\n}\n\n.ozwell-toast-wrap {\n  border-bottom: 1px solid #f2c15d;\n  background: #fff7dd;\n  padding: 8px 10px;\n}\n\n.ozwell-toast-wrap [data-slot="toast"] {\n  min-width: 0;\n  max-width: none;\n  padding: 8px 10px;\n  border-radius: 8px;\n  box-shadow: none;\n}\n\n.ozwell-toast-wrap [data-slot="toast-message"] {\n  font-size: 12px;\n  line-height: 1.35;\n}\n\n.ozwell-footer {\n  position: relative;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 8px 12px 10px;\n  border-top: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #64748b;\n  font-size: 11px;\n  line-height: 1;\n  text-align: center;\n}\n\n.ozwell-agent-menu {\n  position: relative;\n  display: inline-flex;\n  align-items: center;\n}\n\n.ozwell-agent-menu-button {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 24px;\n  height: 24px;\n  border: 1px solid #d8e0ec;\n  border-radius: 7px;\n  background: #ffffff;\n  color: #64748b;\n  cursor: pointer;\n  font-size: 13px;\n  line-height: 1;\n}\n\n.ozwell-agent-menu-button:hover {\n  background: #eef2f7;\n  color: #334155;\n}\n\n.ozwell-agent-menu-popover {\n  position: absolute;\n  right: 0;\n  bottom: 30px;\n  z-index: 10;\n  display: grid;\n  min-width: 170px;\n  overflow: hidden;\n  border: 1px solid #cbd5e1;\n  border-radius: 8px;\n  background: #ffffff;\n  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);\n}\n\n.ozwell-agent-menu-popover button {\n  border: 0;\n  border-bottom: 1px solid #e2e8f0;\n  background: transparent;\n  color: #0f172a;\n  cursor: pointer;\n  padding: 9px 11px;\n  text-align: left;\n  font-size: 12px;\n}\n\n.ozwell-agent-menu-popover button:last-child {\n  border-bottom: 0;\n}\n\n.ozwell-agent-menu-popover button:hover {\n  background: #f1f5f9;\n}\n\n.ozwell-agent-draft {\n  position: relative;\n  display: flex;\n  flex: 1;\n  min-height: 0;\n  flex-direction: column;\n  background: #f7f9fc;\n}\n\n.ozwell-agent-draft-editor {\n  flex: 1;\n  min-height: 0;\n  width: 100%;\n  resize: none;\n  border: 0;\n  border-bottom: 1px solid #d8e0ec;\n  outline: none;\n  padding: 14px;\n  background: #0f172a;\n  color: #e5e7eb;\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 12px;\n  line-height: 1.55;\n  tab-size: 2;\n}\n\n.ozwell-agent-draft-editor:focus {\n  box-shadow: inset 0 0 0 2px rgba(39, 170, 225, 0.45);\n}\n\n.ozwell-agent-draft-editor:disabled {\n  opacity: 0.82;\n  cursor: wait;\n}\n\n.ozwell-agent-draft-status {\n  position: absolute;\n  top: 52px;\n  left: 50%;\n  z-index: 2;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n  transform: translateX(-50%);\n  border: 1px solid #334155;\n  border-radius: 999px;\n  background: rgba(15, 23, 42, 0.94);\n  color: #e5e7eb;\n  padding: 7px 11px;\n  font-size: 12px;\n  font-weight: 600;\n  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);\n}\n\n.ozwell-agent-draft-spinner {\n  width: 12px;\n  height: 12px;\n  border: 2px solid rgba(229, 231, 235, 0.35);\n  border-top-color: #e5e7eb;\n  border-radius: 999px;\n  animation: ozwell-spin 0.8s linear infinite;\n}\n\n@keyframes ozwell-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n.ozwell-agent-draft-composer {\n  display: flex;\n  align-items: flex-end;\n  gap: 8px;\n  padding: 10px 12px;\n  border-top: 1px solid #d8e0ec;\n  background: #ffffff;\n}\n\n.ozwell-agent-draft-composer textarea {\n  flex: 1;\n  max-height: 120px;\n  min-height: 40px;\n  resize: vertical;\n  border: 1px solid #cbd5e1;\n  border-radius: 8px;\n  outline: none;\n  padding: 10px 12px;\n  color: #111827;\n  font-size: 14px;\n  line-height: 1.35;\n}\n\n.ozwell-agent-draft-composer textarea:focus {\n  border-color: #27aae1;\n  box-shadow: 0 0 0 2px rgba(39, 170, 225, 0.18);\n}\n\n.ozwell-markdown {\n  display: grid;\n  gap: 0.7em;\n  max-width: 100%;\n  color: inherit;\n  font-size: 14px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ozwell-markdown > :first-child {\n  margin-top: 0;\n}\n\n.ozwell-markdown > :last-child {\n  margin-bottom: 0;\n}\n\n.ozwell-markdown p,\n.ozwell-markdown ul,\n.ozwell-markdown ol,\n.ozwell-markdown pre,\n.ozwell-markdown blockquote,\n.ozwell-markdown table {\n  margin: 0;\n}\n\n.ozwell-markdown ul,\n.ozwell-markdown ol {\n  padding-left: 1.25rem;\n}\n\n.ozwell-markdown a {\n  color: #0f766e;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\n\n.ozwell-markdown blockquote {\n  padding-left: 0.85rem;\n  border-left: 3px solid #9ca3af;\n  color: #475569;\n}\n\n.ozwell-markdown table {\n  width: 100%;\n  border-collapse: collapse;\n  font-size: 13px;\n}\n\n.ozwell-markdown th,\n.ozwell-markdown td {\n  padding: 6px 8px;\n  border: 1px solid #cbd5e1;\n  text-align: left;\n  vertical-align: top;\n}\n\n.ozwell-markdown th {\n  background: #eef2f7;\n  font-weight: 700;\n}\n\n.ozwell-markdown :not(pre) > code {\n  padding: 0.1rem 0.3rem;\n  border-radius: 5px;\n  background: #e8eef5;\n  color: #334155;\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 0.92em;\n}\n\n.ozwell-code-block {\n  max-width: 100%;\n  overflow: hidden;\n  border: 1px solid #1f2937;\n  border-radius: 8px;\n  background: #111827;\n  color: #e5e7eb;\n}\n\n.ozwell-code-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 9px;\n  border-bottom: 1px solid #374151;\n  color: #cbd5e1;\n  font-size: 12px;\n  line-height: 1;\n}\n\n.ozwell-code-copy {\n  border: 1px solid #475569;\n  border-radius: 6px;\n  background: #1f2937;\n  color: #f8fafc;\n  cursor: pointer;\n  font-size: 12px;\n  line-height: 1;\n  padding: 5px 8px;\n}\n\n.ozwell-code-copy:hover {\n  background: #334155;\n}\n\n.ozwell-code-block pre {\n  max-width: 100%;\n  overflow-x: auto;\n  padding: 12px;\n}\n\n.ozwell-code-block code {\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 12px;\n  line-height: 1.55;\n  white-space: pre;\n}\n';
     document.head.appendChild(style);
   })();
 
@@ -35527,6 +35527,10 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const [sending, setSending] = (0, import_react10.useState)(false);
     const [queuedMessage, setQueuedMessage] = (0, import_react10.useState)(null);
     const [toast, setToast] = (0, import_react10.useState)(null);
+    const [agentMenuOpen, setAgentMenuOpen] = (0, import_react10.useState)(false);
+    const [agentDraftYaml, setAgentDraftYaml] = (0, import_react10.useState)(null);
+    const [draftInstruction, setDraftInstruction] = (0, import_react10.useState)("");
+    const [agentDraftStatus, setAgentDraftStatus] = (0, import_react10.useState)(null);
     const [thinkingMode, setThinkingMode] = (0, import_react10.useState)(() => window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART);
     const [thinkingMenuOpen, setThinkingMenuOpen] = (0, import_react10.useState)(false);
     const [messagesMenuOpen, setMessagesMenuOpen] = (0, import_react10.useState)(false);
@@ -35542,6 +35546,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const sendingRef = (0, import_react10.useRef)(false);
     const fallbackToastShownRef = (0, import_react10.useRef)(false);
     const messagesFlaredRef = (0, import_react10.useRef)(false);
+    const draftTextareaRef = (0, import_react10.useRef)(null);
     (0, import_react10.useEffect)(() => {
       configRef.current = config;
     }, [config]);
@@ -35601,6 +35606,140 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       }
       return configRef.current.tools || [];
     }, []);
+    const rawToolEmbedConfigured = (0, import_react10.useMemo)(() => !isAgentKeyConfigured(config) && Boolean(getAuthKey(config)) && Boolean(config.tools && config.tools.length > 0), [config]);
+    const yamlScalar = (0, import_react10.useCallback)((value) => {
+      if (value === null || value === void 0) return "''";
+      if (typeof value === "number" || typeof value === "boolean") return String(value);
+      const text2 = String(value);
+      if (!text2) return "''";
+      if (/[:#\n\r]|^\s|\s$/.test(text2)) return JSON.stringify(text2);
+      return text2;
+    }, []);
+    const toYaml = (0, import_react10.useCallback)((value, indent = 0) => {
+      const pad = " ".repeat(indent);
+      if (Array.isArray(value)) {
+        if (value.length === 0) return "[]\n";
+        return value.map((item) => {
+          if (item && typeof item === "object" && !Array.isArray(item)) {
+            const entries2 = Object.entries(item);
+            if (entries2.length === 0) return `${pad}- {}
+`;
+            const [firstKey, firstValue] = entries2[0];
+            const rest = entries2.slice(1);
+            const first = firstValue && typeof firstValue === "object" ? `${pad}- ${firstKey}:
+${toYaml(firstValue, indent + 4)}` : `${pad}- ${firstKey}: ${yamlScalar(firstValue)}
+`;
+            return first + rest.map(([key, itemValue]) => itemValue && typeof itemValue === "object" ? `${pad}  ${key}:
+${toYaml(itemValue, indent + 4)}` : `${pad}  ${key}: ${yamlScalar(itemValue)}
+`).join("");
+          }
+          return `${pad}- ${yamlScalar(item)}
+`;
+        }).join("");
+      }
+      if (value && typeof value === "object") {
+        return Object.entries(value).map(([key, itemValue]) => itemValue && typeof itemValue === "object" ? `${pad}${key}:
+${toYaml(itemValue, indent + 2)}` : `${pad}${key}: ${yamlScalar(itemValue)}
+`).join("");
+      }
+      return `${pad}${yamlScalar(value)}
+`;
+    }, [yamlScalar]);
+    const toolToAgentYamlTool = (0, import_react10.useCallback)((tool) => ({
+      name: tool.function.name.replace(/^postMessage[:_]/, ""),
+      description: tool.function.description || "",
+      inputSchema: tool.function.parameters || { type: "object", properties: {} }
+    }), []);
+    const buildToolsYaml = (0, import_react10.useCallback)(() => toYaml({ tools: (configRef.current.tools || []).map(toolToAgentYamlTool) }), [toYaml, toolToAgentYamlTool]);
+    const buildSuggestionPayload = (0, import_react10.useCallback)((mode, instruction) => ({
+      mode,
+      title: configRef.current.title || DEFAULT_CONFIG2.title,
+      page_title: document.title || "",
+      url: window.location.href,
+      context: configRef.current.agentSuggestionContext || {},
+      tools: (configRef.current.tools || []).map(toolToAgentYamlTool),
+      ...mode === "revise" ? { yaml: agentDraftYaml || "", instruction: instruction || "" } : {}
+    }), [agentDraftYaml, toolToAgentYamlTool]);
+    const requestAgentSuggestion = (0, import_react10.useCallback)(async (mode, instruction) => {
+      const response = await fetch("/v1/agents/suggest", {
+        method: "POST",
+        headers: requestHeaders(configRef.current),
+        body: JSON.stringify(buildSuggestionPayload(mode, instruction)),
+        signal: AbortSignal.timeout(12e4)
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Agent suggestion failed (${response.status}): ${errorText}`);
+      }
+      const body = await response.json();
+      if (!body.yaml || typeof body.yaml !== "string") {
+        throw new Error("Agent suggestion response missing yaml");
+      }
+      return body.yaml;
+    }, [buildSuggestionPayload]);
+    const copyText = (0, import_react10.useCallback)(async (text2) => {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text2);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text2;
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }, []);
+    const downloadYaml = (0, import_react10.useCallback)((text2) => {
+      postToParent({
+        source: "ozwell-chat-widget",
+        type: "download_yaml",
+        filename: "ozwell-agent.yaml",
+        content: text2
+      });
+    }, [postToParent]);
+    const openAgentDraft = (0, import_react10.useCallback)(async () => {
+      if (!rawToolEmbedConfigured || sendingRef.current) return;
+      setAgentMenuOpen(false);
+      setAgentDraftYaml("");
+      setAgentDraftStatus("Drafting agent YAML...");
+      setSending(true);
+      try {
+        const yamlText = await requestAgentSuggestion("initial");
+        setAgentDraftYaml(yamlText);
+        window.setTimeout(() => draftTextareaRef.current?.focus(), 0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Agent suggestion failed";
+        appendDisplay(systemDisplayMessage(`Error: ${message}`));
+      } finally {
+        setSending(false);
+        setAgentDraftStatus(null);
+      }
+    }, [appendDisplay, rawToolEmbedConfigured, requestAgentSuggestion]);
+    const exportToolsYaml = (0, import_react10.useCallback)(async () => {
+      const yamlText = buildToolsYaml();
+      setAgentMenuOpen(false);
+      setAgentDraftYaml(yamlText);
+      await copyText(yamlText).catch(() => void 0);
+    }, [buildToolsYaml, copyText]);
+    const reviseAgentDraft = (0, import_react10.useCallback)(async (instruction) => {
+      if (!agentDraftYaml || sendingRef.current) return;
+      setAgentDraftStatus("Revising agent YAML...");
+      setSending(true);
+      try {
+        const yamlText = await requestAgentSuggestion("revise", instruction);
+        setAgentDraftYaml(yamlText);
+        setDraftInstruction("");
+        window.setTimeout(() => draftTextareaRef.current?.focus(), 0);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Agent revision failed";
+        appendDisplay(systemDisplayMessage(`Error: ${message}`));
+      } finally {
+        setSending(false);
+        setAgentDraftStatus(null);
+      }
+    }, [agentDraftYaml, appendDisplay, requestAgentSuggestion]);
     const sendQueuedMessage = (0, import_react10.useCallback)(() => {
       const next = queuedRef.current;
       if (!next) return;
@@ -35843,6 +35982,10 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       }
       const trimmed = text2.trim();
       if (!trimmed) return;
+      if (agentDraftYaml !== null) {
+        await reviseAgentDraft(trimmed);
+        return;
+      }
       const userMessage = { role: "user", content: trimmed };
       appendHistory(userMessage);
       appendDisplay(userDisplayMessage(trimmed));
@@ -36051,8 +36194,21 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       messageNodes[chatIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
       setMessagesMenuOpen(false);
     }, []);
+    const submitDraftInstruction = (0, import_react10.useCallback)((event) => {
+      event.preventDefault();
+      const trimmed = draftInstruction.trim();
+      if (!trimmed) return;
+      void reviseAgentDraft(trimmed);
+    }, [draftInstruction, reviseAgentDraft]);
     return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-widget-shell", children: [
-      (config.thinkingEnabled || showMessagesNav) && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-reasoning-bar", children: [
+      (config.thinkingEnabled || showMessagesNav || agentDraftYaml !== null) && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-reasoning-bar", children: agentDraftYaml !== null ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: agentDraftStatus || "Agent Draft" }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-reasoning-controls", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Button, { type: "button", size: "sm", variant: "ghost", onClick: () => void copyText(agentDraftYaml), children: "Copy" }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Button, { type: "button", size: "sm", variant: "ghost", onClick: () => downloadYaml(agentDraftYaml), children: "Save" }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Button, { type: "button", size: "sm", variant: "ghost", onClick: () => setAgentDraftYaml(null), children: "Close" })
+        ] })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
         config.thinkingEnabled ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-thinking-control", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
           Dropdown,
           {
@@ -36124,7 +36280,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
             )) })
           }
         ) })
-      ] }),
+      ] }) }),
       toast && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-toast-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
         Toast,
         {
@@ -36134,7 +36290,43 @@ Please report this to https://github.com/markedjs/marked.`, e) {
           onClose: () => setToast(null)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+      agentDraftYaml !== null ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-agent-draft", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+          "textarea",
+          {
+            ref: draftTextareaRef,
+            className: "ozwell-agent-draft-editor",
+            value: agentDraftYaml,
+            spellCheck: false,
+            disabled: sending && agentDraftStatus === "Drafting agent YAML...",
+            onChange: (event) => setAgentDraftYaml(event.target.value),
+            "aria-label": "Agent YAML draft"
+          }
+        ),
+        agentDraftStatus && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-agent-draft-status", role: "status", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-agent-draft-spinner" }),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: agentDraftStatus })
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("form", { className: "ozwell-agent-draft-composer", onSubmit: submitDraftInstruction, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            "textarea",
+            {
+              value: draftInstruction,
+              onChange: (event) => setDraftInstruction(event.target.value),
+              placeholder: "Ask AI to revise this YAML...",
+              rows: 1,
+              disabled: sending,
+              onKeyDown: (event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Button, { type: "submit", disabled: sending || !draftInstruction.trim(), children: sending ? "Working" : "Send" })
+        ] })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
         AIChat,
         {
           messages: chatMessages,
@@ -36150,7 +36342,26 @@ Please report this to https://github.com/markedjs/marked.`, e) {
           renderTextContent
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-footer", children: "Powered by Ozwell" })
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-footer", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: "Powered by Ozwell" }),
+        rawToolEmbedConfigured && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-agent-menu", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            "button",
+            {
+              type: "button",
+              className: "ozwell-agent-menu-button",
+              "aria-label": "Agent tools",
+              "aria-expanded": agentMenuOpen,
+              onClick: () => setAgentMenuOpen((open) => !open),
+              children: "\u2699"
+            }
+          ),
+          agentMenuOpen && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-agent-menu-popover", role: "menu", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", role: "menuitem", onClick: () => void exportToolsYaml(), children: "Export Tools YAML" }),
+            /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", role: "menuitem", onClick: () => void openAgentDraft(), children: "Suggest an Agent" })
+          ] })
+        ] })
+      ] })
     ] });
   }
 

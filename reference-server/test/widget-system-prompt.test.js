@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
+const WIDGET_PATH = new URL('../embed/src/WidgetApp.tsx', import.meta.url);
 
 async function readWidgetSource() {
   return readFile(WIDGET_PATH, 'utf8');
@@ -11,9 +11,9 @@ async function readWidgetSource() {
 test('agent-key widgets do not add a client-side system prompt', async () => {
   const source = await readWidgetSource();
 
-  assert.match(source, /function isAgentKeyConfigured\(config\)/);
-  assert.match(source, /getAuthKey\(config\)\.startsWith\("agnt_key-"\)/);
-  assert.match(source, /if \(isAgentKeyConfigured\(config\)\) return "";/);
+  assert.match(source, /function isAgentKeyConfigured\(config: OzwellConfig\)/);
+  assert.match(source, /getAuthKey\(config\)\.startsWith\(['"]agnt_key-['"]\)/);
+  assert.match(source, /if \(isAgentKeyConfigured\(config\)\) return ['"]['"];/);
 });
 
 test('widget default prompt does not discourage tool use', async () => {
@@ -27,15 +27,15 @@ test('widget default prompt does not discourage tool use', async () => {
 test('parent-key widgets keep a small neutral default prompt and tool hint', async () => {
   const source = await readWidgetSource();
 
-  assert.match(source, /var DEFAULT_PARENT_SYSTEM_PROMPT = "You are a helpful assistant\. Answer clearly and concisely\.";/);
-  assert.match(source, /var DEFAULT_PARENT_TOOL_HINT = "Use the available tools when they are helpful for answering the user or performing a requested action\.";/);
+  assert.match(source, /const DEFAULT_PARENT_SYSTEM_PROMPT = ['"]You are a helpful assistant\. Answer clearly and concisely\.['"];/);
+  assert.match(source, /const DEFAULT_PARENT_TOOL_HINT = ['"]Use the available tools when they are helpful for answering the user or performing a requested action\.['"];/);
   assert.match(source, /let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;/);
   assert.match(source, /systemPrompt \+= ` \$\{DEFAULT_PARENT_TOOL_HINT\}`;/);
 });
 
 test('parent-key custom system prompt is preserved without widget tool rules', async () => {
   const source = await readWidgetSource();
-  const promptFunctionMatch = source.match(/function buildSystemPrompt\(config\) \{[\s\S]*?\n  \}\n/);
+  const promptFunctionMatch = source.match(/function buildSystemPrompt\(config: OzwellConfig\) {[\s\S]*?\n}\n\nfunction requestHeaders/);
   assert.ok(promptFunctionMatch, 'could not extract buildSystemPrompt function body');
   const promptFunction = promptFunctionMatch[0];
 

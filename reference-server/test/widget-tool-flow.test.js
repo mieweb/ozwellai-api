@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
+const WIDGET_PATH = new URL('../embed/src/WidgetApp.tsx', import.meta.url);
 const LOADER_PATH = new URL('../embed/ozwell-loader.js', import.meta.url);
 
 async function readWidgetSource() {
@@ -32,10 +32,11 @@ test('widget tool results are sent back with the matching OpenAI tool_call_id', 
   const source = await readWidgetSource();
 
   assert.match(source, /const toolCallId = data\.id;/);
-  assert.match(source, /role:\s*"tool"/);
+  assert.match(source, /role:\s*['"]tool['"]/);
   assert.match(source, /tool_call_id:\s*toolCallId/);
   assert.match(source, /content:\s*serializeToolResult\(result\)/);
-  assert.match(source, /sendMessageStreaming\("", tools, thinkingRetryCount \+ 1\)/);
+  assert.match(source, /sendMessageStreaming\(['"]['"], tools, thinkingRetryCount \+ 1\)/);
+  assert.match(source, /sendMessageStreaming\('', toolsForRequest\(\)\)/);
 });
 
 test('widget accepts falsy JSON-RPC ids and always serializes tool result content as a string', async () => {
@@ -43,8 +44,8 @@ test('widget accepts falsy JSON-RPC ids and always serializes tool result conten
 
   assert.match(source, /if \(toolCallId == null\)/);
   assert.doesNotMatch(source, /if \(!toolCallId\)/);
-  assert.match(source, /function serializeToolResult\(result\)/);
-  assert.match(source, /return serialized === void 0 \? "null" : serialized;/);
+  assert.match(source, /function serializeToolResult\(result: unknown\)/);
+  assert.match(source, /return serialized === undefined \? 'null' : serialized;/);
 });
 
 test('loader strips callable tool functions before sending config through postMessage', async () => {
@@ -73,4 +74,20 @@ test('loader returns a tool error if the page handler never responds', async () 
   assert.match(source, /function finishToolCall\(message\)/);
   assert.match(source, /Tool "\$\{toolName\}" did not respond/);
   assert.match(source, /call respond\(\) or error\(\)/);
+});
+
+test('loader allows agent draft YAML downloads from the iframe', async () => {
+  const source = await readLoaderSource();
+
+  assert.match(source, /allow-downloads/);
+  assert.match(source, /case 'download_yaml'/);
+  assert.match(source, /link\.download = data\.filename \|\| 'ozwell-agent\.yaml'/);
+});
+
+test('loader uses Ozwell favicon for widget srcdoc and floating button', async () => {
+  const source = await readLoaderSource();
+
+  assert.match(source, /const faviconUrl = autoDetectedBase \? `\$\{autoDetectedBase\}\/favicon\.ico` : '\/favicon\.ico'/);
+  assert.match(source, /<link rel="icon" href="\$\{faviconUrl\}" \/>/);
+  assert.match(source, /<img src="\$\{faviconUrl\}" alt="Chat" class="ozwell-chat-icon" \/>/);
 });

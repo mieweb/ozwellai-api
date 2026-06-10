@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { FormEvent } from 'react';
 import {
   AIChat,
   Button,
@@ -302,6 +303,10 @@ export function WidgetApp() {
   const [sending, setSending] = useState(false);
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [agentDraftYaml, setAgentDraftYaml] = useState<string | null>(null);
+  const [draftInstruction, setDraftInstruction] = useState('');
+  const [agentDraftStatus, setAgentDraftStatus] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(() => (window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART) as ThinkingMode);
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
   const [messagesMenuOpen, setMessagesMenuOpen] = useState(false);
@@ -318,6 +323,7 @@ export function WidgetApp() {
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
   const messagesFlaredRef = useRef(false);
+  const draftTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
@@ -381,6 +387,159 @@ export function WidgetApp() {
     }
     return configRef.current.tools || [];
   }, []);
+
+  const rawToolEmbedConfigured = useMemo(() => (
+    !isAgentKeyConfigured(config)
+    && Boolean(getAuthKey(config))
+    && Boolean(config.tools && config.tools.length > 0)
+  ), [config]);
+
+  const yamlScalar = useCallback((value: unknown): string => {
+    if (value === null || value === undefined) return "''";
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    const text = String(value);
+    if (!text) return "''";
+    if (/[:#\n\r]|^\s|\s$/.test(text)) return JSON.stringify(text);
+    return text;
+  }, []);
+
+  const toYaml = useCallback((value: unknown, indent = 0): string => {
+    const pad = ' '.repeat(indent);
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '[]\n';
+      return value.map((item) => {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const entries = Object.entries(item as Record<string, unknown>);
+          if (entries.length === 0) return `${pad}- {}\n`;
+          const [firstKey, firstValue] = entries[0];
+          const rest = entries.slice(1);
+          const first = firstValue && typeof firstValue === 'object'
+            ? `${pad}- ${firstKey}:\n${toYaml(firstValue, indent + 4)}`
+            : `${pad}- ${firstKey}: ${yamlScalar(firstValue)}\n`;
+          return first + rest.map(([key, itemValue]) => (
+            itemValue && typeof itemValue === 'object'
+              ? `${pad}  ${key}:\n${toYaml(itemValue, indent + 4)}`
+              : `${pad}  ${key}: ${yamlScalar(itemValue)}\n`
+          )).join('');
+        }
+        return `${pad}- ${yamlScalar(item)}\n`;
+      }).join('');
+    }
+    if (value && typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>).map(([key, itemValue]) => (
+        itemValue && typeof itemValue === 'object'
+          ? `${pad}${key}:\n${toYaml(itemValue, indent + 2)}`
+          : `${pad}${key}: ${yamlScalar(itemValue)}\n`
+      )).join('');
+    }
+    return `${pad}${yamlScalar(value)}\n`;
+  }, [yamlScalar]);
+
+  const toolToAgentYamlTool = useCallback((tool: OpenAITool) => ({
+    name: tool.function.name.replace(/^postMessage[:_]/, ''),
+    description: tool.function.description || '',
+    inputSchema: tool.function.parameters || { type: 'object', properties: {} },
+  }), []);
+
+  const buildToolsYaml = useCallback(() => (
+    toYaml({ tools: (configRef.current.tools || []).map(toolToAgentYamlTool) })
+  ), [toYaml, toolToAgentYamlTool]);
+
+  const buildSuggestionPayload = useCallback((mode: 'initial' | 'revise', instruction?: string) => ({
+    mode,
+    title: configRef.current.title || DEFAULT_CONFIG.title,
+    page_title: document.title || '',
+    url: window.location.href,
+    context: configRef.current.agentSuggestionContext || {},
+    tools: (configRef.current.tools || []).map(toolToAgentYamlTool),
+    ...(mode === 'revise' ? { yaml: agentDraftYaml || '', instruction: instruction || '' } : {}),
+  }), [agentDraftYaml, toolToAgentYamlTool]);
+
+  const requestAgentSuggestion = useCallback(async (mode: 'initial' | 'revise', instruction?: string) => {
+    const response = await fetch('/v1/agents/suggest', {
+      method: 'POST',
+      headers: requestHeaders(configRef.current),
+      body: JSON.stringify(buildSuggestionPayload(mode, instruction)),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Agent suggestion failed (${response.status}): ${errorText}`);
+    }
+    const body = await response.json();
+    if (!body.yaml || typeof body.yaml !== 'string') {
+      throw new Error('Agent suggestion response missing yaml');
+    }
+    return body.yaml;
+  }, [buildSuggestionPayload]);
+
+  const copyText = useCallback(async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }, []);
+
+  const downloadYaml = useCallback((text: string) => {
+    postToParent({
+      source: 'ozwell-chat-widget',
+      type: 'download_yaml',
+      filename: 'ozwell-agent.yaml',
+      content: text,
+    });
+  }, [postToParent]);
+
+  const openAgentDraft = useCallback(async () => {
+    if (!rawToolEmbedConfigured || sendingRef.current) return;
+    setAgentMenuOpen(false);
+    setAgentDraftYaml('');
+    setAgentDraftStatus('Drafting agent YAML...');
+    setSending(true);
+    try {
+      const yamlText = await requestAgentSuggestion('initial');
+      setAgentDraftYaml(yamlText);
+      window.setTimeout(() => draftTextareaRef.current?.focus(), 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Agent suggestion failed';
+      appendDisplay(systemDisplayMessage(`Error: ${message}`));
+    } finally {
+      setSending(false);
+      setAgentDraftStatus(null);
+    }
+  }, [appendDisplay, rawToolEmbedConfigured, requestAgentSuggestion]);
+
+  const exportToolsYaml = useCallback(async () => {
+    const yamlText = buildToolsYaml();
+    setAgentMenuOpen(false);
+    setAgentDraftYaml(yamlText);
+    await copyText(yamlText).catch(() => undefined);
+  }, [buildToolsYaml, copyText]);
+
+  const reviseAgentDraft = useCallback(async (instruction: string) => {
+    if (!agentDraftYaml || sendingRef.current) return;
+    setAgentDraftStatus('Revising agent YAML...');
+    setSending(true);
+    try {
+      const yamlText = await requestAgentSuggestion('revise', instruction);
+      setAgentDraftYaml(yamlText);
+      setDraftInstruction('');
+      window.setTimeout(() => draftTextareaRef.current?.focus(), 0);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Agent revision failed';
+      appendDisplay(systemDisplayMessage(`Error: ${message}`));
+    } finally {
+      setSending(false);
+      setAgentDraftStatus(null);
+    }
+  }, [agentDraftYaml, appendDisplay, requestAgentSuggestion]);
 
   const sendQueuedMessage = useCallback(() => {
     const next = queuedRef.current;
@@ -656,6 +815,11 @@ export function WidgetApp() {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    if (agentDraftYaml !== null) {
+      await reviseAgentDraft(trimmed);
+      return;
+    }
+
     const userMessage = { role: 'user' as const, content: trimmed };
     appendHistory(userMessage);
     appendDisplay(userDisplayMessage(trimmed));
@@ -907,88 +1071,108 @@ export function WidgetApp() {
     setMessagesMenuOpen(false);
   }, []);
 
+  const submitDraftInstruction = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = draftInstruction.trim();
+    if (!trimmed) return;
+    void reviseAgentDraft(trimmed);
+  }, [draftInstruction, reviseAgentDraft]);
+
   return (
     <div className="ozwell-widget-shell">
-      {(config.thinkingEnabled || showMessagesNav) && (
+      {(config.thinkingEnabled || showMessagesNav || agentDraftYaml !== null) && (
         <div className="ozwell-reasoning-bar">
-          {config.thinkingEnabled ? (
-            <div className="ozwell-thinking-control">
-              <Dropdown
-                open={thinkingMenuOpen}
-                onOpenChange={setThinkingMenuOpen}
-                placement="bottom-start"
-                width={248}
-                className="ozwell-thinking-menu"
-                trigger={(
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="ozwell-thinking-trigger"
-                    aria-label={`Show thinking: ${selectedThinkingLabel}`}
-                  >
-                    Show thinking: {selectedThinkingLabel}
-                  </Button>
-                )}
-              >
-                <DropdownContent className="ozwell-thinking-menu-content">
-                  {THINKING_MODE_OPTIONS.map((option) => (
-                    <DropdownItem
-                      key={option.value}
-                      searchText={`${option.label} ${option.description}`}
-                      onClick={() => selectThinkingMode(option.value)}
-                      className="ozwell-thinking-menu-item"
-                      aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
-                    >
-                      <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
-                        <span className="ozwell-thinking-option">
-                          <span className="ozwell-thinking-option-label">{option.label}</span>
-                          <span className="ozwell-thinking-option-description">{option.description}</span>
-                        </span>
-                      </Tooltip>
-                    </DropdownItem>
-                  ))}
-                </DropdownContent>
-              </Dropdown>
-            </div>
+          {agentDraftYaml !== null ? (
+            <>
+              <span>{agentDraftStatus || 'Agent Draft'}</span>
+              <div className="ozwell-reasoning-controls">
+                <Button type="button" size="sm" variant="ghost" onClick={() => void copyText(agentDraftYaml)}>Copy</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => downloadYaml(agentDraftYaml)}>Save</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setAgentDraftYaml(null)}>Close</Button>
+              </div>
+            </>
           ) : (
-            <span className="ozwell-control-spacer" aria-hidden="true" />
-          )}
-          <div className="ozwell-reasoning-controls">
-            {showMessagesNav && (
-              <Dropdown
-                open={messagesMenuOpen}
-                onOpenChange={setMessagesMenuOpen}
-                placement="bottom-end"
-                width={260}
-                className="ozwell-messages-menu"
-                trigger={(
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className={messagesButtonFlare ? 'ozwell-messages-trigger ozwell-messages-trigger-flare' : 'ozwell-messages-trigger'}
+            <>
+              {config.thinkingEnabled ? (
+                <div className="ozwell-thinking-control">
+                  <Dropdown
+                    open={thinkingMenuOpen}
+                    onOpenChange={setThinkingMenuOpen}
+                    placement="bottom-start"
+                    width={248}
+                    className="ozwell-thinking-menu"
+                    trigger={(
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        className="ozwell-thinking-trigger"
+                        aria-label={`Show thinking: ${selectedThinkingLabel}`}
+                      >
+                        Show thinking: {selectedThinkingLabel}
+                      </Button>
+                    )}
                   >
-                    Messages
-                  </Button>
+                    <DropdownContent className="ozwell-thinking-menu-content">
+                      {THINKING_MODE_OPTIONS.map((option) => (
+                        <DropdownItem
+                          key={option.value}
+                          searchText={`${option.label} ${option.description}`}
+                          onClick={() => selectThinkingMode(option.value)}
+                          className="ozwell-thinking-menu-item"
+                          aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
+                        >
+                          <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
+                            <span className="ozwell-thinking-option">
+                              <span className="ozwell-thinking-option-label">{option.label}</span>
+                              <span className="ozwell-thinking-option-description">{option.description}</span>
+                            </span>
+                          </Tooltip>
+                        </DropdownItem>
+                      ))}
+                    </DropdownContent>
+                  </Dropdown>
+                </div>
+              ) : (
+                <span className="ozwell-control-spacer" aria-hidden="true" />
+              )}
+              <div className="ozwell-reasoning-controls">
+                {showMessagesNav && (
+                  <Dropdown
+                    open={messagesMenuOpen}
+                    onOpenChange={setMessagesMenuOpen}
+                    placement="bottom-end"
+                    width={260}
+                    className="ozwell-messages-menu"
+                    trigger={(
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className={messagesButtonFlare ? 'ozwell-messages-trigger ozwell-messages-trigger-flare' : 'ozwell-messages-trigger'}
+                      >
+                        Messages
+                      </Button>
+                    )}
+                  >
+                    <DropdownContent className="ozwell-messages-menu-content">
+                      {userMessageItems.map((item, index) => (
+                        <DropdownItem
+                          key={item.id}
+                          searchText={item.text}
+                          onClick={() => scrollToMessage(item.chatIndex)}
+                          className="ozwell-message-nav-item"
+                        >
+                          <span className="ozwell-message-nav-index">{index + 1}</span>
+                          <span className="ozwell-message-nav-text">{item.text}</span>
+                        </DropdownItem>
+                      ))}
+                    </DropdownContent>
+                  </Dropdown>
                 )}
-              >
-                <DropdownContent className="ozwell-messages-menu-content">
-                  {userMessageItems.map((item, index) => (
-                    <DropdownItem
-                      key={item.id}
-                      searchText={item.text}
-                      onClick={() => scrollToMessage(item.chatIndex)}
-                      className="ozwell-message-nav-item"
-                    >
-                      <span className="ozwell-message-nav-index">{index + 1}</span>
-                      <span className="ozwell-message-nav-text">{item.text}</span>
-                    </DropdownItem>
-                  ))}
-                </DropdownContent>
-              </Dropdown>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1003,21 +1187,80 @@ export function WidgetApp() {
         </div>
       )}
 
-      <AIChat
-        messages={chatMessages}
-        isGenerating={sending}
-        title={config.title || DEFAULT_CONFIG.title}
-        inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
-        showHeader={false}
-        height="100%"
-        variant="embedded"
-        size="full"
-        onSendMessage={(message) => void sendMessage(message)}
-        onClose={() => postToParent({ source: 'ozwell-chat-widget', type: 'closed' })}
-        renderTextContent={renderTextContent}
-      />
+      {agentDraftYaml !== null ? (
+        <div className="ozwell-agent-draft">
+          <textarea
+            ref={draftTextareaRef}
+            className="ozwell-agent-draft-editor"
+            value={agentDraftYaml}
+            spellCheck={false}
+            disabled={sending && agentDraftStatus === 'Drafting agent YAML...'}
+            onChange={(event) => setAgentDraftYaml(event.target.value)}
+            aria-label="Agent YAML draft"
+          />
+          {agentDraftStatus && (
+            <div className="ozwell-agent-draft-status" role="status">
+              <span className="ozwell-agent-draft-spinner" />
+              <span>{agentDraftStatus}</span>
+            </div>
+          )}
+          <form className="ozwell-agent-draft-composer" onSubmit={submitDraftInstruction}>
+            <textarea
+              value={draftInstruction}
+              onChange={(event) => setDraftInstruction(event.target.value)}
+              placeholder="Ask AI to revise this YAML..."
+              rows={1}
+              disabled={sending}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+            <Button type="submit" disabled={sending || !draftInstruction.trim()}>
+              {sending ? 'Working' : 'Send'}
+            </Button>
+          </form>
+        </div>
+      ) : (
+        <AIChat
+          messages={chatMessages}
+          isGenerating={sending}
+          title={config.title || DEFAULT_CONFIG.title}
+          inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
+          showHeader={false}
+          height="100%"
+          variant="embedded"
+          size="full"
+          onSendMessage={(message) => void sendMessage(message)}
+          onClose={() => postToParent({ source: 'ozwell-chat-widget', type: 'closed' })}
+          renderTextContent={renderTextContent}
+        />
+      )}
 
-      <div className="ozwell-footer">Powered by Ozwell</div>
+      <div className="ozwell-footer">
+        <span>Powered by Ozwell</span>
+        {rawToolEmbedConfigured && (
+          <div className="ozwell-agent-menu">
+            <button
+              type="button"
+              className="ozwell-agent-menu-button"
+              aria-label="Agent tools"
+              aria-expanded={agentMenuOpen}
+              onClick={() => setAgentMenuOpen((open) => !open)}
+            >
+              ⚙
+            </button>
+            {agentMenuOpen && (
+              <div className="ozwell-agent-menu-popover" role="menu">
+                <button type="button" role="menuitem" onClick={() => void exportToolsYaml()}>Export Tools YAML</button>
+                <button type="button" role="menuitem" onClick={() => void openAgentDraft()}>Suggest an Agent</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

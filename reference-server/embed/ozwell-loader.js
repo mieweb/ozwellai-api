@@ -160,6 +160,7 @@
 
     // Extract base URL for loading ozwell.js (remove /ozwell.html from path)
     const widgetBaseUrl = widgetSrc.replace(/\/[^/]*$/, '');
+    const faviconUrl = autoDetectedBase ? `${autoDetectedBase}/favicon.ico` : '/favicon.ico';
 
     // Use srcdoc instead of src to inline HTML (eliminates ozwell.html file)
     iframe.srcdoc = `<!DOCTYPE html>
@@ -167,6 +168,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="${faviconUrl}" />
     <title>Ozwell Chat Widget</title>
   </head>
   <body>
@@ -174,15 +176,16 @@
   </body>
 </html>`;
 
-    iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
-    iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
+    const customContainer = !config.defaultUI && containerId;
+    iframe.width = String(options.width || (customContainer ? '100%' : DEFAULT_DIMENSIONS.width));
+    iframe.height = String(options.height || (customContainer ? '100%' : DEFAULT_DIMENSIONS.height));
     iframe.style.border = '0';
     iframe.style.borderRadius = '12px';
     iframe.style.boxShadow = '0 20px 50px rgba(15, 23, 42, 0.12)';
     iframe.style.maxWidth = 'calc(100vw - 40px)';
     iframe.style.maxHeight = 'calc(100vh - 80px)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-downloads');
 
     container.appendChild(iframe);
     state.iframe = iframe;
@@ -380,6 +383,18 @@
         // AI responded with text (not a tool call) - handle notification
         handleAssistantResponse(data);
         break;
+      case 'download_yaml': {
+        const blob = new Blob([String(data.content || '')], { type: 'application/yaml' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = data.filename || 'ozwell-agent.yaml';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        break;
+      }
       default:
         break;
     }
@@ -779,7 +794,8 @@
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    const faviconUrl = autoDetectedBase ? `${autoDetectedBase}/favicon.ico` : '/favicon.ico';
+    button.innerHTML = `<img src="${faviconUrl}" alt="Chat" class="ozwell-chat-icon" />`;
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
