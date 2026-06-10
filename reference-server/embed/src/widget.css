@@ -1,0 +1,222 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f7f9fc;
+}
+
+html,
+body,
+#ozwell-widget-root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: transparent;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.ozwell-widget-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #f7f9fc;
+  color: #111827;
+}
+
+.ozwell-widget-shell [class*="ai-chat"],
+.ozwell-widget-shell [data-slot*="chat"] {
+  min-height: 0;
+}
+
+.ozwell-reasoning-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #d8e0ec;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ozwell-reasoning-controls {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ozwell-reasoning-controls button {
+  white-space: nowrap;
+}
+
+.ozwell-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f2c15d;
+  background: #fff7dd;
+  color: #5f4213;
+  font-size: 13px;
+}
+
+.ozwell-toast button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ozwell-toast button:hover {
+  background: rgba(95, 66, 19, 0.12);
+}
+
+.ozwell-footer {
+  padding: 8px 12px 10px;
+  border-top: 1px solid #d8e0ec;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+}
+
+.ozwell-markdown {
+  display: grid;
+  gap: 0.7em;
+  max-width: 100%;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.ozwell-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ozwell-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ozwell-markdown p,
+.ozwell-markdown ul,
+.ozwell-markdown ol,
+.ozwell-markdown pre,
+.ozwell-markdown blockquote,
+.ozwell-markdown table {
+  margin: 0;
+}
+
+.ozwell-markdown ul,
+.ozwell-markdown ol {
+  padding-left: 1.25rem;
+}
+
+.ozwell-markdown a {
+  color: #0f766e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ozwell-markdown blockquote {
+  padding-left: 0.85rem;
+  border-left: 3px solid #9ca3af;
+  color: #475569;
+}
+
+.ozwell-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ozwell-markdown th,
+.ozwell-markdown td {
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ozwell-markdown th {
+  background: #eef2f7;
+  font-weight: 700;
+}
+
+.ozwell-markdown :not(pre) > code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 5px;
+  background: #e8eef5;
+  color: #334155;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.ozwell-code-block {
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.ozwell-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid #374151;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ozwell-code-copy {
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #f8fafc;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.ozwell-code-copy:hover {
+  background: #334155;
+}
+
+.ozwell-code-block pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.ozwell-code-block code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
