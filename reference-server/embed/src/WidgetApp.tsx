@@ -544,16 +544,25 @@ export function WidgetApp() {
       if (hasToolCalls || parsedResult) {
         const toolCalls = hasToolCalls ? accumulatedToolCalls : parsedResult!.toolCalls;
         const shouldHideContent = parsedResult?.shouldHideContent || hasToolCalls || false;
+        const hasVisibleThinking = Boolean(
+          fullThinking.trim() && configRef.current.thinkingEnabled && modeAtStart !== THINKING.NONE
+        );
         appendHistory({
           role: 'assistant',
           content: fullContent || '',
           tool_calls: toolCalls,
         });
-        updateDisplayMessage(assistantMessageId, (message) => ({
-          ...message,
-          content: shouldHideContent ? [] : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
-          status: 'complete',
-        }));
+        if (shouldHideContent && !hasVisibleThinking) {
+          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+        } else {
+          updateDisplayMessage(assistantMessageId, (message) => ({
+            ...message,
+            content: shouldHideContent
+              ? assistantDisplayMessage('', fullThinking, modeAtStart).content
+              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+            status: 'complete',
+          }));
+        }
         executeToolCalls(toolCalls);
       } else {
         const trimmedContent = fullContent.trim();
