@@ -19,6 +19,17 @@ export function isValidApiKey(key: string): boolean {
   return key.startsWith(KEY_PREFIX);
 }
 
+export function parsePositiveEnvNumber(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  console.warn(`[config] Ignoring ${name}=${JSON.stringify(value)}; expected a positive number.`);
+  return undefined;
+}
+
 /**
  * Simple deterministic text generator for predictable testing
  * Uses a basic Markov chain approach with predefined patterns

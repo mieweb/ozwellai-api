@@ -1,5 +1,5 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured } from '../util';
+import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
 import { agentStore, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
@@ -279,17 +279,6 @@ function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', mod
   return { type: 'mock_response' as const, reason, model, message: messages[reason] };
 }
 
-function parsePositiveEnvNumber(name: string): number | undefined {
-  const value = process.env[name];
-  if (!value) return undefined;
-
-  const parsed = Number(value);
-  if (Number.isFinite(parsed) && parsed > 0) return parsed;
-
-  console.warn(`[config] Ignoring ${name}=${JSON.stringify(value)}; expected a positive number.`);
-  return undefined;
-}
-
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
@@ -337,7 +326,6 @@ function buildMockAssistant(messages: NonNullableMessage[]) {
 
 function dispatchMockNonStream(
   messages: NonNullableMessage[],
-  model: string,
   warning: MockWarning,
 ) {
   const { assistantMsg, finishReason } = buildMockAssistant(messages);
@@ -362,7 +350,6 @@ function dispatchMockNonStream(
 
 function dispatchMockStream(
   messages: NonNullableMessage[],
-  model: string,
   reply: FastifyReply,
   origin: string | undefined,
   warning: MockWarning,
@@ -421,6 +408,15 @@ function respondMockOrError(
   reply: FastifyReply,
   origin: string | undefined,
 ) {
+  const warning = buildMockWarning(reason, model);
+  if (reason === 'mock_agent') {
+    if (stream) {
+      dispatchMockStream(messages, reply, origin, warning);
+      return undefined;
+    }
+    return dispatchMockNonStream(messages, warning);
+  }
+
   if (!MOCK_ENABLED) {
     reply.code(503);
     return createError(
@@ -428,12 +424,11 @@ function respondMockOrError(
       'server_error',
     );
   }
-  const warning = buildMockWarning(reason, model);
   if (stream) {
-    dispatchMockStream(messages, model, reply, origin, warning);
+    dispatchMockStream(messages, reply, origin, warning);
     return undefined;
   }
-  return dispatchMockNonStream(messages, model, warning);
+  return dispatchMockNonStream(messages, warning);
 }
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -622,10 +617,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Tools arriving from the widget use two namespaces:
     //   • bare names       — server-side tools (defined in the agent's tools array)
     //   • postMessage_name — page-provided tools (prefixed by the loader)
+    //   • postMessage:name — legacy page tools from cached loaders during deploys
     //
     // allowedTools (from agent.tools) gates bare-name tools.
-    // pageTools policy gates postMessage_-prefixed tools.
-    const PM_PREFIX = 'postMessage_';
+    // pageTools policy gates prefixed page tools.
+    const PM_PREFIXES = ['postMessage_', 'postMessage:'];
     let filteredTools = tools;
     if (agentConfig !== null && tools) {
       const allowed = agentConfig.allowedTools;          // null = no server tools defined
@@ -635,9 +631,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
         const name = t.function.name;
 
-        if (name.startsWith(PM_PREFIX)) {
+        const pagePrefix = PM_PREFIXES.find((prefix) => name.startsWith(prefix));
+        if (pagePrefix) {
           // Page tool — apply pageTools policy
-          const bare = name.slice(PM_PREFIX.length);
+          const bare = name.slice(pagePrefix.length);
           if (pagePolicy === 'all') return true;
           if (typeof pagePolicy === 'object' && 'restricted' in pagePolicy) {
             return pagePolicy.restricted.includes(bare);
