@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AIChat, Button, type AIMessage, type MCPToolCall } from '@mieweb/ui';
+import {
+  AIChat,
+  Button,
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  Toast,
+  Tooltip,
+  type AIMessage,
+  type MCPToolCall,
+} from '@mieweb/ui';
 import { MarkdownContent } from './MarkdownContent';
 import type {
   ChatHistoryMessage,
@@ -13,7 +23,13 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
-const REASONING_MODES = ['None', 'Peek', 'Smart', 'Expanded'] as const;
+const THINKING_MODE_OPTIONS = [
+  { value: String(THINKING.NONE), label: 'Never', description: 'Hide all thinking blocks in the chat.' },
+  { value: String(THINKING.PEEK), label: 'Collapsed', description: 'Show a compact thinking row that can be opened.' },
+  { value: String(THINKING.SMART), label: 'Auto', description: 'Open while thinking, then collapse after the answer.' },
+  { value: String(THINKING.EXPANDED), label: 'Expanded', description: 'Keep thinking blocks open by default.' },
+];
+const MESSAGES_NAV_THRESHOLD = 3;
 const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
@@ -73,6 +89,14 @@ function serializeToolResult(result: unknown) {
 
 function getContentText(message: ChatHistoryMessage) {
   return typeof message.content === 'string' ? message.content : '';
+}
+
+function getDisplayText(message: WidgetMessage) {
+  return message.content
+    .filter((block) => block.type === 'text' && block.text)
+    .map((block) => block.text)
+    .join(' ')
+    .trim();
 }
 
 function historyToRequestMessages(messages: ChatHistoryMessage[]) {
@@ -279,6 +303,9 @@ export function WidgetApp() {
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(() => (window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART) as ThinkingMode);
+  const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
+  const [messagesMenuOpen, setMessagesMenuOpen] = useState(false);
+  const [messagesButtonFlare, setMessagesButtonFlare] = useState(false);
 
   const configRef = useRef(config);
   const historyRef = useRef(historyMessages);
@@ -290,6 +317,7 @@ export function WidgetApp() {
   const queuedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
+  const messagesFlaredRef = useRef(false);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
@@ -835,35 +863,137 @@ export function WidgetApp() {
     }];
   }, [displayMessages, queuedMessage, thinkingMode]);
 
+  const userMessageItems = useMemo(() => (
+    displayMessages.flatMap((message, chatIndex) => {
+      if (message.role !== 'user') return [];
+      const text = getDisplayText(message);
+      if (!text) return [];
+      return [{ id: message.id, text, chatIndex }];
+    })
+  ), [displayMessages]);
+
+  const showMessagesNav = userMessageItems.length >= MESSAGES_NAV_THRESHOLD;
+
+  useEffect(() => {
+    if (!showMessagesNav || messagesFlaredRef.current) return;
+    messagesFlaredRef.current = true;
+    setMessagesButtonFlare(true);
+    const timeoutId = window.setTimeout(() => setMessagesButtonFlare(false), 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [showMessagesNav]);
+
+  const selectThinkingMode = useCallback((value: string) => {
+    const nextMode = Number(value) as ThinkingMode;
+    setThinkingMode(nextMode);
+    setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
+    setThinkingMenuOpen(false);
+  }, []);
+
+  const selectedThinkingLabel = useMemo(() => (
+    THINKING_MODE_OPTIONS.find((option) => option.value === String(thinkingMode))?.label || 'Auto'
+  ), [thinkingMode]);
+
+  const scrollToMessage = useCallback((chatIndex: number) => {
+    const messageNodes = document.querySelectorAll<HTMLElement>(
+      '[data-slot="ai-chat-messages"] [data-slot="ai-message"]'
+    );
+    messageNodes[chatIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    setMessagesMenuOpen(false);
+  }, []);
+
   return (
     <div className="ozwell-widget-shell">
-      {config.thinkingEnabled && (
+      {(config.thinkingEnabled || showMessagesNav) && (
         <div className="ozwell-reasoning-bar">
-          <span>Reasoning</span>
-          <div className="ozwell-reasoning-controls">
-            {REASONING_MODES.map((label, index) => (
-              <Button
-                key={label}
-                type="button"
-                size="sm"
-                variant={thinkingMode === index ? 'primary' : 'ghost'}
-                onClick={() => {
-                  const nextMode = index as ThinkingMode;
-                  setThinkingMode(nextMode);
-                  setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-                }}
+          {config.thinkingEnabled ? (
+            <div className="ozwell-thinking-control">
+              <Dropdown
+                open={thinkingMenuOpen}
+                onOpenChange={setThinkingMenuOpen}
+                placement="bottom-start"
+                width={248}
+                className="ozwell-thinking-menu"
+                trigger={(
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="ozwell-thinking-trigger"
+                    aria-label={`Show thinking: ${selectedThinkingLabel}`}
+                  >
+                    Show thinking: {selectedThinkingLabel}
+                  </Button>
+                )}
               >
-                {label}
-              </Button>
-            ))}
+                <DropdownContent className="ozwell-thinking-menu-content">
+                  {THINKING_MODE_OPTIONS.map((option) => (
+                    <DropdownItem
+                      key={option.value}
+                      searchText={`${option.label} ${option.description}`}
+                      onClick={() => selectThinkingMode(option.value)}
+                      className="ozwell-thinking-menu-item"
+                      aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
+                    >
+                      <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
+                        <span className="ozwell-thinking-option">
+                          <span className="ozwell-thinking-option-label">{option.label}</span>
+                          <span className="ozwell-thinking-option-description">{option.description}</span>
+                        </span>
+                      </Tooltip>
+                    </DropdownItem>
+                  ))}
+                </DropdownContent>
+              </Dropdown>
+            </div>
+          ) : (
+            <span className="ozwell-control-spacer" aria-hidden="true" />
+          )}
+          <div className="ozwell-reasoning-controls">
+            {showMessagesNav && (
+              <Dropdown
+                open={messagesMenuOpen}
+                onOpenChange={setMessagesMenuOpen}
+                placement="bottom-end"
+                width={260}
+                className="ozwell-messages-menu"
+                trigger={(
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={messagesButtonFlare ? 'ozwell-messages-trigger ozwell-messages-trigger-flare' : 'ozwell-messages-trigger'}
+                  >
+                    Messages
+                  </Button>
+                )}
+              >
+                <DropdownContent className="ozwell-messages-menu-content">
+                  {userMessageItems.map((item, index) => (
+                    <DropdownItem
+                      key={item.id}
+                      searchText={item.text}
+                      onClick={() => scrollToMessage(item.chatIndex)}
+                      className="ozwell-message-nav-item"
+                    >
+                      <span className="ozwell-message-nav-index">{index + 1}</span>
+                      <span className="ozwell-message-nav-text">{item.text}</span>
+                    </DropdownItem>
+                  ))}
+                </DropdownContent>
+              </Dropdown>
+            )}
           </div>
         </div>
       )}
 
       {toast && (
-        <div className="ozwell-toast" role="status">
-          <span>{toast}</span>
-          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss warning">x</button>
+        <div className="ozwell-toast-wrap">
+          <Toast
+            id="ozwell-widget-warning"
+            message={toast}
+            variant="warning"
+            onClose={() => setToast(null)}
+          />
         </div>
       )}
 

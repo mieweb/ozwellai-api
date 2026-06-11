@@ -114,7 +114,7 @@ var OzwellWidgetBundle = (() => {
       function cloneAndReplaceKey(oldElement, newKey) {
         return ReactElement(oldElement.type, newKey, oldElement.props);
       }
-      function isValidElement4(object) {
+      function isValidElement5(object) {
         return "object" === typeof object && null !== object && object.$$typeof === REACT_ELEMENT_TYPE;
       }
       function escape(key) {
@@ -181,7 +181,7 @@ var OzwellWidgetBundle = (() => {
         if (invokeCallback)
           return callback = callback(children), invokeCallback = "" === nameSoFar ? "." + getElementKey(children, 0) : nameSoFar, isArrayImpl(callback) ? (escapedPrefix = "", null != invokeCallback && (escapedPrefix = invokeCallback.replace(userProvidedKeyEscapeRegex, "$&/") + "/"), mapIntoArray(callback, array, escapedPrefix, "", function(c) {
             return c;
-          })) : null != callback && (isValidElement4(callback) && (callback = cloneAndReplaceKey(
+          })) : null != callback && (isValidElement5(callback) && (callback = cloneAndReplaceKey(
             callback,
             escapedPrefix + (null == callback.key || children && children.key === callback.key ? "" : ("" + callback.key).replace(
               userProvidedKeyEscapeRegex,
@@ -266,7 +266,7 @@ var OzwellWidgetBundle = (() => {
         }
         console.error(error);
       };
-      var Children3 = {
+      var Children4 = {
         map: mapChildren,
         forEach: function(children, forEachFunc, forEachContext) {
           mapChildren(
@@ -290,7 +290,7 @@ var OzwellWidgetBundle = (() => {
           }) || [];
         },
         only: function(children) {
-          if (!isValidElement4(children))
+          if (!isValidElement5(children))
             throw Error(
               "React.Children.only expected to receive a single React element child."
             );
@@ -298,7 +298,7 @@ var OzwellWidgetBundle = (() => {
         }
       };
       exports.Activity = REACT_ACTIVITY_TYPE;
-      exports.Children = Children3;
+      exports.Children = Children4;
       exports.Component = Component;
       exports.Fragment = REACT_FRAGMENT_TYPE;
       exports.Profiler = REACT_PROFILER_TYPE;
@@ -377,7 +377,7 @@ var OzwellWidgetBundle = (() => {
       exports.forwardRef = function(render) {
         return { $$typeof: REACT_FORWARD_REF_TYPE, render };
       };
-      exports.isValidElement = isValidElement4;
+      exports.isValidElement = isValidElement5;
       exports.lazy = function(ctor) {
         return {
           $$typeof: REACT_LAZY_TYPE,
@@ -773,7 +773,7 @@ var OzwellWidgetBundle = (() => {
   var require_react_dom_production = __commonJS({
     "../node_modules/react-dom/cjs/react-dom.production.js"(exports) {
       "use strict";
-      var React17 = require_react();
+      var React18 = require_react();
       function formatProdErrorMessage(code) {
         var url = "https://react.dev/errors/" + code;
         if (1 < arguments.length) {
@@ -813,7 +813,7 @@ var OzwellWidgetBundle = (() => {
           implementation
         };
       }
-      var ReactSharedInternals = React17.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+      var ReactSharedInternals = React18.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
       function getCrossOriginStringAs(as, input) {
         if ("font" === as) return "";
         if ("string" === typeof input)
@@ -949,7 +949,7 @@ var OzwellWidgetBundle = (() => {
     "../node_modules/react-dom/cjs/react-dom-client.production.js"(exports) {
       "use strict";
       var Scheduler = require_scheduler();
-      var React17 = require_react();
+      var React18 = require_react();
       var ReactDOM2 = require_react_dom();
       function formatProdErrorMessage(code) {
         var url = "https://react.dev/errors/" + code;
@@ -1140,7 +1140,7 @@ var OzwellWidgetBundle = (() => {
         return null;
       }
       var isArrayImpl = Array.isArray;
-      var ReactSharedInternals = React17.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+      var ReactSharedInternals = React18.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
       var ReactDOMSharedInternals = ReactDOM2.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
       var sharedNotPendingObject = {
         pending: false,
@@ -12586,7 +12586,7 @@ var OzwellWidgetBundle = (() => {
           0 === i && attemptExplicitHydrationTarget(target);
         }
       };
-      var isomorphicReactPackageVersion$jscomp$inline_1840 = React17.version;
+      var isomorphicReactPackageVersion$jscomp$inline_1840 = React18.version;
       if ("19.2.6" !== isomorphicReactPackageVersion$jscomp$inline_1840)
         throw Error(
           formatProdErrorMessage(
@@ -15299,7 +15299,7 @@ var OzwellWidgetBundle = (() => {
 
   // ../vendor/mieweb-ui/dist/chunk-ZVSW2KS6.js
   function LoadingSpinner2() {
-    return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
       "svg",
       {
         className: "h-4 w-4 animate-spin",
@@ -15308,7 +15308,7 @@ var OzwellWidgetBundle = (() => {
         viewBox: "0 0 24 24",
         "aria-hidden": "true",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
             "circle",
             {
               className: "opacity-25",
@@ -15319,7 +15319,7 @@ var OzwellWidgetBundle = (() => {
               strokeWidth: "4"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
             "path",
             {
               className: "opacity-75",
@@ -15331,14 +15331,14 @@ var OzwellWidgetBundle = (() => {
       }
     );
   }
-  var React9, import_jsx_runtime10, buttonVariants, Button;
+  var React10, import_jsx_runtime11, buttonVariants, Button;
   var init_chunk_ZVSW2KS6 = __esm({
     "../vendor/mieweb-ui/dist/chunk-ZVSW2KS6.js"() {
       "use strict";
       init_chunk_F3SOEIN2();
-      React9 = __toESM(require_react(), 1);
+      React10 = __toESM(require_react(), 1);
       init_dist();
-      import_jsx_runtime10 = __toESM(require_jsx_runtime(), 1);
+      import_jsx_runtime11 = __toESM(require_jsx_runtime(), 1);
       buttonVariants = cva(
         // Base styles
         [
@@ -15410,7 +15410,7 @@ var OzwellWidgetBundle = (() => {
           }
         }
       );
-      Button = React9.forwardRef(
+      Button = React10.forwardRef(
         ({
           className,
           variant,
@@ -15425,7 +15425,7 @@ var OzwellWidgetBundle = (() => {
           ...props
         }, ref) => {
           const resolvedSize = size ?? "md";
-          return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
             "button",
             {
               "data-slot": "button",
@@ -15438,13 +15438,13 @@ var OzwellWidgetBundle = (() => {
               disabled: disabled || isLoading,
               "aria-busy": isLoading,
               ...props,
-              children: isLoading ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(LoadingSpinner2, {}),
+              children: isLoading ? /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(import_jsx_runtime11.Fragment, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(LoadingSpinner2, {}),
                 loadingText || children
-              ] }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
-                React9.isValidElement(leftIcon) && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "shrink-0", children: leftIcon }),
+              ] }) : /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(import_jsx_runtime11.Fragment, { children: [
+                React10.isValidElement(leftIcon) && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "shrink-0", children: leftIcon }),
                 children,
-                React9.isValidElement(rightIcon) && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "shrink-0", children: rightIcon })
+                React10.isValidElement(rightIcon) && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "shrink-0", children: rightIcon })
               ] })
             }
           );
@@ -16529,7 +16529,7 @@ kbd {
     if (document.head.querySelector('style[data-ozwell-style="' + marker + '"]')) return;
     const style = document.createElement("style");
     style.dataset.ozwellStyle = marker;
-    style.textContent = ':root {\n  color-scheme: light;\n  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  background: #f7f9fc;\n}\n\nhtml,\nbody,\n#ozwell-widget-root {\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  overflow: hidden;\n}\n\nbody {\n  background: transparent;\n}\n\nbutton,\ntextarea {\n  font: inherit;\n}\n\n.ozwell-widget-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  height: 100%;\n  min-height: 0;\n  background: #f7f9fc;\n  color: #111827;\n}\n\n.ozwell-widget-shell [class*="ai-chat"],\n.ozwell-widget-shell [data-slot*="chat"] {\n  min-height: 0;\n}\n\n.ozwell-reasoning-bar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 10px 12px;\n  border-bottom: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #334155;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ozwell-reasoning-controls {\n  display: flex;\n  gap: 6px;\n  min-width: 0;\n  overflow-x: auto;\n}\n\n.ozwell-reasoning-controls button {\n  white-space: nowrap;\n}\n\n.ozwell-toast {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 10px 12px;\n  border-bottom: 1px solid #f2c15d;\n  background: #fff7dd;\n  color: #5f4213;\n  font-size: 13px;\n}\n\n.ozwell-toast button {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 24px;\n  height: 24px;\n  border: 0;\n  border-radius: 6px;\n  background: transparent;\n  color: inherit;\n  cursor: pointer;\n}\n\n.ozwell-toast button:hover {\n  background: rgba(95, 66, 19, 0.12);\n}\n\n.ozwell-footer {\n  padding: 8px 12px 10px;\n  border-top: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #64748b;\n  font-size: 11px;\n  line-height: 1;\n  text-align: center;\n}\n\n.ozwell-markdown {\n  display: grid;\n  gap: 0.7em;\n  max-width: 100%;\n  color: inherit;\n  font-size: 14px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ozwell-markdown > :first-child {\n  margin-top: 0;\n}\n\n.ozwell-markdown > :last-child {\n  margin-bottom: 0;\n}\n\n.ozwell-markdown p,\n.ozwell-markdown ul,\n.ozwell-markdown ol,\n.ozwell-markdown pre,\n.ozwell-markdown blockquote,\n.ozwell-markdown table {\n  margin: 0;\n}\n\n.ozwell-markdown ul,\n.ozwell-markdown ol {\n  padding-left: 1.25rem;\n}\n\n.ozwell-markdown a {\n  color: #0f766e;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\n\n.ozwell-markdown blockquote {\n  padding-left: 0.85rem;\n  border-left: 3px solid #9ca3af;\n  color: #475569;\n}\n\n.ozwell-markdown table {\n  width: 100%;\n  border-collapse: collapse;\n  font-size: 13px;\n}\n\n.ozwell-markdown th,\n.ozwell-markdown td {\n  padding: 6px 8px;\n  border: 1px solid #cbd5e1;\n  text-align: left;\n  vertical-align: top;\n}\n\n.ozwell-markdown th {\n  background: #eef2f7;\n  font-weight: 700;\n}\n\n.ozwell-markdown :not(pre) > code {\n  padding: 0.1rem 0.3rem;\n  border-radius: 5px;\n  background: #e8eef5;\n  color: #334155;\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 0.92em;\n}\n\n.ozwell-code-block {\n  max-width: 100%;\n  overflow: hidden;\n  border: 1px solid #1f2937;\n  border-radius: 8px;\n  background: #111827;\n  color: #e5e7eb;\n}\n\n.ozwell-code-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 9px;\n  border-bottom: 1px solid #374151;\n  color: #cbd5e1;\n  font-size: 12px;\n  line-height: 1;\n}\n\n.ozwell-code-copy {\n  border: 1px solid #475569;\n  border-radius: 6px;\n  background: #1f2937;\n  color: #f8fafc;\n  cursor: pointer;\n  font-size: 12px;\n  line-height: 1;\n  padding: 5px 8px;\n}\n\n.ozwell-code-copy:hover {\n  background: #334155;\n}\n\n.ozwell-code-block pre {\n  max-width: 100%;\n  overflow-x: auto;\n  padding: 12px;\n}\n\n.ozwell-code-block code {\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 12px;\n  line-height: 1.55;\n  white-space: pre;\n}\n';
+    style.textContent = ':root {\n  color-scheme: light;\n  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;\n  background: #f7f9fc;\n}\n\nhtml,\nbody,\n#ozwell-widget-root {\n  width: 100%;\n  height: 100%;\n  margin: 0;\n  overflow: hidden;\n}\n\nbody {\n  background: transparent;\n}\n\nbutton,\ntextarea {\n  font: inherit;\n}\n\n.ozwell-widget-shell {\n  display: flex;\n  flex-direction: column;\n  width: 100%;\n  height: 100%;\n  min-height: 0;\n  background: #f7f9fc;\n  color: #111827;\n}\n\n.ozwell-widget-shell [class*="ai-chat"],\n.ozwell-widget-shell [data-slot*="chat"] {\n  min-height: 0;\n}\n\n.ozwell-reasoning-bar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 10px;\n  border-bottom: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #334155;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ozwell-reasoning-controls {\n  display: flex;\n  align-items: center;\n  justify-content: flex-end;\n  gap: 6px;\n  min-width: 0;\n  flex: 0 0 auto;\n}\n\n.ozwell-reasoning-controls button {\n  white-space: nowrap;\n}\n\n.ozwell-thinking-control {\n  display: flex;\n  align-items: center;\n  min-width: 0;\n}\n\n.ozwell-thinking-trigger {\n  min-height: 30px;\n  max-width: 190px;\n  border-radius: 8px;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu {\n  max-width: min(248px, calc(100vw - 24px));\n  border-radius: 8px;\n}\n\n.ozwell-thinking-menu-content {\n  padding: 6px;\n}\n\n.ozwell-thinking-menu-item {\n  padding: 7px 8px !important;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] {\n  background: #e8f4fb;\n  color: #0f789f;\n}\n\n.ozwell-thinking-menu-item [data-slot="dropdown-item-label"] {\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option {\n  display: grid;\n  gap: 2px;\n  min-width: 0;\n  width: 100%;\n}\n\n.ozwell-thinking-option-label {\n  color: inherit;\n  font-size: 12px;\n  font-weight: 700;\n  line-height: 1.2;\n}\n\n.ozwell-thinking-option-description {\n  overflow: hidden;\n  color: #64748b;\n  font-size: 11px;\n  font-weight: 500;\n  line-height: 1.25;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.ozwell-thinking-menu-item[aria-current="true"] .ozwell-thinking-option-description {\n  color: #0f789f;\n}\n\n.ozwell-messages-trigger {\n  min-height: 30px;\n  border-radius: 8px;\n}\n\n.ozwell-messages-trigger-flare {\n  animation: ozwell-message-flare 1.8s ease-out;\n}\n\n.ozwell-messages-menu {\n  max-width: min(260px, calc(100vw - 24px));\n  border-radius: 10px;\n}\n\n.ozwell-messages-menu-content {\n  max-height: 240px;\n  overflow-y: auto;\n  padding: 6px;\n}\n\n.ozwell-message-nav-item {\n  display: grid !important;\n  grid-template-columns: 22px minmax(0, 1fr);\n  gap: 8px !important;\n  padding: 7px 8px !important;\n}\n\n.ozwell-message-nav-item [data-slot="dropdown-item-label"] {\n  display: contents;\n}\n\n.ozwell-message-nav-index {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  width: 22px;\n  height: 22px;\n  border-radius: 999px;\n  background: #e8f4fb;\n  color: #0f789f;\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.ozwell-message-nav-text {\n  min-width: 0;\n  overflow: hidden;\n  color: #1f2937;\n  font-size: 12px;\n  font-weight: 500;\n  line-height: 1.35;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n@keyframes ozwell-message-flare {\n  0% {\n    box-shadow: 0 0 0 0 rgba(15, 120, 159, 0.34);\n    background: #e8f4fb;\n    color: #0f789f;\n  }\n  70% {\n    box-shadow: 0 0 0 8px rgba(15, 120, 159, 0);\n    background: #e8f4fb;\n    color: #0f789f;\n  }\n  100% {\n    box-shadow: 0 0 0 0 rgba(15, 120, 159, 0);\n  }\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-call"] {\n  padding: 8px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-icon"] {\n  width: 28px;\n  height: 28px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-content"] {\n  font-size: 14px;\n}\n\n.ozwell-widget-shell [data-slot="ai-tool-result"],\n.ozwell-widget-shell [data-slot="ai-tool-parameters"] {\n  font-size: 12px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] button {\n  padding: 7px 10px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] p {\n  font-size: 13px;\n}\n\n.ozwell-widget-shell [data-slot="ai-message-thinking"] [class*="text-sm"] {\n  font-size: 14px;\n}\n\n.ozwell-toast-wrap {\n  border-bottom: 1px solid #f2c15d;\n  background: #fff7dd;\n  padding: 8px 10px;\n}\n\n.ozwell-toast-wrap [data-slot="toast"] {\n  min-width: 0;\n  max-width: none;\n  padding: 8px 10px;\n  border-radius: 8px;\n  box-shadow: none;\n}\n\n.ozwell-toast-wrap [data-slot="toast-message"] {\n  font-size: 12px;\n  line-height: 1.35;\n}\n\n.ozwell-footer {\n  padding: 8px 12px 10px;\n  border-top: 1px solid #d8e0ec;\n  background: #ffffff;\n  color: #64748b;\n  font-size: 11px;\n  line-height: 1;\n  text-align: center;\n}\n\n.ozwell-markdown {\n  display: grid;\n  gap: 0.7em;\n  max-width: 100%;\n  color: inherit;\n  font-size: 14px;\n  line-height: 1.55;\n  overflow-wrap: anywhere;\n}\n\n.ozwell-markdown > :first-child {\n  margin-top: 0;\n}\n\n.ozwell-markdown > :last-child {\n  margin-bottom: 0;\n}\n\n.ozwell-markdown p,\n.ozwell-markdown ul,\n.ozwell-markdown ol,\n.ozwell-markdown pre,\n.ozwell-markdown blockquote,\n.ozwell-markdown table {\n  margin: 0;\n}\n\n.ozwell-markdown ul,\n.ozwell-markdown ol {\n  padding-left: 1.25rem;\n}\n\n.ozwell-markdown a {\n  color: #0f766e;\n  text-decoration: underline;\n  text-underline-offset: 2px;\n}\n\n.ozwell-markdown blockquote {\n  padding-left: 0.85rem;\n  border-left: 3px solid #9ca3af;\n  color: #475569;\n}\n\n.ozwell-markdown table {\n  width: 100%;\n  border-collapse: collapse;\n  font-size: 13px;\n}\n\n.ozwell-markdown th,\n.ozwell-markdown td {\n  padding: 6px 8px;\n  border: 1px solid #cbd5e1;\n  text-align: left;\n  vertical-align: top;\n}\n\n.ozwell-markdown th {\n  background: #eef2f7;\n  font-weight: 700;\n}\n\n.ozwell-markdown :not(pre) > code {\n  padding: 0.1rem 0.3rem;\n  border-radius: 5px;\n  background: #e8eef5;\n  color: #334155;\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 0.92em;\n}\n\n.ozwell-code-block {\n  max-width: 100%;\n  overflow: hidden;\n  border: 1px solid #1f2937;\n  border-radius: 8px;\n  background: #111827;\n  color: #e5e7eb;\n}\n\n.ozwell-code-header {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 7px 9px;\n  border-bottom: 1px solid #374151;\n  color: #cbd5e1;\n  font-size: 12px;\n  line-height: 1;\n}\n\n.ozwell-code-copy {\n  border: 1px solid #475569;\n  border-radius: 6px;\n  background: #1f2937;\n  color: #f8fafc;\n  cursor: pointer;\n  font-size: 12px;\n  line-height: 1;\n  padding: 5px 8px;\n}\n\n.ozwell-code-copy:hover {\n  background: #334155;\n}\n\n.ozwell-code-block pre {\n  max-width: 100%;\n  overflow-x: auto;\n  padding: 12px;\n}\n\n.ozwell-code-block code {\n  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;\n  font-size: 12px;\n  line-height: 1.55;\n  white-space: pre;\n}\n';
     document.head.appendChild(style);
   })();
 
@@ -21600,6 +21600,590 @@ kbd {
     }, [ref, callback, enabled]);
   }
 
+  // ../vendor/mieweb-ui/dist/chunk-3OHVUXDG.js
+  init_chunk_F3SOEIN2();
+  var React9 = __toESM(require_react(), 1);
+  var import_jsx_runtime10 = __toESM(require_jsx_runtime(), 1);
+  var placementStyles = {
+    "bottom-start": "top-full left-0 mt-2",
+    "bottom-end": "top-full right-0 mt-2",
+    bottom: "top-full left-1/2 -translate-x-1/2 mt-2"
+  };
+  var DropdownContext = React9.createContext(null);
+  function getNodeText(node) {
+    if (typeof node === "string" || typeof node === "number") {
+      return String(node);
+    }
+    if (Array.isArray(node)) {
+      return node.map(getNodeText).join(" ");
+    }
+    if (React9.isValidElement(node)) {
+      return getNodeText(node.props.children);
+    }
+    return "";
+  }
+  function isDropdownElement(node, component) {
+    return React9.isValidElement(node) && node.type === component;
+  }
+  function hasVisibleDropdownContent(node) {
+    if (node == null || typeof node === "boolean") {
+      return false;
+    }
+    if (Array.isArray(node)) {
+      return node.some(hasVisibleDropdownContent);
+    }
+    if (!React9.isValidElement(node)) {
+      if (typeof node === "string") {
+        return node.trim().length > 0;
+      }
+      return true;
+    }
+    if (node.type === React9.Fragment) {
+      return React9.Children.toArray(node.props.children).some(
+        hasVisibleDropdownContent
+      );
+    }
+    if (node.type === DropdownSeparator || node.type === DropdownLabel || node.type === DropdownHeader) {
+      return false;
+    }
+    if (node.type === DropdownContent) {
+      return React9.Children.toArray(node.props.children).some(
+        hasVisibleDropdownContent
+      );
+    }
+    return true;
+  }
+  function normalizeDropdownSiblings(children) {
+    const hasContentBefore = (index) => {
+      for (let current = index - 1; current >= 0; current -= 1) {
+        const child = children[current];
+        if (isDropdownElement(child, DropdownSeparator)) {
+          return false;
+        }
+        if (hasVisibleDropdownContent(child)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const hasContentAfter = (index) => {
+      for (let current = index + 1; current < children.length; current += 1) {
+        const child = children[current];
+        if (isDropdownElement(child, DropdownSeparator)) {
+          return false;
+        }
+        if (hasVisibleDropdownContent(child)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    return children.filter((child, index) => {
+      if (isDropdownElement(child, DropdownSeparator)) {
+        return hasContentBefore(index) && hasContentAfter(index);
+      }
+      if (isDropdownElement(child, DropdownLabel)) {
+        return hasContentAfter(index);
+      }
+      return true;
+    });
+  }
+  function filterDropdownChildren(children, query) {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return React9.Children.toArray(children);
+    }
+    const filteredChildren = React9.Children.toArray(children).map((child) => {
+      if (!React9.isValidElement(child)) {
+        if (typeof child === "string" || typeof child === "number") {
+          return String(child).toLowerCase().includes(normalizedQuery) ? child : null;
+        }
+        return null;
+      }
+      if (child.type === React9.Fragment) {
+        const fragmentChildren = filterDropdownChildren(
+          child.props.children,
+          normalizedQuery
+        );
+        return fragmentChildren.length > 0 ? React9.cloneElement(child, void 0, fragmentChildren) : null;
+      }
+      if (isDropdownElement(child, DropdownHeader)) {
+        return child;
+      }
+      if (isDropdownElement(child, DropdownItem)) {
+        const searchText = [
+          getNodeText(child.props.children),
+          child.props.searchText
+        ].filter(Boolean).join(" ").toLowerCase();
+        return searchText.includes(normalizedQuery) ? child : null;
+      }
+      if (isDropdownElement(child, DropdownContent)) {
+        const contentChildren = filterDropdownChildren(
+          child.props.children,
+          normalizedQuery
+        );
+        return hasVisibleDropdownContent(contentChildren) ? React9.cloneElement(child, void 0, contentChildren) : null;
+      }
+      if (isDropdownElement(child, DropdownSeparator)) {
+        return child;
+      }
+      if (isDropdownElement(child, DropdownLabel)) {
+        return child;
+      }
+      const nestedChildren = child.props.children;
+      if (nestedChildren === void 0) {
+        return child;
+      }
+      const filteredNestedChildren = filterDropdownChildren(
+        nestedChildren,
+        normalizedQuery
+      );
+      return filteredNestedChildren.length > 0 ? React9.cloneElement(child, void 0, filteredNestedChildren) : null;
+    }).filter((child) => child !== null);
+    return normalizeDropdownSiblings(filteredChildren);
+  }
+  function getSelectableValues(children) {
+    return React9.Children.toArray(children).flatMap((child) => {
+      if (!React9.isValidElement(
+        child
+      )) {
+        return [];
+      }
+      if (child.type === React9.Fragment || child.type === DropdownContent) {
+        return getSelectableValues(child.props.children);
+      }
+      if (isDropdownElement(child, DropdownItem)) {
+        return typeof child.props.value === "string" ? [child.props.value] : [];
+      }
+      return child.props.children !== void 0 ? getSelectableValues(child.props.children) : [];
+    });
+  }
+  function Dropdown({
+    trigger,
+    children,
+    open: controlledOpen,
+    onOpenChange,
+    placement = "bottom-start",
+    className,
+    width = "auto",
+    disabled = false,
+    searchable = false,
+    searchPlaceholder = "Search...",
+    searchAriaLabel = "Search dropdown items",
+    searchEmptyState = "No results found",
+    multiSelect = false,
+    selectedValues: controlledSelectedValues,
+    defaultSelectedValues = [],
+    onSelectedValuesChange,
+    showSelectAll = false,
+    selectAllLabel = "Select all"
+  }) {
+    const [uncontrolledOpen, setUncontrolledOpen] = React9.useState(false);
+    const [uncontrolledSelectedValues, setUncontrolledSelectedValues] = React9.useState(defaultSelectedValues);
+    const [searchQuery, setSearchQuery] = React9.useState("");
+    const containerRef = React9.useRef(null);
+    const searchInputRef = React9.useRef(null);
+    const menuId = React9.useId();
+    const isControlled = controlledOpen !== void 0;
+    const isSelectedValuesControlled = controlledSelectedValues !== void 0;
+    const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
+    const selectedValues = isSelectedValuesControlled ? controlledSelectedValues : uncontrolledSelectedValues;
+    const setOpen = React9.useCallback(
+      (value) => {
+        if (!isControlled) {
+          setUncontrolledOpen(value);
+        }
+        onOpenChange?.(value);
+      },
+      [isControlled, onOpenChange]
+    );
+    const handleToggle = React9.useCallback(() => {
+      if (!disabled) {
+        setOpen(!isOpen);
+      }
+    }, [disabled, isOpen, setOpen]);
+    const handleClose = React9.useCallback(() => {
+      setOpen(false);
+    }, [setOpen]);
+    const setSelectedValues = React9.useCallback(
+      (values) => {
+        if (!isSelectedValuesControlled) {
+          setUncontrolledSelectedValues(values);
+        }
+        onSelectedValuesChange?.(values);
+      },
+      [isSelectedValuesControlled, onSelectedValuesChange]
+    );
+    const toggleSelectedValue = React9.useCallback(
+      (value) => {
+        if (!multiSelect) {
+          return;
+        }
+        setSelectedValues(
+          selectedValues.includes(value) ? selectedValues.filter((selectedValue) => selectedValue !== value) : [...selectedValues, value]
+        );
+      },
+      [multiSelect, selectedValues, setSelectedValues]
+    );
+    const dropdownContext = React9.useMemo(
+      () => ({
+        multiSelect,
+        selectedValues,
+        toggleSelectedValue
+      }),
+      [multiSelect, selectedValues, toggleSelectedValue]
+    );
+    useClickOutside(containerRef, handleClose, isOpen);
+    useEscapeKey(handleClose, isOpen);
+    React9.useEffect(() => {
+      if (!isOpen) {
+        setSearchQuery("");
+        return;
+      }
+      if (searchable) {
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      }
+    }, [isOpen, searchable]);
+    const triggerElement = React9.cloneElement(trigger, {
+      onClick: handleToggle,
+      "aria-haspopup": "menu",
+      "aria-expanded": isOpen,
+      "aria-controls": isOpen ? menuId : void 0,
+      disabled: disabled || trigger.props.disabled
+    });
+    const widthStyle = typeof width === "number" ? { width: `${width}px` } : width === "trigger" ? { minWidth: "100%" } : {};
+    const filteredChildren = React9.useMemo(
+      () => filterDropdownChildren(children, searchQuery),
+      [children, searchQuery]
+    );
+    const visibleSelectableValues = React9.useMemo(
+      () => getSelectableValues(searchable ? filteredChildren : children),
+      [children, filteredChildren, searchable]
+    );
+    const hasSearchResults = React9.useMemo(
+      () => hasVisibleDropdownContent(filteredChildren),
+      [filteredChildren]
+    );
+    const allVisibleSelected = visibleSelectableValues.length > 0 && visibleSelectableValues.every((value) => selectedValues.includes(value));
+    const someVisibleSelected = visibleSelectableValues.some(
+      (value) => selectedValues.includes(value)
+    );
+    const handleSelectAll = React9.useCallback(() => {
+      if (!multiSelect || visibleSelectableValues.length === 0) {
+        return;
+      }
+      const visibleValueSet = new Set(visibleSelectableValues);
+      setSelectedValues(
+        allVisibleSelected ? selectedValues.filter((value) => !visibleValueSet.has(value)) : Array.from(/* @__PURE__ */ new Set([...selectedValues, ...visibleSelectableValues]))
+      );
+    }, [
+      allVisibleSelected,
+      multiSelect,
+      selectedValues,
+      setSelectedValues,
+      visibleSelectableValues
+    ]);
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(DropdownContext.Provider, { value: dropdownContext, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { ref: containerRef, className: "relative inline-flex", children: [
+      triggerElement,
+      isOpen && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+        "div",
+        {
+          style: widthStyle,
+          "data-slot": "dropdown-menu",
+          className: cn(
+            "absolute z-50 min-w-[12rem]",
+            "rounded-xl border border-neutral-200 bg-white shadow-lg",
+            "dark:border-neutral-700 dark:bg-neutral-800",
+            "animate-in fade-in zoom-in-95 duration-100",
+            placementStyles[placement],
+            className
+          ),
+          children: [
+            searchable && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+              "div",
+              {
+                className: "border-b border-neutral-200 p-2 dark:border-neutral-700",
+                "data-slot": "dropdown-search",
+                children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                  "input",
+                  {
+                    ref: searchInputRef,
+                    type: "search",
+                    value: searchQuery,
+                    onChange: (event) => setSearchQuery(event.target.value),
+                    placeholder: searchPlaceholder,
+                    "aria-label": searchAriaLabel,
+                    "aria-controls": menuId,
+                    "aria-autocomplete": "list",
+                    "data-slot": "dropdown-search-input",
+                    className: cn(
+                      inputVariants({ size: "sm" }),
+                      "text-sm",
+                      "dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-100"
+                    )
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { id: menuId, role: "menu", children: [
+              multiSelect && showSelectAll && visibleSelectableValues.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(import_jsx_runtime10.Fragment, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "p-2", "data-slot": "dropdown-select-all", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                  DropdownItem,
+                  {
+                    checked: allVisibleSelected,
+                    indeterminate: !allVisibleSelected && someVisibleSelected,
+                    onClick: handleSelectAll,
+                    children: selectAllLabel
+                  }
+                ) }),
+                /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(DropdownSeparator, {})
+              ] }),
+              searchable ? hasSearchResults ? filteredChildren : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                "div",
+                {
+                  className: "text-muted-foreground px-3 py-4 text-center text-sm",
+                  "data-slot": "dropdown-empty",
+                  children: searchEmptyState
+                }
+              ) : children
+            ] })
+          ]
+        }
+      )
+    ] }) });
+  }
+  Dropdown.displayName = "Dropdown";
+  var DropdownHeader = React9.forwardRef(
+    ({ className, avatar, title, subtitle, children, ...props }, ref) => {
+      return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+        "div",
+        {
+          ref,
+          "data-slot": "dropdown-header",
+          className: cn(
+            "border-b border-neutral-200 p-4 dark:border-neutral-700",
+            className
+          ),
+          ...props,
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+              "div",
+              {
+                className: "flex items-center gap-3",
+                "data-slot": "dropdown-header-row",
+                children: [
+                  avatar,
+                  /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "min-w-0 flex-1", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                      "p",
+                      {
+                        className: "truncate text-sm font-semibold text-neutral-900 dark:text-white",
+                        "data-slot": "dropdown-header-title",
+                        children: title
+                      }
+                    ),
+                    subtitle && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                      "p",
+                      {
+                        className: "text-muted-foreground truncate text-xs",
+                        "data-slot": "dropdown-header-subtitle",
+                        children: subtitle
+                      }
+                    )
+                  ] })
+                ]
+              }
+            ),
+            children
+          ]
+        }
+      );
+    }
+  );
+  DropdownHeader.displayName = "DropdownHeader";
+  var DropdownContent = React9.forwardRef(
+    ({ className, ...props }, ref) => {
+      return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+        "div",
+        {
+          ref,
+          "data-slot": "dropdown-content",
+          className: cn("p-2", className),
+          ...props
+        }
+      );
+    }
+  );
+  DropdownContent.displayName = "DropdownContent";
+  function DropdownItemCheckbox({
+    checked,
+    indeterminate = false
+  }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+      "span",
+      {
+        "aria-hidden": "true",
+        "data-slot": "dropdown-checkbox",
+        className: cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-colors duration-150",
+          checked || indeterminate ? "border-primary-500 bg-primary-800 text-white" : "border-input bg-background text-transparent"
+        ),
+        children: indeterminate ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          "svg",
+          {
+            "aria-hidden": "true",
+            className: "h-3 w-3",
+            xmlns: "http://www.w3.org/2000/svg",
+            viewBox: "0 0 16 16",
+            fill: "none",
+            children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+              "path",
+              {
+                d: "M4 8h8",
+                stroke: "currentColor",
+                strokeWidth: "2",
+                strokeLinecap: "round"
+              }
+            )
+          }
+        ) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          "svg",
+          {
+            "aria-hidden": "true",
+            className: "h-3 w-3",
+            xmlns: "http://www.w3.org/2000/svg",
+            viewBox: "0 0 16 16",
+            fill: "none",
+            children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+              "path",
+              {
+                d: "M3.5 8.5 6.5 11.5 12.5 4.5",
+                stroke: "currentColor",
+                strokeWidth: "2",
+                strokeLinecap: "round",
+                strokeLinejoin: "round"
+              }
+            )
+          }
+        )
+      }
+    );
+  }
+  var DropdownItem = React9.forwardRef(
+    ({
+      className,
+      icon,
+      variant = "default",
+      children,
+      searchText,
+      checked,
+      indeterminate = false,
+      onCheckedChange,
+      onClick,
+      value,
+      disabled,
+      ...props
+    }, ref) => {
+      const dropdownContext = React9.useContext(DropdownContext);
+      const itemValue = typeof value === "string" ? value : void 0;
+      const contextSelectedValues = dropdownContext?.selectedValues ?? [];
+      const isMultiSelectItem = dropdownContext?.multiSelect === true && itemValue !== void 0 || checked !== void 0 || indeterminate;
+      const isChecked = checked ?? (isMultiSelectItem ? itemValue !== void 0 && contextSelectedValues.includes(itemValue) : false);
+      const handleClick = React9.useCallback(
+        (event) => {
+          if (dropdownContext && isMultiSelectItem && itemValue !== void 0 && !disabled) {
+            dropdownContext.toggleSelectedValue(itemValue);
+            onCheckedChange?.(!isChecked);
+          }
+          onClick?.(event);
+        },
+        [
+          disabled,
+          dropdownContext,
+          isChecked,
+          isMultiSelectItem,
+          itemValue,
+          onCheckedChange,
+          onClick
+        ]
+      );
+      return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
+        "button",
+        {
+          ref,
+          type: "button",
+          role: isMultiSelectItem ? "menuitemcheckbox" : "menuitem",
+          "aria-checked": isMultiSelectItem ? indeterminate ? "mixed" : isChecked : void 0,
+          disabled,
+          "data-slot": "dropdown-item",
+          className: cn(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm",
+            "transition-colors duration-150",
+            "focus:outline-none",
+            variant === "default" && [
+              "text-neutral-700 dark:text-neutral-300",
+              "hover:bg-neutral-100 dark:hover:bg-neutral-700",
+              "focus:bg-neutral-100 dark:focus:bg-neutral-700"
+            ],
+            variant === "danger" && [
+              "text-red-600 dark:text-red-400",
+              "hover:bg-red-50 dark:hover:bg-red-900/20",
+              "focus:bg-red-50 dark:focus:bg-red-900/20"
+            ],
+            className
+          ),
+          "data-search-text": searchText,
+          onClick: handleClick,
+          value,
+          ...props,
+          children: [
+            isMultiSelectItem && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+              DropdownItemCheckbox,
+              {
+                checked: isChecked,
+                indeterminate
+              }
+            ),
+            icon && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "h-4 w-4 shrink-0", "data-slot": "dropdown-item-icon", children: icon }),
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "font-medium", "data-slot": "dropdown-item-label", children })
+          ]
+        }
+      );
+    }
+  );
+  DropdownItem.displayName = "DropdownItem";
+  function DropdownSeparator({ className }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+      "hr",
+      {
+        "data-slot": "dropdown-separator",
+        className: cn(
+          "border-t border-neutral-200 dark:border-neutral-700",
+          className
+        )
+      }
+    );
+  }
+  DropdownSeparator.displayName = "DropdownSeparator";
+  function DropdownLabel({
+    className,
+    children
+  }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+      "div",
+      {
+        "data-slot": "dropdown-label",
+        className: cn(
+          "px-3 py-1.5 text-xs font-semibold tracking-wider uppercase",
+          "text-muted-foreground",
+          className
+        ),
+        children
+      }
+    );
+  }
+  DropdownLabel.displayName = "DropdownLabel";
+
   // ../vendor/mieweb-ui/dist/chunk-VSQF22GL.js
   function isStorybookDocsMode() {
     if (typeof window === "undefined") return false;
@@ -21642,12 +22226,12 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-EZKRAW2X.js
   init_chunk_F3SOEIN2();
-  var React10 = __toESM(require_react(), 1);
+  var React11 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime11 = __toESM(require_jsx_runtime(), 1);
-  var RadioGroupContext = React10.createContext(void 0);
+  var import_jsx_runtime12 = __toESM(require_jsx_runtime(), 1);
+  var RadioGroupContext = React11.createContext(void 0);
   function useRadioGroupContext() {
-    const context = React10.useContext(RadioGroupContext);
+    const context = React11.useContext(RadioGroupContext);
     if (!context) {
       throw new Error("Radio must be used within a RadioGroup");
     }
@@ -21691,15 +22275,15 @@ kbd {
     children,
     className
   }) {
-    const generatedName = React10.useId();
+    const generatedName = React11.useId();
     const groupName = name || generatedName;
-    const groupId = React10.useId();
+    const groupId = React11.useId();
     const descriptionId = `${groupId}-description`;
     const errorId = `${groupId}-error`;
-    const [uncontrolledValue, setUncontrolledValue] = React10.useState(defaultValue);
+    const [uncontrolledValue, setUncontrolledValue] = React11.useState(defaultValue);
     const isControlled = controlledValue !== void 0;
     const value = isControlled ? controlledValue : uncontrolledValue;
-    const handleChange = React10.useCallback(
+    const handleChange = React11.useCallback(
       (newValue) => {
         if (!isControlled) {
           setUncontrolledValue(newValue);
@@ -21708,11 +22292,11 @@ kbd {
       },
       [isControlled, onValueChange]
     );
-    return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
       RadioGroupContext.Provider,
       {
         value: { name: groupName, value, onChange: handleChange, disabled, size },
-        children: /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
           "fieldset",
           {
             "data-slot": "radio-group",
@@ -21720,7 +22304,7 @@ kbd {
             className: cn("flex flex-col gap-2", className),
             "aria-describedby": [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(" ") || void 0,
             children: [
-              label && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+              label && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                 "legend",
                 {
                   "data-slot": "radio-group-legend",
@@ -21733,7 +22317,7 @@ kbd {
                   children: label
                 }
               ),
-              description && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+              description && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                 "p",
                 {
                   id: descriptionId,
@@ -21747,7 +22331,7 @@ kbd {
                   children: description
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                 "div",
                 {
                   "data-slot": "radio-group-items",
@@ -21758,7 +22342,7 @@ kbd {
                   children
                 }
               ),
-              error && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+              error && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                 "p",
                 {
                   id: errorId,
@@ -21780,7 +22364,7 @@ kbd {
     );
   }
   RadioGroup.displayName = "RadioGroup";
-  var Radio = React10.forwardRef(
+  var Radio = React11.forwardRef(
     ({
       className,
       size: propSize,
@@ -21793,24 +22377,24 @@ kbd {
       ...props
     }, ref) => {
       const context = useRadioGroupContext();
-      const generatedId = React10.useId();
+      const generatedId = React11.useId();
       const radioId = id || generatedId;
       const descriptionId = `${radioId}-description`;
       const isChecked = context.value === value;
       const isDisabled = propDisabled || context.disabled;
       const size = propSize || context.size;
-      const handleChange = React10.useCallback(() => {
+      const handleChange = React11.useCallback(() => {
         if (!isDisabled) {
           context.onChange(value);
         }
       }, [isDisabled, context, value]);
-      const radioElement = /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+      const radioElement = /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
         "span",
         {
           "data-slot": "radio-indicator",
           className: "relative inline-flex items-center justify-center",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
               "input",
               {
                 ref,
@@ -21827,7 +22411,7 @@ kbd {
                 ...props
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
               "span",
               {
                 "data-slot": "radio-dot",
@@ -21843,8 +22427,8 @@ kbd {
           ]
         }
       );
-      const labelElement = label && /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "flex flex-col gap-0.5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+      const labelElement = label && /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex flex-col gap-0.5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
           "label",
           {
             htmlFor: radioId,
@@ -21859,7 +22443,7 @@ kbd {
             children: label
           }
         ),
-        description && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+        description && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
           "p",
           {
             id: descriptionId,
@@ -21874,7 +22458,7 @@ kbd {
           }
         )
       ] });
-      return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
         "div",
         {
           "data-slot": "radio-wrapper",
@@ -21894,9 +22478,9 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-6555OYRU.js
   init_chunk_F3SOEIN2();
-  var React11 = __toESM(require_react(), 1);
+  var React12 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime12 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime13 = __toESM(require_jsx_runtime(), 1);
   var cardVariants = cva(
     [
       "rounded-xl bg-card text-card-foreground",
@@ -21958,7 +22542,7 @@ kbd {
       }
     }
   });
-  var Card = React11.forwardRef(
+  var Card = React12.forwardRef(
     ({
       className,
       padding,
@@ -21972,7 +22556,7 @@ kbd {
       children,
       ...props
     }, ref) => {
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
         Component,
         {
           ref,
@@ -21992,17 +22576,17 @@ kbd {
           "aria-busy": loading || void 0,
           ...props,
           children: [
-            accent && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            accent && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
               "div",
               {
                 className: cn(cardAccentVariants({ color: accent })),
                 "aria-hidden": "true"
               }
             ),
-            loading && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "bg-card/80 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "flex gap-1", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" }),
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" }),
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full" })
+            loading && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "bg-card/80 absolute inset-0 z-10 flex items-center justify-center backdrop-blur-sm", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex gap-1", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.3s]" }),
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full [animation-delay:-0.15s]" }),
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "bg-primary-800 h-2 w-2 animate-bounce rounded-full" })
             ] }) }),
             children
           ]
@@ -22011,7 +22595,7 @@ kbd {
     }
   );
   Card.displayName = "Card";
-  var CardHeader = React11.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardHeader = React12.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "div",
     {
       ref,
@@ -22021,7 +22605,7 @@ kbd {
     }
   ));
   CardHeader.displayName = "CardHeader";
-  var CardTitle = React11.forwardRef(({ className, children, as: Comp = "h3", ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardTitle = React12.forwardRef(({ className, children, as: Comp = "h3", ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     Comp,
     {
       ref,
@@ -22035,7 +22619,7 @@ kbd {
     }
   ));
   CardTitle.displayName = "CardTitle";
-  var CardDescription = React11.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardDescription = React12.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "p",
     {
       ref,
@@ -22045,7 +22629,7 @@ kbd {
     }
   ));
   CardDescription.displayName = "CardDescription";
-  var CardContent = React11.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardContent = React12.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "div",
     {
       ref,
@@ -22055,7 +22639,7 @@ kbd {
     }
   ));
   CardContent.displayName = "CardContent";
-  var CardFooter = React11.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardFooter = React12.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "div",
     {
       ref,
@@ -22065,7 +22649,7 @@ kbd {
     }
   ));
   CardFooter.displayName = "CardFooter";
-  var CardMedia = React11.forwardRef(
+  var CardMedia = React12.forwardRef(
     ({ className, aspectRatio = "video", overlay, src, alt, ...props }, ref) => {
       const aspectClasses = {
         video: "aspect-video",
@@ -22073,7 +22657,7 @@ kbd {
         wide: "aspect-[21/9]",
         auto: ""
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
         "div",
         {
           ref,
@@ -22083,7 +22667,7 @@ kbd {
             className
           ),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
               "img",
               {
                 src,
@@ -22092,14 +22676,14 @@ kbd {
                 ...props
               }
             ),
-            overlay && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "absolute inset-0 flex items-end bg-gradient-to-t from-neutral-900/60 to-transparent p-4", children: overlay })
+            overlay && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "absolute inset-0 flex items-end bg-gradient-to-t from-neutral-900/60 to-transparent p-4", children: overlay })
           ]
         }
       );
     }
   );
   CardMedia.displayName = "CardMedia";
-  var CardBadge = React11.forwardRef(
+  var CardBadge = React12.forwardRef(
     ({
       className,
       variant = "default",
@@ -22120,7 +22704,7 @@ kbd {
         "bottom-left": "bottom-2 left-2",
         "bottom-right": "bottom-2 right-2"
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
         "span",
         {
           ref,
@@ -22138,7 +22722,7 @@ kbd {
     }
   );
   CardBadge.displayName = "CardBadge";
-  var CardActions = React11.forwardRef(
+  var CardActions = React12.forwardRef(
     ({ className, align = "right", children, ...props }, ref) => {
       const alignClasses = {
         left: "justify-start",
@@ -22147,7 +22731,7 @@ kbd {
         between: "justify-between",
         around: "justify-around"
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
         "div",
         {
           ref,
@@ -22164,7 +22748,7 @@ kbd {
     }
   );
   CardActions.displayName = "CardActions";
-  var CardDivider = React11.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  var CardDivider = React12.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     "hr",
     {
       ref,
@@ -22174,7 +22758,7 @@ kbd {
     }
   ));
   CardDivider.displayName = "CardDivider";
-  var CardCollapsible = React11.forwardRef(
+  var CardCollapsible = React12.forwardRef(
     ({
       className,
       expanded: controlledExpanded,
@@ -22183,7 +22767,7 @@ kbd {
       children,
       ...props
     }, ref) => {
-      const [internalExpanded, setInternalExpanded] = React11.useState(false);
+      const [internalExpanded, setInternalExpanded] = React12.useState(false);
       const isControlled = controlledExpanded !== void 0;
       const expanded = isControlled ? controlledExpanded : internalExpanded;
       const handleToggle = () => {
@@ -22193,7 +22777,7 @@ kbd {
           setInternalExpanded(!expanded);
         }
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
         "div",
         {
           ref,
@@ -22201,16 +22785,16 @@ kbd {
           className: cn("", className),
           ...props,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
               "button",
               {
                 type: "button",
                 onClick: handleToggle,
                 className: "text-primary-800 focus-visible:ring-primary-500 flex items-center gap-1 rounded text-sm hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
                 "aria-expanded": expanded,
-                children: typeof trigger === "string" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(import_jsx_runtime12.Fragment, { children: [
+                children: typeof trigger === "string" ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_jsx_runtime13.Fragment, { children: [
                   expanded ? "Show less" : trigger,
-                  /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
                     "svg",
                     {
                       "aria-hidden": "true",
@@ -22221,7 +22805,7 @@ kbd {
                       fill: "none",
                       stroke: "currentColor",
                       viewBox: "0 0 24 24",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                      children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
                         "path",
                         {
                           strokeLinecap: "round",
@@ -22235,14 +22819,14 @@ kbd {
                 ] }) : trigger
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
               "div",
               {
                 className: cn(
                   "grid transition-all duration-300 ease-in-out",
                   expanded ? "mt-3 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
                 ),
-                children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "overflow-hidden", children })
+                children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "overflow-hidden", children })
               }
             )
           ]
@@ -22251,9 +22835,9 @@ kbd {
     }
   );
   CardCollapsible.displayName = "CardCollapsible";
-  var CardStat = React11.forwardRef(
+  var CardStat = React12.forwardRef(
     ({ className, value, label, trend, icon, ...props }, ref) => {
-      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
         "div",
         {
           ref,
@@ -22261,11 +22845,11 @@ kbd {
           className: cn("flex items-start gap-3", className),
           ...props,
           children: [
-            icon && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "bg-primary-500/10 text-primary-800 rounded-lg p-2", children: icon }),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "min-w-0 flex-1", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "text-2xl font-bold tracking-tight", children: value }),
-              /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "text-muted-foreground text-sm", children: label }),
-              trend && /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+            icon && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "bg-primary-500/10 text-primary-800 rounded-lg p-2", children: icon }),
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "min-w-0 flex-1", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "text-2xl font-bold tracking-tight", children: value }),
+              /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "text-muted-foreground text-sm", children: label }),
+              trend && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
                 "div",
                 {
                   className: cn(
@@ -22273,7 +22857,7 @@ kbd {
                     trend.value >= 0 ? "text-success-700 dark:text-success-300" : "text-destructive-700 dark:text-destructive-400"
                   ),
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
                       "svg",
                       {
                         "aria-hidden": "true",
@@ -22281,7 +22865,7 @@ kbd {
                         fill: "none",
                         stroke: "currentColor",
                         viewBox: "0 0 24 24",
-                        children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                        children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
                           "path",
                           {
                             strokeLinecap: "round",
@@ -22292,11 +22876,11 @@ kbd {
                         )
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { children: [
                       Math.abs(trend.value),
                       "%"
                     ] }),
-                    trend.label && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "text-muted-foreground", children: trend.label })
+                    trend.label && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "text-muted-foreground", children: trend.label })
                   ]
                 }
               )
@@ -22310,9 +22894,9 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-XCLQZ4FV.js
   init_chunk_F3SOEIN2();
-  var React12 = __toESM(require_react(), 1);
+  var React13 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime13 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime14 = __toESM(require_jsx_runtime(), 1);
   var checkboxVariants = cva(
     [
       "shrink-0 appearance-none",
@@ -22338,7 +22922,7 @@ kbd {
       }
     }
   );
-  var Checkbox = React12.forwardRef(
+  var Checkbox = React13.forwardRef(
     ({
       className,
       size,
@@ -22351,25 +22935,25 @@ kbd {
       disabled,
       ...props
     }, ref) => {
-      const internalRef = React12.useRef(null);
-      const generatedId = React12.useId();
+      const internalRef = React13.useRef(null);
+      const generatedId = React13.useId();
       const checkboxId = id || generatedId;
       const descriptionId = `${checkboxId}-description`;
       const errorId = `${checkboxId}-error`;
-      React12.useEffect(() => {
+      React13.useEffect(() => {
         const checkbox = internalRef.current;
         if (checkbox) {
           checkbox.indeterminate = indeterminate;
         }
       }, [indeterminate]);
-      React12.useImperativeHandle(ref, () => internalRef.current);
-      const checkboxElement = /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+      React13.useImperativeHandle(ref, () => internalRef.current);
+      const checkboxElement = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
         "span",
         {
           "data-slot": "checkbox-indicator",
           className: "relative inline-flex items-center justify-center",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
               "input",
               {
                 ref: internalRef,
@@ -22383,14 +22967,14 @@ kbd {
                 ...props
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
               CheckIcon2,
               {
                 size,
                 className: "pointer-events-none absolute text-white opacity-0 transition-opacity peer-checked:opacity-100"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
               MinusIcon,
               {
                 size,
@@ -22400,8 +22984,8 @@ kbd {
           ]
         }
       );
-      const labelElement = label && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "flex flex-col", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+      const labelElement = label && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "flex flex-col", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "label",
           {
             htmlFor: checkboxId,
@@ -22413,7 +22997,7 @@ kbd {
             children: label
           }
         ),
-        description && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+        description && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "p",
           {
             id: descriptionId,
@@ -22423,8 +23007,8 @@ kbd {
           }
         )
       ] });
-      return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { "data-slot": "checkbox-wrapper", className: "flex flex-col gap-1", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { "data-slot": "checkbox-wrapper", className: "flex flex-col gap-1", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
           "div",
           {
             "data-slot": "checkbox-row",
@@ -22439,7 +23023,7 @@ kbd {
             ]
           }
         ),
-        error && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+        error && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "p",
           {
             id: errorId,
@@ -22461,17 +23045,17 @@ kbd {
     children,
     className
   }) {
-    const groupId = React12.useId();
+    const groupId = React13.useId();
     const descriptionId = `${groupId}-description`;
     const errorId = `${groupId}-error`;
-    return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
       "fieldset",
       {
         "data-slot": "checkbox-group",
         className: cn("flex flex-col", className),
         "aria-describedby": [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(" ") || void 0,
         children: [
-          label && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          label && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "legend",
             {
               "data-slot": "checkbox-group-legend",
@@ -22479,7 +23063,7 @@ kbd {
               children: label
             }
           ),
-          description && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          description && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "p",
             {
               id: descriptionId,
@@ -22488,7 +23072,7 @@ kbd {
               children: description
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "div",
             {
               role: "group",
@@ -22500,7 +23084,7 @@ kbd {
               children
             }
           ),
-          error && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+          error && /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
             "p",
             {
               id: errorId,
@@ -22522,7 +23106,7 @@ kbd {
       lg: 14
     };
     const iconSize = sizeMap[size || "md"];
-    return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "svg",
       {
         xmlns: "http://www.w3.org/2000/svg",
@@ -22536,7 +23120,7 @@ kbd {
         strokeLinejoin: "round",
         className,
         "aria-hidden": "true",
-        children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M20 6 9 17l-5-5" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M20 6 9 17l-5-5" })
       }
     );
   }
@@ -22547,7 +23131,7 @@ kbd {
       lg: 14
     };
     const iconSize = sizeMap[size || "md"];
-    return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
       "svg",
       {
         xmlns: "http://www.w3.org/2000/svg",
@@ -22561,16 +23145,16 @@ kbd {
         strokeLinejoin: "round",
         className,
         "aria-hidden": "true",
-        children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: "M5 12h14" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M5 12h14" })
       }
     );
   }
 
   // ../vendor/mieweb-ui/dist/chunk-WTDCNXZO.js
   init_chunk_F3SOEIN2();
-  var React13 = __toESM(require_react(), 1);
+  var React14 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime14 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime15 = __toESM(require_jsx_runtime(), 1);
   var scrollLockState = {
     count: 0,
     originalOverflow: null
@@ -22636,7 +23220,7 @@ kbd {
     "aria-labelledby": ariaLabelledBy,
     "aria-describedby": ariaDescribedBy
   }) {
-    const generatedId = React13.useId();
+    const generatedId = React14.useId();
     const modalId = id || generatedId;
     const focusTrapRef = useFocusTrap(open);
     useEscapeKey(() => {
@@ -22644,7 +23228,7 @@ kbd {
         onOpenChange(false);
       }
     }, open);
-    const handleOverlayClick = React13.useCallback(
+    const handleOverlayClick = React14.useCallback(
       (e) => {
         if (closeOnOverlayClick && e.target === e.currentTarget) {
           onOpenChange(false);
@@ -22652,7 +23236,7 @@ kbd {
       },
       [closeOnOverlayClick, onOpenChange]
     );
-    React13.useEffect(() => {
+    React14.useEffect(() => {
       if (!open || isStorybookDocsMode()) {
         return void 0;
       }
@@ -22670,12 +23254,12 @@ kbd {
       };
     }, [open]);
     if (!open) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       ModalContext.Provider,
       {
         value: { onClose: () => onOpenChange(false), modalId },
-        children: /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "fixed inset-0 z-50", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "fixed inset-0 z-50", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
             "div",
             {
               className: cn(modalOverlayVariants()),
@@ -22683,12 +23267,12 @@ kbd {
               "aria-hidden": "true"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "fixed inset-0 overflow-y-auto", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "fixed inset-0 overflow-y-auto", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
             "div",
             {
               className: "flex min-h-full items-center justify-center p-0 sm:p-4",
               onClick: handleOverlayClick,
-              children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+              children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
                 "div",
                 {
                   ref: focusTrapRef,
@@ -22713,18 +23297,18 @@ kbd {
     );
   }
   Modal.displayName = "Modal";
-  var ModalContext = React13.createContext(
+  var ModalContext = React14.createContext(
     void 0
   );
   function useModalContext() {
-    const context = React13.useContext(ModalContext);
+    const context = React14.useContext(ModalContext);
     if (!context) {
       throw new Error("Modal components must be used within a Modal");
     }
     return context;
   }
-  var ModalHeader = React13.forwardRef(
-    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+  var ModalHeader = React14.forwardRef(
+    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       "div",
       {
         ref,
@@ -22739,10 +23323,10 @@ kbd {
     )
   );
   ModalHeader.displayName = "ModalHeader";
-  var ModalTitle = React13.forwardRef(
+  var ModalTitle = React14.forwardRef(
     ({ className, children, ...props }, ref) => {
       const { modalId } = useModalContext();
-      return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
         "h2",
         {
           ref,
@@ -22759,10 +23343,10 @@ kbd {
     }
   );
   ModalTitle.displayName = "ModalTitle";
-  var ModalClose = React13.forwardRef(
+  var ModalClose = React14.forwardRef(
     ({ className, children, onClick, ...props }, ref) => {
       const { onClose } = useModalContext();
-      const handleClick = React13.useCallback(
+      const handleClick = React14.useCallback(
         (e) => {
           onClick?.(e);
           if (!e.defaultPrevented) {
@@ -22771,7 +23355,7 @@ kbd {
         },
         [onClick, onClose]
       );
-      return /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
         "button",
         {
           ref,
@@ -22787,14 +23371,14 @@ kbd {
           ),
           "aria-label": "Close",
           ...props,
-          children: children || /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(CloseIcon2, {})
+          children: children || /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(CloseIcon2, {})
         }
       );
     }
   );
   ModalClose.displayName = "ModalClose";
-  var ModalBody = React13.forwardRef(
-    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+  var ModalBody = React14.forwardRef(
+    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       "div",
       {
         ref,
@@ -22805,8 +23389,8 @@ kbd {
     )
   );
   ModalBody.displayName = "ModalBody";
-  var ModalFooter = React13.forwardRef(
-    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+  var ModalFooter = React14.forwardRef(
+    ({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
       "div",
       {
         ref,
@@ -22822,7 +23406,7 @@ kbd {
   );
   ModalFooter.displayName = "ModalFooter";
   function CloseIcon2() {
-    return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
       "svg",
       {
         xmlns: "http://www.w3.org/2000/svg",
@@ -22836,8 +23420,8 @@ kbd {
         strokeLinejoin: "round",
         "aria-hidden": "true",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "M18 6 6 18" }),
-          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d: "m6 6 12 12" })
+          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("path", { d: "M18 6 6 18" }),
+          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("path", { d: "m6 6 12 12" })
         ]
       }
     );
@@ -22845,9 +23429,9 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-WO5CAOAN.js
   init_chunk_F3SOEIN2();
-  var React14 = __toESM(require_react(), 1);
+  var React15 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime15 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime16 = __toESM(require_jsx_runtime(), 1);
   var avatarVariants = cva(
     [
       "relative inline-flex items-center justify-center",
@@ -22877,22 +23461,22 @@ kbd {
   function getInitials(name) {
     return name.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2);
   }
-  var Avatar = React14.forwardRef(
+  var Avatar = React15.forwardRef(
     ({ className, src, alt, name, fallback, size, ring, ...props }, ref) => {
-      const [imageError, setImageError] = React14.useState(false);
-      React14.useEffect(() => {
+      const [imageError, setImageError] = React15.useState(false);
+      React15.useEffect(() => {
         setImageError(false);
       }, [src]);
       const showImage = src && !imageError;
       const initials = name ? getInitials(name) : null;
-      return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
         "div",
         {
           ref,
           "data-slot": "avatar",
           className: cn(avatarVariants({ size, ring }), className),
           ...props,
-          children: showImage ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          children: showImage ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
             "img",
             {
               src,
@@ -22900,14 +23484,14 @@ kbd {
               className: "h-full w-full object-cover",
               onError: () => setImageError(true)
             }
-          ) : React14.isValidElement(fallback) ? fallback : initials ? initials : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+          ) : React15.isValidElement(fallback) ? fallback : initials ? initials : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
             "svg",
             {
               "aria-hidden": "true",
               className: "h-[60%] w-[60%] text-white/80",
               fill: "currentColor",
               viewBox: "0 0 24 24",
-              children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("path", { d: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" })
+              children: /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("path", { d: "M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" })
             }
           )
         }
@@ -22915,12 +23499,12 @@ kbd {
     }
   );
   Avatar.displayName = "Avatar";
-  var AvatarGroup = React14.forwardRef(
+  var AvatarGroup = React15.forwardRef(
     ({ className, max, size = "md", children, ...props }, ref) => {
-      const childrenArray = React14.Children.toArray(children);
+      const childrenArray = React15.Children.toArray(children);
       const visibleChildren = max ? childrenArray.slice(0, max) : childrenArray;
       const remainingCount = max ? Math.max(0, childrenArray.length - max) : 0;
-      return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
         "div",
         {
           ref,
@@ -22929,8 +23513,8 @@ kbd {
           ...props,
           children: [
             visibleChildren.map((child, index) => {
-              if (React14.isValidElement(child)) {
-                return React14.cloneElement(
+              if (React15.isValidElement(child)) {
+                return React15.cloneElement(
                   child,
                   {
                     key: index,
@@ -22944,7 +23528,7 @@ kbd {
               }
               return child;
             }),
-            remainingCount > 0 && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+            remainingCount > 0 && /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
               "div",
               {
                 className: cn(
@@ -22967,9 +23551,9 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-DCER2QQB.js
   init_chunk_F3SOEIN2();
-  var React15 = __toESM(require_react(), 1);
+  var React16 = __toESM(require_react(), 1);
   init_dist();
-  var import_jsx_runtime16 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime17 = __toESM(require_jsx_runtime(), 1);
   var badgeVariants = cva(
     [
       "inline-flex items-center justify-center",
@@ -22999,9 +23583,9 @@ kbd {
       }
     }
   );
-  var Badge = React15.forwardRef(
+  var Badge = React16.forwardRef(
     ({ className, variant, size, icon, children, ...props }, ref) => {
-      return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
         "span",
         {
           ref,
@@ -23009,7 +23593,7 @@ kbd {
           className: cn(badgeVariants({ variant, size }), className),
           ...props,
           children: [
-            icon && /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "mr-1 shrink-0", children: icon }),
+            icon && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "mr-1 shrink-0", children: icon }),
             children
           ]
         }
@@ -23054,10 +23638,10 @@ kbd {
 
   // ../vendor/mieweb-ui/dist/chunk-MV3MTHWQ.js
   init_chunk_F3SOEIN2();
-  var React16 = __toESM(require_react(), 1);
+  var React17 = __toESM(require_react(), 1);
   init_dist();
   init_lucide_react();
-  var import_jsx_runtime17 = __toESM(require_jsx_runtime(), 1);
+  var import_jsx_runtime18 = __toESM(require_jsx_runtime(), 1);
   var alertVariants = cva(
     [
       "relative w-full rounded-lg border p-4",
@@ -23079,7 +23663,7 @@ kbd {
       }
     }
   );
-  var Alert = React16.forwardRef(
+  var Alert = React17.forwardRef(
     ({
       className,
       variant,
@@ -23090,7 +23674,7 @@ kbd {
       children,
       ...props
     }, ref) => {
-      return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
         "div",
         {
           ref,
@@ -23098,15 +23682,15 @@ kbd {
           "data-slot": "alert",
           className: cn(
             alertVariants({ variant }),
-            React16.isValidElement(icon) && "pl-11",
+            React17.isValidElement(icon) && "pl-11",
             dismissible && "pr-10",
             className
           ),
           ...props,
           children: [
-            React16.isValidElement(icon) && icon,
-            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { children }),
-            dismissible && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+            React17.isValidElement(icon) && icon,
+            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { children }),
+            dismissible && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
               "button",
               {
                 type: "button",
@@ -23119,7 +23703,7 @@ kbd {
                   "transition-opacity"
                 ),
                 "aria-label": dismissLabel,
-                children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(X, { size: 16, "aria-hidden": "true" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(X, { size: 16, "aria-hidden": "true" })
               }
             )
           ]
@@ -23128,7 +23712,7 @@ kbd {
     }
   );
   Alert.displayName = "Alert";
-  var AlertTitle = React16.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+  var AlertTitle = React17.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
     "h5",
     {
       ref,
@@ -23139,7 +23723,7 @@ kbd {
     }
   ));
   AlertTitle.displayName = "AlertTitle";
-  var AlertDescription = React16.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+  var AlertDescription = React17.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
     "p",
     {
       ref,
@@ -23154,7 +23738,7 @@ kbd {
   init_chunk_F3SOEIN2();
   var React142 = __toESM(require_react());
   var import_react8 = __toESM(require_react());
-  var import_jsx_runtime18 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime19 = __toESM(require_jsx_runtime());
   init_dist();
   var ReactDOM = __toESM(require_react_dom());
   var import_react_dom2 = __toESM(require_react_dom());
@@ -23208,14 +23792,14 @@ kbd {
       }
     };
     const canAdd = value.length < maxEntries;
-    const content = /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-      value.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    const content = /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+      value.map((entry) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           "data-slot": "additional-fields-row",
           className: "mb-3 flex items-center gap-2",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Input,
               {
                 value: entry.name,
@@ -23226,7 +23810,7 @@ kbd {
                 hideLabel: true
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Input,
               {
                 value: entry.value,
@@ -23237,7 +23821,7 @@ kbd {
                 hideLabel: true
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Button,
               {
                 type: "button",
@@ -23247,29 +23831,29 @@ kbd {
                 disabled,
                 "aria-label": "Remove field",
                 className: "text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/20 dark:hover:text-red-300",
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Trash2, { className: "h-4 w-4" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Trash2, { className: "h-4 w-4" })
               }
             )
           ]
         },
         entry.id
       )),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Button,
         {
           type: "button",
           variant: "ghost",
           onClick: handleAdd,
           disabled: disabled || !canAdd,
-          leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Plus, { className: "h-4 w-4" }),
+          leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Plus, { className: "h-4 w-4" }),
           className: "text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-900/20",
           children: addButtonLabel
         }
       )
     ] });
     if (!collapsible) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "additional-fields", className: cn("space-y-3", className), children: [
-        title && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "additional-fields", className: cn("space-y-3", className), children: [
+        title && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "h3",
           {
             "data-slot": "additional-fields-title",
@@ -23280,8 +23864,8 @@ kbd {
         content
       ] });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "additional-fields", className: cn("", className), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "additional-fields", className: cn("", className), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "button",
         {
           type: "button",
@@ -23296,8 +23880,8 @@ kbd {
           "aria-expanded": isExpanded,
           "aria-controls": contentId,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: title }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: title }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ChevronDown,
               {
                 className: cn(
@@ -23306,11 +23890,11 @@ kbd {
                 )
               }
             ),
-            value.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 ml-1 rounded-full px-2 py-0.5 text-xs", children: value.length })
+            value.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 ml-1 rounded-full px-2 py-0.5 text-xs", children: value.length })
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           id: contentId,
@@ -23467,8 +24051,8 @@ kbd {
         }
       };
     }, [googlePlaces?.enabled]);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: cn("space-y-4", className), children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: cn("space-y-4", className), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Input,
         {
           ref: inputRef,
@@ -23485,7 +24069,7 @@ kbd {
           "data-cy": "input-address-line-1"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Input,
         {
           id: `${idPrefix}-street2`,
@@ -23500,8 +24084,8 @@ kbd {
           "data-cy": "input-address-line-2"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-12 gap-4", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "col-span-12 md:col-span-6", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-12 gap-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "col-span-12 md:col-span-6", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Input,
           {
             id: `${idPrefix}-city`,
@@ -23517,7 +24101,7 @@ kbd {
             "data-cy": "input-city"
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "col-span-4 md:col-span-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "col-span-4 md:col-span-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Input,
           {
             id: `${idPrefix}-state`,
@@ -23534,7 +24118,7 @@ kbd {
             "data-cy": "input-state"
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "col-span-8 md:col-span-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "col-span-8 md:col-span-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Input,
           {
             id: `${idPrefix}-postalCode`,
@@ -23551,8 +24135,8 @@ kbd {
           }
         ) })
       ] }),
-      (showCounty || showCountry) && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-12 gap-4", children: [
-        showCounty && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: cn(showCountry ? "col-span-6" : "col-span-12"), children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      (showCounty || showCountry) && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-12 gap-4", children: [
+        showCounty && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: cn(showCountry ? "col-span-6" : "col-span-12"), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Input,
           {
             id: `${idPrefix}-county`,
@@ -23567,7 +24151,7 @@ kbd {
             "data-cy": "input-county"
           }
         ) }),
-        showCountry && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: cn(showCounty ? "col-span-6" : "col-span-12"), children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        showCountry && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: cn(showCounty ? "col-span-6" : "col-span-12"), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Input,
           {
             id: `${idPrefix}-country`,
@@ -23584,8 +24168,8 @@ kbd {
           }
         ) })
       ] }),
-      value.lat !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("input", { type: "hidden", name: "lat", value: value.lat }),
-      value.lng !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("input", { type: "hidden", name: "lng", value: value.lng })
+      value.lat !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("input", { type: "hidden", name: "lat", value: value.lat }),
+      value.lng !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("input", { type: "hidden", name: "lng", value: value.lng })
     ] });
   }
   AddressForm.displayName = "AddressForm";
@@ -23621,12 +24205,12 @@ kbd {
       if (!name) return "?";
       return name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "ai-message-avatar",
         className: cn(avatarVariants2({ role, size }), className),
-        children: role === "assistant" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SparklesIcon, { size: "md" }) : role === "user" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "font-medium", children: getInitials2(userName) }) : role === "system" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: role === "assistant" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SparklesIcon, { size: "md" }) : role === "user" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "font-medium", children: getInitials2(userName) }) : role === "system" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "svg",
           {
             "aria-hidden": "true",
@@ -23635,7 +24219,7 @@ kbd {
             viewBox: "0 0 24 24",
             stroke: "currentColor",
             strokeWidth: "1.5",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 strokeLinecap: "round",
@@ -23644,7 +24228,7 @@ kbd {
               }
             )
           }
-        ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "svg",
           {
             "aria-hidden": "true",
@@ -23653,7 +24237,7 @@ kbd {
             viewBox: "0 0 24 24",
             stroke: "currentColor",
             strokeWidth: "1.5",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 strokeLinecap: "round",
@@ -23674,13 +24258,13 @@ kbd {
       minHeight: "6px",
       flexShrink: 0
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "ai-typing-indicator",
         className: cn("inline-flex items-center justify-center gap-2", className),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "span",
             {
               className: "rounded-full bg-neutral-500 dark:bg-neutral-400",
@@ -23691,7 +24275,7 @@ kbd {
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "span",
             {
               className: "rounded-full bg-neutral-500 dark:bg-neutral-400",
@@ -23702,7 +24286,7 @@ kbd {
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "span",
             {
               className: "rounded-full bg-neutral-500 dark:bg-neutral-400",
@@ -23712,7 +24296,7 @@ kbd {
               }
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("style", { children: `
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("style", { children: `
         @keyframes typing-dot {
           0%, 80%, 100% { opacity: 0.4; }
           40% { opacity: 1; }
@@ -23735,12 +24319,12 @@ kbd {
     );
     if (content.type === "text" && content.text) {
       if (renderTextContent) {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "prose prose-sm dark:prose-invert max-w-none", children: renderTextContent(content.text, { messageId, streaming, role }) });
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "prose prose-sm dark:prose-invert max-w-none", children: renderTextContent(content.text, { messageId, streaming, role }) });
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "prose prose-sm dark:prose-invert max-w-none", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "whitespace-pre-wrap", children: content.text }) });
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "prose prose-sm dark:prose-invert max-w-none", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "whitespace-pre-wrap", children: content.text }) });
     }
     if (content.type === "tool_use" && content.toolCall) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         MCPToolCallDisplay,
         {
           toolCall: content.toolCall,
@@ -23750,20 +24334,20 @@ kbd {
       );
     }
     if (content.type === "thinking" && content.text) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           "data-slot": "ai-message-thinking",
           className: "rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-800/50",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "button",
               {
                 onClick: () => setIsCollapsed(!isCollapsed),
                 className: "flex w-full items-center justify-between px-3 py-2 text-left",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground flex items-center gap-2 text-sm", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground flex items-center gap-2 text-sm", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       "svg",
                       {
                         "aria-hidden": "true",
@@ -23772,7 +24356,7 @@ kbd {
                         viewBox: "0 0 24 24",
                         stroke: "currentColor",
                         strokeWidth: "1.5",
-                        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "path",
                           {
                             strokeLinecap: "round",
@@ -23784,7 +24368,7 @@ kbd {
                     ),
                     "Thinking..."
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     ChevronIcon,
                     {
                       direction: isCollapsed ? "right" : "down",
@@ -23794,18 +24378,18 @@ kbd {
                 ]
               }
             ),
-            !isCollapsed && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "border-t border-neutral-200 px-3 py-2 dark:border-neutral-700", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-sm text-neutral-600 italic dark:text-neutral-400", children: content.text }) })
+            !isCollapsed && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "border-t border-neutral-200 px-3 py-2 dark:border-neutral-700", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-sm text-neutral-600 italic dark:text-neutral-400", children: content.text }) })
           ]
         }
       );
     }
     if (content.type === "code" && content.text) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "pre",
         {
           "data-slot": "ai-message-code",
           className: "rounded-lg bg-neutral-900 p-3 text-sm dark:bg-neutral-950",
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "code",
             {
               className: content.language ? `language-${content.language}` : "",
@@ -23862,14 +24446,14 @@ kbd {
       });
     };
     if (message.role === "tool") {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           "data-slot": "ai-message",
           className: cn(messageVariants({ role: message.role }), className),
           children: [
-            showAvatar && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MessageAvatar, { role: message.role }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1 space-y-2", children: message.content.map((content, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            showAvatar && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MessageAvatar, { role: message.role }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1 space-y-2", children: message.content.map((content, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ContentBlock,
               {
                 content,
@@ -23885,14 +24469,14 @@ kbd {
         }
       );
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "ai-message",
         className: cn(messageVariants({ role: message.role }), className),
         children: [
-          showAvatar && message.role !== "system" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MessageAvatar, { role: message.role, userName }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          showAvatar && message.role !== "system" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MessageAvatar, { role: message.role, userName }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: cn(
@@ -23900,7 +24484,7 @@ kbd {
                 message.role === "user" && "items-end"
               ),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "div",
                   {
                     "data-slot": "ai-message-bubble",
@@ -23908,7 +24492,7 @@ kbd {
                       bubbleVariants2({ role: message.role }),
                       message.status === "error" && "border border-red-300 dark:border-red-700"
                     ),
-                    children: hasContent ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "space-y-3", children: message.content.map((content, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    children: hasContent ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "space-y-3", children: message.content.map((content, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       ContentBlock,
                       {
                         content,
@@ -23919,10 +24503,10 @@ kbd {
                         renderTextContent
                       },
                       index
-                    )) }) : isStreaming ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AITypingIndicator, {}) }) : null
+                    )) }) : isStreaming ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AITypingIndicator, {}) }) : null
                   }
                 ),
-                showTimestamp && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                showTimestamp && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "span",
                   {
                     "data-slot": "ai-message-timestamp",
@@ -23930,7 +24514,7 @@ kbd {
                     children: formatTime4(message.timestamp)
                   }
                 ),
-                message.status === "error" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "px-2 text-xs text-red-500", children: message.role === "user" ? "Failed to send" : "An error occurred" })
+                message.status === "error" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "px-2 text-xs text-red-500", children: message.role === "user" ? "Failed to send" : "An error occurred" })
               ]
             }
           )
@@ -23939,7 +24523,7 @@ kbd {
     );
   }
   var ACTION_ICONS = {
-    patient: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    patient: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -23948,7 +24532,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -23958,7 +24542,7 @@ kbd {
         )
       }
     ),
-    search: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    search: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -23967,7 +24551,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -23977,7 +24561,7 @@ kbd {
         )
       }
     ),
-    appointment: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    appointment: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -23986,7 +24570,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -23996,7 +24580,7 @@ kbd {
         )
       }
     ),
-    document: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    document: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -24005,7 +24589,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -24015,7 +24599,7 @@ kbd {
         )
       }
     ),
-    help: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    help: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -24024,7 +24608,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -24034,7 +24618,7 @@ kbd {
         )
       }
     ),
-    default: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    default: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -24043,7 +24627,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: "1.5",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -24059,12 +24643,12 @@ kbd {
     onSelect,
     className
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "ai-chat-suggestions",
         className: cn("flex flex-wrap gap-2", className),
-        children: actions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        children: actions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           "button",
           {
             "data-slot": "ai-chat-suggestion-btn",
@@ -24078,7 +24662,7 @@ kbd {
             ),
             children: [
               ACTION_ICONS[action.icon || "default"] || ACTION_ICONS.default,
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: action.label })
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: action.label })
             ]
           },
           action.id
@@ -24094,19 +24678,19 @@ kbd {
     className,
     ...props
   }) {
-    const aiIcon = /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    const aiIcon = /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "ai-empty-state-icon",
         className: "bg-primary-800 dark:bg-primary-800 flex h-16 w-16 items-center justify-center rounded-full text-white",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SparklesIcon, { size: "lg", className: "h-8 w-8" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SparklesIcon, { size: "lg", className: "h-8 w-8" })
       }
     );
-    const suggestionsAction = suggestions && suggestions.length > 0 && onSuggestionSelect ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mt-6", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground mb-3 text-sm", children: "Try asking:" }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SuggestedActions, { actions: suggestions, onSelect: onSuggestionSelect })
+    const suggestionsAction = suggestions && suggestions.length > 0 && onSuggestionSelect ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mt-6", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground mb-3 text-sm", children: "Try asking:" }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SuggestedActions, { actions: suggestions, onSelect: onSuggestionSelect })
     ] }) : void 0;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       EmptyState,
       {
         title,
@@ -24191,35 +24775,35 @@ kbd {
         onResourceClick(link);
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "ai-chat",
         className: cn(chatVariants({ variant, size }), className),
         style: { height: height || void 0 },
         children: [
-          showHeader && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          showHeader && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               "data-slot": "ai-chat-header",
               className: "flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-700",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-3", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-3", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "div",
                     {
                       "data-slot": "ai-chat-header-icon",
                       className: "bg-primary-800 dark:bg-primary-800 flex h-8 w-8 items-center justify-center rounded-full text-white",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SparklesIcon, { size: "sm" })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SparklesIcon, { size: "sm" })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("h2", { className: "font-semibold text-neutral-900 dark:text-white", children: title }),
-                    isGenerating && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-xs text-neutral-500", children: "Generating..." })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("h2", { className: "font-semibold text-neutral-900 dark:text-white", children: title }),
+                    isGenerating && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-xs text-neutral-500", children: "Generating..." })
                   ] })
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-1", children: [
-                  isGenerating && onCancel && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-1", children: [
+                  isGenerating && onCancel && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "button",
                     {
                       onClick: onCancel,
@@ -24232,7 +24816,7 @@ kbd {
                       children: "Stop"
                     }
                   ),
-                  onClear && messages.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  onClear && messages.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "button",
                     {
                       onClick: onClear,
@@ -24240,10 +24824,10 @@ kbd {
                       className: "rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-300",
                       title: "Clear chat",
                       "aria-label": "Clear chat",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RefreshIcon, {})
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(RefreshIcon, {})
                     }
                   ),
-                  onClose && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  onClose && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "button",
                     {
                       onClick: onClose,
@@ -24251,26 +24835,26 @@ kbd {
                       className: "rounded-lg p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-300",
                       title: "Close chat",
                       "aria-label": "Close chat",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CloseIcon, {})
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CloseIcon, {})
                     }
                   )
                 ] })
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "div",
             {
               "data-slot": "ai-chat-messages",
               className: "flex-1 overflow-y-auto px-4 py-4",
-              children: messages.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              children: messages.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 AIEmptyState,
                 {
                   suggestions,
                   onSuggestionSelect: handleSuggestionSelect
                 }
-              ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "space-y-4", children: [
-                messages.map((message) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "space-y-4", children: [
+                messages.map((message) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   AIMessageDisplay,
                   {
                     message,
@@ -24281,24 +24865,24 @@ kbd {
                   },
                   message.id
                 )),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { ref: messagesEndRef })
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { ref: messagesEndRef })
               ] })
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               "data-slot": "ai-chat-input",
               className: "shrink-0 border-t border-neutral-200 dark:border-neutral-700",
               children: [
-                suggestions && suggestions.length > 0 && messages.length > 0 && !isGenerating && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { "data-slot": "ai-chat-input-suggestions", className: "px-4 pt-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                suggestions && suggestions.length > 0 && messages.length > 0 && !isGenerating && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { "data-slot": "ai-chat-input-suggestions", className: "px-4 pt-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   SuggestedActions,
                   {
                     actions: suggestions,
                     onSelect: handleSuggestionSelect
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   MessageComposer,
                   {
                     onSend: handleSend,
@@ -24309,7 +24893,7 @@ kbd {
                     showCameraButton: false,
                     showCharacterCount: false,
                     variant: "minimal",
-                    inputTrailing: talkToText ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    inputTrailing: talkToText ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       RecordButton,
                       {
                         variant: "ghost",
@@ -24416,7 +25000,7 @@ kbd {
   );
   function formatValueDefault(value) {
     if (value === null || value === void 0 || value === "") {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground italic", "aria-label": "empty", children: "\u2014" });
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground italic", "aria-label": "empty", children: "\u2014" });
     }
     if (value instanceof Date) return value.toLocaleDateString();
     if (typeof value === "object") {
@@ -24434,7 +25018,7 @@ kbd {
       medium: "Medium confidence",
       low: "Low confidence"
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "span",
       {
         className: cn(confidenceBadgeVariants({ level })),
@@ -24460,7 +25044,7 @@ kbd {
     const level = resolveConfidenceLevel(proposal);
     const render = proposal.renderValue ?? formatValueDefault;
     const canEdit = Boolean(proposal.renderEditor);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "li",
       {
         "data-slot": "reconciliation-row",
@@ -24471,7 +25055,7 @@ kbd {
           "border-border border-b last:border-b-0"
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pt-0.5", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "pt-0.5", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Checkbox,
             {
               id: checkboxId,
@@ -24481,9 +25065,9 @@ kbd {
               "aria-label": `Apply update for ${proposal.label}`
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "min-w-0 flex-1", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center justify-between gap-3", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "min-w-0 flex-1", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center justify-between gap-3", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "label",
                 {
                   htmlFor: checkboxId,
@@ -24493,7 +25077,7 @@ kbd {
                   ),
                   children: [
                     proposal.label,
-                    proposal.required && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    proposal.required && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       "span",
                       {
                         className: "text-muted-foreground ml-1 text-xs font-normal",
@@ -24504,9 +25088,9 @@ kbd {
                   ]
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                level && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ConfidenceBadge, { level }),
-                canEdit && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                level && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ConfidenceBadge, { level }),
+                canEdit && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "button",
                   {
                     type: "button",
@@ -24523,13 +25107,13 @@ kbd {
                 )
               ] })
             ] }),
-            proposal.description && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground mt-0.5 text-xs", children: proposal.description }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dl", { className: "mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "border-border/60 rounded-md border border-dashed px-3 py-2", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-muted-foreground text-[11px] tracking-wide uppercase", children: "On file" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { className: "text-foreground mt-0.5 break-words", children: render(proposal.current) })
+            proposal.description && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground mt-0.5 text-xs", children: proposal.description }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dl", { className: "mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "border-border/60 rounded-md border border-dashed px-3 py-2", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-muted-foreground text-[11px] tracking-wide uppercase", children: "On file" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { className: "text-foreground mt-0.5 break-words", children: render(proposal.current) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "div",
                 {
                   className: cn(
@@ -24537,8 +25121,8 @@ kbd {
                     safeState.accepted ? "border-primary-300 bg-primary-50/60 dark:border-primary-700 dark:bg-primary-950/30" : "border-border bg-background"
                   ),
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dt", { className: "text-muted-foreground flex items-center gap-1 text-[11px] tracking-wide uppercase", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dt", { className: "text-muted-foreground flex items-center gap-1 text-[11px] tracking-wide uppercase", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         SparklesIcon,
                         {
                           size: "sm",
@@ -24546,9 +25130,9 @@ kbd {
                         }
                       ),
                       "From AI",
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "sr-only", children: "(AI-suggested value)" })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "sr-only", children: "(AI-suggested value)" })
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       "dd",
                       {
                         id: `${rowId}-editor`,
@@ -24560,7 +25144,7 @@ kbd {
                 }
               )
             ] }),
-            proposal.hint && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            proposal.hint && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "p",
               {
                 className: cn(
@@ -24585,7 +25169,7 @@ kbd {
     return date.toLocaleString();
   }
   function SourcePill({ source }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "reconciliation-source",
@@ -24595,8 +25179,8 @@ kbd {
           "text-muted-foreground"
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-primary-700 dark:text-primary-400 flex items-center", children: source.icon ?? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SparklesIcon, { size: "sm" }) }),
-          source.thumbnailUrl && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-primary-700 dark:text-primary-400 flex items-center", children: source.icon ?? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SparklesIcon, { size: "sm" }) }),
+          source.thumbnailUrl && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "img",
             {
               src: source.thumbnailUrl,
@@ -24605,8 +25189,8 @@ kbd {
               "aria-hidden": "true"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground", children: source.label }),
-          source.generatedAt && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground", children: source.label }),
+          source.generatedAt && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground", children: [
             "\xB7 ",
             relativeTimeLabel(source.generatedAt)
           ] })
@@ -24799,7 +25383,7 @@ kbd {
       }
       return Array.from(map.entries());
     }, [effective]);
-    const bulkBar = !hideBulkActions && effective.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    const bulkBar = !hideBulkActions && effective.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -24808,7 +25392,7 @@ kbd {
         ),
         "data-slot": "reconciliation-bulk",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Checkbox,
             {
               checked: allAccepted,
@@ -24818,7 +25402,7 @@ kbd {
               label: allAccepted ? rejectAllLabel : acceptAllLabel
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "p",
             {
               className: "text-muted-foreground text-xs",
@@ -24835,13 +25419,13 @@ kbd {
         ]
       }
     ) : null;
-    const rowList = /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    const rowList = /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "ul",
       {
         "data-slot": "reconciliation-rows",
         className: "divide-border max-h-[60vh] overflow-y-auto",
-        children: grouped.map(([groupKey, items]) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(React142.Fragment, { children: [
-          groupKey && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: grouped.map(([groupKey, items]) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(React142.Fragment, { children: [
+          groupKey && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "li",
             {
               "aria-hidden": "true",
@@ -24852,7 +25436,7 @@ kbd {
               children: groupKey
             }
           ),
-          items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             ReconciliationProposalRow,
             {
               proposal: p,
@@ -24866,8 +25450,8 @@ kbd {
         ] }, groupKey ?? "__nogroup"))
       }
     );
-    const footerButtons = /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-      onSkip && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    const footerButtons = /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+      onSkip && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Button,
         {
           type: "button",
@@ -24877,7 +25461,7 @@ kbd {
           children: skipLabel
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Button,
         {
           type: "button",
@@ -24895,12 +25479,12 @@ kbd {
           'AIReconciliationPanel: `onOpenChange` is required when `variant="modal"`.'
         );
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Modal, { open: Boolean(open), onOpenChange, size: "2xl", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalTitle, { children: title }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Modal, { open: Boolean(open), onOpenChange, size: "2xl", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalTitle, { children: title }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { className: "px-0 py-0", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { className: "px-0 py-0", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           "div",
           {
             ref: containerRef,
@@ -24910,22 +25494,22 @@ kbd {
             role: "group",
             "aria-label": title,
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "border-border border-b px-6 py-3", children: [
-                description && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground text-sm", children: description }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: cn(description && "mt-3"), children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SourcePill, { source }) })
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "border-border border-b px-6 py-3", children: [
+                description && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground text-sm", children: description }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: cn(description && "mt-3"), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SourcePill, { source }) })
               ] }),
-              effective.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground px-6 py-6 text-sm", children: "No updates to review \u2014 your profile already matches the scan." }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
+              effective.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground px-6 py-6 text-sm", children: "No updates to review \u2014 your profile already matches the scan." }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
                 bulkBar,
                 rowList
               ] })
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalFooter, { children: effective.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { onClick: () => onOpenChange(false), children: "Close" }) : footerButtons })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalFooter, { children: effective.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { onClick: () => onOpenChange(false), children: "Close" }) : footerButtons })
       ] });
     }
     if (effective.length === 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         ref: containerRef,
@@ -24935,16 +25519,16 @@ kbd {
         role: "group",
         "aria-label": title,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "border-border border-b px-4 pt-4 pb-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-start justify-between gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "min-w-0 flex-1", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("h2", { className: "text-foreground text-base font-semibold", children: title }),
-              description && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground mt-1 text-sm", children: description })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "border-border border-b px-4 pt-4 pb-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-start justify-between gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "min-w-0 flex-1", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("h2", { className: "text-foreground text-base font-semibold", children: title }),
+              description && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground mt-1 text-sm", children: description })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SourcePill, { source })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SourcePill, { source })
           ] }) }),
           bulkBar,
           rowList,
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "div",
             {
               className: cn(
@@ -25182,8 +25766,8 @@ kbd {
         left: rect.right
       });
     }, [open]);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "button",
         {
           ref: buttonRef,
@@ -25202,11 +25786,11 @@ kbd {
           "aria-haspopup": "menu",
           "aria-expanded": open,
           "aria-label": `Actions for ${item.label}`,
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Ellipsis, { size: 14 })
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Ellipsis, { size: 14 })
         }
       ),
       open && menuPos && ReactDOM.createPortal(
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "div",
           {
             ref: menuRef,
@@ -25223,7 +25807,7 @@ kbd {
               "dark:border-neutral-700 dark:bg-neutral-800",
               "animate-in fade-in zoom-in-95 duration-100"
             ),
-            children: actions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            children: actions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "button",
               {
                 role: "menuitem",
@@ -25239,8 +25823,8 @@ kbd {
                   action.onClick(item);
                 },
                 children: [
-                  action.icon && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "h-3.5 w-3.5 shrink-0", children: action.icon }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: action.label })
+                  action.icon && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "h-3.5 w-3.5 shrink-0", children: action.icon }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: action.label })
                 ]
               },
               action.key
@@ -25266,7 +25850,7 @@ kbd {
     };
     return (
       /* eslint-disable-next-line jsx-a11y/no-static-element-interactions */
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           "data-slot": "count-badge-menu",
@@ -25278,41 +25862,41 @@ kbd {
           ),
           onMouseDown: (e) => e.stopPropagation(),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 className: cn(
                   "rounded-t-lg border-b border-neutral-200 px-3 py-2 dark:border-neutral-700",
                   headerBg[variant ?? "default"]
                 ),
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-xs font-semibold text-neutral-600 dark:text-neutral-300", children: [
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-xs font-semibold text-neutral-600 dark:text-neutral-300", children: [
                   items.length,
                   " ",
                   items.length === 1 ? "item" : "items"
                 ] })
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 "data-slot": "count-badge-menu-scroll",
                 className: "max-h-[240px] overflow-y-auto",
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("table", { className: "w-full text-left text-xs", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("tr", { className: "border-b border-neutral-100 dark:border-neutral-700", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "#" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "Label" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "Status" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("th", { className: "w-8 px-1 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "sr-only", children: "Actions" }) })
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("table", { className: "w-full text-left text-xs", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("tr", { className: "border-b border-neutral-100 dark:border-neutral-700", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "#" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "Label" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("th", { className: "text-muted-foreground px-3 py-1.5 font-medium", children: "Status" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("th", { className: "w-8 px-1 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "sr-only", children: "Actions" }) })
                   ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("tbody", { children: items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("tbody", { children: items.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "tr",
                     {
                       className: "group dark:border-neutral-750 border-b border-neutral-50 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-700/50",
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("td", { className: "px-3 py-1.5 text-neutral-500 tabular-nums dark:text-neutral-400", children: index + 1 }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("td", { className: "max-w-[140px] truncate px-3 py-1.5 font-medium text-neutral-800 dark:text-neutral-200", children: item.label }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("td", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "inline-flex items-center gap-1.5", children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("td", { className: "px-3 py-1.5 text-neutral-500 tabular-nums dark:text-neutral-400", children: index + 1 }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("td", { className: "max-w-[140px] truncate px-3 py-1.5 font-medium text-neutral-800 dark:text-neutral-200", children: item.label }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("td", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "inline-flex items-center gap-1.5", children: [
+                          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                             "span",
                             {
                               className: cn(
@@ -25321,9 +25905,9 @@ kbd {
                               )
                             }
                           ),
-                          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground", children: statusLabel[item.status] })
+                          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground", children: statusLabel[item.status] })
                         ] }) }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("td", { className: "px-1 py-1.5", children: actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RowActionMenu, { item, actions }) })
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("td", { className: "px-1 py-1.5", children: actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(RowActionMenu, { item, actions }) })
                       ]
                     },
                     item.id
@@ -25369,9 +25953,9 @@ kbd {
       document.addEventListener("mousedown", handleClick);
       return () => document.removeEventListener("mousedown", handleClick);
     }, [shareOpen]);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mb-4 flex items-center gap-1 border-b border-neutral-200 pb-3 dark:border-neutral-700", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { ref: shareRef, className: "relative", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mb-4 flex items-center gap-1 border-b border-neutral-200 pb-3 dark:border-neutral-700", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { ref: shareRef, className: "relative", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           Button,
           {
             variant: "ghost",
@@ -25380,9 +25964,9 @@ kbd {
             "aria-expanded": shareOpen,
             "aria-haspopup": "menu",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Share, { size: 14, className: "mr-1.5" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Share, { size: 14, className: "mr-1.5" }),
               "Share",
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 ChevronDown,
                 {
                   size: 12,
@@ -25395,7 +25979,7 @@ kbd {
             ]
           }
         ),
-        shareOpen && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        shareOpen && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           "div",
           {
             role: "menu",
@@ -25406,7 +25990,7 @@ kbd {
               "animate-in fade-in zoom-in-95 duration-100"
             ),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "button",
                 {
                   role: "menuitem",
@@ -25421,12 +26005,12 @@ kbd {
                     setShareOpen(false);
                   },
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Stethoscope, { size: 14 }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Stethoscope, { size: 14 }),
                     "Physician"
                   ]
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "button",
                 {
                   role: "menuitem",
@@ -25441,12 +26025,12 @@ kbd {
                     setShareOpen(false);
                   },
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(User, { size: 14 }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(User, { size: 14 }),
                     "Patient"
                   ]
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "button",
                 {
                   role: "menuitem",
@@ -25461,7 +26045,7 @@ kbd {
                     setShareOpen(false);
                   },
                   children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Mail, { size: 14 }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Mail, { size: 14 }),
                     "Email"
                   ]
                 }
@@ -25470,26 +26054,26 @@ kbd {
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         Button,
         {
           variant: "ghost",
           size: "sm",
           onClick: () => console.warn("Export", viewTarget),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Download, { size: 14, className: "mr-1.5" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Download, { size: 14, className: "mr-1.5" }),
             "Export"
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         Button,
         {
           variant: "ghost",
           size: "sm",
           onClick: () => console.warn("Open in chart", viewTarget),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ExternalLink, { size: 14, className: "mr-1.5" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ExternalLink, { size: 14, className: "mr-1.5" }),
             "Open in Chart"
           ]
         }
@@ -25564,9 +26148,9 @@ kbd {
         onDelete ? handleDeleteRequest : void 0
       );
       const entityLabel = deleteLabel ?? "item";
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { ref: containerRef, className: "relative inline-flex", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { ref: containerRef, className: "relative inline-flex", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "button",
             {
               ref,
@@ -25583,9 +26167,9 @@ kbd {
               "aria-expanded": showMenu ? open : void 0,
               ...props,
               children: [
-                icon && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "shrink-0", children: icon }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: label }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                icon && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "shrink-0", children: icon }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "span",
                   {
                     "data-slot": "count-chip",
@@ -25598,7 +26182,7 @@ kbd {
               ]
             }
           ),
-          showMenu && open && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          showMenu && open && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             HoverMenu,
             {
               items,
@@ -25607,7 +26191,7 @@ kbd {
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           Modal,
           {
             open: !!deleteTarget,
@@ -25616,22 +26200,22 @@ kbd {
             },
             size: "sm",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalTitle, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalTitle, { children: [
                   "Delete ",
                   entityLabel
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("p", { className: "text-muted-foreground", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { className: "text-muted-foreground", children: [
                 "Are you sure you want to delete",
                 " ",
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground font-medium", children: deleteTarget?.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground font-medium", children: deleteTarget?.label }),
                 "? This action cannot be undone."
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalFooter, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: () => setDeleteTarget(null), children: "Cancel" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalFooter, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "secondary", onClick: () => setDeleteTarget(null), children: "Cancel" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     variant: "danger",
@@ -25648,7 +26232,7 @@ kbd {
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           Modal,
           {
             open: !!editTarget,
@@ -25660,16 +26244,16 @@ kbd {
             },
             size: "md",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalTitle, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalTitle, { children: [
                   label,
                   ": ",
                   editTarget?.label
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Input,
                   {
                     label: "Label",
@@ -25677,8 +26261,8 @@ kbd {
                     onChange: (e) => setEditForm((f) => ({ ...f, label: e.target.value }))
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "label",
                     {
                       htmlFor: "cb-edit-status",
@@ -25686,7 +26270,7 @@ kbd {
                       children: "Status"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "select",
                     {
                       id: "cb-edit-status",
@@ -25698,17 +26282,17 @@ kbd {
                         "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                       ),
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "active", children: "Active" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "pending", children: "Pending" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "overdue", children: "Overdue" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "completed", children: "Completed" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "cancelled", children: "Cancelled" })
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "active", children: "Active" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "pending", children: "Pending" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "overdue", children: "Overdue" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "completed", children: "Completed" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "cancelled", children: "Cancelled" })
                       ]
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "label",
                     {
                       htmlFor: "cb-edit-priority",
@@ -25716,7 +26300,7 @@ kbd {
                       children: "Priority"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "select",
                     {
                       id: "cb-edit-priority",
@@ -25728,15 +26312,15 @@ kbd {
                         "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                       ),
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Low", children: "Low" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Normal", children: "Normal" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "High", children: "High" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Urgent", children: "Urgent" })
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Low", children: "Low" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Normal", children: "Normal" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "High", children: "High" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Urgent", children: "Urgent" })
                       ]
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Input,
                   {
                     label: "Assigned To",
@@ -25744,7 +26328,7 @@ kbd {
                     onChange: (e) => setEditForm((f) => ({ ...f, assignedTo: e.target.value }))
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Input,
                   {
                     label: "Due Date",
@@ -25753,8 +26337,8 @@ kbd {
                     onChange: (e) => setEditForm((f) => ({ ...f, dueDate: e.target.value }))
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "label",
                     {
                       htmlFor: "cb-edit-notes",
@@ -25762,7 +26346,7 @@ kbd {
                       children: "Notes"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "textarea",
                     {
                       id: "cb-edit-notes",
@@ -25780,8 +26364,8 @@ kbd {
                   )
                 ] })
               ] }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalFooter, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalFooter, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     variant: "secondary",
@@ -25792,7 +26376,7 @@ kbd {
                     children: "Cancel"
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     onClick: () => {
@@ -25809,7 +26393,7 @@ kbd {
             ]
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           Modal,
           {
             open: !!viewTarget,
@@ -25818,25 +26402,25 @@ kbd {
             },
             size: "md",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalTitle, { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalTitle, { children: [
                   label,
                   ": ",
                   viewTarget?.label
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalBody, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ViewModalActions, { viewTarget }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dl", { className: "space-y-3 text-sm", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Label" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { className: "text-muted-foreground", children: viewTarget?.label })
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalBody, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ViewModalActions, { viewTarget }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dl", { className: "space-y-3 text-sm", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Label" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { className: "text-muted-foreground", children: viewTarget?.label })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Status" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { children: viewTarget && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "inline-flex items-center gap-1.5", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Status" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { children: viewTarget && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "inline-flex items-center gap-1.5", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "span",
                         {
                           className: cn(
@@ -25845,58 +26429,58 @@ kbd {
                           )
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground", children: statusLabel[viewTarget.status] })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground", children: statusLabel[viewTarget.status] })
                     ] }) })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Priority" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { className: "text-muted-foreground", children: "Normal" })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Priority" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { className: "text-muted-foreground", children: "Normal" })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Assigned To" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { className: "text-muted-foreground", children: "Dr. Smith" })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Assigned To" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { className: "text-muted-foreground", children: "Dr. Smith" })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Due Date" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dd", { className: "text-muted-foreground", children: (/* @__PURE__ */ new Date()).toLocaleDateString() })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Due Date" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dd", { className: "text-muted-foreground", children: (/* @__PURE__ */ new Date()).toLocaleDateString() })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Created" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dd", { className: "text-muted-foreground inline-flex items-center gap-1", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Clock, { size: 13 }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Created" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dd", { className: "text-muted-foreground inline-flex items-center gap-1", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Clock, { size: 13 }),
                       "Feb 10, 2026 at 9:15 AM"
                     ] })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-between", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-foreground font-medium", children: "Last Modified" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dd", { className: "text-muted-foreground inline-flex items-center gap-1", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Clock, { size: 13 }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-between", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-foreground font-medium", children: "Last Modified" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dd", { className: "text-muted-foreground inline-flex items-center gap-1", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Clock, { size: 13 }),
                       "Feb 22, 2026 at 3:42 PM"
                     ] })
                   ] })
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mt-4 border-t border-neutral-200 pt-3 dark:border-neutral-700", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("h4", { className: "text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileText, { size: 13 }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mt-4 border-t border-neutral-200 pt-3 dark:border-neutral-700", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("h4", { className: "text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileText, { size: 13 }),
                     "Recent Activity"
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("ul", { className: "text-muted-foreground space-y-2 text-xs", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("li", { className: "flex items-start gap-2", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "bg-primary-400 mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground font-medium", children: "Dr. Smith" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("ul", { className: "text-muted-foreground space-y-2 text-xs", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "flex items-start gap-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "bg-primary-400 mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground font-medium", children: "Dr. Smith" }),
                         " ",
                         "updated status to",
                         " ",
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "font-medium", children: viewTarget && statusLabel[viewTarget.status] }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "font-medium", children: viewTarget && statusLabel[viewTarget.status] }),
                         " ",
                         "\u2014 1 day ago"
                       ] })
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("li", { className: "flex items-start gap-2", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-600" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground font-medium", children: "System" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "flex items-start gap-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-600" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground font-medium", children: "System" }),
                         " ",
                         "created this ",
                         entityLabel,
@@ -25906,9 +26490,9 @@ kbd {
                   ] })
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalFooter, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: () => setViewTarget(null), children: "Close" }),
-                onEdit && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalFooter, { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "secondary", onClick: () => setViewTarget(null), children: "Close" }),
+                onEdit && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     onClick: () => {
@@ -25980,7 +26564,7 @@ kbd {
       children,
       ...props
     }, ref) => {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         Card,
         {
           ref,
@@ -25990,7 +26574,7 @@ kbd {
           className: cn(widgetVariants({ size }), className),
           ...props,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               CardHeader,
               {
                 "data-slot": "dashboard-widget-header",
@@ -25999,12 +26583,12 @@ kbd {
                   accent && "pl-6"
                 ),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                    icon && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Heading, { className: "text-foreground text-sm font-semibold tracking-wide uppercase", children: title }),
-                    count !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "bg-primary-100 text-primary-900 dark:bg-primary-900/50 dark:text-primary-300 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold", children: count })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                    icon && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Heading, { className: "text-foreground text-sm font-semibold tracking-wide uppercase", children: title }),
+                    count !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "bg-primary-100 text-primary-900 dark:bg-primary-900/50 dark:text-primary-300 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold", children: count })
                   ] }),
-                  headerAction ? headerAction : onAdd && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  headerAction ? headerAction : onAdd && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     Button,
                     {
                       variant: "ghost",
@@ -26012,7 +26596,7 @@ kbd {
                       className: "h-7 w-7",
                       onClick: onAdd,
                       "aria-label": addLabel,
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "svg",
                         {
                           "aria-hidden": "true",
@@ -26020,7 +26604,7 @@ kbd {
                           fill: "none",
                           stroke: "currentColor",
                           viewBox: "0 0 24 24",
-                          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                             "path",
                             {
                               strokeLinecap: "round",
@@ -26036,7 +26620,7 @@ kbd {
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               CardContent,
               {
                 "data-slot": "dashboard-widget-body",
@@ -26044,7 +26628,7 @@ kbd {
                 children
               }
             ),
-            footer && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            footer && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 "data-slot": "dashboard-widget-footer",
@@ -26065,14 +26649,14 @@ kbd {
       3: "grid-cols-3",
       4: "grid-cols-4"
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "dl",
       {
         ref,
         "data-slot": "dashboard-widget-info",
         className: cn("grid gap-x-6 gap-y-3", gridCols[columns], className),
         ...props,
-        children: items.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        children: items.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           "div",
           {
             className: cn(
@@ -26081,8 +26665,8 @@ kbd {
               item.className
             ),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-muted-foreground text-xs font-medium tracking-wide uppercase", children: item.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-muted-foreground text-xs font-medium tracking-wide uppercase", children: item.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "dd",
                 {
                   className: cn(
@@ -26112,7 +26696,7 @@ kbd {
     ...props
   }, ref) {
     if (data.length === 0) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           ref,
@@ -26126,16 +26710,16 @@ kbd {
         }
       );
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         ref,
         "data-slot": "dashboard-widget-table",
         className: cn("-mx-4", className),
         ...props,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Table, { responsive: true, children: [
-          showHeader && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TableHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(TableRow, { children: [
-            columns.map((col) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Table, { responsive: true, children: [
+          showHeader && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TableHeader, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(TableRow, { children: [
+            columns.map((col) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               TableHead,
               {
                 className: cn(
@@ -26148,9 +26732,9 @@ kbd {
               },
               col.key
             )),
-            actions && actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TableHead, { className: "w-0 px-4", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "sr-only", children: "Actions" }) })
+            actions && actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TableHead, { className: "w-0 px-4", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "sr-only", children: "Actions" }) })
           ] }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TableBody, { children: data.map((row, rowIndex) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TableBody, { children: data.map((row, rowIndex) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             TableRow,
             {
               className: cn(
@@ -26158,7 +26742,7 @@ kbd {
               ),
               onClick: onRowClick ? () => onRowClick(row, rowIndex) : void 0,
               children: [
-                columns.map((col) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                columns.map((col) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   TableCell,
                   {
                     className: cn(
@@ -26171,7 +26755,7 @@ kbd {
                   },
                   col.key
                 )),
-                actions && actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TableCell, { className: "w-0 px-2 py-2 text-right", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                actions && actions.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TableCell, { className: "w-0 px-2 py-2 text-right", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   WidgetRowActionMenu,
                   {
                     row,
@@ -26226,8 +26810,8 @@ kbd {
       (action) => !action.hidden?.(row, rowIndex)
     );
     if (visibleActions.length === 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "button",
         {
           ref: buttonRef,
@@ -26246,11 +26830,11 @@ kbd {
           "aria-haspopup": "menu",
           "aria-expanded": open,
           "aria-label": `Row actions for row ${rowIndex + 1}`,
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Ellipsis, { size: 14 })
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Ellipsis, { size: 14 })
         }
       ),
       open && menuPos && (0, import_react_dom2.createPortal)(
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "div",
           {
             ref: menuRef,
@@ -26267,7 +26851,7 @@ kbd {
               "dark:border-neutral-700 dark:bg-neutral-800",
               "animate-in fade-in zoom-in-95 duration-100"
             ),
-            children: visibleActions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            children: visibleActions.map((action) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "button",
               {
                 role: "menuitem",
@@ -26283,8 +26867,8 @@ kbd {
                   action.onClick(row, rowIndex);
                 },
                 children: [
-                  action.icon && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "h-3.5 w-3.5 shrink-0", children: action.icon }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: action.label })
+                  action.icon && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "h-3.5 w-3.5 shrink-0", children: action.icon }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: action.label })
                 ]
               },
               action.label
@@ -26312,7 +26896,7 @@ kbd {
       2: "grid-cols-2",
       3: "grid-cols-3"
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         ref,
@@ -26321,8 +26905,8 @@ kbd {
         ...props,
         children: actions.map((action, i) => {
           const colorClasses = actionColorMap[action.color ?? "primary"];
-          const content = /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-            action.icon && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          const content = /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+            action.icon && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "span",
               {
                 className: cn(
@@ -26332,7 +26916,7 @@ kbd {
                 children: action.icon
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-sm font-medium", children: action.label })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-sm font-medium", children: action.label })
           ] });
           const sharedClasses = cn(
             "flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left transition-colors",
@@ -26341,9 +26925,9 @@ kbd {
             action.disabled && "opacity-50 cursor-not-allowed pointer-events-none"
           );
           if (action.href) {
-            return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("a", { href: action.href, className: sharedClasses, children: content }, i);
+            return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("a", { href: action.href, className: sharedClasses, children: content }, i);
           }
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -26365,7 +26949,7 @@ kbd {
       3: "grid-cols-3",
       4: "grid-cols-4"
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         ref,
@@ -26373,14 +26957,14 @@ kbd {
         className: cn("space-y-3", className),
         ...props,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dl", { className: cn("grid gap-x-6 gap-y-3", gridCols[columns]), children: items.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: cn("", item.className), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("dt", { className: "text-muted-foreground text-xs font-medium tracking-wide uppercase", children: item.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("dd", { className: "text-foreground mt-0.5 text-sm font-semibold", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dl", { className: cn("grid gap-x-6 gap-y-3", gridCols[columns]), children: items.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: cn("", item.className), children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("dt", { className: "text-muted-foreground text-xs font-medium tracking-wide uppercase", children: item.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("dd", { className: "text-foreground mt-0.5 text-sm font-semibold", children: [
               item.value,
-              item.unit && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground ml-0.5 text-xs font-normal", children: item.unit })
+              item.unit && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground ml-0.5 text-xs font-normal", children: item.unit })
             ] })
           ] }, `${item.label}-${i}`)) }),
-          footer && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "border-border text-muted-foreground flex items-center gap-2 border-t pt-2 text-xs", children: footer })
+          footer && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "border-border text-muted-foreground flex items-center gap-2 border-t pt-2 text-xs", children: footer })
         ]
       }
     );
@@ -26463,8 +27047,8 @@ kbd {
       [onFilesSelected]
     );
     const acceptString = acceptedFileTypes.join(",");
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "input",
         {
           ref: inputRef,
@@ -26478,7 +27062,7 @@ kbd {
           tabIndex: -1
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           ref: dropZoneRef,
@@ -26524,7 +27108,7 @@ kbd {
           ),
           children: [
             children,
-            isDragging && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            isDragging && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 className: cn(
@@ -26532,7 +27116,7 @@ kbd {
                   "bg-primary-500/10 rounded-xl",
                   "pointer-events-none"
                 ),
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-primary-800 dark:text-primary-400 text-lg font-medium", children: "Drop files here" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-primary-800 dark:text-primary-400 text-lg font-medium", children: "Drop files here" })
               }
             )
           ]
@@ -26547,7 +27131,7 @@ kbd {
     const handleRemove = React142.useCallback(() => {
       onRemove(file.id);
     }, [file.id, onRemove]);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         role: "group",
@@ -26559,22 +27143,22 @@ kbd {
           "focus-within:ring-primary-500 focus-within:ring-2 focus-within:ring-offset-2"
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 dark:bg-neutral-800", children: [
-            isImage2 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 dark:bg-neutral-800", children: [
+            isImage2 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "img",
               {
                 src: file.previewUrl,
                 alt: `Preview of ${file.file.name}`,
                 className: "h-full w-full object-cover"
               }
-            ) : isPdf ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex h-full w-full flex-col items-center justify-center gap-2", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileText, { className: "text-muted-foreground h-12 w-12" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs", children: "PDF Document" })
-            ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex h-full w-full flex-col items-center justify-center gap-2", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Image, { className: "text-muted-foreground h-12 w-12" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs", children: "File" })
+            ) : isPdf ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex h-full w-full flex-col items-center justify-center gap-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileText, { className: "text-muted-foreground h-12 w-12" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs", children: "PDF Document" })
+            ] }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex h-full w-full flex-col items-center justify-center gap-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Image, { className: "text-muted-foreground h-12 w-12" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs", children: "File" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 className: cn(
@@ -26583,7 +27167,7 @@ kbd {
                   "group-hover:bg-black/30",
                   disabled && "pointer-events-none"
                 ),
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     variant: "danger",
@@ -26597,12 +27181,12 @@ kbd {
                       "focus-visible:opacity-100"
                     ),
                     "aria-label": `Remove ${file.file.name}`,
-                    children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(X, { className: "h-4 w-4" })
+                    children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(X, { className: "h-4 w-4" })
                   }
                 )
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "span",
               {
                 className: cn(
@@ -26615,8 +27199,8 @@ kbd {
               }
             )
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "p-2", "data-slot": "doc-scanner-preview-info", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "p-2", "data-slot": "doc-scanner-preview-info", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "p",
               {
                 className: "text-foreground truncate text-sm font-medium",
@@ -26624,7 +27208,7 @@ kbd {
                 children: file.file.name
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground text-xs", children: formatFileSize22(file.file.size) })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground text-xs", children: formatFileSize22(file.file.size) })
           ] })
         ]
       }
@@ -26641,7 +27225,7 @@ kbd {
     if (files.length === 0) {
       return null;
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         className: cn(
@@ -26653,7 +27237,7 @@ kbd {
         role: "list",
         "aria-label": "Selected files",
         "data-slot": "doc-scanner-preview",
-        children: files.map((file) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: files.map((file) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           FilePreviewItem,
           {
             file,
@@ -27092,19 +27676,19 @@ kbd {
     isOk,
     value
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: `inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium ${isOk ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"} `,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "span",
             {
               className: `h-2 w-2 rounded-full ${isOk ? "bg-green-400" : "bg-red-400"}`
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: label }),
-          value !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "opacity-70", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label }),
+          value !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "opacity-70", children: [
             "(",
             value,
             ")"
@@ -27115,9 +27699,9 @@ kbd {
   }
   function CountdownDisplay({ seconds }) {
     if (seconds <= 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pointer-events-none absolute inset-0 flex items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute inset-0 animate-ping rounded-full bg-green-500 opacity-25" }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "relative flex h-24 w-24 items-center justify-center rounded-full bg-green-500/90", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-4xl font-bold text-white", children: seconds }) })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "pointer-events-none absolute inset-0 flex items-center justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute inset-0 animate-ping rounded-full bg-green-500 opacity-25" }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "relative flex h-24 w-24 items-center justify-center rounded-full bg-green-500/90", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-4xl font-bold text-white", children: seconds }) })
     ] }) });
   }
   function StabilityBar({
@@ -27126,12 +27710,12 @@ kbd {
   }) {
     const progress = Math.min(stabilityDuration / targetDuration * 100, 100);
     const isComplete = progress >= 100;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "w-full", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mb-1 flex justify-between text-xs text-white/70", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: "Stability" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: isComplete ? "Stable!" : "Hold steady..." })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "w-full", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mb-1 flex justify-between text-xs text-white/70", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: "Stability" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: isComplete ? "Stable!" : "Hold steady..." })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "h-1.5 overflow-hidden rounded-full bg-white/20", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "h-1.5 overflow-hidden rounded-full bg-white/20", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           className: `h-full transition-all duration-100 ${isComplete ? "bg-green-400" : "bg-yellow-400"}`,
@@ -27157,29 +27741,29 @@ kbd {
       stabilityDuration
     } = metrics;
     const borderColor = isReadyForCapture ? "border-green-500" : isDocumentDetected ? "border-yellow-400" : "border-white/40";
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pointer-events-none absolute inset-0", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "pointer-events-none absolute inset-0", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           className: `absolute inset-4 rounded-lg border-4 transition-colors duration-300 ${borderColor}`,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -top-1 -left-1 h-6 w-6 rounded-tl border-t-4 border-l-4 border-current" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -top-1 -right-1 h-6 w-6 rounded-tr border-t-4 border-r-4 border-current" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -bottom-1 -left-1 h-6 w-6 rounded-bl border-b-4 border-l-4 border-current" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -right-1 -bottom-1 h-6 w-6 rounded-br border-r-4 border-b-4 border-current" })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -top-1 -left-1 h-6 w-6 rounded-tl border-t-4 border-l-4 border-current" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -top-1 -right-1 h-6 w-6 rounded-tr border-t-4 border-r-4 border-current" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -bottom-1 -left-1 h-6 w-6 rounded-bl border-b-4 border-l-4 border-current" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -right-1 -bottom-1 h-6 w-6 rounded-br border-r-4 border-b-4 border-current" })
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CountdownDisplay, { seconds: captureCountdown }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "absolute top-3 right-3 left-3", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CountdownDisplay, { seconds: captureCountdown }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "absolute top-3 right-3 left-3", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "div",
           {
             className: `mb-2 rounded-lg px-4 py-2 text-center backdrop-blur-sm ${isReadyForCapture ? "bg-green-500/80 text-white" : "bg-black/60 text-white"} `,
-            children: isReadyForCapture ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "font-medium", children: captureCountdown > 0 ? `Capturing in ${captureCountdown}...` : "\u2713 Ready to capture!" }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: !isInFocus ? "\u{1F50D} Hold camera steady" : !isBrightnessOk ? brightness < 40 ? "\u{1F4A1} Need more light" : "\u{1F4A1} Too bright" : !isStable ? "\u270B Hold steady..." : "\u{1F4C4} Position document in frame" })
+            children: isReadyForCapture ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "font-medium", children: captureCountdown > 0 ? `Capturing in ${captureCountdown}...` : "\u2713 Ready to capture!" }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: !isInFocus ? "\u{1F50D} Hold camera steady" : !isBrightnessOk ? brightness < 40 ? "\u{1F4A1} Need more light" : "\u{1F4A1} Too bright" : !isStable ? "\u270B Hold steady..." : "\u{1F4C4} Position document in frame" })
           }
         ),
-        isDocumentDetected && !isStable && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "px-2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        isDocumentDetected && !isStable && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "px-2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           StabilityBar,
           {
             stabilityDuration,
@@ -27187,9 +27771,9 @@ kbd {
           }
         ) })
       ] }),
-      showDetailedMetrics && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute right-3 bottom-3 left-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap justify-center gap-2 rounded-lg bg-black/60 p-2 backdrop-blur-sm", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(StatusPill, { label: "Focus", isOk: isInFocus, value: focusScore }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      showDetailedMetrics && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute right-3 bottom-3 left-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap justify-center gap-2 rounded-lg bg-black/60 p-2 backdrop-blur-sm", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(StatusPill, { label: "Focus", isOk: isInFocus, value: focusScore }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           StatusPill,
           {
             label: "Brightness",
@@ -27197,7 +27781,7 @@ kbd {
             value: brightness
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(StatusPill, { label: "Stable", isOk: isStable })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(StatusPill, { label: "Stable", isOk: isStable })
       ] }) })
     ] });
   }
@@ -27206,8 +27790,8 @@ kbd {
     isReady,
     detectionOverlay
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "video",
         {
           ref: videoRef,
@@ -27221,45 +27805,45 @@ kbd {
           )
         }
       ),
-      !isReady && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-3", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Spinner, { size: "lg" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-sm text-neutral-400", children: "Starting camera..." })
+      !isReady && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "absolute inset-0 flex flex-col items-center justify-center gap-3", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Spinner, { size: "lg" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-sm text-neutral-400", children: "Starting camera..." })
       ] }),
       isReady && detectionOverlay,
-      isReady && !detectionOverlay && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "pointer-events-none absolute inset-0", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "absolute inset-8 rounded-lg border-2 border-white/30", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -top-0.5 -left-0.5 h-6 w-6 rounded-tl-lg border-t-4 border-l-4 border-white" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -top-0.5 -right-0.5 h-6 w-6 rounded-tr-lg border-t-4 border-r-4 border-white" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -bottom-0.5 -left-0.5 h-6 w-6 rounded-bl-lg border-b-4 border-l-4 border-white" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute -right-0.5 -bottom-0.5 h-6 w-6 rounded-br-lg border-r-4 border-b-4 border-white" })
+      isReady && !detectionOverlay && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "pointer-events-none absolute inset-0", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "absolute inset-8 rounded-lg border-2 border-white/30", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -top-0.5 -left-0.5 h-6 w-6 rounded-tl-lg border-t-4 border-l-4 border-white" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -top-0.5 -right-0.5 h-6 w-6 rounded-tr-lg border-t-4 border-r-4 border-white" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -bottom-0.5 -left-0.5 h-6 w-6 rounded-bl-lg border-b-4 border-l-4 border-white" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute -right-0.5 -bottom-0.5 h-6 w-6 rounded-br-lg border-r-4 border-b-4 border-white" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "absolute right-0 bottom-4 left-0 text-center", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "rounded-full bg-black/50 px-3 py-1 text-sm text-white", children: "Position document within the frame" }) })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "absolute right-0 bottom-4 left-0 text-center", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "rounded-full bg-black/50 px-3 py-1 text-sm text-white", children: "Position document within the frame" }) })
       ] })
     ] });
   }
   function PermissionDeniedMessage({ onRetry }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-8", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Alert, { variant: "warning", className: "w-full", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "h-5 w-5" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertTitle, { children: "Camera access denied" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertDescription, { children: "Please allow camera access in your browser settings to use this feature. You may need to refresh the page after changing permissions." })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-8", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Alert, { variant: "warning", className: "w-full", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "h-5 w-5" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertTitle, { children: "Camera access denied" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertDescription, { children: "Please allow camera access in your browser settings to use this feature. You may need to refresh the page after changing permissions." })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-2 text-center", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground text-sm", children: "To enable camera access:" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("ol", { className: "text-muted-foreground list-inside list-decimal space-y-1 text-left text-sm", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: "Click the camera/lock icon in your browser's address bar" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: "Allow camera access for this site" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: "Click the button below to try again" })
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-2 text-center", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground text-sm", children: "To enable camera access:" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("ol", { className: "text-muted-foreground list-inside list-decimal space-y-1 text-left text-sm", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: "Click the camera/lock icon in your browser's address bar" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: "Allow camera access for this site" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: "Click the button below to try again" })
         ] })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { onClick: onRetry, leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RefreshCw, { className: "h-4 w-4" }), children: "Try again" })
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { onClick: onRetry, leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(RefreshCw, { className: "h-4 w-4" }), children: "Try again" })
     ] });
   }
   function CameraUnavailableMessage() {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex flex-col items-center justify-center gap-4 py-8", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Alert, { variant: "danger", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "h-5 w-5" }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertTitle, { children: "Camera unavailable" }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertDescription, { children: "No camera was detected on this device. Please ensure your camera is connected and not in use by another application." })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex flex-col items-center justify-center gap-4 py-8", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Alert, { variant: "danger", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "h-5 w-5" }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertTitle, { children: "Camera unavailable" }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertDescription, { children: "No camera was detected on this device. Please ensure your camera is connected and not in use by another application." })
     ] }) });
   }
   function PhotoPreview({
@@ -27267,8 +27851,8 @@ kbd {
     onConfirm,
     onRetake
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-4", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-4", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-black", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "img",
         {
           src: previewUrl,
@@ -27276,22 +27860,22 @@ kbd {
           className: "h-full w-full object-cover"
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-center gap-3", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-center gap-3", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Button,
           {
             variant: "secondary",
             onClick: onRetake,
-            leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RefreshCw, { className: "h-4 w-4" }),
+            leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(RefreshCw, { className: "h-4 w-4" }),
             children: "Retake"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           Button,
           {
             variant: "primary",
             onClick: onConfirm,
-            leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Check, { className: "h-4 w-4" }),
+            leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Check, { className: "h-4 w-4" }),
             children: "Use this photo"
           }
         )
@@ -27423,13 +28007,13 @@ kbd {
     }, [stopCamera, detection, previewUrl, onOpenChange]);
     const renderContent = () => {
       if (permission === "denied") {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(PermissionDeniedMessage, { onRetry: startCamera });
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(PermissionDeniedMessage, { onRetry: startCamera });
       }
       if (permission === "unavailable") {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CameraUnavailableMessage, {});
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CameraUnavailableMessage, {});
       }
       if (capturedFile && previewUrl) {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           PhotoPreview,
           {
             previewUrl,
@@ -27438,13 +28022,13 @@ kbd {
           }
         );
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-4", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           CameraViewfinder,
           {
             videoRef,
             isReady,
-            detectionOverlay: autoDetectEnabled && isReady ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            detectionOverlay: autoDetectEnabled && isReady ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               DocumentDetectionOverlay,
               {
                 metrics: detection.metrics,
@@ -27456,8 +28040,8 @@ kbd {
             ) : void 0
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-3", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex items-center justify-center gap-2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex items-center justify-center gap-2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Button,
             {
               variant: autoDetectEnabled ? "primary" : "secondary",
@@ -27470,12 +28054,12 @@ kbd {
                   detection.stopDetection();
                 }
               },
-              leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ScanLine, { className: "h-4 w-4" }),
+              leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ScanLine, { className: "h-4 w-4" }),
               children: autoDetectEnabled ? "Auto-capture ON" : "Auto-capture OFF"
             }
           ) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex justify-center gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex justify-center gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Button,
               {
                 variant: "secondary",
@@ -27483,17 +28067,17 @@ kbd {
                 onClick: switchCamera,
                 disabled: !isReady,
                 "aria-label": `Switch to ${currentFacingMode === "user" ? "back" : "front"} camera`,
-                children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RefreshCw, { className: "h-5 w-5" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(RefreshCw, { className: "h-5 w-5" })
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Button,
               {
                 variant: "primary",
                 size: "lg",
                 onClick: handleCapture,
                 disabled: !isReady,
-                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Camera, { className: "h-5 w-5" }),
+                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Camera, { className: "h-5 w-5" }),
                 children: autoDetectEnabled ? "Manual Capture" : "Capture"
               }
             )
@@ -27501,7 +28085,7 @@ kbd {
         ] })
       ] });
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       Modal,
       {
         open,
@@ -27509,12 +28093,12 @@ kbd {
         size: "lg",
         "aria-label": "Webcam capture",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalTitle, { children: "Take a Photo" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalTitle, { children: "Take a Photo" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: renderContent() }),
-          permission !== "denied" && permission !== "unavailable" && !capturedFile && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalFooter, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: handleClose, children: "Cancel" }) })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: renderContent() }),
+          permission !== "denied" && permission !== "unavailable" && !capturedFile && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalFooter, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "secondary", onClick: handleClose, children: "Cancel" }) })
         ]
       }
     );
@@ -27743,8 +28327,8 @@ kbd {
     const cameraAcceptString = acceptedFileTypes.filter((type) => type.startsWith("image/")).join(",");
     const renderContent = () => {
       if (state === "processing") {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-12", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-12", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             SpinnerWithLabel,
             {
               size: "xl",
@@ -27752,32 +28336,32 @@ kbd {
               labelPosition: "bottom"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { variant: "muted", size: "sm", className: "max-w-xs text-center", children: "Our AI is extracting information from your document. This usually takes a few seconds." })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { variant: "muted", size: "sm", className: "max-w-xs text-center", children: "Our AI is extracting information from your document. This usually takes a few seconds." })
         ] });
       }
       if (state === "success") {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-12", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleCheckBig, { className: "h-8 w-8 text-green-600 dark:text-green-400" }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { weight: "semibold", size: "lg", children: "Document scanned successfully!" }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { variant: "muted", size: "sm", children: "The extracted data has been processed." })
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col items-center justify-center gap-4 py-12", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleCheckBig, { className: "h-8 w-8 text-green-600 dark:text-green-400" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { weight: "semibold", size: "lg", children: "Document scanned successfully!" }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { variant: "muted", size: "sm", children: "The extracted data has been processed." })
         ] });
       }
       if (state === "error") {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col items-center gap-4 py-8", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Alert, { variant: "danger", className: "w-full", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "h-5 w-5" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertTitle, { children: "Processing failed" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertDescription, { children: error })
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col items-center gap-4 py-8", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Alert, { variant: "danger", className: "w-full", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "h-5 w-5" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertTitle, { children: "Processing failed" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertDescription, { children: error })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "secondary", onClick: handleClearAll, children: "Start over" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Button, { variant: "primary", onClick: handleRetry, children: "Try again" })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "secondary", onClick: handleClearAll, children: "Start over" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Button, { variant: "primary", onClick: handleRetry, children: "Try again" })
           ] })
         ] });
       }
       if (state === "preview" && hasFiles) {
-        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-6", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-6", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             FilePreview,
             {
               files,
@@ -27785,17 +28369,17 @@ kbd {
               disabled
             }
           ),
-          validationErrors.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          validationErrors.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             Alert,
             {
               variant: "warning",
               dismissible: true,
               onDismiss: () => setValidationErrors([]),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "h-5 w-5" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertTitle, { children: "Some files were not added" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertDescription, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("ul", { className: "mt-2 list-inside list-disc space-y-1", children: validationErrors.map((err, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("li", { className: "text-sm", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("strong", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "h-5 w-5" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertTitle, { children: "Some files were not added" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertDescription, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { className: "mt-2 list-inside list-disc space-y-1", children: validationErrors.map((err, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "text-sm", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("strong", { children: [
                     err.file.name,
                     ":"
                   ] }),
@@ -27805,13 +28389,13 @@ kbd {
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "flex flex-wrap items-center justify-center gap-3",
               "data-slot": "doc-scanner-actions",
               children: [
-                multiple && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(import_jsx_runtime18.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                multiple && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_jsx_runtime19.Fragment, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     variant: "secondary",
@@ -27826,27 +28410,27 @@ kbd {
                       };
                       input.click();
                     },
-                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Upload, { className: "h-4 w-4" }),
+                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Upload, { className: "h-4 w-4" }),
                     disabled,
                     children: "Add more files"
                   }
                 ) }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   Button,
                   {
                     variant: "secondary",
                     onClick: handleClearAll,
-                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Trash2, { className: "h-4 w-4" }),
+                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Trash2, { className: "h-4 w-4" }),
                     disabled,
                     children: "Clear all"
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                   Button,
                   {
                     variant: "primary",
                     onClick: handleScan,
-                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Scan, { className: "h-4 w-4" }),
+                    leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Scan, { className: "h-4 w-4" }),
                     disabled,
                     children: [
                       "Scan ",
@@ -27859,8 +28443,8 @@ kbd {
           )
         ] });
       }
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col gap-6", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col gap-6", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           DropZone,
           {
             onFilesSelected: handleFilesSelected,
@@ -27868,27 +28452,27 @@ kbd {
             multiple,
             disabled,
             className: "min-h-[240px]",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "div",
               {
                 className: "flex flex-col items-center gap-4 text-center",
                 "data-slot": "doc-scanner-dropzone-content",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "div",
                     {
                       className: "bg-primary-100 dark:bg-primary-900/30 flex h-14 w-14 items-center justify-center rounded-full",
                       "data-slot": "doc-scanner-upload-icon",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Upload, { className: "text-primary-800 dark:text-primary-400 h-7 w-7" })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Upload, { className: "text-primary-800 dark:text-primary-400 h-7 w-7" })
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "space-y-1", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { weight: "medium", children: "Drag and drop your files here" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { variant: "muted", size: "sm", children: "or click to browse" })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "space-y-1", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { weight: "medium", children: "Drag and drop your files here" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { variant: "muted", size: "sm", children: "or click to browse" })
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Text, { variant: "muted", size: "xs", className: "max-w-xs", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Text, { variant: "muted", size: "xs", className: "max-w-xs", children: [
                     "Supported formats: JPEG, PNG, HEIC, WebP, PDF",
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("br", {}),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("br", {}),
                     "Max size: ",
                     maxFileSizeMb,
                     " MB"
@@ -27898,46 +28482,46 @@ kbd {
             )
           }
         ),
-        (enableCamera || enableWebcam) && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col items-center gap-3", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex w-full max-w-xs items-center gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-border h-px flex-1" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { variant: "muted", size: "sm", children: "or" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-border h-px flex-1" })
+        (enableCamera || enableWebcam) && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col items-center gap-3", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex w-full max-w-xs items-center gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-border h-px flex-1" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { variant: "muted", size: "sm", children: "or" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-border h-px flex-1" })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap justify-center gap-3", children: [
-            enableCamera && isMobile && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap justify-center gap-3", children: [
+            enableCamera && isMobile && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Button,
               {
                 variant: "secondary",
                 onClick: handleCameraCapture,
-                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Camera, { className: "h-4 w-4" }),
+                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Camera, { className: "h-4 w-4" }),
                 disabled,
                 children: "Take a photo"
               }
             ),
-            enableWebcam && !isMobile && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            enableWebcam && !isMobile && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Button,
               {
                 variant: "secondary",
                 onClick: () => setIsWebcamOpen(true),
-                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Camera, { className: "h-4 w-4" }),
+                leftIcon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Camera, { className: "h-4 w-4" }),
                 disabled,
                 children: "Use webcam"
               }
             )
           ] })
         ] }),
-        validationErrors.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        validationErrors.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           Alert,
           {
             variant: "warning",
             dismissible: true,
             onDismiss: () => setValidationErrors([]),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "h-5 w-5" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertTitle, { children: "Invalid files" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertDescription, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("ul", { className: "mt-2 list-inside list-disc space-y-1", children: validationErrors.map((err, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("li", { className: "text-sm", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("strong", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "h-5 w-5" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertTitle, { children: "Invalid files" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertDescription, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { className: "mt-2 list-inside list-disc space-y-1", children: validationErrors.map((err, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "text-sm", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("strong", { children: [
                   err.file.name,
                   ":"
                 ] }),
@@ -27949,7 +28533,7 @@ kbd {
         )
       ] });
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -27959,12 +28543,12 @@ kbd {
         ),
         "data-slot": "doc-scanner",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mb-6 text-center", "data-slot": "doc-scanner-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { as: "h2", size: "xl", weight: "semibold", className: "mb-1", children: title }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Text, { variant: "muted", size: "sm", children: description })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mb-6 text-center", "data-slot": "doc-scanner-header", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { as: "h2", size: "xl", weight: "semibold", className: "mb-1", children: title }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Text, { variant: "muted", size: "sm", children: description })
           ] }),
           renderContent(),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "input",
             {
               ref: cameraInputRef,
@@ -27977,7 +28561,7 @@ kbd {
               tabIndex: -1
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             WebcamModal,
             {
               open: isWebcamOpen,
@@ -28085,19 +28669,19 @@ kbd {
     label,
     value
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "text-muted-foreground flex items-center gap-2 text-sm", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: label }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground", children: value })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "text-muted-foreground flex items-center gap-2 text-sm", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: label }),
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground", children: value })
     ] });
   }
   function AllergyRow({ allergies }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { size: 16, className: "text-red-600 dark:text-red-400" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-xs font-semibold tracking-wide text-red-700 uppercase dark:text-red-400", children: "Allergies" })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { size: 16, className: "text-red-600 dark:text-red-400" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-xs font-semibold tracking-wide text-red-700 uppercase dark:text-red-400", children: "Allergies" })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex flex-wrap items-center gap-1.5", children: allergies.map((a, i) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex flex-wrap items-center gap-1.5", children: allergies.map((a, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Badge,
         {
           variant: "danger",
@@ -28114,17 +28698,17 @@ kbd {
   }) {
     const visible = medications.slice(0, maxVisible);
     const remaining = medications.length - maxVisible;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Paperclip, { size: 16, className: "text-muted-foreground/60" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Meds" })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap items-center gap-2", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Paperclip, { size: 16, className: "text-muted-foreground/60" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Meds" })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap items-center gap-1.5", children: [
-        visible.map((m2, i) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Badge, { variant: "secondary", size: "sm", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap items-center gap-1.5", children: [
+        visible.map((m2, i) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Badge, { variant: "secondary", size: "sm", children: [
           m2.name,
           m2.dose ? ` ${m2.dose}` : ""
         ] }, `${m2.name}-${m2.dose ?? i}`)),
-        remaining > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-primary-800 dark:text-primary-400 text-xs", children: [
+        remaining > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-primary-800 dark:text-primary-400 text-xs", children: [
           "+",
           remaining,
           " more"
@@ -28137,7 +28721,7 @@ kbd {
     label,
     onClick
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "button",
       {
         type: "button",
@@ -28149,8 +28733,8 @@ kbd {
           "focus-visible:bg-muted/50 focus-visible:outline-none"
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: label })
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground shrink-0", children: icon }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label })
         ]
       }
     );
@@ -28172,8 +28756,8 @@ kbd {
       onAction?.(action);
       setOpen(false);
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative", ref: menuRef, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative", ref: menuRef, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Button,
         {
           variant: "ghost",
@@ -28183,10 +28767,10 @@ kbd {
           "aria-haspopup": "menu",
           "aria-expanded": open,
           className: "h-8 w-8",
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(EllipsisVertical, { size: 18 })
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(EllipsisVertical, { size: 18 })
         }
       ),
-      open && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      open && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           role: "menu",
@@ -28198,138 +28782,138 @@ kbd {
             "max-h-[calc(100vh_-_3rem)] overflow-y-auto md:max-h-[calc(100vh_-_4rem)]",
             "motion-safe:animate-fade-in"
           ),
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-col md:flex-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "min-w-[13rem]", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-[11px] font-semibold tracking-wide uppercase", children: "Quick Actions" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-col md:flex-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "min-w-[13rem]", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-[11px] font-semibold tracking-wide uppercase", children: "Quick Actions" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Pencil, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Pencil, { size: 15 }),
                   label: "Edit Patient",
                   onClick: () => handleAction("edit-patient")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Phone, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Phone, { size: 15 }),
                   label: "Contact",
                   onClick: () => handleAction("contact")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Send, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Send, { size: 15 }),
                   label: "Send Message",
                   onClick: () => handleAction("send-message")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Calendar, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Calendar, { size: 15 }),
                   label: "Schedule Appointment",
                   onClick: () => handleAction("schedule-appointment")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Printer, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Printer, { size: 15 }),
                   label: "Print Summary",
                   onClick: () => handleAction("print-summary")
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 OverflowMenuItem,
                 {
-                  icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Download, { size: 15 }),
+                  icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Download, { size: 15 }),
                   label: "Export Record",
                   onClick: () => handleAction("export-record")
                 }
               )
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "border-border my-1 border-t md:my-0 md:border-t-0 md:border-l" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "md:min-w-[26rem]", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-[11px] font-semibold tracking-wide uppercase", children: "Add" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-1 gap-1 md:grid-cols-2 md:gap-2", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "border-border my-1 border-t md:my-0 md:border-t-0 md:border-l" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "md:min-w-[26rem]", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "px-3 py-1.5", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-[11px] font-semibold tracking-wide uppercase", children: "Add" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-1 gap-1 md:grid-cols-2 md:gap-2", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ClipboardPlus, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ClipboardPlus, { size: 15 }),
                     label: "Task",
                     onClick: () => handleAction("add-task")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Stethoscope, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Stethoscope, { size: 15 }),
                     label: "Encounter",
                     onClick: () => handleAction("add-encounter")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ClipboardCheck, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ClipboardCheck, { size: 15 }),
                     label: "Due List Item",
                     onClick: () => handleAction("add-due-list")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FilePlus, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FilePlus, { size: 15 }),
                     label: "Order Request",
                     onClick: () => handleAction("add-order")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileCheck, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileCheck, { size: 15 }),
                     label: "eSign Request",
                     onClick: () => handleAction("add-esign")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Wheat, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Wheat, { size: 15 }),
                     label: "Allergy",
                     onClick: () => handleAction("add-allergy")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Pill, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Pill, { size: 15 }),
                     label: "Medication",
                     onClick: () => handleAction("add-medication")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Bell, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Bell, { size: 15 }),
                     label: "Alert",
                     onClick: () => handleAction("add-alert")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileHeart, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileHeart, { size: 15 }),
                     label: "Condition",
                     onClick: () => handleAction("add-condition")
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   OverflowMenuItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(HeartPulse, { size: 15 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(HeartPulse, { size: 15 }),
                     label: "Vitals",
                     onClick: () => handleAction("add-vitals")
                   }
@@ -28342,12 +28926,12 @@ kbd {
     ] });
   }
   function AlertRow({ comments }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ClipboardList, { size: 16, className: "text-muted-foreground/60" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Alert" })
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex shrink-0 items-center gap-1.5", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ClipboardList, { size: 16, className: "text-muted-foreground/60" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Alert" })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-foreground text-sm", children: comments.join("; ") })
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-foreground text-sm", children: comments.join("; ") })
     ] });
   }
   var PatientHeader = React142.forwardRef(
@@ -28423,7 +29007,7 @@ kbd {
         [onOverflowAction, patient]
       );
       const displayName = formatPatientName(patient.name);
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           ref,
@@ -28437,8 +29021,8 @@ kbd {
           ),
           ...props,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-start gap-4 px-5 py-4", children: [
-              showBackButton && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-start gap-4 px-5 py-4", children: [
+              showBackButton && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 Button,
                 {
                   variant: "ghost",
@@ -28447,10 +29031,10 @@ kbd {
                   disabled: !onBack,
                   "aria-label": "Go back",
                   className: "mt-1 -ml-2 h-8 w-8 shrink-0",
-                  children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ArrowLeft, { size: 18 })
+                  children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ArrowLeft, { size: 18 })
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 Avatar,
                 {
                   name: formatFullName(patient.name),
@@ -28459,10 +29043,10 @@ kbd {
                   className: "hidden shrink-0 md:inline-flex"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("h2", { className: "text-foreground order-1 min-w-0 flex-1 truncate text-xl font-bold", children: displayName }),
-                showOverflowMenu && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "order-2 shrink-0 md:order-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(PatientOverflowMenu, { onAction: handleOverflowAction }) }),
-                actions && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap items-center gap-x-2 gap-y-1", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("h2", { className: "text-foreground order-1 min-w-0 flex-1 truncate text-xl font-bold", children: displayName }),
+                showOverflowMenu && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "order-2 shrink-0 md:order-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(PatientOverflowMenu, { onAction: handleOverflowAction }) }),
+                actions && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "div",
                   {
                     className: cn(
@@ -28474,7 +29058,7 @@ kbd {
                     children: actions
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "order-3 mt-1 flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-sm md:order-4", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "order-3 mt-1 flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-sm md:order-4", children: [
                   patient.status && (() => {
                     const normalizedStatus = patient.status.toLowerCase();
                     const statusColorMap = {
@@ -28483,67 +29067,67 @@ kbd {
                       deceased: "bg-red-500"
                     };
                     const statusColorClass = statusColorMap[normalizedStatus] ?? "bg-yellow-500";
-                    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "inline-flex items-center gap-1 whitespace-nowrap", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "inline-flex items-center gap-1 whitespace-nowrap", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "span",
                         {
                           "aria-hidden": "true",
                           className: `inline-block h-2 w-2 rounded-full ${statusColorClass}`
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground capitalize", children: normalizedStatus })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground capitalize", children: normalizedStatus })
                     ] });
                   })(),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
                     "MRN: ",
                     patient.mrn
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
                     patient.age,
                     " y/o ",
                     patient.sex
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground whitespace-nowrap", children: [
                     "DOB: ",
                     patient.dob
                   ] }),
-                  patient.employer && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground whitespace-nowrap", children: patient.employer })
+                  patient.employer && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground whitespace-nowrap", children: patient.employer })
                 ] })
               ] }) })
             ] }),
-            hasInfoRows && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "border-border bg-muted/30 mx-5 mb-3 space-y-2.5 rounded-lg border px-4 py-3", children: [
-              hasAllergies && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AllergyRow, { allergies }),
-              hasMedications && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            hasInfoRows && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "border-border bg-muted/30 mx-5 mb-3 space-y-2.5 rounded-lg border px-4 py-3", children: [
+              hasAllergies && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AllergyRow, { allergies }),
+              hasMedications && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 MedicationRow,
                 {
                   medications,
                   maxVisible: maxVisibleMeds
                 }
               ),
-              hasComments && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AlertRow, { comments }),
-              hasProviders && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-wrap gap-x-8 gap-y-2", children: [
-                patient.attendingProvider && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              hasComments && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AlertRow, { comments }),
+              hasProviders && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-wrap gap-x-8 gap-y-2", children: [
+                patient.attendingProvider && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   DetailItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Stethoscope, { size: 14 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Stethoscope, { size: 14 }),
                     label: "Attending",
                     value: patient.attendingProvider
                   }
                 ),
-                patient.familyProvider && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                patient.familyProvider && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   DetailItem,
                   {
-                    icon: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Users, { size: 14 }),
+                    icon: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Users, { size: 14 }),
                     label: "Family MD",
                     value: patient.familyProvider
                   }
                 )
               ] })
             ] }),
-            showFlagBanner && patient.flags && patient.flags.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "border-t border-amber-200 bg-amber-50 px-5 py-1.5 text-left text-xs font-medium tracking-wide text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/40 dark:text-amber-300", children: patient.flags.map(
+            showFlagBanner && patient.flags && patient.flags.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "border-t border-amber-200 bg-amber-50 px-5 py-1.5 text-left text-xs font-medium tracking-wide text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/40 dark:text-amber-300", children: patient.flags.map(
               (flag) => flag.charAt(0).toUpperCase() + flag.slice(1).toLowerCase()
             ).join(" \xB7 ") }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               Modal,
               {
                 open: contactModalOpen,
@@ -28552,40 +29136,40 @@ kbd {
                 },
                 size: "sm",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalTitle, { children: "Contact Information" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalTitle, { children: "Contact Information" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "space-y-4", children: [
-                    patient.email && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-3", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "space-y-4", children: [
+                    patient.email && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-3", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Mail,
                         {
                           size: 18,
                           className: "text-muted-foreground shrink-0"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Email" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-foreground text-sm", children: patient.email })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Email" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-foreground text-sm", children: patient.email })
                       ] })
                     ] }),
-                    patient.phone && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-3", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    patient.phone && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-3", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Phone,
                         {
                           size: 18,
                           className: "text-muted-foreground shrink-0"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Phone" }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-foreground text-sm", children: patient.phone })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs font-semibold tracking-wide uppercase", children: "Phone" }),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-foreground text-sm", children: patient.phone })
                       ] })
                     ] }),
-                    !patient.email && !patient.phone && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground text-sm", children: "No contact information available." })
+                    !patient.email && !patient.phone && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground text-sm", children: "No contact information available." })
                   ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalFooter, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalFooter, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     Button,
                     {
                       variant: "secondary",
@@ -28596,7 +29180,7 @@ kbd {
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               Modal,
               {
                 open: !!addModalType,
@@ -28608,15 +29192,15 @@ kbd {
                 },
                 size: "md",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalTitle, { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalTitle, { children: [
                       "Add ",
                       addEntityLabel
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Label",
@@ -28625,8 +29209,8 @@ kbd {
                         placeholder: `Enter ${addEntityLabel.toLowerCase()} name\u2026`
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "label",
                         {
                           htmlFor: "ph-add-status",
@@ -28634,7 +29218,7 @@ kbd {
                           children: "Status"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                         "select",
                         {
                           id: "ph-add-status",
@@ -28646,17 +29230,17 @@ kbd {
                             "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                           ),
                           children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "active", children: "Active" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "pending", children: "Pending" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "overdue", children: "Overdue" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "completed", children: "Completed" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "cancelled", children: "Cancelled" })
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "active", children: "Active" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "pending", children: "Pending" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "overdue", children: "Overdue" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "completed", children: "Completed" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "cancelled", children: "Cancelled" })
                           ]
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "label",
                         {
                           htmlFor: "ph-add-priority",
@@ -28664,7 +29248,7 @@ kbd {
                           children: "Priority"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                         "select",
                         {
                           id: "ph-add-priority",
@@ -28676,15 +29260,15 @@ kbd {
                             "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                           ),
                           children: [
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Low", children: "Low" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Normal", children: "Normal" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "High", children: "High" }),
-                            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "Urgent", children: "Urgent" })
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Low", children: "Low" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Normal", children: "Normal" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "High", children: "High" }),
+                            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "Urgent", children: "Urgent" })
                           ]
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Assigned To",
@@ -28692,7 +29276,7 @@ kbd {
                         onChange: (e) => setAddForm((f) => ({ ...f, assignedTo: e.target.value }))
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Due Date",
@@ -28701,8 +29285,8 @@ kbd {
                         onChange: (e) => setAddForm((f) => ({ ...f, dueDate: e.target.value }))
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "label",
                         {
                           htmlFor: "ph-add-notes",
@@ -28710,7 +29294,7 @@ kbd {
                           children: "Notes"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         "textarea",
                         {
                           id: "ph-add-notes",
@@ -28728,8 +29312,8 @@ kbd {
                       )
                     ] })
                   ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalFooter, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalFooter, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Button,
                       {
                         variant: "secondary",
@@ -28740,7 +29324,7 @@ kbd {
                         children: "Cancel"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                       Button,
                       {
                         onClick: () => {
@@ -28760,7 +29344,7 @@ kbd {
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               Modal,
               {
                 open: editPatientOpen,
@@ -28772,13 +29356,13 @@ kbd {
                 },
                 size: "2xl",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalHeader, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalTitle, { children: "Edit Patient" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalClose, {})
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalHeader, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalTitle, { children: "Edit Patient" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalClose, {})
                   ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-4", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ModalBody, { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("form", { className: "space-y-4", onSubmit: (e) => e.preventDefault(), children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-4", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "First Name",
@@ -28789,7 +29373,7 @@ kbd {
                           }))
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Middle Name",
@@ -28800,7 +29384,7 @@ kbd {
                           }))
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Last Name",
@@ -28811,7 +29395,7 @@ kbd {
                           }))
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Suffix",
@@ -28824,9 +29408,9 @@ kbd {
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "label",
                           {
                             htmlFor: "ph-edit-sex",
@@ -28834,7 +29418,7 @@ kbd {
                             children: "Sex"
                           }
                         ),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                           "select",
                           {
                             id: "ph-edit-sex",
@@ -28846,14 +29430,14 @@ kbd {
                               "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                             ),
                             children: [
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "M", children: "Male" }),
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "F", children: "Female" }),
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "U", children: "Unknown" })
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "M", children: "Male" }),
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "F", children: "Female" }),
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "U", children: "Unknown" })
                             ]
                           }
                         )
                       ] }),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Date of Birth",
@@ -28863,8 +29447,8 @@ kbd {
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "MRN",
@@ -28873,8 +29457,8 @@ kbd {
                           className: "bg-muted/50 cursor-not-allowed opacity-70"
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "label",
                           {
                             htmlFor: "ph-edit-status",
@@ -28882,7 +29466,7 @@ kbd {
                             children: "Status"
                           }
                         ),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                           "select",
                           {
                             id: "ph-edit-status",
@@ -28897,16 +29481,16 @@ kbd {
                               "focus:ring-ring focus:border-transparent focus:ring-2 focus:outline-none"
                             ),
                             children: [
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "active", children: "Active" }),
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "inactive", children: "Inactive" }),
-                              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: "deceased", children: "Deceased" })
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "active", children: "Active" }),
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "inactive", children: "Inactive" }),
+                              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: "deceased", children: "Deceased" })
                             ]
                           }
                         )
                       ] })
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "grid grid-cols-1 gap-4 sm:grid-cols-2", children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Email",
@@ -28915,7 +29499,7 @@ kbd {
                           onChange: (e) => setEditPatientForm((f) => ({ ...f, email: e.target.value }))
                         }
                       ),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                         Input,
                         {
                           label: "Phone",
@@ -28925,7 +29509,7 @@ kbd {
                         }
                       )
                     ] }),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Employer",
@@ -28934,7 +29518,7 @@ kbd {
                         className: "bg-muted/50 cursor-not-allowed opacity-70"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Attending Provider",
@@ -28945,7 +29529,7 @@ kbd {
                         }))
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Input,
                       {
                         label: "Family MD",
@@ -28957,8 +29541,8 @@ kbd {
                       }
                     )
                   ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(ModalFooter, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(ModalFooter, { children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Button,
                       {
                         variant: "secondary",
@@ -28969,7 +29553,7 @@ kbd {
                         children: "Cancel"
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                       Button,
                       {
                         onClick: () => {
@@ -29026,7 +29610,7 @@ kbd {
     };
     const expMonth = String(card.expMonth).padStart(2, "0");
     const expYear = String(card.expYear).slice(-2);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -29038,7 +29622,7 @@ kbd {
         ),
         "data-slot": "payment-card",
         children: [
-          selectable && !disabled && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          selectable && !disabled && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -29048,14 +29632,14 @@ kbd {
               tabIndex: 0
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700",
               "data-slot": "payment-card-header",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "i",
                     {
                       className: cn(
@@ -29066,7 +29650,7 @@ kbd {
                       "aria-hidden": "true"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "span",
                     {
                       className: "text-muted-foreground text-xs font-medium uppercase",
@@ -29075,7 +29659,7 @@ kbd {
                     }
                   )
                 ] }),
-                (card.isDefault || selected) && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                (card.isDefault || selected) && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "span",
                   {
                     className: "text-brand-600 dark:text-brand-400 text-xs font-medium",
@@ -29086,18 +29670,18 @@ kbd {
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "mt-3 flex items-center justify-between",
               "data-slot": "payment-card-details",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "font-mono text-sm text-gray-900 dark:text-gray-100", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "hidden lg:inline", children: "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 " }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "font-mono text-sm text-gray-900 dark:text-gray-100", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "hidden lg:inline", children: "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 " }),
                   "\u2022\u2022\u2022\u2022 ",
                   card.last4
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "text-muted-foreground text-sm", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "text-muted-foreground text-sm", children: [
                   expMonth,
                   "/",
                   expYear
@@ -29105,14 +29689,14 @@ kbd {
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "relative z-10 mt-3 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700",
               "data-slot": "payment-card-footer",
               children: [
-                selectable && !card.isDefault && !selected ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("label", { className: "flex cursor-pointer items-center gap-2", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                selectable && !card.isDefault && !selected ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("label", { className: "flex cursor-pointer items-center gap-2", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "input",
                     {
                       type: "radio",
@@ -29124,9 +29708,9 @@ kbd {
                       className: "text-brand-600 focus:ring-brand-500"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs", children: "Set as default" })
-                ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", {}),
-                showDelete && onDelete && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs", children: "Set as default" })
+                ] }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", {}),
+                showDelete && onDelete && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "button",
                   {
                     type: "button",
@@ -29138,7 +29722,7 @@ kbd {
                       "disabled:cursor-not-allowed disabled:opacity-50"
                     ),
                     "aria-label": `Delete card ending in ${card.last4}`,
-                    children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TrashIcon2, { className: "h-4 w-4" })
+                    children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TrashIcon2, { className: "h-4 w-4" })
                   }
                 )
               ]
@@ -29172,7 +29756,7 @@ kbd {
     };
     const isNew = account.status === "new";
     const isError = account.status === "errored" || account.status === "verification_failed";
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -29186,7 +29770,7 @@ kbd {
         ),
         "data-slot": "payment-bank",
         children: [
-          selectable && !disabled && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          selectable && !disabled && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -29196,15 +29780,15 @@ kbd {
               tabIndex: 0
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700",
               "data-slot": "payment-bank-header",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(BankIcon, { className: "text-foreground/70 h-5 w-5" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(BankIcon, { className: "text-foreground/70 h-5 w-5" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "span",
                     {
                       className: "text-foreground/70 text-xs font-medium uppercase",
@@ -29213,32 +29797,32 @@ kbd {
                     }
                   )
                 ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                  isNew && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-xs font-medium text-yellow-800 dark:text-yellow-300", children: "Pending Verification" }),
-                  isError && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-xs font-medium text-red-800 dark:text-red-300", children: "Verification Failed" }),
-                  !isNew && !isError && (account.isDefault || selected) && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-brand-600 dark:text-brand-400 text-xs font-medium", children: "Default" })
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                  isNew && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-xs font-medium text-yellow-800 dark:text-yellow-300", children: "Pending Verification" }),
+                  isError && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-xs font-medium text-red-800 dark:text-red-300", children: "Verification Failed" }),
+                  !isNew && !isError && (account.isDefault || selected) && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-brand-600 dark:text-brand-400 text-xs font-medium", children: "Default" })
                 ] })
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "mt-3 space-y-1", "data-slot": "payment-bank-details", children: [
-            account.bankName && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "text-sm font-medium text-gray-900 dark:text-gray-100", children: account.bankName }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "text-foreground/70 font-mono text-sm", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "hidden lg:inline", children: "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 " }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "mt-3 space-y-1", "data-slot": "payment-bank-details", children: [
+            account.bankName && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "text-sm font-medium text-gray-900 dark:text-gray-100", children: account.bankName }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "text-foreground/70 font-mono text-sm", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "hidden lg:inline", children: "\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 " }),
               "\u2022\u2022\u2022\u2022",
               " ",
               account.last4
             ] }),
-            account.accountType && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "text-foreground/70 text-xs capitalize", children: account.accountType })
+            account.accountType && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "text-foreground/70 text-xs capitalize", children: account.accountType })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: "relative z-10 mt-3 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-gray-700",
               "data-slot": "payment-bank-footer",
               children: [
-                selectable && !account.isDefault && !selected ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("label", { className: "flex cursor-pointer items-center gap-2", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                selectable && !account.isDefault && !selected ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("label", { className: "flex cursor-pointer items-center gap-2", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "input",
                     {
                       type: "radio",
@@ -29250,9 +29834,9 @@ kbd {
                       className: "text-brand-600 focus:ring-brand-500"
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-muted-foreground text-xs", children: "Set as default" })
-                ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", {}),
-                showDelete && onDelete && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-muted-foreground text-xs", children: "Set as default" })
+                ] }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", {}),
+                showDelete && onDelete && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "button",
                   {
                     type: "button",
@@ -29264,7 +29848,7 @@ kbd {
                       "disabled:cursor-not-allowed disabled:opacity-50"
                     ),
                     "aria-label": `Delete account ending in ${account.last4}`,
-                    children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(TrashIcon2, { className: "h-4 w-4" })
+                    children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(TrashIcon2, { className: "h-4 w-4" })
                   }
                 )
               ]
@@ -29286,7 +29870,7 @@ kbd {
     className
   }) {
     if (methods.length === 0) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           className: cn(
@@ -29295,10 +29879,10 @@ kbd {
             className
           ),
           "data-slot": "payment-list-empty",
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-start gap-3", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(WarningIcon, { className: "h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-start gap-3", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(WarningIcon, { className: "h-5 w-5 flex-shrink-0 text-yellow-600 dark:text-yellow-400" }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "h4",
                 {
                   className: "font-medium text-yellow-800 dark:text-yellow-200",
@@ -29306,7 +29890,7 @@ kbd {
                   children: "No Payment Methods"
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "p",
                 {
                   className: "mt-1 text-sm text-yellow-700 dark:text-yellow-300",
@@ -29319,13 +29903,13 @@ kbd {
         }
       );
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         className: cn("grid gap-4 md:grid-cols-2", className),
         "data-slot": "payment-list",
         children: methods.map(
-          (method) => method.type === "card" ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          (method) => method.type === "card" ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             PaymentMethodCard,
             {
               card: method.data,
@@ -29337,7 +29921,7 @@ kbd {
               disabled
             },
             method.data.id
-          ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             PaymentMethodBank,
             {
               account: method.data,
@@ -29356,7 +29940,7 @@ kbd {
   }
   PaymentMethodList.displayName = "PaymentMethodList";
   function BankIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -29365,7 +29949,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -29377,7 +29961,7 @@ kbd {
     );
   }
   function TrashIcon2({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -29386,7 +29970,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -29398,7 +29982,7 @@ kbd {
     );
   }
   function WarningIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -29407,7 +29991,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -29463,21 +30047,21 @@ kbd {
   var ProviderLogo = ({ logoURL, name, variant }) => {
     const [hasError, setHasError] = React142.useState(false);
     if (!logoURL || hasError) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           "data-slot": "provider-card-logo",
           className: cn(logoContainerVariants({ variant })),
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-primary-100 dark:bg-primary-900 flex h-12 w-12 items-center justify-center rounded-full", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "text-primary-800 dark:text-primary-300 text-lg font-bold", children: name.charAt(0).toUpperCase() }) })
+          children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-primary-100 dark:bg-primary-900 flex h-12 w-12 items-center justify-center rounded-full", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "text-primary-800 dark:text-primary-300 text-lg font-bold", children: name.charAt(0).toUpperCase() }) })
         }
       );
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "provider-card-logo",
         className: cn(logoContainerVariants({ variant })),
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "img",
           {
             src: logoURL,
@@ -29492,8 +30076,8 @@ kbd {
   };
   var DistanceBadge = ({ distance }) => {
     if (distance === void 0) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground inline-flex items-center gap-1 text-xs", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground inline-flex items-center gap-1 text-xs", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "svg",
         {
           "aria-hidden": "true",
@@ -29503,7 +30087,7 @@ kbd {
           stroke: "currentColor",
           strokeWidth: 2,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 strokeLinecap: "round",
@@ -29511,7 +30095,7 @@ kbd {
                 d: "M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 strokeLinecap: "round",
@@ -29526,20 +30110,20 @@ kbd {
       "mi"
     ] });
   };
-  var SafeFromWildfiresNotice = () => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { content: "BlueHive has confirmed that this provider is operational and not impacted by the January 2025 wildfires.", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  var SafeFromWildfiresNotice = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Tooltip, { content: "BlueHive has confirmed that this provider is operational and not impacted by the January 2025 wildfires.", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "div",
     {
       "data-slot": "provider-card-safe-notice",
       className: "inline-flex items-center gap-1.5 rounded-md bg-green-100 px-2 py-1 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "svg",
           {
             "aria-hidden": "true",
             className: "h-4 w-4",
             fill: "currentColor",
             viewBox: "0 0 20 20",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 fillRule: "evenodd",
@@ -29549,24 +30133,24 @@ kbd {
             )
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: "Operational" })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: "Operational" })
       ]
     }
   ) });
-  var VerifiedBadge = () => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { content: "This provider's information has been verified", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  var VerifiedBadge = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Tooltip, { content: "This provider's information has been verified", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "span",
     {
       "data-slot": "provider-card-verified",
       className: "inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "svg",
           {
             "aria-hidden": "true",
             className: "h-3.5 w-3.5",
             fill: "currentColor",
             viewBox: "0 0 20 20",
-            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "path",
               {
                 fillRule: "evenodd",
@@ -29630,7 +30214,7 @@ kbd {
       };
       const displayServices = showServices && provider.services?.slice(0, maxServices);
       const remainingServices = showServices && provider.services ? Math.max(0, provider.services.length - maxServices) : 0;
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           ref,
@@ -29648,7 +30232,7 @@ kbd {
           "data-variant": variant,
           "data-testid": "provider-card",
           children: [
-            (variant === "compact" || variant === "featured") && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            (variant === "compact" || variant === "featured") && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ProviderLogo,
               {
                 logoURL: provider.logoURL,
@@ -29656,7 +30240,7 @@ kbd {
                 variant
               }
             ),
-            variant === "list" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            variant === "list" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ProviderLogo,
               {
                 logoURL: provider.logoURL,
@@ -29664,7 +30248,7 @@ kbd {
                 variant
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "div",
               {
                 "data-slot": "provider-card-content",
@@ -29675,13 +30259,13 @@ kbd {
                   variant === "featured" && ""
                 ),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "div",
                     {
                       "data-slot": "provider-card-header",
                       className: "mb-1 flex items-start justify-between gap-2",
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "h3",
                           {
                             className: cn(
@@ -29693,11 +30277,11 @@ kbd {
                             children: provider.name
                           }
                         ),
-                        provider.verified && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(VerifiedBadge, {})
+                        provider.verified && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(VerifiedBadge, {})
                       ]
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "p",
                     {
                       "data-slot": "provider-card-address",
@@ -29705,13 +30289,13 @@ kbd {
                         "text-muted-foreground",
                         variant === "featured" ? "text-sm" : "text-xs"
                       ),
-                      children: variant === "list" ? formatAddressSingleLine2(provider.address) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
+                      children: variant === "list" ? formatAddressSingleLine2(provider.address) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
                         provider.address.street1,
-                        provider.address.street2 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(import_jsx_runtime18.Fragment, { children: [
-                          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("br", {}),
+                        provider.address.street2 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
+                          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("br", {}),
                           provider.address.street2
                         ] }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("br", {}),
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("br", {}),
                         provider.address.city,
                         ", ",
                         provider.address.state,
@@ -29720,7 +30304,7 @@ kbd {
                       ] })
                     }
                   ),
-                  provider.workNumber && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  provider.workNumber && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "a",
                     {
                       href: `tel:${provider.workNumber}`,
@@ -29736,13 +30320,13 @@ kbd {
                       children: formatPhoneNumber3(provider.workNumber)
                     }
                   ),
-                  displayServices && displayServices.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  displayServices && displayServices.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "div",
                     {
                       "data-slot": "provider-card-services",
                       className: "mt-3 flex flex-wrap gap-1.5",
                       children: [
-                        displayServices.map((service) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        displayServices.map((service) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           Badge,
                           {
                             variant: "default",
@@ -29752,7 +30336,7 @@ kbd {
                           },
                           service._id
                         )),
-                        remainingServices > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(Badge, { variant: "secondary", size: "sm", className: "text-xs", children: [
+                        remainingServices > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(Badge, { variant: "secondary", size: "sm", className: "text-xs", children: [
                           "+",
                           remainingServices,
                           " more"
@@ -29760,16 +30344,16 @@ kbd {
                       ]
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "div",
                     {
                       "data-slot": "provider-card-footer",
                       className: "mt-3 flex items-center justify-between",
                       children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-                          provider.safeFromWildfires && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SafeFromWildfiresNotice, {}),
-                          !provider.safeFromWildfires && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(DistanceBadge, { distance: provider.distance })
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+                          provider.safeFromWildfires && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SafeFromWildfiresNotice, {}),
+                          !provider.safeFromWildfires && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(DistanceBadge, { distance: provider.distance })
                         ] }),
                         renderActions?.(provider)
                       ]
@@ -29787,7 +30371,7 @@ kbd {
   var ProviderCardSkeleton = ({
     variant = "compact"
   }) => {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -29797,7 +30381,7 @@ kbd {
           variant === "featured" && "flex flex-col p-6"
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "div",
             {
               className: cn(
@@ -29808,7 +30392,7 @@ kbd {
               )
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               className: cn(
@@ -29816,12 +30400,12 @@ kbd {
                 variant !== "featured" && "p-4"
               ),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-muted h-4 w-3/4 rounded" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-muted h-3 w-full rounded" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-muted h-3 w-2/3 rounded" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-muted h-3 w-1/3 rounded" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1" }),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex justify-between", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "bg-muted h-4 w-16 rounded" }) })
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-muted h-4 w-3/4 rounded" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-muted h-3 w-full rounded" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-muted h-3 w-2/3 rounded" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-muted h-3 w-1/3 rounded" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex justify-between", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "bg-muted h-4 w-16 rounded" }) })
               ]
             }
           )
@@ -29893,7 +30477,7 @@ kbd {
       variant: "default"
     }
   });
-  var CrosshairsIcon = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  var CrosshairsIcon = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "svg",
     {
       "aria-hidden": "true",
@@ -29903,16 +30487,16 @@ kbd {
       stroke: "currentColor",
       strokeWidth: 2,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("circle", { cx: "12", cy: "12", r: "10" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("circle", { cx: "12", cy: "12", r: "3" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("line", { x1: "12", y1: "2", x2: "12", y2: "6" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("line", { x1: "12", y1: "18", x2: "12", y2: "22" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("line", { x1: "2", y1: "12", x2: "6", y2: "12" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("line", { x1: "18", y1: "12", x2: "22", y2: "12" })
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("circle", { cx: "12", cy: "12", r: "10" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("circle", { cx: "12", cy: "12", r: "3" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("line", { x1: "12", y1: "2", x2: "12", y2: "6" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("line", { x1: "12", y1: "18", x2: "12", y2: "22" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("line", { x1: "2", y1: "12", x2: "6", y2: "12" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("line", { x1: "18", y1: "12", x2: "22", y2: "12" })
       ]
     }
   );
-  var SearchIcon3 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+  var SearchIcon3 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
     "svg",
     {
       "aria-hidden": "true",
@@ -29921,7 +30505,7 @@ kbd {
       viewBox: "0 0 24 24",
       stroke: "currentColor",
       strokeWidth: 2,
-      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "path",
         {
           strokeLinecap: "round",
@@ -29931,7 +30515,7 @@ kbd {
       )
     }
   );
-  var SpinnerIcon4 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+  var SpinnerIcon4 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
     "svg",
     {
       "aria-hidden": "true",
@@ -29939,7 +30523,7 @@ kbd {
       fill: "none",
       viewBox: "0 0 24 24",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "circle",
           {
             className: "opacity-25",
@@ -29950,7 +30534,7 @@ kbd {
             strokeWidth: "4"
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             className: "opacity-75",
@@ -29961,7 +30545,7 @@ kbd {
       ]
     }
   );
-  var CheckIcon3 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+  var CheckIcon3 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
     "svg",
     {
       "aria-hidden": "true",
@@ -29970,10 +30554,10 @@ kbd {
       viewBox: "0 0 24 24",
       stroke: "currentColor",
       strokeWidth: 2,
-      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 13l4 4L19 7" })
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 13l4 4L19 7" })
     }
   );
-  var WarningIcon2 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+  var WarningIcon2 = ({ className }) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
     "svg",
     {
       "aria-hidden": "true",
@@ -29982,7 +30566,7 @@ kbd {
       viewBox: "0 0 24 24",
       stroke: "currentColor",
       strokeWidth: 2,
-      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "path",
         {
           strokeLinecap: "round",
@@ -30000,13 +30584,13 @@ kbd {
     const getIcon = () => {
       switch (status) {
         case "loading":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SpinnerIcon4, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SpinnerIcon4, { className: "h-4 w-4" });
         case "success":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CheckIcon3, { className: "text-success animate-in zoom-in h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CheckIcon3, { className: "text-success animate-in zoom-in h-4 w-4" });
         case "error":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(WarningIcon2, { className: "text-destructive h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(WarningIcon2, { className: "text-destructive h-4 w-4" });
         default:
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CrosshairsIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CrosshairsIcon, { className: "h-4 w-4" });
       }
     };
     const getTooltip = () => {
@@ -30021,7 +30605,7 @@ kbd {
           return "Click to automatically find your location";
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Tooltip, { content: getTooltip(), children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Tooltip, { content: getTooltip(), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       Button,
       {
         type: "button",
@@ -30046,7 +30630,7 @@ kbd {
     className
   }) => {
     if (loading) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           className: cn("text-muted-foreground animate-pulse text-sm", className),
@@ -30059,8 +30643,8 @@ kbd {
       return null;
     }
     if (results.count === 0) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: cn("text-muted-foreground text-sm", className), children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("strong", { children: "No providers found" }),
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: cn("text-muted-foreground text-sm", className), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("strong", { children: "No providers found" }),
         " for ZIP code",
         " ",
         results.postalCode.zipcode
@@ -30075,7 +30659,7 @@ kbd {
         onResultsClick?.();
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         className: cn(
@@ -30088,14 +30672,14 @@ kbd {
         role: "button",
         tabIndex: 0,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("strong", { children: results.count.toLocaleString() }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("strong", { children: results.count.toLocaleString() }),
           " results in",
           " ",
           results.postalCode.city,
           ", ",
           results.postalCode.state,
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("br", {}),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("small", { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("br", {}),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("small", { children: [
             "Near ",
             results.postalCode.streetName || results.postalCode.zipcode,
             " ",
@@ -30163,7 +30747,7 @@ kbd {
       };
       const placeholderText = placeholder || (providerCount ? `Search our ${providerCount.toLocaleString()} providers by ZIP` : "Search providers by ZIP code");
       const displayError = error || validationError;
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           "data-slot": "provider-search",
@@ -30173,7 +30757,7 @@ kbd {
             className
           ),
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "form",
               {
                 ref,
@@ -30183,7 +30767,7 @@ kbd {
                 "aria-label": "Provider search",
                 ...props,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "div",
                     {
                       "data-slot": "provider-search-input",
@@ -30194,7 +30778,7 @@ kbd {
                         !displayError && "border-input"
                       ),
                       children: [
-                        onGeolocate && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        onGeolocate && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           GeolocationButton,
                           {
                             status: geoStatus,
@@ -30202,7 +30786,7 @@ kbd {
                             disabled: loading
                           }
                         ),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "min-w-0 flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           Input,
                           {
                             type: "text",
@@ -30223,7 +30807,7 @@ kbd {
                             )
                           }
                         ) }),
-                        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           Button,
                           {
                             type: "submit",
@@ -30232,13 +30816,13 @@ kbd {
                             disabled: loading,
                             className: "h-10 w-10 shrink-0",
                             "aria-label": "Search",
-                            children: loading ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SpinnerIcon4, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SearchIcon3, { className: "h-4 w-4" })
+                            children: loading ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SpinnerIcon4, { className: "h-4 w-4" }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SearchIcon3, { className: "h-4 w-4" })
                           }
                         )
                       ]
                     }
                   ),
-                  displayError && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  displayError && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "p",
                     {
                       id: "search-error",
@@ -30250,7 +30834,7 @@ kbd {
                 ]
               }
             ),
-            showResults && (results || resultsLoading) && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { "data-slot": "provider-search-results", className: "mt-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            showResults && (results || resultsLoading) && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { "data-slot": "provider-search-results", className: "mt-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               SearchResultsMessage,
               {
                 results,
@@ -30270,13 +30854,13 @@ kbd {
     className,
     ...props
   }) => {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "provider-search-hero",
         className: cn("text-center", className),
         children: [
-          title && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          title && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "h1",
             {
               "data-slot": "provider-search-hero-title",
@@ -30284,8 +30868,8 @@ kbd {
               children: title
             }
           ),
-          subtitle && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground mb-6 text-lg md:text-xl", children: subtitle }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "mx-auto max-w-xl", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ProviderSearchBar, { ...props, variant: "hero" }) })
+          subtitle && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground mb-6 text-lg md:text-xl", children: subtitle }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "mx-auto max-w-xl", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ProviderSearchBar, { ...props, variant: "hero" }) })
         ]
       }
     );
@@ -30451,14 +31035,14 @@ kbd {
       }),
       [validateAndSubmit]
     );
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: cn("space-y-6", className), "data-slot": "ref-form", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: cn("space-y-6", className), "data-slot": "ref-form", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           className: "flex flex-col gap-4 sm:flex-row sm:items-center",
           "data-slot": "ref-row",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               RadioGroup,
               {
                 name: "result",
@@ -30471,12 +31055,12 @@ kbd {
                 orientation: "horizontal",
                 error: showError ? pleaseSelectResult : void 0,
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Radio, { value: "passed", label: passed }),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(Radio, { value: "failed", label: failed })
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Radio, { value: "passed", label: passed }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Radio, { value: "failed", label: failed })
                 ]
               }
             ) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Input,
               {
                 label: alternateResultsText,
@@ -30488,17 +31072,17 @@ kbd {
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           className: "flex flex-col gap-4 sm:flex-row sm:items-center",
           "data-slot": "ref-row",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "font-semibold", "data-slot": "ref-date-label", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "font-semibold", "data-slot": "ref-date-label", children: [
               dateDrawn,
               ":"
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Input,
               {
                 type: "date",
@@ -30510,17 +31094,17 @@ kbd {
           ]
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           className: "flex flex-col gap-4 sm:flex-row sm:items-center",
           "data-slot": "ref-row",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "font-semibold", "data-slot": "ref-date-label", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "font-semibold", "data-slot": "ref-date-label", children: [
               dateCompleted,
               ":"
             ] }) }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "sm:w-1/2", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               Input,
               {
                 type: "date",
@@ -30532,7 +31116,7 @@ kbd {
           ]
         }
       ),
-      showApplyToAll && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex justify-end", "data-slot": "ref-apply-all", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      showApplyToAll && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex justify-end", "data-slot": "ref-apply-all", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Checkbox,
         {
           id: "apply-to-all",
@@ -30542,7 +31126,7 @@ kbd {
           labelPosition: "left"
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Textarea,
         {
           label: providerRecommendations,
@@ -30552,9 +31136,9 @@ kbd {
           placeholder: providerRecommendations
         }
       ) }),
-      showFileUpload && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "ref-file-upload", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", "data-slot": "ref-file-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      showFileUpload && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "ref-file-upload", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", "data-slot": "ref-file-row", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "span",
             {
               className: "bg-muted border-input rounded-l-md border border-r-0 px-3 py-2 text-sm font-medium",
@@ -30562,7 +31146,7 @@ kbd {
               children: results
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             Input,
             {
               value: files.map((f) => f.name).join(", "),
@@ -30571,7 +31155,7 @@ kbd {
               placeholder: "No files selected"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "input",
             {
               ref: fileInputRef,
@@ -30581,7 +31165,7 @@ kbd {
               onChange: handleFileSelect
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             Button,
             {
               type: "button",
@@ -30589,27 +31173,27 @@ kbd {
               className: "rounded-l-none",
               onClick: () => fileInputRef.current?.click(),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(FileUp, { className: "mr-2 h-4 w-4" }),
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(FileUp, { className: "mr-2 h-4 w-4" }),
                 browseFiles
               ]
             }
           )
         ] }),
-        files.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "mt-2 space-y-1", "data-slot": "ref-file-list", children: files.map((file, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+        files.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "mt-2 space-y-1", "data-slot": "ref-file-list", children: files.map((file, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           "div",
           {
             className: "bg-muted/50 flex items-center justify-between rounded px-3 py-1.5 text-sm",
             "data-slot": "ref-file-item",
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "truncate", children: file.name }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "truncate", children: file.name }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "button",
                 {
                   type: "button",
                   onClick: () => removeFile(index),
                   className: "text-muted-foreground hover:text-destructive ml-2",
                   "data-slot": "ref-file-remove",
-                  children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(X, { className: "h-4 w-4" })
+                  children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(X, { className: "h-4 w-4" })
                 }
               )
             ]
@@ -30617,21 +31201,21 @@ kbd {
           index
         )) })
       ] }),
-      providerContacts.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "ref-providers", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("h5", { className: "mb-2 font-semibold", "data-slot": "ref-provider-heading", children: provider }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("hr", { className: "mb-3", "data-slot": "ref-provider-divider" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      providerContacts.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "ref-providers", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("h5", { className: "mb-2 font-semibold", "data-slot": "ref-provider-heading", children: provider }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("hr", { className: "mb-3", "data-slot": "ref-provider-divider" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "div",
           {
             className: "max-h-40 space-y-2 overflow-y-auto",
             "data-slot": "ref-contact-list",
-            children: providerContacts.map((contact) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            children: providerContacts.map((contact) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "div",
               {
                 className: "hover:bg-muted/50 flex items-center gap-3 rounded px-3 py-2",
                 "data-slot": "ref-contact-row",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     Checkbox,
                     {
                       id: `contact-${contact.id}`,
@@ -30639,7 +31223,7 @@ kbd {
                       onChange: () => handleContactToggle(contact.id)
                     }
                   ),
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "label",
                     {
                       htmlFor: `contact-${contact.id}`,
@@ -30649,12 +31233,12 @@ kbd {
                         contact.firstName,
                         " ",
                         contact.lastName,
-                        contact.degree && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground", children: [
+                        contact.degree && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground", children: [
                           " ",
                           "| ",
                           contact.degree
                         ] }),
-                        contact.positionTitle && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { className: "text-muted-foreground", children: [
+                        contact.positionTitle && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "text-muted-foreground", children: [
                           " ",
                           "| ",
                           contact.positionTitle
@@ -30668,25 +31252,25 @@ kbd {
             ))
           }
         )
-      ] }) : showFileUpload && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      ] }) : showFileUpload && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "div",
         {
           className: "bg-warning/10 border-warning/30 rounded-lg border p-4",
           "data-slot": "ref-no-providers",
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "h4",
               {
                 className: "flex items-center gap-2 font-semibold",
                 "data-slot": "ref-no-providers-heading",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CircleAlert, { className: "text-warning h-5 w-5" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CircleAlert, { className: "text-warning h-5 w-5" }),
                   noProviderContacts
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "text-muted-foreground mt-1 text-sm", children: noProviderContactsMessage }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "text-muted-foreground mt-1 text-sm", children: noProviderContactsMessage }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "button",
               {
                 type: "button",
@@ -30697,7 +31281,7 @@ kbd {
           ]
         }
       ),
-      showError && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      showError && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "p",
         {
           className: "text-destructive-700 dark:text-destructive-400 text-sm font-medium",
@@ -30933,7 +31517,7 @@ kbd {
       const hasSubSelection = group.subGroups?.some(hasSelectedInGroup) ?? false;
       return hasDirectSelection || hasSubSelection;
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "div",
       {
         "data-slot": "service-picker",
@@ -30943,8 +31527,8 @@ kbd {
           className
         ),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "service-picker-header", className: "p-3", children: [
-            !hideHeading && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "service-picker-header", className: "p-3", children: [
+            !hideHeading && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "h2",
               {
                 "data-slot": "service-picker-heading",
@@ -30952,9 +31536,9 @@ kbd {
                 children: heading
               }
             ),
-            showSearch && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "service-picker-search", className: "relative", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SearchIcon5, { className: "text-muted-foreground h-5 w-5" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            showSearch && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "service-picker-search", className: "relative", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SearchIcon5, { className: "text-muted-foreground h-5 w-5" }) }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 Input,
                 {
                   type: "search",
@@ -30967,33 +31551,33 @@ kbd {
               )
             ] })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "div",
             {
               "data-slot": "service-picker-body",
               className: "flex-1 overflow-y-auto p-3",
               children: [
-                error && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                error && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "div",
                   {
                     "data-slot": "service-picker-error",
                     className: "bg-destructive/10 text-destructive-700 mb-4 rounded-lg p-4 dark:text-red-400",
-                    children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("strong", { children: error })
+                    children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("strong", { children: error })
                   }
                 ),
-                loading ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                loading ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                   "div",
                   {
                     "data-slot": "service-picker-loading",
                     className: "text-muted-foreground flex items-center gap-2",
                     children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(SpinnerIcon5, { className: "h-5 w-5 animate-spin" }),
-                      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: "Loading available services..." })
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SpinnerIcon5, { className: "h-5 w-5 animate-spin" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: "Loading available services..." })
                     ]
                   }
                 ) : isSearching ? (
                   // Search results - flat list
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("ul", { "data-slot": "service-picker-list", className: "space-y-1", children: searchResults.length > 0 ? searchResults.map((service) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { "data-slot": "service-picker-list", className: "space-y-1", children: searchResults.length > 0 ? searchResults.map((service) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     ServiceItem,
                     {
                       service,
@@ -31002,17 +31586,17 @@ kbd {
                       multiple
                     },
                     service.id
-                  )) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  )) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "div",
                     {
                       "data-slot": "service-picker-empty",
                       className: "bg-muted text-muted-foreground rounded-lg p-4",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("strong", { children: emptyMessage })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("strong", { children: emptyMessage })
                     }
                   ) }) })
                 ) : (
                   // Grouped list - accordion style
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("ul", { "data-slot": "service-picker-list", className: "space-y-1", children: filteredGroups.length > 0 ? filteredGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { "data-slot": "service-picker-list", className: "space-y-1", children: filteredGroups.length > 0 ? filteredGroups.map((group) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     ServiceGroupItem,
                     {
                       group,
@@ -31024,12 +31608,12 @@ kbd {
                       multiple
                     },
                     group.id
-                  )) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  )) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "div",
                     {
                       "data-slot": "service-picker-empty",
                       className: "bg-muted text-muted-foreground rounded-lg p-4",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("strong", { children: emptyMessage })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("strong", { children: emptyMessage })
                     }
                   ) }) })
                 )
@@ -31053,8 +31637,8 @@ kbd {
   }) {
     const isExpanded = expandedGroups.has(group.id);
     const hasSelection = hasSelectedInGroup(group);
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("li", { className: "service-group", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "service-group", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "button",
         {
           type: "button",
@@ -31069,14 +31653,14 @@ kbd {
           ),
           "aria-expanded": isExpanded,
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
               "span",
               {
                 "data-slot": "service-picker-group-name",
                 className: "flex items-center gap-2",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { children: group.name }),
-                  hasSelection && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: group.name }),
+                  hasSelection && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "span",
                     {
                       "data-slot": "service-picker-group-dot",
@@ -31087,7 +31671,7 @@ kbd {
                 ]
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ChevronIcon2,
               {
                 className: cn(
@@ -31099,13 +31683,13 @@ kbd {
           ]
         }
       ),
-      isExpanded && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+      isExpanded && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
         "ul",
         {
           "data-slot": "service-picker-group-list",
           className: "mt-1 space-y-1 pl-4",
           children: [
-            group.services.map((service) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            group.services.map((service) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ServiceItem,
               {
                 service,
@@ -31115,7 +31699,7 @@ kbd {
               },
               service.id
             )),
-            group.subGroups?.map((subGroup) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            group.subGroups?.map((subGroup) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               ServiceGroupItem,
               {
                 group: subGroup,
@@ -31140,7 +31724,7 @@ kbd {
     onToggle,
     multiple
   }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "label",
       {
         "data-slot": "service-picker-item",
@@ -31151,13 +31735,13 @@ kbd {
           service.disabled && "cursor-not-allowed opacity-50"
         ),
         children: [
-          multiple ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          multiple ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "span",
             {
               "data-slot": "service-picker-check",
               className: "relative inline-flex shrink-0 items-center justify-center",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "input",
                   {
                     type: "checkbox",
@@ -31174,16 +31758,16 @@ kbd {
                     )
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CheckIcon4, { className: "pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" })
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CheckIcon4, { className: "pointer-events-none absolute h-3 w-3 text-white opacity-0 transition-opacity peer-checked:opacity-100" })
               ]
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "span",
             {
               "data-slot": "service-picker-radio",
               className: "relative inline-flex shrink-0 items-center justify-center",
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "input",
                   {
                     type: "radio",
@@ -31200,7 +31784,7 @@ kbd {
                     )
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                   "span",
                   {
                     "data-slot": "service-picker-radio-dot",
@@ -31210,9 +31794,9 @@ kbd {
               ]
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "min-w-0 flex-1", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-center gap-2", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "min-w-0 flex-1", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-center gap-2", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "span",
                 {
                   "data-slot": "service-picker-item-name",
@@ -31220,7 +31804,7 @@ kbd {
                   children: service.name
                 }
               ),
-              service.code && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+              service.code && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                 "span",
                 {
                   "data-slot": "service-picker-item-code",
@@ -31233,7 +31817,7 @@ kbd {
                 }
               )
             ] }),
-            service.description && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            service.description && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "p",
               {
                 "data-slot": "service-picker-item-desc",
@@ -31242,7 +31826,7 @@ kbd {
               }
             )
           ] }),
-          service.price !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+          service.price !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
             "span",
             {
               "data-slot": "service-picker-item-price",
@@ -31258,7 +31842,7 @@ kbd {
     ) });
   }
   function CheckIcon4({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31267,12 +31851,12 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 3,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 13l4 4L19 7" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 13l4 4L19 7" })
       }
     );
   }
   function SearchIcon5({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31281,7 +31865,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 2,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31293,7 +31877,7 @@ kbd {
     );
   }
   function SpinnerIcon5({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31301,7 +31885,7 @@ kbd {
         fill: "none",
         viewBox: "0 0 24 24",
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "circle",
             {
               className: "opacity-25",
@@ -31312,7 +31896,7 @@ kbd {
               strokeWidth: "4"
             }
           ),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "path",
             {
               className: "opacity-75",
@@ -31325,7 +31909,7 @@ kbd {
     );
   }
   function ChevronIcon2({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31334,7 +31918,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 2,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 9l-7 7-7-7" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 9l-7 7-7-7" })
       }
     );
   }
@@ -31442,7 +32026,7 @@ kbd {
       const d2 = typeof date === "string" ? new Date(date) : date;
       return d2.toLocaleDateString(void 0, { month: "short", day: "numeric" });
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "timeline-progress",
@@ -31452,11 +32036,11 @@ kbd {
         "aria-valuenow": Math.max(currentIndex + 1, 1),
         "aria-valuemin": 1,
         "aria-valuemax": visibleSteps.length || 1,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "relative flex items-start", children: visibleSteps.map((step, index) => {
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "relative flex items-start", children: visibleSteps.map((step, index) => {
           const state = getStepState(index, step);
           const isLast = index === visibleSteps.length - 1;
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex flex-1 flex-col items-center", children: [
-            showTimestamps && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex flex-1 flex-col items-center", children: [
+            showTimestamps && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 className: cn(
@@ -31467,8 +32051,8 @@ kbd {
                 children: step.completedAt ? formatTimestamp(step.completedAt) : "\xA0"
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative flex w-full items-center", children: [
-              index > 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative flex w-full items-center", children: [
+              index > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "div",
                 {
                   className: cn(
@@ -31478,15 +32062,15 @@ kbd {
                   )
                 }
               ),
-              index === 0 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1" }),
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              index === 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1" }),
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "div",
                 {
                   className: cn(
                     "flex shrink-0 items-center justify-center",
                     sizes.wrapper
                   ),
-                  children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+                  children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
                     "div",
                     {
                       className: cn(
@@ -31510,8 +32094,8 @@ kbd {
                         )
                       ),
                       children: [
-                        state === "completed" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(CheckIcon6, { className: sizes.checkIcon }),
-                        state === "current" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        state === "completed" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CheckIcon6, { className: sizes.checkIcon }),
+                        state === "current" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "div",
                           {
                             className: cn(
@@ -31520,7 +32104,7 @@ kbd {
                             )
                           }
                         ),
-                        state === "pending" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                        state === "pending" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                           "div",
                           {
                             className: cn(
@@ -31529,13 +32113,13 @@ kbd {
                             )
                           }
                         ),
-                        state === "error" && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(XIcon4, { className: sizes.xIcon })
+                        state === "error" && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(XIcon4, { className: sizes.xIcon })
                       ]
                     }
                   )
                 }
               ),
-              !isLast && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              !isLast && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "div",
                 {
                   className: cn(
@@ -31545,9 +32129,9 @@ kbd {
                   )
                 }
               ),
-              isLast && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1" })
+              isLast && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
               "div",
               {
                 className: cn(
@@ -31596,17 +32180,17 @@ kbd {
     const getEventIcon = (type) => {
       switch (type) {
         case "message":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MessageIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MessageIcon, { className: "h-4 w-4" });
         case "status":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(StatusIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(StatusIcon, { className: "h-4 w-4" });
         case "attachment":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(AttachmentIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(AttachmentIcon, { className: "h-4 w-4" });
         case "assignment":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(UserIcon2, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(UserIcon2, { className: "h-4 w-4" });
         case "note":
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(NoteIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(NoteIcon, { className: "h-4 w-4" });
         default:
-          return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(StatusIcon, { className: "h-4 w-4" });
+          return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(StatusIcon, { className: "h-4 w-4" });
       }
     };
     const getEventColor = (type) => {
@@ -31626,18 +32210,18 @@ kbd {
       }
     };
     if (events.length === 0) {
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: cn("py-8 text-center text-neutral-500", className), children: "No activity yet." });
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: cn("py-8 text-center text-neutral-500", className), children: "No activity yet." });
     }
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { "data-slot": "timeline-event-list", className: cn("relative", className), children: [
-      events.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "timeline-event-list", className: cn("relative", className), children: [
+      events.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           className: "absolute top-0 bottom-0 left-5 w-px bg-neutral-200 dark:bg-neutral-700",
           "aria-hidden": "true"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "space-y-6", children: events.map((event) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "relative flex gap-4", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "space-y-6", children: events.map((event) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "relative flex gap-4", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "div",
           {
             className: cn(
@@ -31647,18 +32231,18 @@ kbd {
             children: getEventIcon(event.type)
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex-1 pt-0.5", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-start justify-between gap-2", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("h4", { className: "font-semibold text-neutral-900 dark:text-neutral-100", children: event.title }),
-              event.author && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("p", { className: "text-muted-foreground text-sm", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex-1 pt-0.5", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-start justify-between gap-2", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("h4", { className: "font-semibold text-neutral-900 dark:text-neutral-100", children: event.title }),
+              event.author && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { className: "text-muted-foreground text-sm", children: [
                 "by ",
                 event.author
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("time", { className: "text-muted-foreground shrink-0 pt-0.5 text-xs", children: formatTime4(event.timestamp) })
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("time", { className: "text-muted-foreground shrink-0 pt-0.5 text-xs", children: formatTime4(event.timestamp) })
           ] }),
-          event.content && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "mt-1.5 text-sm text-neutral-600 dark:text-neutral-300", children: event.content })
+          event.content && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "mt-1.5 text-sm text-neutral-600 dark:text-neutral-300", children: event.content })
         ] })
       ] }, event.id)) })
     ] });
@@ -31672,7 +32256,7 @@ kbd {
     className
   }) {
     if (!open) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "div",
       {
         "data-slot": "order-confirmation",
@@ -31683,9 +32267,9 @@ kbd {
         role: "dialog",
         "aria-modal": "true",
         "aria-labelledby": "order-confirmation-title",
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-neutral-800", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "mb-6 flex justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "animate-bounce", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(PlaneIcon, { className: "h-10 w-10 text-green-600 dark:text-green-400" }) }) }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-neutral-800", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "mb-6 flex justify-center", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex h-20 w-20 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "animate-bounce", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(PlaneIcon, { className: "h-10 w-10 text-green-600 dark:text-green-400" }) }) }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "h2",
             {
               id: "order-confirmation-title",
@@ -31693,12 +32277,12 @@ kbd {
               children: "Order Submitted!"
             }
           ),
-          orderNumber && /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("p", { className: "text-muted-foreground mb-4 text-center text-sm", children: [
+          orderNumber && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { className: "text-muted-foreground mb-4 text-center text-sm", children: [
             "Order #",
             orderNumber
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { className: "mb-6 text-center text-neutral-600 dark:text-neutral-300", children: message }),
-          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "mb-6 text-center text-neutral-600 dark:text-neutral-300", children: message }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -31718,7 +32302,7 @@ kbd {
   }
   OrderConfirmation.displayName = "OrderConfirmation";
   function CheckIcon6({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31727,7 +32311,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 3,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31739,7 +32323,7 @@ kbd {
     );
   }
   function XIcon4({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31748,7 +32332,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 3,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31760,7 +32344,7 @@ kbd {
     );
   }
   function MessageIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31769,7 +32353,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31781,7 +32365,7 @@ kbd {
     );
   }
   function StatusIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31790,7 +32374,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31802,7 +32386,7 @@ kbd {
     );
   }
   function AttachmentIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31811,7 +32395,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31823,7 +32407,7 @@ kbd {
     );
   }
   function UserIcon2({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31832,7 +32416,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31844,7 +32428,7 @@ kbd {
     );
   }
   function NoteIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31853,7 +32437,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31865,7 +32449,7 @@ kbd {
     );
   }
   function PlaneIcon({ className }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
       "svg",
       {
         "aria-hidden": "true",
@@ -31874,7 +32458,7 @@ kbd {
         viewBox: "0 0 24 24",
         stroke: "currentColor",
         strokeWidth: 1.5,
-        children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "path",
           {
             strokeLinecap: "round",
@@ -31882,6 +32466,169 @@ kbd {
             d: "M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
           }
         )
+      }
+    );
+  }
+  var CheckIcon7 = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "svg",
+    {
+      "aria-hidden": "true",
+      className: "h-5 w-5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      strokeWidth: 2,
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 13l4 4L19 7" })
+    }
+  );
+  var XCircleIcon = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "svg",
+    {
+      "aria-hidden": "true",
+      className: "h-5 w-5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      strokeWidth: 2,
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          d: "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+        }
+      )
+    }
+  );
+  var ExclamationIcon = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "svg",
+    {
+      "aria-hidden": "true",
+      className: "h-5 w-5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      strokeWidth: 2,
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          d: "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+        }
+      )
+    }
+  );
+  var InfoIcon = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "svg",
+    {
+      "aria-hidden": "true",
+      className: "h-5 w-5",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      strokeWidth: 2,
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          d: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        }
+      )
+    }
+  );
+  var XIcon5 = () => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "svg",
+    {
+      "aria-hidden": "true",
+      className: "h-4 w-4",
+      fill: "none",
+      viewBox: "0 0 24 24",
+      stroke: "currentColor",
+      strokeWidth: 2,
+      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+        "path",
+        {
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          d: "M6 18L18 6M6 6l12 12"
+        }
+      )
+    }
+  );
+  var variantStyles = {
+    success: {
+      container: "bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200",
+      icon: "text-green-500 dark:text-green-400"
+    },
+    error: {
+      container: "bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200",
+      icon: "text-red-500 dark:text-red-400"
+    },
+    warning: {
+      container: "bg-amber-50 dark:bg-amber-900 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200",
+      icon: "text-amber-500 dark:text-amber-400"
+    },
+    info: {
+      container: "bg-primary-50 dark:bg-primary-900 border-primary-200 dark:border-primary-800 text-primary-800 dark:text-primary-200",
+      icon: "text-primary-800 dark:text-primary-400"
+    }
+  };
+  var defaultIcons = {
+    success: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(CheckIcon7, {}),
+    error: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(XCircleIcon, {}),
+    warning: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(ExclamationIcon, {}),
+    info: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(InfoIcon, {})
+  };
+  function Toast({
+    title,
+    message,
+    variant = "info",
+    dismissible = true,
+    action,
+    icon,
+    onClose
+  }) {
+    const styles = variantStyles[variant];
+    const displayIcon = icon ?? defaultIcons[variant];
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+      "div",
+      {
+        role: "alert",
+        "data-slot": "toast",
+        className: cn(
+          "flex items-start gap-3 rounded-lg border p-4 shadow-lg",
+          "max-w-[420px] min-w-[300px]",
+          "animate-slide-in-right",
+          styles.container
+        ),
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { "data-slot": "toast-icon", className: cn("flex-shrink-0", styles.icon), children: displayIcon }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { "data-slot": "toast-content", className: "min-w-0 flex-1", children: [
+            title && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { "data-slot": "toast-title", className: "mb-1 text-sm font-semibold", children: title }),
+            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { "data-slot": "toast-message", className: "text-sm", children: message }),
+            action && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+              "button",
+              {
+                onClick: action.onClick,
+                "data-slot": "toast-action",
+                className: "mt-2 rounded text-sm font-medium underline hover:no-underline focus:ring-2 focus:ring-current focus:ring-offset-2 focus:outline-none",
+                children: action.label
+              }
+            )
+          ] }),
+          dismissible && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+            "button",
+            {
+              onClick: onClose,
+              "data-slot": "toast-dismiss",
+              className: "flex-shrink-0 rounded p-1 transition-colors hover:bg-black/10 focus:ring-2 focus:ring-current focus:outline-none dark:hover:bg-white/10",
+              "aria-label": "Dismiss notification",
+              children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(XIcon5, {})
+            }
+          )
+        ]
       }
     );
   }
@@ -31928,7 +32675,7 @@ kbd {
           }
         }
       };
-      return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         Input,
         {
           ref,
@@ -32024,8 +32771,8 @@ kbd {
     };
     const canAdd = websites.length < maxEntries;
     const canRemove = websites.length > minEntries;
-    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: cn("space-y-3", className), children: websites.map((website, index) => /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "flex items-start gap-2", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: cn("space-y-3", className), children: websites.map((website, index) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "flex items-start gap-2", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "flex-1", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         WebsiteInput,
         {
           label: index === 0 ? label : void 0,
@@ -32037,9 +32784,9 @@ kbd {
           placeholder: getPlaceholder(website.type)
         }
       ) }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "w-36 shrink-0", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("label", { className: "sr-only", htmlFor: `website-type-${index}`, children: "URL type" }),
-        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "w-36 shrink-0", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("label", { className: "sr-only", htmlFor: `website-type-${index}`, children: "URL type" }),
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
           "select",
           {
             id: `website-type-${index}`,
@@ -32055,18 +32802,18 @@ kbd {
               "dark:focus:border-brand-400 dark:focus:ring-brand-400/20",
               index === 0 && label ? "mt-6" : ""
             ),
-            children: WEBSITE_TYPES.map((type) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("option", { value: type.value, children: getTypeLabel(type.value) }, type.value))
+            children: WEBSITE_TYPES.map((type) => /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("option", { value: type.value, children: getTypeLabel(type.value) }, type.value))
           }
         )
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
         "div",
         {
           className: cn(
             "flex shrink-0 items-center",
             index === 0 && label ? "mt-6" : ""
           ),
-          children: index === 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          children: index === 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -32080,7 +32827,7 @@ kbd {
                 "dark:disabled:text-muted-foreground"
               ),
               "aria-label": "Add website",
-              children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "svg",
                 {
                   "aria-hidden": "true",
@@ -32088,7 +32835,7 @@ kbd {
                   fill: "none",
                   viewBox: "0 0 24 24",
                   stroke: "currentColor",
-                  children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "path",
                     {
                       strokeLinecap: "round",
@@ -32100,7 +32847,7 @@ kbd {
                 }
               )
             }
-          ) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          ) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
             "button",
             {
               type: "button",
@@ -32114,7 +32861,7 @@ kbd {
                 "dark:disabled:text-muted-foreground"
               ),
               "aria-label": "Remove website",
-              children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+              children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 "svg",
                 {
                   "aria-hidden": "true",
@@ -32122,7 +32869,7 @@ kbd {
                   fill: "none",
                   viewBox: "0 0 24 24",
                   stroke: "currentColor",
-                  children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+                  children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                     "path",
                     {
                       strokeLinecap: "round",
@@ -34501,7 +35248,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   var Kt = x.lex;
 
   // embed/src/MarkdownContent.tsx
-  var import_jsx_runtime19 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime20 = __toESM(require_jsx_runtime());
   k.use({
     gfm: true,
     breaks: true
@@ -34546,7 +35293,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
       } catch {
       }
     };
-    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
       "div",
       {
         className: "ozwell-markdown",
@@ -34558,9 +35305,15 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   }
 
   // embed/src/WidgetApp.tsx
-  var import_jsx_runtime20 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime21 = __toESM(require_jsx_runtime());
   var THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 };
-  var REASONING_MODES = ["None", "Peek", "Smart", "Expanded"];
+  var THINKING_MODE_OPTIONS = [
+    { value: String(THINKING.NONE), label: "Never", description: "Hide all thinking blocks in the chat." },
+    { value: String(THINKING.PEEK), label: "Collapsed", description: "Show a compact thinking row that can be opened." },
+    { value: String(THINKING.SMART), label: "Auto", description: "Open while thinking, then collapse after the answer." },
+    { value: String(THINKING.EXPANDED), label: "Expanded", description: "Keep thinking blocks open by default." }
+  ];
+  var MESSAGES_NAV_THRESHOLD = 3;
   var DEFAULT_PARENT_SYSTEM_PROMPT = "You are a helpful assistant. Answer clearly and concisely.";
   var DEFAULT_PARENT_TOOL_HINT = "Use the available tools when they are helpful for answering the user or performing a requested action.";
   var MCP_TOOL_TIMEOUT_MS = 3e4;
@@ -34592,6 +35345,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     if (typeof result === "string") return result;
     const serialized = JSON.stringify(result);
     return serialized === void 0 ? "null" : serialized;
+  }
+  function getDisplayText(message) {
+    return message.content.filter((block) => block.type === "text" && block.text).map((block) => block.text).join(" ").trim();
   }
   function historyToRequestMessages(messages) {
     return messages.map(({ thinking, ...rest }) => rest);
@@ -34772,6 +35528,9 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const [queuedMessage, setQueuedMessage] = (0, import_react10.useState)(null);
     const [toast, setToast] = (0, import_react10.useState)(null);
     const [thinkingMode, setThinkingMode] = (0, import_react10.useState)(() => window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART);
+    const [thinkingMenuOpen, setThinkingMenuOpen] = (0, import_react10.useState)(false);
+    const [messagesMenuOpen, setMessagesMenuOpen] = (0, import_react10.useState)(false);
+    const [messagesButtonFlare, setMessagesButtonFlare] = (0, import_react10.useState)(false);
     const configRef = (0, import_react10.useRef)(config);
     const historyRef = (0, import_react10.useRef)(historyMessages);
     const parentOriginRef = (0, import_react10.useRef)(null);
@@ -34782,6 +35541,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
     const queuedRef = (0, import_react10.useRef)(null);
     const sendingRef = (0, import_react10.useRef)(false);
     const fallbackToastShownRef = (0, import_react10.useRef)(false);
+    const messagesFlaredRef = (0, import_react10.useRef)(false);
     (0, import_react10.useEffect)(() => {
       configRef.current = config;
     }, [config]);
@@ -35250,7 +36010,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         window.removeEventListener("message", onInitResponse);
       };
     }, [appendDisplay, appendHistory, applyConfig, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
-    const renderTextContent = (0, import_react10.useCallback)((text2, ctx) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MarkdownContent, { text: text2, cacheKey: ctx.messageId, streaming: ctx.streaming }), []);
+    const renderTextContent = (0, import_react10.useCallback)((text2, ctx) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MarkdownContent, { text: text2, cacheKey: ctx.messageId, streaming: ctx.streaming }), []);
     const chatMessages = (0, import_react10.useMemo)(() => {
       const modeAwareMessages = displayMessages.map((message) => applyThinkingModeToMessage(message, thinkingMode));
       if (!queuedMessage) return modeAwareMessages;
@@ -35263,30 +36023,118 @@ Please report this to https://github.com/markedjs/marked.`, e) {
         metadata: { source: "queued" }
       }];
     }, [displayMessages, queuedMessage, thinkingMode]);
-    return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ozwell-widget-shell", children: [
-      config.thinkingEnabled && /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ozwell-reasoning-bar", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: "Reasoning" }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "ozwell-reasoning-controls", children: REASONING_MODES.map((label, index) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-          Button,
+    const userMessageItems = (0, import_react10.useMemo)(() => displayMessages.flatMap((message, chatIndex) => {
+      if (message.role !== "user") return [];
+      const text2 = getDisplayText(message);
+      if (!text2) return [];
+      return [{ id: message.id, text: text2, chatIndex }];
+    }), [displayMessages]);
+    const showMessagesNav = userMessageItems.length >= MESSAGES_NAV_THRESHOLD;
+    (0, import_react10.useEffect)(() => {
+      if (!showMessagesNav || messagesFlaredRef.current) return;
+      messagesFlaredRef.current = true;
+      setMessagesButtonFlare(true);
+      const timeoutId = window.setTimeout(() => setMessagesButtonFlare(false), 1800);
+      return () => window.clearTimeout(timeoutId);
+    }, [showMessagesNav]);
+    const selectThinkingMode = (0, import_react10.useCallback)((value) => {
+      const nextMode = Number(value);
+      setThinkingMode(nextMode);
+      setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
+      setThinkingMenuOpen(false);
+    }, []);
+    const selectedThinkingLabel = (0, import_react10.useMemo)(() => THINKING_MODE_OPTIONS.find((option) => option.value === String(thinkingMode))?.label || "Auto", [thinkingMode]);
+    const scrollToMessage = (0, import_react10.useCallback)((chatIndex) => {
+      const messageNodes = document.querySelectorAll(
+        '[data-slot="ai-chat-messages"] [data-slot="ai-message"]'
+      );
+      messageNodes[chatIndex]?.scrollIntoView({ block: "center", behavior: "smooth" });
+      setMessagesMenuOpen(false);
+    }, []);
+    return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-widget-shell", children: [
+      (config.thinkingEnabled || showMessagesNav) && /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: "ozwell-reasoning-bar", children: [
+        config.thinkingEnabled ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-thinking-control", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+          Dropdown,
           {
-            type: "button",
-            size: "sm",
-            variant: thinkingMode === index ? "primary" : "ghost",
-            onClick: () => {
-              const nextMode = index;
-              setThinkingMode(nextMode);
-              setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-            },
-            children: label
-          },
-          label
-        )) })
+            open: thinkingMenuOpen,
+            onOpenChange: setThinkingMenuOpen,
+            placement: "bottom-start",
+            width: 248,
+            className: "ozwell-thinking-menu",
+            trigger: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+              Button,
+              {
+                type: "button",
+                size: "sm",
+                variant: "secondary",
+                className: "ozwell-thinking-trigger",
+                "aria-label": `Show thinking: ${selectedThinkingLabel}`,
+                children: [
+                  "Show thinking: ",
+                  selectedThinkingLabel
+                ]
+              }
+            ),
+            children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(DropdownContent, { className: "ozwell-thinking-menu-content", children: THINKING_MODE_OPTIONS.map((option) => /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              DropdownItem,
+              {
+                searchText: `${option.label} ${option.description}`,
+                onClick: () => selectThinkingMode(option.value),
+                className: "ozwell-thinking-menu-item",
+                "aria-current": option.value === String(thinkingMode) ? "true" : void 0,
+                children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(Tooltip, { content: option.description, placement: "right", delay: 150, maxWidth: 220, children: /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { className: "ozwell-thinking-option", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-thinking-option-label", children: option.label }),
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-thinking-option-description", children: option.description })
+                ] }) })
+              },
+              option.value
+            )) })
+          }
+        ) }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-control-spacer", "aria-hidden": "true" }),
+        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-reasoning-controls", children: showMessagesNav && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+          Dropdown,
+          {
+            open: messagesMenuOpen,
+            onOpenChange: setMessagesMenuOpen,
+            placement: "bottom-end",
+            width: 260,
+            className: "ozwell-messages-menu",
+            trigger: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+              Button,
+              {
+                type: "button",
+                size: "sm",
+                variant: "ghost",
+                className: messagesButtonFlare ? "ozwell-messages-trigger ozwell-messages-trigger-flare" : "ozwell-messages-trigger",
+                children: "Messages"
+              }
+            ),
+            children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(DropdownContent, { className: "ozwell-messages-menu-content", children: userMessageItems.map((item, index) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+              DropdownItem,
+              {
+                searchText: item.text,
+                onClick: () => scrollToMessage(item.chatIndex),
+                className: "ozwell-message-nav-item",
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-message-nav-index", children: index + 1 }),
+                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { className: "ozwell-message-nav-text", children: item.text })
+                ]
+              },
+              item.id
+            )) })
+          }
+        ) })
       ] }),
-      toast && /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "ozwell-toast", role: "status", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: toast }),
-        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("button", { type: "button", onClick: () => setToast(null), "aria-label": "Dismiss warning", children: "x" })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      toast && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-toast-wrap", children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+        Toast,
+        {
+          id: "ozwell-widget-warning",
+          message: toast,
+          variant: "warning",
+          onClose: () => setToast(null)
+        }
+      ) }),
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
         AIChat,
         {
           messages: chatMessages,
@@ -35302,12 +36150,12 @@ Please report this to https://github.com/markedjs/marked.`, e) {
           renderTextContent
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "ozwell-footer", children: "Powered by Ozwell" })
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { className: "ozwell-footer", children: "Powered by Ozwell" })
     ] });
   }
 
   // embed/src/main.tsx
-  var import_jsx_runtime21 = __toESM(require_jsx_runtime());
+  var import_jsx_runtime22 = __toESM(require_jsx_runtime());
   document.documentElement.dataset.theme = document.documentElement.dataset.theme || "light";
   document.documentElement.dataset.brand = document.documentElement.dataset.brand || "ozwell";
   var root = document.createElement("div");
@@ -35315,7 +36163,7 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   document.body.innerHTML = "";
   document.body.appendChild(root);
   (0, import_client.createRoot)(root).render(
-    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(import_react11.StrictMode, { children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(WidgetApp, {}) })
+    /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(import_react11.StrictMode, { children: /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(WidgetApp, {}) })
   );
 })();
 /*! Bundled license information:
