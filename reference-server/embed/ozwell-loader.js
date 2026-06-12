@@ -543,10 +543,10 @@
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: #0066ff;
+        background: var(--mieweb-primary-800, #0f749c);
         border: none;
         cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0, 102, 255, 0.3);
+        box-shadow: 0 4px 16px rgba(15, 116, 156, 0.3);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -559,7 +559,7 @@
 
       .ozwell-chat-button:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+        box-shadow: 0 6px 20px rgba(15, 116, 156, 0.4);
       }
 
       .ozwell-chat-button.hidden {
@@ -639,7 +639,7 @@
         justify-content: space-between;
         align-items: center;
         padding: 16px;
-        background: #0066ff;
+        background: var(--mieweb-primary-800, #0f749c);
         color: white;
         user-select: none;
       }

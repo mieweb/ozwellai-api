@@ -92,8 +92,8 @@ textarea {
 }
 
 .ozwell-thinking-menu-item[aria-current="true"] {
-  background: #e8f4fb;
-  color: #0f789f;
+  background: var(--mieweb-primary-50, #e6f7fc);
+  color: var(--mieweb-primary-800, #0f749c);
 }
 
 .ozwell-thinking-menu-item [data-slot="dropdown-item-label"] {
@@ -126,7 +126,7 @@ textarea {
 }
 
 .ozwell-thinking-menu-item[aria-current="true"] .ozwell-thinking-option-description {
-  color: #0f789f;
+  color: var(--mieweb-primary-800, #0f749c);
 }
 
 .ozwell-messages-trigger {
@@ -167,8 +167,8 @@ textarea {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: #e8f4fb;
-  color: #0f789f;
+  background: var(--mieweb-primary-50, #e6f7fc);
+  color: var(--mieweb-primary-800, #0f749c);
   font-size: 11px;
   font-weight: 700;
 }
@@ -186,17 +186,17 @@ textarea {
 
 @keyframes ozwell-message-flare {
   0% {
-    box-shadow: 0 0 0 0 rgba(15, 120, 159, 0.34);
-    background: #e8f4fb;
-    color: #0f789f;
+    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0.34);
+    background: var(--mieweb-primary-50, #e6f7fc);
+    color: var(--mieweb-primary-800, #0f749c);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(15, 120, 159, 0);
-    background: #e8f4fb;
-    color: #0f789f;
+    box-shadow: 0 0 0 8px rgba(15, 116, 156, 0);
+    background: var(--mieweb-primary-50, #e6f7fc);
+    color: var(--mieweb-primary-800, #0f749c);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(15, 120, 159, 0);
+    box-shadow: 0 0 0 0 rgba(15, 116, 156, 0);
   }
 }
 

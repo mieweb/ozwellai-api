@@ -851,7 +851,13 @@ export function WidgetApp() {
   ), []);
 
   const chatMessages = useMemo(() => {
-    const modeAwareMessages = displayMessages.map((message) => applyThinkingModeToMessage(message, thinkingMode));
+    const modeAwareMessages = displayMessages
+      .map((message) => applyThinkingModeToMessage(message, thinkingMode))
+      .filter((message) => (
+        message.status === 'streaming'
+        || message.content.length > 0
+        || message.role === 'tool'
+      ));
     if (!queuedMessage) return modeAwareMessages;
     return [...modeAwareMessages, {
       id: 'queued-message',
