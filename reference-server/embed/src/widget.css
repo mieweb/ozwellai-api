@@ -230,6 +230,10 @@ textarea {
   font-size: 14px;
 }
 
+.ozwell-widget-shell [data-slot="ai-message"].flex-row-reverse > [data-slot="ai-message-avatar"] {
+  display: none;
+}
+
 .ozwell-toast-wrap {
   border-bottom: 1px solid #f2c15d;
   background: #fff7dd;
