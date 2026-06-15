@@ -1,5 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, parsePositiveEnvNumber } from '../util';
+
+const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 
 const responsesRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/responses
@@ -31,7 +33,8 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as any;
-    const { model, input, stream = false, max_tokens = 150, temperature = 0.7 } = body;
+    const { model, input, stream = false, max_tokens, temperature = 0.7 } = body;
+    const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
 
     // Validate model
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
@@ -62,7 +65,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
       reply.raw.write(`event: start\ndata: ${JSON.stringify({ id: requestId, model, created })}\n\n`);
 
       // Send content events
-      const generator = SimpleTextGenerator.generateStream(input, max_tokens);
+      const generator = SimpleTextGenerator.generateStream(input, effectiveMaxTokens);
       let fullOutput = '';
       
       for (const token of generator) {
@@ -100,7 +103,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // Non-streaming response
-    const output = SimpleTextGenerator.generate(input, max_tokens, temperature);
+    const output = SimpleTextGenerator.generate(input, effectiveMaxTokens, temperature);
     const inputTokens = countTokens(input);
     const outputTokens = countTokens(output);
 

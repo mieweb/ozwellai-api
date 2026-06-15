@@ -1,4 +1,6 @@
 import { test, expect, type Page, type FrameLocator } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 
 /**
  * Ozwell Landing Page E2E Tests
@@ -7,7 +9,7 @@ import { test, expect, type Page, type FrameLocator } from '@playwright/test';
  * - Widget loading and auto-detection
  * - Chat interactions with AI
  * - Tool calls (update_form_data)
- * - State synchronization via iframe-sync
+ * - State synchronization via postMessage tool calls
  */
 
 test.describe('Ozwell Embed Widget', () => {
@@ -174,6 +176,19 @@ test.describe('Ozwell Embed Widget', () => {
 });
 
 test.describe('Integration Guide Modal', () => {
+  test('should serve Swagger UI assets from landing app dependencies', async ({ request }) => {
+    const packageJsonPath = path.resolve(process.cwd(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+    expect(packageJson.dependencies?.['@fastify/swagger-ui']).toBeTruthy();
+
+    const scriptResponse = await request.get('/swagger-ui/swagger-ui-bundle.js');
+    expect(scriptResponse.ok()).toBe(true);
+
+    const stylesheetResponse = await request.get('/swagger-ui/swagger-ui.css');
+    expect(stylesheetResponse.ok()).toBe(true);
+  });
+
   test('should show integration guide', async ({ page }) => {
     await page.goto('/');
     

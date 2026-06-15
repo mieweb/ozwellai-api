@@ -72,6 +72,8 @@ jobs:
 
       - name: Start reference server
         working-directory: ./reference-server
+        env:
+          ALLOW_MOCK: 'true'  # no LLM configured in CI — e2e relies on deterministic mock responses
         run: |
           npm start > /tmp/reference-server.log 2>&1 &
           echo $! > /tmp/reference-server.pid

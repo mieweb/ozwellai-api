@@ -157,7 +157,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 | `model` | string | No | Model ID (default: server's configured model). On the LLM backend, if the model doesn't exist on the current provider, the server falls back to `LLM_MODEL`. |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
 | `tools` | array | No | Server-side tool definitions. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. These are always available to the agent. Page-provided tools are separate and controlled by `pageTools`. |
-| `pageTools` | string or object | No | Controls which page-provided tools (via `postMessage:`) the agent can call. `all` (default) — accept everything. `{ restricted: [...] }` — only these page tools. `{ blocked: [...] }` — all page tools except these. |
+| `pageTools` | string or object | No | Controls which page-provided tools (via `postMessage_` prefix) the agent can call. `all` (default) — accept everything. `{ restricted: [...] }` — only these page tools. `{ blocked: [...] }` — all page tools except these. |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |
 
 #### Example
