@@ -5,7 +5,7 @@ import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
-import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, type ChatMessage as MockChatMessage } from './mock-chat';
+import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -318,7 +318,7 @@ function dispatchMockNonStream(
   warning: MockWarning,
 ) {
   const { assistantMsg, finishReason } = buildMockAssistant(messages);
-  const promptText = messages.map((m) => m.content).join(' ');
+  const promptText = messages.map((m) => contentToText(m.content)).join(' ');
   const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
   const promptTokens = countTokens(promptText);
   const completionTokens = countTokens(completionText);
@@ -411,13 +411,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 role: { type: 'string' },
                 // Content may be a plain string (text) or an array of
                 // multimodal content parts (text + image_url) for vision.
-                content: {
-                  anyOf: [
-                    { type: 'string' },
-                    { type: 'array', items: { type: 'object' } },
-                    { type: 'null' },
-                  ],
-                },
+                //
+                // NOTE: We intentionally leave this schema unconstrained (no
+                // `type`/`anyOf`). Fastify's default ajv runs with
+                // `coerceTypes: true`, which unwraps a single-element array
+                // (`[x]` -> `x`) while attempting the scalar `string` branch of
+                // an `anyOf`. That mutation corrupted the payload and made
+                // single-part content arrays (e.g. one image_url) fail
+                // validation with FST_ERR_VALIDATION. An empty schema accepts
+                // string | array | object | null without any coercion; the
+                // route normalizes content at runtime (see normalizedMessages
+                // and contentToText).
+                content: {},
                 tool_calls: { type: 'array' },
                 tool_call_id: { type: 'string' }
               },
