@@ -1,7 +1,9 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { createError, generateId, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
+import { createError, generateId, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, isLLMBackendConfigured } from '../util';
 import * as yaml from 'yaml';
 import { agentStore, Agent } from '../storage/agents';
+import OzwellAI from 'ozwellai';
+import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -69,12 +71,25 @@ function extractYamlInput(body: string | { yaml: string }): string | null {
 
 interface ParsedAgentFields {
     name?: string;
+    description?: string;
     instructions?: string;
     model?: string;
     temperature?: number;
     tools?: unknown;
     behavior?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
     [k: string]: unknown;
+}
+
+interface AgentSuggestionRequest {
+    mode?: 'initial' | 'revise';
+    title?: string;
+    page_title?: string;
+    url?: string;
+    context?: Record<string, unknown>;
+    tools?: unknown;
+    yaml?: string;
+    instruction?: string;
 }
 
 /** Parse YAML into a loose object. Throws on invalid YAML. */
@@ -110,6 +125,143 @@ function parseAndValidate(
         return { parsed: null, error: createError("'instructions' is required", 'invalid_request_error') };
     }
     return { parsed, error: null };
+}
+
+function normalizeToolForAgentYaml(tool: unknown): { name: string; description?: string; inputSchema?: unknown } | null {
+    if (typeof tool === 'string' && tool.trim()) return { name: tool.trim() };
+    if (!tool || typeof tool !== 'object') return null;
+    const record = tool as Record<string, unknown>;
+    const fn = record.function && typeof record.function === 'object' ? record.function as Record<string, unknown> : record;
+    const rawName = typeof fn.name === 'string' ? fn.name : typeof record.name === 'string' ? record.name : '';
+    const name = rawName.replace(/^postMessage[:_]/, '').trim();
+    if (!name) return null;
+    return {
+        name,
+        ...(typeof fn.description === 'string' ? { description: fn.description } : {}),
+        inputSchema: fn.parameters || record.inputSchema || record.input_schema || { type: 'object', properties: {} },
+    };
+}
+
+function toolsYamlFromRequest(tools: unknown): string {
+    const normalized = Array.isArray(tools)
+        ? tools.map(normalizeToolForAgentYaml).filter(Boolean)
+        : [];
+    return yaml.stringify({ tools: normalized });
+}
+
+function supportedAgentYamlContract() {
+    return `Ozwell Agent YAML supported today:
+- name: string, required
+- description: string, optional
+- instructions: string, required. This is the system/developer prompt used by the agent.
+- model: string, optional
+- temperature: number, optional
+- tools: array, optional. Each tool is { name, description, inputSchema }.
+- behavior: object, optional. Common fields: tone, language, rules.
+
+Tool format:
+tools:
+  - name: get_ticket
+    description: Read current ticket details.
+    inputSchema:
+      type: object
+      properties: {}
+
+Rules:
+- Output YAML only. No markdown fences.
+- Use instructions, not system.
+- Set model to exactly: ${LLM_MODEL}
+- Keep tool names exactly as provided, except remove postMessage: or postMessage_ prefix.
+- Do not invent tools.
+- Include all useful discovered tools.
+- Mutating tools should have confirmation rules in instructions or behavior.rules.
+- Do not include metadata, widgetTitle, pageTitle, url, or source fields in the YAML.
+- Use page/widget context only to choose name, description, and instructions.`;
+}
+
+function buildInitialSuggestionPrompt(input: AgentSuggestionRequest) {
+    return `${supportedAgentYamlContract()}
+
+Task: Draft an Ozwell Agent YAML for this raw embed.
+
+Widget title: ${input.title || 'Ozwell Assistant'}
+Server default model: ${LLM_MODEL}
+Page title: ${input.page_title || ''}
+URL: ${input.url || ''}
+Optional context:
+${JSON.stringify(input.context || {}, null, 2)}
+
+Discovered tools in supported format:
+${toolsYamlFromRequest(input.tools)}
+
+Return only valid YAML. Do not include metadata/page/widget/url fields.`;
+}
+
+function buildRevisionPrompt(input: AgentSuggestionRequest) {
+    return `${supportedAgentYamlContract()}
+
+Task: Revise this existing Ozwell Agent YAML using the user's instruction.
+
+Current YAML:
+${input.yaml || ''}
+
+User instruction:
+${input.instruction || ''}
+
+Server default model: ${LLM_MODEL}
+
+Return only the full revised YAML. Do not include metadata/page/widget/url fields.`;
+}
+
+function extractYamlFromModelText(text: string) {
+    const trimmed = text.trim();
+    const fenced = trimmed.match(/^```(?:ya?ml)?\s*\n?([\s\S]*?)\n?```$/i);
+    return (fenced ? fenced[1] : trimmed).trim() + '\n';
+}
+
+function removeNonPortableSuggestionFields(yamlInput: string): string {
+    const parsed = parseAgentYaml(yamlInput);
+    delete parsed.metadata;
+    delete parsed.widgetTitle;
+    delete parsed.pageTitle;
+    delete parsed.url;
+    delete parsed.source;
+    return yaml.stringify(parsed);
+}
+
+const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
+const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
+const llmClient = isLLMBackendConfigured()
+    ? new OzwellAI({
+        apiKey: process.env.LLM_API_KEY || '',
+        baseURL: process.env.LLM_BASE_URL!,
+        timeout: 120000,
+        defaultHeaders: {
+            ...(LLM_PROVIDER && { 'x-portkey-provider': LLM_PROVIDER }),
+        },
+    })
+    : null;
+
+async function requestSuggestedYaml(input: AgentSuggestionRequest): Promise<string> {
+    if (!llmClient) {
+        throw new Error('LLM backend is not configured. Set LLM_BASE_URL and LLM_API_KEY to use agent suggestions.');
+    }
+    const prompt = input.mode === 'revise'
+        ? buildRevisionPrompt(input)
+        : buildInitialSuggestionPrompt(input);
+    const response = await llmClient.createChatCompletion({
+        model: LLM_MODEL,
+        messages: [
+            { role: 'system', content: 'You generate valid Ozwell Agent YAML. Return YAML only.' },
+            { role: 'user', content: prompt },
+        ],
+        temperature: 0.2,
+    } as ClientChatCompletionRequest);
+    const content = response.choices?.[0]?.message?.content;
+    if (!content || typeof content !== 'string') {
+        throw new Error('LLM did not return YAML content');
+    }
+    return extractYamlFromModelText(content);
 }
 
 /**
@@ -235,6 +387,59 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             fastify.log.error(error);
             reply.code(500);
             return createError('Agent registration failed', 'server_error');
+        }
+    });
+
+    // POST /v1/agents/suggest — generate or revise current Ozwell Agent YAML
+    fastify.post<{ Body: AgentSuggestionRequest }>('/v1/agents/suggest', {
+        schema: {
+            headers: authHeaders,
+            tags: ['Agents'],
+            summary: 'Suggest current Ozwell agent YAML from raw embed tools',
+            body: {
+                type: 'object',
+                properties: {
+                    mode: { type: 'string', enum: ['initial', 'revise'] },
+                    title: { type: 'string' },
+                    page_title: { type: 'string' },
+                    url: { type: 'string' },
+                    context: { type: 'object', additionalProperties: true },
+                    tools: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                    yaml: { type: 'string' },
+                    instruction: { type: 'string' },
+                },
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        yaml: { type: 'string' },
+                        format: { type: 'string' },
+                    },
+                    required: ['yaml', 'format']
+                }
+            }
+        },
+        preHandler: apiKeyAuth
+    }, async (request, reply) => {
+        try {
+            const mode = request.body?.mode || 'initial';
+            if (mode === 'revise' && (!request.body?.yaml || !request.body?.instruction)) {
+                reply.code(400);
+                return createError("'yaml' and 'instruction' are required for revise mode", 'invalid_request_error');
+            }
+            const suggestedYaml = removeNonPortableSuggestionFields(
+                await requestSuggestedYaml({ ...request.body, mode })
+            );
+            const validation = parseAndValidate(suggestedYaml, reply);
+            if (validation.error) return validation.error;
+            reply.header('Cache-Control', 'no-store');
+            return { yaml: suggestedYaml, format: 'ozwell-agent-yaml-v0' };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Agent suggestion failed';
+            fastify.log.error({ err: error }, 'agent suggestion failed');
+            reply.code(message.includes('LLM backend is not configured') ? 503 : 500);
+            return createError(message, 'server_error');
         }
     });
 

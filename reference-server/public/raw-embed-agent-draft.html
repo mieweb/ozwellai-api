@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.ico">
+  <title>Raw Embed Agent Draft Demo</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: #f6f8fb;
+      color: #172033;
+    }
+    main {
+      min-height: 100vh;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    section {
+      background: #fff;
+      border: 1px solid #d8e0ec;
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .ticket {
+      display: grid;
+      gap: 28px;
+      min-height: calc(100vh - 48px);
+    }
+    .label {
+      color: #64748b;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    @media (max-width: 900px) {
+      h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="ticket">
+      <div>
+        <div class="label">Ticket</div>
+        <h1 id="ticket-title">Database connection failing after upgrade</h1>
+      </div>
+      <div>
+        <div class="label">Status</div>
+        <p id="ticket-status">Open</p>
+      </div>
+      <div>
+        <div class="label">Priority</div>
+        <p>High</p>
+      </div>
+      <div>
+        <div class="label">Description</div>
+        <p id="ticket-description">Customer reports intermittent connection failures after upgrading the database driver.</p>
+      </div>
+      <div>
+        <div class="label">Internal notes</div>
+        <ul id="ticket-notes"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    window.OzwellChatConfig = {
+      apiKey: 'ozw_demo_localhost_key_for_testing',
+      title: 'Ticket Helper',
+      placeholder: 'Ask about this ticket...',
+      thinkingEnabled: true,
+      thinkingDefaultMode: 2,
+      agentSuggestionContext: {
+        description: 'Support ticket assistant that can inspect ticket details, add internal notes, and update ticket status.'
+      },
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'get_ticket',
+            description: 'Read the current support ticket details visible on the page.',
+            parameters: { type: 'object', properties: {} }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'add_ticket_note',
+            description: 'Add an internal note to the current support ticket.',
+            parameters: {
+              type: 'object',
+              properties: {
+                note: { type: 'string', description: 'The note text to add to the ticket.' }
+              },
+              required: ['note']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'set_ticket_status',
+            description: 'Update the visible support ticket status on the page.',
+            parameters: {
+              type: 'object',
+              properties: {
+                status: { type: 'string', description: 'The new ticket status to display.' }
+              },
+              required: ['status']
+            }
+          }
+        }
+      ]
+    };
+
+    document.addEventListener('ozwell-tool-call', (event) => {
+      const { name, arguments: args, respond } = event.detail;
+      if (name === 'get_ticket') {
+        respond({
+          title: document.getElementById('ticket-title').textContent,
+          status: document.getElementById('ticket-status').textContent,
+          description: document.getElementById('ticket-description').textContent,
+          notes: Array.from(document.querySelectorAll('#ticket-notes li')).map((item) => item.textContent)
+        });
+        return;
+      }
+      if (name === 'add_ticket_note') {
+        const li = document.createElement('li');
+        li.textContent = args.note || '';
+        document.getElementById('ticket-notes').appendChild(li);
+        respond({ ok: true });
+        return;
+      }
+      if (name === 'set_ticket_status') {
+        document.getElementById('ticket-status').textContent = args.status || 'Open';
+        respond({ ok: true, status: document.getElementById('ticket-status').textContent });
+      }
+    });
+  </script>
+  <script src="/embed/ozwell-loader.js"></script>
+</body>
+</html>

@@ -16,6 +16,7 @@ export interface OzwellConfig {
   thinkingEnabled?: boolean;
   thinkingDefaultMode?: ThinkingMode;
   headers?: Record<string, string>;
+  agentSuggestionContext?: Record<string, unknown>;
 }
 
 export interface OpenAITool {
