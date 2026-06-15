@@ -523,6 +523,9 @@ test('manager admin — configured user ids or emails become admins on first log
         const adminUser = usersBody.data.find(user => user.external_user_id === '2009');
         const emailAdminUser = usersBody.data.find(user => user.external_user_id === 'external-email-admin');
         const otherUser = usersBody.data.find(user => user.external_user_id === '2010');
+        assert.ok(adminUser, 'expected configured admin user id to be listed');
+        assert.ok(emailAdminUser, 'expected configured admin email user to be listed');
+        assert.ok(otherUser, 'expected non-admin manager user to be listed');
         assert.equal(adminUser.is_admin, true);
         assert.match(adminUser.current_parent_key.key_hint, /^ozw_\.\.\.[a-z0-9]{4}$/);
         assert.equal(adminUser.current_parent_key.status, 'active');

@@ -18,7 +18,10 @@ COPY reference-server/ ./reference-server/
 
 RUN cd spec && npm run build
 RUN cd clients/typescript && npm run build
-RUN cd reference-server && npm run build
+RUN cd reference-server \
+  && npm run build \
+  && npm prune --omit=dev \
+  && npm cache clean --force
 
 FROM node:20-bookworm-slim AS production
 
@@ -40,12 +43,9 @@ COPY --from=build --chown=ozwell:ozwell /app/spec/dist ./spec/dist
 COPY --from=build --chown=ozwell:ozwell /app/clients/typescript/package*.json ./clients/typescript/
 COPY --from=build --chown=ozwell:ozwell /app/clients/typescript/dist ./clients/typescript/dist
 COPY --from=build --chown=ozwell:ozwell /app/reference-server/package*.json ./reference-server/
+COPY --from=build --chown=ozwell:ozwell /app/reference-server/node_modules ./reference-server/node_modules
 COPY --from=build --chown=ozwell:ozwell /app/reference-server/dist ./reference-server/dist
 COPY --from=build --chown=ozwell:ozwell /app/reference-server/embed ./reference-server/embed
-
-RUN cd reference-server \
-  && npm ci --omit=dev \
-  && npm cache clean --force
 
 USER ozwell
 
