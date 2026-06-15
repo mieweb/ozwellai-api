@@ -12,6 +12,9 @@ import path from 'node:path';
  * - State synchronization via postMessage tool calls
  */
 
+const widgetInput = (iframe: FrameLocator) => iframe.getByRole('textbox', { name: 'Message' });
+const widgetMessageBubbles = (iframe: FrameLocator) => iframe.locator('[data-slot="ai-message-bubble"]');
+
 test.describe('Ozwell Embed Widget', () => {
   let iframe: FrameLocator;
 
@@ -74,7 +77,8 @@ test.describe('Ozwell Embed Widget', () => {
 
   test('should send a chat message', async ({ page }) => {
     // Type a message in the chat input
-    const chatInput = iframe.getByRole('textbox');
+    const responseBaseline = await widgetMessageBubbles(iframe).count();
+    const chatInput = widgetInput(iframe);
     await chatInput.fill('hello');
     await chatInput.press('Enter');
     
@@ -83,23 +87,26 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Expect either an assistant response (agent key configured) or
     // a "No API key configured" error (CI without keys) — both are valid
-    await expect(
-      iframe.locator('.message.assistant, .message.system').first()
-    ).toBeVisible({ timeout: 15000 });
+    await expect.poll(
+      () => widgetMessageBubbles(iframe).count(),
+      { timeout: 15000 }
+    ).toBeGreaterThan(responseBaseline + 1);
   });
 
   test('should update name via tool call', async ({ page }) => {
     test.setTimeout(120000); // 2 minute timeout for AI tool call test
     
     // Type a message requesting name change
-    const chatInput = iframe.getByRole('textbox');
+    const responseBaseline = await widgetMessageBubbles(iframe).count();
+    const chatInput = widgetInput(iframe);
     await chatInput.fill('change my name to TestUser');
     await chatInput.press('Enter');
     
     // Wait for AI response or auth error (CI has no agent key)
-    await expect(
-      iframe.locator('.message.assistant, .message.system').first()
-    ).toBeVisible({ timeout: 60000 });
+    await expect.poll(
+      () => widgetMessageBubbles(iframe).count(),
+      { timeout: 60000 }
+    ).toBeGreaterThan(responseBaseline + 1);
     
     // Check if name was updated (only possible with a valid agent key + Ollama)
     try {
@@ -114,7 +121,7 @@ test.describe('Ozwell Embed Widget', () => {
     test.setTimeout(120000); // 2 minute timeout for AI tool call test
     
     // Type a message requesting name change
-    const chatInput = iframe.getByRole('textbox');
+    const chatInput = widgetInput(iframe);
     await chatInput.fill('update my name to EventTest');
     await chatInput.press('Enter');
     
@@ -294,7 +301,8 @@ test.describe('Tic-Tac-Toe Demo', () => {
     await expect(page.locator('#board')).toBeVisible({ timeout: 5000 });
 
     const iframe = page.frameLocator('#ozwell-chat-container iframe');
-    await expect(iframe.locator('#chat-input')).toBeVisible({ timeout: 10000 });
+    const chatInput = widgetInput(iframe);
+    await expect(chatInput).toBeVisible({ timeout: 10000 });
 
     await page.evaluate(() => {
       (window as any).OzwellChat.configure({
@@ -318,8 +326,8 @@ test.describe('Tic-Tac-Toe Demo', () => {
       });
     });
 
-    await iframe.locator('#chat-input').fill('play center');
-    await iframe.locator('#chat-input').press('Enter');
+    await chatInput.fill('play center');
+    await chatInput.press('Enter');
 
     await expect(page.locator('.cell').nth(4)).toHaveText('X');
     await expect.poll(() => chatRequests.length, { timeout: 10000 }).toBeGreaterThanOrEqual(2);
