@@ -65,7 +65,7 @@
   };
 
   const EMPTY_SCHEMA = { type: 'object', properties: {} };
-  const PAGE_TOOL_PREFIX = 'postMessage:';
+  const PAGE_TOOL_PREFIX = 'postMessage_';
   const TOOL_RESPONSE_TIMEOUT_MS = 29000;
 
   function readGlobalConfig() {
@@ -232,7 +232,7 @@
     iframeWindow.postMessage(message, '*');
   }
 
-  /** Add postMessage: prefix to a page tool so it can't collide with server-side tools. */
+  /** Add postMessage_ prefix to a page tool so it can't collide with server-side tools. */
   function prefixPageTool(tool) {
     return { ...tool, name: PAGE_TOOL_PREFIX + tool.name };
   }
@@ -300,7 +300,7 @@
           postJsonRpc(message);
         }
 
-        // Strip postMessage: prefix so page handlers see the original name
+        // Strip postMessage_ prefix so page handlers see the original name
         const toolName = rawToolName && rawToolName.startsWith(PAGE_TOOL_PREFIX)
           ? rawToolName.slice(PAGE_TOOL_PREFIX.length)
           : rawToolName;

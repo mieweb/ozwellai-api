@@ -34,7 +34,7 @@ before(async () => {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
-        env: { ...process.env, PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development' }
+        env: { ...process.env, PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development', ALLOW_MOCK: '' }
     });
     await waitForReady();
 });
