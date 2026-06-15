@@ -22,7 +22,7 @@ type ToolFunction = {
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
-type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
+type NonNullableMessage = { role: Message['role']; content: NonNullable<Message['content']>; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
 type JSONSchemaParameters = {
@@ -409,7 +409,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               additionalProperties: true,
               properties: {
                 role: { type: 'string' },
-                content: { type: 'string' },
+                // Content may be a plain string (text) or an array of
+                // multimodal content parts (text + image_url) for vision.
+                content: {
+                  anyOf: [
+                    { type: 'string' },
+                    { type: 'array', items: { type: 'object' } },
+                    { type: 'null' },
+                  ],
+                },
                 tool_calls: { type: 'array' },
                 tool_call_id: { type: 'string' }
               },
