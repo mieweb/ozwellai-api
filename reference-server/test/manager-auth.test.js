@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -46,7 +47,7 @@ async function waitForReady(maxMs = 10_000) {
     throw new Error('server never became ready');
 }
 
-function startServer({ trustHeaders = true, adminExternalUserIds = '' } = {}) {
+function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-manager-auth-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
     const server = spawn('npm', ['run', 'dev'], {
@@ -63,9 +64,43 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '' } = {}) {
             LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
             OLLAMA_BASE_URL: '',
             NODE_ENV: 'development',
+            ...extraEnv,
         }
     });
     return { server, tmp, dbPath };
+}
+
+async function startStreamingLLMServer() {
+    let capturedBody = null;
+    const server = createServer((req, res) => {
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404).end();
+            return;
+        }
+
+        let raw = '';
+        req.on('data', chunk => { raw += chunk; });
+        req.on('end', () => {
+            capturedBody = JSON.parse(raw);
+            res.writeHead(200, { 'content-type': 'text/event-stream' });
+            res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n');
+            res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n');
+            res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10}}\n\n');
+            res.write('data: [DONE]\n\n');
+            res.end();
+        });
+    });
+
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = server.address();
+    return {
+        baseURL: `http://127.0.0.1:${port}`,
+        getCapturedBody: () => capturedBody,
+        close: () => new Promise(resolve => server.close(resolve)),
+    };
 }
 
 function stopServer(server, tmp) {
@@ -657,6 +692,64 @@ test('manager admin — user-first APIs include key history, agents, and usage m
         assert.ok(ownAgentRow.metrics.total_tokens > 0);
     } finally {
         stopServer(server, tmp);
+    }
+});
+
+test('manager auth — streaming LLM usage chunks are requested and recorded', async () => {
+    const upstream = await startStreamingLLMServer();
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: '',
+            LLM_MODEL: 'test-stream-model',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                model: 'test-stream-model',
+                messages: [{ role: 'user', content: 'hello stream usage' }],
+                stream: true,
+            }),
+        });
+        assert.equal(chat.status, 200);
+        const text = await chat.text();
+        assert.ok(text.includes('data: [DONE]'), 'stream terminates with [DONE]');
+
+        assert.deepEqual(upstream.getCapturedBody().stream_options, { include_usage: true });
+
+        const db = new Database(dbPath);
+        try {
+            const event = db.prepare(`
+              SELECT auth_type, model, status_code, prompt_tokens, completion_tokens, total_tokens
+              FROM usage_events
+              WHERE parent_key_id = ? AND agent_id IS NULL
+            `).get(key.id);
+            assert.deepEqual(event, {
+                auth_type: 'parent',
+                model: 'test-stream-model',
+                status_code: 200,
+                prompt_tokens: 7,
+                completion_tokens: 3,
+                total_tokens: 10,
+            });
+        } finally {
+            db.close();
+        }
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
     }
 });
 

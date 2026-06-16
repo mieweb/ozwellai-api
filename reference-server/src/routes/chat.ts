@@ -21,7 +21,15 @@ type ToolFunction = {
 
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
-type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
+type TokenUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+};
+type ChatCompletionRequestWithTools = ChatCompletionRequest & {
+  tools?: ToolDef[];
+  stream_options?: { include_usage?: boolean };
+};
 type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
@@ -574,7 +582,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const recordUsage = (model: string | null, statusCode: number, response?: unknown) => {
       if (!usageContext) return;
       const usage = response && typeof response === 'object' && 'usage' in response
-        ? (response as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }).usage
+        ? (response as { usage?: TokenUsage }).usage
         : undefined;
       try {
         agentStore.recordUsageEvent({
@@ -752,6 +760,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               ...requestOptions,
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true as const,
+              stream_options: { include_usage: true },
             };
             const streamResponse = client.createChatCompletionStream(requestForClient as unknown as ClientChatCompletionRequest);
 
@@ -759,8 +768,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const buffers: Record<string, string> = {};
             // Buffer for partial <think> tags that span multiple chunks
             const thinkBuffer = { partial: '' };
+            let latestUsage: TokenUsage | undefined;
 
             for await (const chunk of streamResponse) {
+              latestUsage = (chunk as unknown as { usage?: TokenUsage }).usage || latestUsage;
               try {
                 const id = chunk.id as string;
 
@@ -816,7 +827,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
-            recordUsage(model, 200);
+            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -847,14 +858,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   model: DEFAULT_MODEL,
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
+                  stream_options: { include_usage: true },
                 };
                 const retryStream = client.createChatCompletionStream(retryRequest as unknown as ClientChatCompletionRequest);
                 const retryThinkBuffer = { partial: '' };
+                let retryLatestUsage: TokenUsage | undefined;
                 for await (const chunk of retryStream) {
+                  retryLatestUsage = (chunk as unknown as { usage?: TokenUsage }).usage || retryLatestUsage;
                   const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
                   reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
-                recordUsage(DEFAULT_MODEL, 200);
+                recordUsage(DEFAULT_MODEL, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined);
               } catch (retryError) {
                 request.log.error({ err: retryError }, 'Fallback model also failed');
               }
