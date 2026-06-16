@@ -49,27 +49,78 @@ Use your own button and layout by disabling the default floating button:
 
 **Use cases:** Sidebar layouts, embedded chat in dashboards, multi-panel UIs, or any design where you want full control over the chat placement and styling.
 
-## Getting Text Back from Widget
+## Getting Text Back into the Page
 
-Use the AI to improve text, then get it back with the "Save & Close" button:
+Use the AI to improve text, then have it write the result back into a textarea. Expose a tool the AI can call with the improved text — the page writes it where it belongs:
 
 ```html
 <textarea id="my-note">Write something...</textarea>
 
 <script>
-  window.OzwellChatConfig = {};
+  window.OzwellChatConfig = {
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: 'update_note',
+          description: 'Write improved text back into the note field',
+          parameters: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'The improved text to insert' }
+            },
+            required: ['text']
+          }
+        }
+      }
+    ]
+  };
 
-  // Listen for Save & Close button
-  document.addEventListener('ozwell-chat-insert', (event) => {
-    document.getElementById('my-note').value = event.detail.text;
+  document.addEventListener('ozwell-tool-call', (event) => {
+    const { name, arguments: args, respond } = event.detail;
+    if (name !== 'update_note') return;
+
+    document.getElementById('my-note').value = args.text;
+    respond({ success: true });
   });
 </script>
 <script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-**How it works:** User asks AI to improve their text, clicks "Save & Close" in widget, and the AI's response gets inserted into the textarea.
+**How it works:** User asks the AI to improve their text. The AI calls `update_note` with the improved text, and the page writes it into the textarea. The page controls exactly where text lands — nothing is inserted without an explicit tool call.
 
-**Use cases:** Draft emails, improve notes, generate summaries, rewrite content - anytime you want AI help but don't need MCP tools.
+**Use cases:** Draft emails, improve notes, generate summaries, rewrite content — anytime you want AI help writing into a specific field.
+
+## Two Ways to Configure Tools and Behavior
+
+The widget can be configured in two complementary ways. You can use either or both.
+
+**Page-side config** — declare everything in `OzwellChatConfig` on the host page:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'agnt_key-...',     // or 'ozw_...' parent key
+    tools: [ /* page tools, handled via ozwell-tool-call */ ]
+  };
+</script>
+```
+
+Page tools act on the host page (read inputs, update fields). The page owns the schema and the handler. This is what every tool example below uses.
+
+**Server-side agent config** — an agent key (`agnt_key-...`) points at an agent stored on the reference server. The agent's YAML supplies the system prompt, model, temperature, and its own server-side tools. The widget discovers all of it automatically through an MCP handshake (`GET /v1/agents/me`) — the page only passes the key:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    apiKey: 'agnt_key-your-agent-key'
+    // no tools / model / prompt needed — the agent provides them
+  };
+</script>
+<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+```
+
+**They combine.** When you use an agent key *and* declare page-side `tools`, both sets are offered to the model: the agent's server-side tools plus the page tools (the loader prefixes page tools so the server can tell them apart). Use the agent for prompt/model/shared tools, and page-side `tools` for anything that must run in the browser.
 
 ## Reading Page Context With Tools
 
@@ -457,14 +508,16 @@ The loader also dispatches CustomEvents on `document` for convenience:
 
 | Event | Detail | Description |
 |-------|--------|-------------|
-| `ozwell-chat-insert` | `{ text }` | User clicked "Save & Close" - contains last AI response |
+| `ozwell-tool-call` | `{ name, arguments, respond, error }` | AI invoked a page tool — call `respond(result)` or `error(message)` |
 | `ozwell-chat-ready` | — | Widget fully initialized and ready |
 | `ozwell-chat-closed` | — | Chat window was closed |
-| `ozwell-chat-unread` | `{ message }` | AI responded while chat was closed (notification triggered) |
+| `ozwell-chat-unread` | — | AI responded while chat was closed (notification triggered) |
 
 ```javascript
-document.addEventListener('ozwell-chat-insert', (event) => {
-  console.log('AI response to insert:', event.detail.text);
+document.addEventListener('ozwell-tool-call', (event) => {
+  const { name, arguments: args, respond } = event.detail;
+  console.log('AI called tool:', name, args);
+  respond({ success: true });
 });
 ```
 
