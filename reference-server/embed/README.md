@@ -473,7 +473,6 @@ Messages sent from the widget iframe to the parent page. All messages include `s
 | `ready` | — | Widget fully initialized and ready to receive messages |
 | `tool_call` | MCP JSON-RPC 2.0 request | Request parent to execute an MCP tool (use `ozwell-tool-call` DOM event instead) |
 | `assistant_response` | `{ hadToolCalls }` | AI assistant finished responding (signal only, no message content) |
-| `insert` | `{ text }` | User clicked "Save & Close" button |
 | `closed` | — | Widget was closed |
 
 #### Listening for Tool Calls
