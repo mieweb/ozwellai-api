@@ -70,6 +70,8 @@ jobs:
 
       - name: Test reference server
         working-directory: ${{ inputs.working-directory }}
+        env:
+          ALLOW_MOCK: 'true'  # mock-agent + fallback tests need mock responses enabled
         run: npm test
         continue-on-error: true  # In case test script doesn't exist yet
 

@@ -19,6 +19,17 @@ export function isValidApiKey(key: string): boolean {
   return key.startsWith(KEY_PREFIX);
 }
 
+export function parsePositiveEnvNumber(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) return undefined;
+
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+
+  console.warn(`[config] Ignoring ${name}=${JSON.stringify(value)}; expected a positive number.`);
+  return undefined;
+}
+
 /**
  * Simple deterministic text generator for predictable testing
  * Uses a basic Markov chain approach with predefined patterns
@@ -63,7 +74,7 @@ export class SimpleTextGenerator {
     " I'm here if you have more questions.",
   ];
 
-  static generate(prompt: string, maxTokens: number = 150, _temperature: number = 0.7): string {
+  static generate(prompt: string, maxTokens?: number, _temperature: number = 0.7): string {
     // Create a seed based on the prompt for deterministic output
     const seed = this.hashString(prompt) % 1000000;
     const rng = this.seededRandom(seed);
@@ -73,7 +84,7 @@ export class SimpleTextGenerator {
     let response = this.RESPONSES[responseIndex];
 
     // Calculate target length based on maxTokens (rough estimate: 1 token ≈ 4 characters)
-    const targetLength = Math.min(maxTokens * 4, 500);
+    const targetLength = maxTokens === undefined ? 500 : maxTokens * 4;
 
     // Add continuations if we need more length
     while (response.length < targetLength * 0.7) {
@@ -95,14 +106,14 @@ export class SimpleTextGenerator {
     response += this.ENDINGS[endingIndex];
 
     // Trim to approximate token limit
-    if (response.length > targetLength) {
+    if (maxTokens !== undefined && response.length > targetLength) {
       response = response.substring(0, targetLength - 10) + "...";
     }
 
     return response;
   }
 
-  static *generateStream(prompt: string, maxTokens: number = 150): Generator<string> {
+  static *generateStream(prompt: string, maxTokens?: number): Generator<string> {
     const fullResponse = this.generate(prompt, maxTokens);
     const words = fullResponse.split(' ');
     

@@ -95,7 +95,7 @@ When the AI calls a tool, the loader dispatches an `ozwell-tool-call` event. Lis
 
 ### Tool Namespacing
 
-Page-provided tools are automatically prefixed with `postMessage:` on the wire so they can't collide with tools the agent server implements natively. This is transparent to your page — the prefix is added by the loader when the widget discovers tools, and stripped before your `ozwell-tool-call` handler fires. You never see the prefix in your code.
+Page-provided tools are automatically prefixed with `postMessage_` on the wire so they can't collide with tools the agent server implements natively. This is transparent to your page — the prefix is added by the loader when the widget discovers tools, and stripped before your `ozwell-tool-call` handler fires. You never see the prefix in your code.
 
 ### Controlling Page Tools
 

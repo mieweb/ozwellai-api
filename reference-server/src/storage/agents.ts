@@ -87,7 +87,7 @@ export function seedMockAgent(): void {
 // ── Agent model ─────────────────────────────────────────────────────
 
 /**
- * pageTools policy gates the postMessage:-prefixed tools an agent may call.
+ * pageTools policy gates the postMessage_-prefixed tools an agent may call.
  * Stored inside the agent YAML blob; chat.ts reads it after parsing.
  */
 export type PageToolsPolicy =

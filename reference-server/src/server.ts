@@ -66,6 +66,10 @@ async function buildServer() {
           url: 'https://ozwellapi-prod.os.mieweb.org',
           description: 'Current official public server',
         },
+        {
+          url: 'https://ozwellapi.os.mieweb.org',
+          description: 'Development server',
+        },
       ],
       components: {
         securitySchemes: {
