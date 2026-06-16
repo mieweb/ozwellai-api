@@ -11,6 +11,60 @@ const ALLOWED_MODELS = process.env.LLM_ALLOWED_MODELS
   ? process.env.LLM_ALLOWED_MODELS.split(',').map(m => m.trim()).filter(Boolean)
   : null;
 
+export async function getModelsList() {
+  // If LLM_ALLOWED_MODELS is set, return only those (skip gateway/Ollama call)
+  if (ALLOWED_MODELS) {
+    return {
+      object: 'list' as const,
+      data: ALLOWED_MODELS.map(id => ({
+        id,
+        object: 'model' as const,
+        created: 0,
+        owned_by: 'curated',
+      })),
+    };
+  }
+
+  // Proxy to LLM gateway when configured
+  if (isLLMBackendConfigured()) {
+    try {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${process.env.LLM_API_KEY || ''}`,
+      };
+      if (process.env.LLM_PROVIDER) headers['x-portkey-provider'] = process.env.LLM_PROVIDER;
+
+      const resp = await fetch(`${process.env.LLM_BASE_URL}/v1/models`, { headers });
+      if (resp.ok) {
+        return await resp.json() as { object: string; data: unknown[] };
+      }
+    } catch {
+      // Gateway unavailable, fall through to next provider
+    }
+  }
+
+  if (process.env.OLLAMA_BASE_URL) {
+    try {
+      const resp = await fetch(`${process.env.OLLAMA_BASE_URL}/api/tags`);
+      if (resp.ok) {
+        const data = await resp.json() as { models: { name: string }[] };
+        return {
+          object: 'list' as const,
+          data: (data.models || []).map((m) => ({
+            id: m.name,
+            object: 'model' as const,
+            created: 0,
+            owned_by: 'ollama',
+          })),
+        };
+      }
+    } catch {
+      // Ollama unavailable, fall through to fallback list
+    }
+  }
+
+  return { object: 'list' as const, data: FALLBACK_MODELS };
+}
+
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
   fastify.get('/v1/models', {
     schema: {
@@ -22,58 +76,7 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Invalid API key provided', 'invalid_request_error');
     }
 
-    // If LLM_ALLOWED_MODELS is set, return only those (skip gateway/Ollama call)
-    if (ALLOWED_MODELS) {
-      return {
-        object: 'list' as const,
-        data: ALLOWED_MODELS.map(id => ({
-          id,
-          object: 'model' as const,
-          created: 0,
-          owned_by: 'curated',
-        })),
-      };
-    }
-
-    // Proxy to LLM gateway when configured
-    if (isLLMBackendConfigured()) {
-      try {
-        const headers: Record<string, string> = {
-          'Authorization': `Bearer ${process.env.LLM_API_KEY || ''}`,
-        };
-        if (process.env.LLM_PROVIDER) headers['x-portkey-provider'] = process.env.LLM_PROVIDER;
-
-        const resp = await fetch(`${process.env.LLM_BASE_URL}/v1/models`, { headers });
-        if (resp.ok) {
-          const data = await resp.json() as { object: string; data: unknown[] };
-          return data;
-        }
-      } catch {
-        // Gateway unavailable, fall through to next provider
-      }
-    }
-
-    if (process.env.OLLAMA_BASE_URL) {
-      try {
-        const resp = await fetch(`${process.env.OLLAMA_BASE_URL}/api/tags`);
-        if (resp.ok) {
-          const data = await resp.json() as { models: { name: string }[] };
-          return {
-            object: 'list' as const,
-            data: (data.models || []).map((m) => ({
-              id: m.name,
-              object: 'model' as const,
-              created: 0,
-              owned_by: 'ollama',
-            })),
-          };
-        }
-      } catch {
-        // Ollama unavailable, fall through to fallback list
-      }
-    }
-
-    return { object: 'list' as const, data: FALLBACK_MODELS };
+    return getModelsList();
   });
 };
 
