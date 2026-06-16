@@ -566,7 +566,7 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
 });
 
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
-    const { server, tmp } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
@@ -591,19 +591,44 @@ test('manager admin — user-first APIs include key history, agents, and usage m
         });
         assert.equal(chat.status, 200);
 
+        const { key } = getUserAndActiveKey(dbPath);
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO usage_events (
+                id, parent_key_id, agent_id, auth_type, route, model, status_code,
+                prompt_tokens, completion_tokens, total_tokens, created_at
+              )
+              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                'usage-direct-parent-key',
+                key.id,
+                'parent',
+                '/v1/chat/completions',
+                'gpt-4o-mini',
+                200,
+                10,
+                15,
+                25,
+                '2026-01-01T00:00:00.000Z',
+            );
+        } finally {
+            db.close();
+        }
+
         const summary = await fetch(`${BASE}/v1/manager/admin/summary`, { headers: MANAGER_HEADERS });
         assert.equal(summary.status, 200);
         const summaryBody = await summary.json();
-        assert.equal(summaryBody.usage.requests_total, 1);
+        assert.equal(summaryBody.usage.requests_total, 2);
         assert.ok(summaryBody.usage.total_tokens > 0);
 
         const users = await fetch(`${BASE}/v1/manager/admin/users`, { headers: MANAGER_HEADERS });
         assert.equal(users.status, 200);
         const userRow = (await users.json()).data.find(user => user.external_user_id === '2009');
         assert.equal(userRow.agent_count, 1);
-        assert.equal(userRow.metrics.request_count, 1);
+        assert.equal(userRow.metrics.request_count, 2);
         assert.ok(userRow.metrics.total_tokens > 0);
-        assert.equal(userRow.current_parent_key.metrics.request_count, 1);
+        assert.equal(userRow.current_parent_key.metrics.request_count, 2);
         assert.ok(userRow.current_parent_key.metrics.total_tokens > 0);
 
         const detail = await fetch(`${BASE}/v1/manager/admin/users/${userRow.id}`, { headers: MANAGER_HEADERS });
@@ -611,11 +636,19 @@ test('manager admin — user-first APIs include key history, agents, and usage m
         const detailBody = await detail.json();
         assert.equal(detailBody.user.external_user_id, '2009');
         assert.equal(detailBody.parent_keys.length, 1);
-        assert.equal(detailBody.parent_keys[0].metrics.request_count, 1);
+        assert.equal(detailBody.parent_keys[0].metrics.request_count, 2);
         assert.ok(detailBody.parent_keys[0].metrics.total_tokens > 0);
         const agentRow = detailBody.agents.find(agent => agent.id === created.agent_id);
         assert.equal(agentRow.metrics.request_count, 1);
         assert.ok(agentRow.metrics.total_tokens > 0);
+        assert.deepEqual(detailBody.unattributed_usage, {
+            request_count: 1,
+            error_count: 0,
+            prompt_tokens: 10,
+            completion_tokens: 15,
+            total_tokens: 25,
+            last_used_at: null,
+        });
 
         const ownAgents = await fetch(`${BASE}/v1/manager/agents`, { headers: MANAGER_HEADERS });
         assert.equal(ownAgents.status, 200);

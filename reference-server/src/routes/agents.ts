@@ -250,6 +250,41 @@ function toMetrics(row: AdminMetricRow) {
     };
 }
 
+type AdminMetrics = ReturnType<typeof toMetrics>;
+
+function emptyMetrics(): AdminMetrics {
+    return {
+        request_count: 0,
+        error_count: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        last_used_at: null,
+    };
+}
+
+function sumMetrics(rows: Array<{ metrics: AdminMetrics }>): AdminMetrics {
+    return rows.reduce((total, row) => ({
+        request_count: total.request_count + row.metrics.request_count,
+        error_count: total.error_count + row.metrics.error_count,
+        prompt_tokens: total.prompt_tokens + row.metrics.prompt_tokens,
+        completion_tokens: total.completion_tokens + row.metrics.completion_tokens,
+        total_tokens: total.total_tokens + row.metrics.total_tokens,
+        last_used_at: null,
+    }), emptyMetrics());
+}
+
+function subtractMetrics(total: AdminMetrics, attributed: AdminMetrics): AdminMetrics {
+    return {
+        request_count: Math.max(total.request_count - attributed.request_count, 0),
+        error_count: Math.max(total.error_count - attributed.error_count, 0),
+        prompt_tokens: Math.max(total.prompt_tokens - attributed.prompt_tokens, 0),
+        completion_tokens: Math.max(total.completion_tokens - attributed.completion_tokens, 0),
+        total_tokens: Math.max(total.total_tokens - attributed.total_tokens, 0),
+        last_used_at: null,
+    };
+}
+
 function toAdminAgentView(agent: AdminAgentRow) {
     let parsed: ParsedAgentFields = {};
     try {
@@ -412,13 +447,16 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             reply.code(404);
             return createError('User not found', 'invalid_request_error', 'user_id', 'not_found');
         }
+        const parentKeys = (detail.parent_keys as AdminParentKeyRow[]).map(toAdminParentKeyView);
+        const agents = (detail.agents as unknown as AdminAgentRow[]).map(toAdminAgentView);
         return {
             user: {
                 ...(detail.user as Record<string, unknown>),
                 is_admin: Boolean((detail.user as { is_admin?: number }).is_admin),
             },
-            parent_keys: (detail.parent_keys as AdminParentKeyRow[]).map(toAdminParentKeyView),
-            agents: (detail.agents as unknown as AdminAgentRow[]).map(toAdminAgentView),
+            parent_keys: parentKeys,
+            agents,
+            unattributed_usage: subtractMetrics(sumMetrics(parentKeys), sumMetrics(agents)),
         };
     });
 
