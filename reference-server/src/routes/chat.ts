@@ -591,6 +591,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
     const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
+    // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
+    // Computed once, spread at each upstream call site. Regex self-classifies future gpt-5.x/o models.
+    const maxTokensParam: Record<string, number> = effectiveMaxTokens
+      ? (/^(o\d|gpt-5)/.test(model)
+          ? { max_completion_tokens: effectiveMaxTokens }
+          : { max_tokens: effectiveMaxTokens })
+      : {};
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -666,7 +673,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-          ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
+          ...maxTokensParam,
           ...(temperature !== undefined && { temperature }),
           ...(response_format && { response_format }),
         };
@@ -870,7 +877,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const retryRequest = {
               model: DEFAULT_MODEL,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-              ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
+              ...maxTokensParam,
               ...(temperature !== undefined && { temperature }),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
