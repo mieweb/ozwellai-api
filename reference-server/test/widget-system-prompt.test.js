@@ -5,7 +5,10 @@ import { test } from 'node:test';
 const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
 
 async function readWidgetSource() {
-  return readFile(WIDGET_PATH, 'utf8');
+  // Normalize CRLF -> LF: git may check out CRLF on Windows, breaking the
+  // source-matching regexes below that anchor on \n.
+  const source = await readFile(WIDGET_PATH, 'utf8');
+  return source.replace(/\r\n/g, '\n');
 }
 
 test('agent-key widgets do not add a client-side system prompt', async () => {
