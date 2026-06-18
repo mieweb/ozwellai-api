@@ -254,10 +254,10 @@ The server will start at `http://localhost:3000`
 **Hosted/public environment:**
 
 ```html
-<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-**Live Demo:** <https://ozwelldemo.opensource.mieweb.org>
+**Live Demo:** <https://tryozwell.os.mieweb.org>
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 

@@ -12,7 +12,7 @@
 #
 # Examples:
 #   ./scripts/test-agent-api.sh --key ozw_demo_localhost_key_for_testing
-#   ./scripts/test-agent-api.sh --key ozw_demo_localhost_key_for_testing --base https://ozwell-dev-refserver.opensource.mieweb.org
+#   ./scripts/test-agent-api.sh --key ozw_demo_localhost_key_for_testing --base https://ozwellapi-prod.os.mieweb.org
 # =============================================================================
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
