@@ -4,9 +4,10 @@
 /** A single multimodal content part (OpenAI-compatible). */
 export type ContentPart =
   | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
+  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }
+  | { type: 'file'; file: { file_data: string; filename?: string } };
 
-/** Message content: plain text, or an array of content parts (text + images). */
+/** Message content: plain text, or an array of content parts (text + images + files). */
 export type MessageContent = string | ContentPart[];
 
 /**

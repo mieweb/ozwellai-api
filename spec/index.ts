@@ -16,9 +16,17 @@ export const ImageContentPartSchema = z.object({
   }),
 });
 
-export const ContentPartSchema = z.union([TextContentPartSchema, ImageContentPartSchema]);
+export const FileContentPartSchema = z.object({
+  type: z.literal('file'),
+  file: z.object({
+    file_data: z.string(),
+    filename: z.string().optional(),
+  }),
+});
 
-// Message content: a string, or an array of content parts (text + images).
+export const ContentPartSchema = z.union([TextContentPartSchema, ImageContentPartSchema, FileContentPartSchema]);
+
+// Message content: a string, or an array of content parts (text + images + files).
 export const MessageContentSchema = z.union([z.string(), z.array(ContentPartSchema)]);
 
 // Common schemas
@@ -191,6 +199,7 @@ export const ChatCompletionChunkSchema = z.object({
 
 export type TextContentPart = z.infer<typeof TextContentPartSchema>;
 export type ImageContentPart = z.infer<typeof ImageContentPartSchema>;
+export type FileContentPart = z.infer<typeof FileContentPartSchema>;
 export type ContentPart = z.infer<typeof ContentPartSchema>;
 export type MessageContent = z.infer<typeof MessageContentSchema>;
 export type Message = z.infer<typeof MessageSchema>;

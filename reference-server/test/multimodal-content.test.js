@@ -120,3 +120,47 @@ test('multimodal content — image_url-only array does not crash and returns a r
     assert.equal(j.choices[0].message.role, 'assistant');
     assert.equal(typeof j.choices[0].message.content, 'string');
 });
+
+test('multimodal content — file content part (PDF as base64 data URL) is accepted', async () => {
+    const body = JSON.stringify({
+        messages: [
+            {
+                role: 'user',
+                content: [
+                    { type: 'text', text: 'Analyze this document' },
+                    { type: 'file', file: { file_data: 'data:application/pdf;base64,JVBERi0xLjQK', filename: 'test.pdf' } },
+                ],
+            },
+        ],
+    });
+
+    const r = await fetch(`${BASE}/v1/chat/completions`, { method: 'POST', headers: H, body });
+    assert.equal(r.status, 200);
+    const j = await r.json();
+    assert.equal(j.object, 'chat.completion');
+    assert.equal(j.choices[0].message.role, 'assistant');
+});
+
+test('multimodal content — file content part streams without crashing', async () => {
+    const r = await fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: H,
+        body: JSON.stringify({
+            stream: true,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: 'Summarize this file' },
+                        { type: 'file', file: { file_data: 'data:text/csv;base64,bmFtZSxhZ2UKSm9obiwyNQ==', filename: 'data.csv' } },
+                    ],
+                },
+            ],
+        }),
+    });
+
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type') || '', /text\/event-stream/);
+    const text = await r.text();
+    assert.ok(text.includes('data: [DONE]'), 'stream terminates with [DONE]');
+});
