@@ -591,6 +591,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
     const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
+    // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
+    // Classified per call from the model actually being sent — the fallback retry switches models, so a
+    // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
+    // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
+    const tokenParamFor = (m: string): Record<string, number> =>
+      !effectiveMaxTokens ? {}
+        : /(^|\/)(o\d|gpt-5)/.test(m)
+          ? { max_completion_tokens: effectiveMaxTokens }
+          : { max_tokens: effectiveMaxTokens };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -666,7 +675,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-          ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
           ...(temperature !== undefined && { temperature }),
           ...(response_format && { response_format }),
         };
@@ -711,6 +719,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           try {
             const requestForClient = {
               ...requestOptions,
+              ...tokenParamFor(model),
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true as const,
             };
@@ -805,6 +814,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 const retryRequest = {
                   ...requestOptions,
                   model: DEFAULT_MODEL,
+                  ...tokenParamFor(DEFAULT_MODEL),
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
                 };
@@ -827,6 +837,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         } else {
           const requestForClientNonStream = {
             ...requestOptions,
+            ...tokenParamFor(model),
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false as const,
           };
@@ -870,7 +881,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const retryRequest = {
               model: DEFAULT_MODEL,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-              ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
+              ...tokenParamFor(DEFAULT_MODEL),
               ...(temperature !== undefined && { temperature }),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
