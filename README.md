@@ -13,7 +13,7 @@
 
 ## Live Demo
 
-**Try it now:** [https://ozwelldemo.opensource.mieweb.org](https://ozwelldemo.opensource.mieweb.org)
+**Try it now:** [https://tryozwell.os.mieweb.org](https://tryozwell.os.mieweb.org)
 
 **Watch demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 

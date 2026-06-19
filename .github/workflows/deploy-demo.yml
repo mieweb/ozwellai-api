@@ -79,7 +79,7 @@ jobs:
             # Restart landing service with public reference-server/API base URL
             pm2 stop landing || true
             pm2 delete landing || true
-            REFERENCE_SERVER_URL=https://ozwellapi.opensource.mieweb.org pm2 start server.js --name landing
+            REFERENCE_SERVER_URL=https://ozwellapi-prod.os.mieweb.org pm2 start server.js --name landing
             pm2 save
 
             # Cleanup
