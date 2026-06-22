@@ -72,6 +72,7 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
 
 async function startStreamingLLMServer() {
     let capturedBody = null;
+    let capturedHeaders = null;
     const server = createServer((req, res) => {
         if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
             res.writeHead(404).end();
@@ -81,6 +82,7 @@ async function startStreamingLLMServer() {
         let raw = '';
         req.on('data', chunk => { raw += chunk; });
         req.on('end', () => {
+            capturedHeaders = req.headers;
             capturedBody = JSON.parse(raw);
             res.writeHead(200, { 'content-type': 'text/event-stream' });
             res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n');
@@ -99,6 +101,91 @@ async function startStreamingLLMServer() {
     return {
         baseURL: `http://127.0.0.1:${port}`,
         getCapturedBody: () => capturedBody,
+        getCapturedHeaders: () => capturedHeaders,
+        close: () => new Promise(resolve => server.close(resolve)),
+    };
+}
+
+async function startJsonLLMServer() {
+    let capturedBody = null;
+    let capturedHeaders = null;
+    let requestCount = 0;
+    const server = createServer((req, res) => {
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404).end();
+            return;
+        }
+
+        let raw = '';
+        req.on('data', chunk => { raw += chunk; });
+        req.on('end', () => {
+            requestCount += 1;
+            capturedHeaders = req.headers;
+            capturedBody = JSON.parse(raw);
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+                id: 'chatcmpl_provider_test',
+                object: 'chat.completion',
+                created: 1,
+                model: capturedBody.model,
+                choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            }));
+        });
+    });
+
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = server.address();
+    return {
+        baseURL: `http://127.0.0.1:${port}`,
+        getCapturedBody: () => capturedBody,
+        getCapturedHeaders: () => capturedHeaders,
+        getRequestCount: () => requestCount,
+        close: () => new Promise(resolve => server.close(resolve)),
+    };
+}
+
+async function startModelNotFoundThenOkServer() {
+    const capturedBodies = [];
+    const server = createServer((req, res) => {
+        if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+            res.writeHead(404).end();
+            return;
+        }
+
+        let raw = '';
+        req.on('data', chunk => { raw += chunk; });
+        req.on('end', () => {
+            const body = JSON.parse(raw);
+            capturedBodies.push(body);
+            if (body.model === 'gpt-4o-mini') {
+                res.writeHead(404, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'model_not_found' } }));
+                return;
+            }
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+                id: 'chatcmpl_fallback_test',
+                object: 'chat.completion',
+                created: 1,
+                model: body.model,
+                choices: [{ index: 0, message: { role: 'assistant', content: 'fallback ok' }, finish_reason: 'stop' }],
+                usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            }));
+        });
+    });
+
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = server.address();
+    return {
+        baseURL: `http://127.0.0.1:${port}`,
+        getCapturedBodies: () => capturedBodies,
         close: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -488,6 +575,74 @@ test('manager auth — /v1/manager/models returns allowed models without bearer 
         assert.equal(res.status, 200);
         const body = await res.json();
         assert.deepEqual(body.data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini', 'openai/gpt-4o']);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — parent key model restrictions can be saved and narrow effective models', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const save = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({
+                allowed_models: [{ provider: 'openai', model: 'gpt-4o' }],
+            }),
+        });
+        assert.equal(save.status, 200);
+        assert.deepEqual((await save.json()).allowed_models, [{ provider: 'openai', model: 'gpt-4o' }]);
+
+        const load = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            headers: MANAGER_HEADERS,
+        });
+        assert.equal(load.status, 200);
+        const loadBody = await load.json();
+        assert.deepEqual(loadBody.allowed_models, [{ provider: 'openai', model: 'gpt-4o' }]);
+        assert.deepEqual(loadBody.effective_models.map(model => model.id), ['gpt-4o']);
+
+        const consumer = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { 'Authorization': `Bearer ${key.key}` },
+        });
+        assert.equal(consumer.status, 200);
+        assert.deepEqual((await consumer.json()).data.map(model => model.id), ['gpt-4o']);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('models — agent allowedModels further narrows consumer effective models', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Model Switch Agent
+instructions: Test model switching
+provider: openai
+model: gpt-4o
+allowedModels:
+  - provider: openai
+    model: gpt-4o-mini
+`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+
+        const consumer = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { 'Authorization': `Bearer ${created.agent_key}` },
+        });
+        assert.equal(consumer.status, 200);
+        const body = await consumer.json();
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini']);
     } finally {
         stopServer(server, tmp);
     }
@@ -703,6 +858,7 @@ test('manager auth — streaming LLM usage chunks are requested and recorded', a
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'test-stream-model',
+            LLM_ALLOWED_MODELS: 'test-stream-model',
             ALLOW_MOCK: '',
         },
     });
@@ -787,6 +943,149 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
 
         const body = upstream.getCapturedBody();
         assert.equal('temperature' in body, false);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('chat — provider/model restrictions are enforced before gateway calls', async () => {
+    const upstream = await startJsonLLMServer();
+    const { server, tmp, dbPath } = startServer({
+        adminExternalUserIds: '2009',
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: '',
+            LLM_MODEL: 'gpt-4o',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const save = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(save.status, 200);
+
+        const allowed = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                provider: 'openai',
+                model: 'gpt-4o',
+                messages: [{ role: 'user', content: 'allowed' }],
+            }),
+        });
+        assert.equal(allowed.status, 200);
+        assert.equal(upstream.getCapturedHeaders()['x-portkey-provider'], 'openai');
+        assert.equal(upstream.getCapturedBody().model, 'gpt-4o');
+
+        const blocked = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: 'blocked' }],
+            }),
+        });
+        assert.equal(blocked.status, 403);
+        assert.equal((await blocked.json()).error.code, 'model_not_allowed');
+        assert.equal(upstream.getRequestCount(), 1);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('chat — model-only requests require provider when model id is ambiguous', async () => {
+    const upstream = await startJsonLLMServer();
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: '',
+            LLM_MODEL: 'shared-model',
+            LLM_ALLOWED_MODELS: 'openai/shared-model,anthropic/shared-model',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const ambiguous = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                model: 'shared-model',
+                messages: [{ role: 'user', content: 'ambiguous' }],
+            }),
+        });
+        assert.equal(ambiguous.status, 400);
+        assert.equal((await ambiguous.json()).error.code, 'provider_required');
+        assert.equal(upstream.getRequestCount(), 0);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('chat — fallback retry does not use a model blocked by restrictions', async () => {
+    const upstream = await startModelNotFoundThenOkServer();
+    const { server, tmp, dbPath } = startServer({
+        adminExternalUserIds: '2009',
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: '',
+            LLM_MODEL: 'gpt-4o',
+            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const save = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(save.status, 200);
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: 'fallback should not bypass restrictions' }],
+            }),
+        });
+        assert.equal(response.status, 503);
+        assert.deepEqual(upstream.getCapturedBodies().map(body => body.model), ['gpt-4o-mini']);
     } finally {
         stopServer(server, tmp);
         await upstream.close();
