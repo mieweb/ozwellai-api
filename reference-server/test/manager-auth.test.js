@@ -61,6 +61,9 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             TRUST_FORWARD_AUTH_HEADERS: trustHeaders ? 'true' : 'false',
             ADMIN_EXTERNAL_USER_IDS: adminExternalUserIds,
             ALLOW_MOCK: 'true',
+            LLM_BASE_URL: '',
+            LLM_API_KEY: '',
+            LLM_PROVIDER: '',
             LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
             OLLAMA_BASE_URL: '',
             NODE_ENV: 'development',
@@ -106,11 +109,35 @@ async function startStreamingLLMServer() {
     };
 }
 
-async function startJsonLLMServer() {
+async function startJsonLLMServer({ modelsByProvider = null } = {}) {
     let capturedBody = null;
     let capturedHeaders = null;
     let requestCount = 0;
+    const providerModels = modelsByProvider || {
+        openai: ['gpt-4o-mini', 'gpt-4o'],
+    };
     const server = createServer((req, res) => {
+        if (req.method === 'GET' && req.url === '/v1/models') {
+            const provider = req.headers['x-portkey-provider'];
+            if (!provider) {
+                res.writeHead(400, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'provider required' } }));
+                return;
+            }
+            const models = providerModels[provider] || [];
+            if (!models.length) {
+                res.writeHead(404, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'provider unavailable' } }));
+                return;
+            }
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+                object: 'list',
+                data: models.map(id => ({ id, object: 'model', owned_by: provider })),
+            }));
+            return;
+        }
+
         if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
             res.writeHead(404).end();
             return;
@@ -151,6 +178,21 @@ async function startJsonLLMServer() {
 async function startModelNotFoundThenOkServer() {
     const capturedBodies = [];
     const server = createServer((req, res) => {
+        if (req.method === 'GET' && req.url === '/v1/models') {
+            const provider = req.headers['x-portkey-provider'];
+            if (provider !== 'openai') {
+                res.writeHead(404, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ error: { message: 'provider unavailable' } }));
+                return;
+            }
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({
+                object: 'list',
+                data: ['gpt-4o-mini', 'gpt-4o'].map(id => ({ id, object: 'model', owned_by: 'openai' })),
+            }));
+            return;
+        }
+
         if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
             res.writeHead(404).end();
             return;
@@ -186,6 +228,29 @@ async function startModelNotFoundThenOkServer() {
     return {
         baseURL: `http://127.0.0.1:${port}`,
         getCapturedBodies: () => capturedBodies,
+        close: () => new Promise(resolve => server.close(resolve)),
+    };
+}
+
+async function startOllamaTagsServer(models = ['local-llama:latest']) {
+    const server = createServer((req, res) => {
+        if (req.method !== 'GET' || req.url !== '/api/tags') {
+            res.writeHead(404).end();
+            return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({
+            models: models.map(name => ({ name })),
+        }));
+    });
+
+    await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = server.address();
+    return {
+        baseURL: `http://127.0.0.1:${port}`,
         close: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -578,6 +643,119 @@ test('manager auth — /v1/manager/models returns allowed models without bearer 
         assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini', 'openai/gpt-4o']);
     } finally {
         stopServer(server, tmp);
+    }
+});
+
+test('manager models — gateway discovery is preferred over legacy LLM_ALLOWED_MODELS seed', async () => {
+    const upstream = await startJsonLLMServer({
+        modelsByProvider: {
+            openai: ['gpt-4o-mini', 'text-embedding-3-small', 'tts-1', 'gpt-image-1'],
+            anthropic: ['claude-sonnet-4-5'],
+            ollama: ['qwen2.5-coder:7b'],
+        },
+    });
+    const { server, tmp } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: 'openai',
+            LLM_ALLOWED_MODELS: 'stale-env-model',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
+        assert.equal(res.status, 200);
+        const body = await res.json();
+        assert.deepEqual(
+            body.data.map(model => `${model.provider}/${model.model}:${model.source}`),
+            [
+                'openai/gpt-4o-mini:gateway',
+                'anthropic/claude-sonnet-4-5:gateway',
+                'ollama/qwen2.5-coder:7b:gateway',
+            ],
+        );
+        assert.equal(body.data.some(model => model.model === 'stale-env-model'), false);
+        assert.equal(body.data.some(model => model.model === 'text-embedding-3-small'), false);
+        assert.equal(body.data.some(model => model.model === 'tts-1'), false);
+        assert.equal(body.data.some(model => model.model === 'gpt-image-1'), false);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('manager models — gateway refresh hides stale registry rows from older sources', async () => {
+    const upstream = await startJsonLLMServer({
+        modelsByProvider: {
+            openai: ['gpt-4o-mini'],
+        },
+    });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: 'openai',
+            LLM_ALLOWED_MODELS: 'stale-env-model',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run('openai', 'stale-env-model', 'stale-env-model', 'stale-env-model', 'env', 1, new Date().toISOString(), new Date().toISOString());
+        } finally {
+            db.close();
+        }
+
+        const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
+        assert.equal(res.status, 200);
+        const body = await res.json();
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}:${model.source}`), ['openai/gpt-4o-mini:gateway']);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('manager models — direct Ollama discovery supplements gateway discovery', async () => {
+    const upstream = await startJsonLLMServer({
+        modelsByProvider: {
+            openai: ['gpt-4o-mini'],
+        },
+    });
+    const ollama = await startOllamaTagsServer(['local-llama:latest']);
+    const { server, tmp } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: 'openai',
+            OLLAMA_BASE_URL: ollama.baseURL,
+            LLM_ALLOWED_MODELS: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
+        assert.equal(res.status, 200);
+        const body = await res.json();
+        assert.deepEqual(
+            body.data.map(model => `${model.provider}/${model.model}:${model.source}`),
+            ['openai/gpt-4o-mini:gateway', 'ollama/local-llama:latest:ollama'],
+        );
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+        await ollama.close();
     }
 });
 
@@ -1011,7 +1189,12 @@ test('chat — provider/model restrictions are enforced before gateway calls', a
 });
 
 test('chat — model-only requests require provider when model id is ambiguous', async () => {
-    const upstream = await startJsonLLMServer();
+    const upstream = await startJsonLLMServer({
+        modelsByProvider: {
+            openai: ['shared-model'],
+            anthropic: ['shared-model'],
+        },
+    });
     const { server, tmp, dbPath } = startServer({
         extraEnv: {
             LLM_BASE_URL: upstream.baseURL,
