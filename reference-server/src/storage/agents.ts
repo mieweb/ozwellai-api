@@ -93,6 +93,7 @@ export function initializeAuthTables(db: Database.Database): void {
         agent_id TEXT,
         auth_type TEXT NOT NULL,
         route TEXT NOT NULL,
+        provider TEXT,
         model TEXT,
         status_code INTEGER NOT NULL,
         prompt_tokens INTEGER,
@@ -110,6 +111,7 @@ export function initializeAuthTables(db: Database.Database): void {
     ensureColumn(db, 'api_keys', 'source', 'TEXT');
     ensureColumn(db, 'api_keys', 'revoked_reason', 'TEXT');
     ensureColumn(db, 'api_keys', 'replaced_by_key_id', 'TEXT');
+    ensureColumn(db, 'usage_events', 'provider', 'TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
     console.log('[auth] Auth tables initialized');
 }
@@ -221,11 +223,27 @@ export interface UsageEventInput {
     agent_id: string | null;
     auth_type: 'parent' | 'agent';
     route: string;
+    provider?: string | null;
     model: string | null;
     status_code: number;
     prompt_tokens?: number | null;
     completion_tokens?: number | null;
     total_tokens?: number | null;
+}
+
+export interface ProviderModelRecord {
+    id: string;
+    provider: string;
+    model: string;
+    label: string;
+    source: string;
+    enabled: boolean;
+    last_discovered_at: string | null;
+}
+
+export interface ProviderModelSelection {
+    provider: string;
+    model?: string | null;
 }
 
 export interface AdminSummary {
@@ -283,6 +301,7 @@ export class AgentStore {
     private stmtMoveAgentsToParent: Database.Statement;
     private stmtAttachApiKeyToUser: Database.Statement;
     private stmtRevokeApiKey: Database.Statement;
+    private stmtUpsertProviderModel: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -356,6 +375,16 @@ export class AgentStore {
               replaced_by_key_id = @replaced_by_key_id
           WHERE id = @id
         `);
+        this.stmtUpsertProviderModel = this.db.prepare(`
+          INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
+          VALUES (@provider, @model, @id, @label, @source, @enabled, @last_discovered_at, @created_at)
+          ON CONFLICT(provider, model) DO UPDATE SET
+            id = excluded.id,
+            label = excluded.label,
+            source = excluded.source,
+            enabled = excluded.enabled,
+            last_discovered_at = excluded.last_discovered_at
+        `);
     }
 
     private initTable() {
@@ -370,6 +399,28 @@ export class AgentStore {
       );
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
+
+      CREATE TABLE IF NOT EXISTS provider_models (
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        source TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_discovered_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (provider, model)
+      );
+      CREATE INDEX IF NOT EXISTS idx_provider_models_enabled ON provider_models(enabled);
+
+      CREATE TABLE IF NOT EXISTS parent_key_model_restrictions (
+        id TEXT PRIMARY KEY,
+        parent_key_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_parent_key_model_restrictions_parent_key ON parent_key_model_restrictions(parent_key_id);
     `);
     }
 
@@ -551,11 +602,11 @@ export class AgentStore {
     recordUsageEvent(input: UsageEventInput): void {
         this.db.prepare(`
           INSERT INTO usage_events (
-            id, parent_key_id, agent_id, auth_type, route, model, status_code,
+            id, parent_key_id, agent_id, auth_type, route, provider, model, status_code,
             prompt_tokens, completion_tokens, total_tokens, created_at
           )
           VALUES (
-            @id, @parent_key_id, @agent_id, @auth_type, @route, @model, @status_code,
+            @id, @parent_key_id, @agent_id, @auth_type, @route, @provider, @model, @status_code,
             @prompt_tokens, @completion_tokens, @total_tokens, @created_at
           )
         `).run({
@@ -564,6 +615,7 @@ export class AgentStore {
             agent_id: input.agent_id,
             auth_type: input.auth_type,
             route: input.route,
+            provider: input.provider ?? null,
             model: input.model,
             status_code: input.status_code,
             prompt_tokens: input.prompt_tokens ?? null,
@@ -571,6 +623,80 @@ export class AgentStore {
             total_tokens: input.total_tokens ?? null,
             created_at: new Date().toISOString(),
         });
+    }
+
+    upsertProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
+        const now = new Date().toISOString();
+        const upsert = this.db.transaction((items: typeof records) => {
+            for (const item of items) {
+                this.stmtUpsertProviderModel.run({
+                    provider: item.provider,
+                    model: item.model,
+                    id: item.id,
+                    label: item.label,
+                    source: item.source,
+                    enabled: item.enabled === false ? 0 : 1,
+                    last_discovered_at: item.last_discovered_at ?? now,
+                    created_at: now,
+                });
+            }
+        });
+        upsert(records);
+        return this.listProviderModels();
+    }
+
+    listProviderModels(): ProviderModelRecord[] {
+        const rows = this.db.prepare(`
+          SELECT id, provider, model, label, source, enabled, last_discovered_at
+          FROM provider_models
+          WHERE enabled = 1
+          ORDER BY rowid ASC
+        `).all() as Array<Omit<ProviderModelRecord, 'enabled'> & { enabled: number }>;
+        return rows.map(row => ({ ...row, enabled: Boolean(row.enabled) }));
+    }
+
+    getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {
+        return this.db.prepare(`
+          SELECT provider, model
+          FROM parent_key_model_restrictions
+          WHERE parent_key_id = ?
+          ORDER BY rowid ASC
+        `).all(parentKeyId) as ProviderModelSelection[];
+    }
+
+    setParentKeyModelRestrictions(parentKeyId: string, selections: ProviderModelSelection[]): ProviderModelSelection[] {
+        const normalized = normalizeProviderModelSelections(selections);
+        const save = this.db.transaction(() => {
+            this.db.prepare('DELETE FROM parent_key_model_restrictions WHERE parent_key_id = ?').run(parentKeyId);
+            const insert = this.db.prepare(`
+              INSERT INTO parent_key_model_restrictions (id, parent_key_id, provider, model, created_at)
+              VALUES (@id, @parent_key_id, @provider, @model, @created_at)
+            `);
+            const created_at = new Date().toISOString();
+            for (const item of normalized) {
+                insert.run({
+                    id: `${parentKeyId}:${item.provider}:${item.model || '*'}`,
+                    parent_key_id: parentKeyId,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at,
+                });
+            }
+        });
+        save();
+        return this.getParentKeyModelRestrictions(parentKeyId);
+    }
+
+    listEffectiveProviderModels(parentKeyId: string | null, agentAllowedModels?: ProviderModelSelection[] | null): ProviderModelRecord[] {
+        const models = this.listProviderModels();
+        const parentRestrictions = parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [];
+        const parentFiltered = parentRestrictions.length
+            ? models.filter(model => selectionAllows(parentRestrictions, model.provider, model.model))
+            : models;
+        const agentSelections = normalizeProviderModelSelections(agentAllowedModels || []);
+        return agentSelections.length
+            ? parentFiltered.filter(model => selectionAllows(agentSelections, model.provider, model.model))
+            : parentFiltered;
     }
 
     getAdminSummary(): AdminSummary {
@@ -822,3 +948,25 @@ export class AgentStore {
 
 // Singleton instance
 export const agentStore = new AgentStore();
+
+export function normalizeProviderModelSelections(selections: ProviderModelSelection[]): ProviderModelSelection[] {
+    const seen = new Set<string>();
+    const normalized: ProviderModelSelection[] = [];
+    for (const selection of selections) {
+        if (!selection || typeof selection.provider !== 'string') continue;
+        const provider = selection.provider.trim();
+        const rawModel = typeof selection.model === 'string' ? selection.model.trim() : null;
+        if (!provider) continue;
+        const key = `${provider}:${rawModel || '*'}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push({ provider, model: rawModel || null });
+    }
+    return normalized;
+}
+
+function selectionAllows(selections: ProviderModelSelection[], provider: string, model: string): boolean {
+    return selections.some(selection => (
+        selection.provider === provider && (!selection.model || selection.model === model)
+    ));
+}

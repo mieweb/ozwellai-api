@@ -182,6 +182,20 @@ type AdminUserRow = AdminMetricRow & {
     is_admin: number | boolean;
 };
 
+type ProviderModelSelectionBody = {
+    provider?: unknown;
+    model?: unknown;
+};
+
+function normalizeRestrictionBody(body: { allowed_models?: ProviderModelSelectionBody[] } | undefined) {
+    return (body?.allowed_models || [])
+        .filter(item => item && typeof item.provider === 'string')
+        .map(item => ({
+            provider: item.provider as string,
+            model: typeof item.model === 'string' ? item.model : null,
+        }));
+}
+
 /** Parse YAML into a loose object. Throws on invalid YAML. */
 function parseAgentYaml(yamlInput: string): ParsedAgentFields {
     const parsed = yaml.parse(yamlInput);
@@ -532,6 +546,66 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             status: key.status,
             revoked_at: key.revoked_at,
             revoked_reason: key.revoked_reason,
+        };
+    });
+
+    fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get parent-key provider/model restrictions',
+            params: {
+                type: 'object',
+                properties: { key_id: { type: 'string' } },
+                required: ['key_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request) => {
+        await getModelsList();
+        return {
+            parent_key_id: request.params.key_id,
+            allowed_models: agentStore.getParentKeyModelRestrictions(request.params.key_id),
+            effective_models: agentStore.listEffectiveProviderModels(request.params.key_id),
+        };
+    });
+
+    fastify.put<{ Params: { key_id: string }; Body: { allowed_models?: ProviderModelSelectionBody[] } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Update parent-key provider/model restrictions',
+            params: {
+                type: 'object',
+                properties: { key_id: { type: 'string' } },
+                required: ['key_id'],
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    allowed_models: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                provider: { type: 'string' },
+                                model: { type: 'string' },
+                            },
+                            required: ['provider'],
+                        },
+                    },
+                },
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request) => {
+        await getModelsList();
+        const allowedModels = agentStore.setParentKeyModelRestrictions(
+            request.params.key_id,
+            normalizeRestrictionBody(request.body),
+        );
+        return {
+            parent_key_id: request.params.key_id,
+            allowed_models: allowedModels,
+            effective_models: agentStore.listEffectiveProviderModels(request.params.key_id),
         };
     });
 
