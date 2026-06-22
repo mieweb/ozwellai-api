@@ -8,10 +8,16 @@ const FALLBACK_MODELS = [
   { provider: 'openai', model: 'gpt-4o-mini', id: 'gpt-4o-mini', label: 'gpt-4o-mini', source: 'fallback' },
 ];
 
-// When set, only these models appear in the dropdown (comma-separated)
+const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
+
+// Legacy bootstrap seed. Live gateway discovery is preferred whenever configured.
 const ALLOWED_MODELS = process.env.LLM_ALLOWED_MODELS
   ? process.env.LLM_ALLOWED_MODELS.split(',').map(m => m.trim()).filter(Boolean)
   : null;
+
+function uniqueProviders(providers: Array<string | undefined>) {
+  return Array.from(new Set(providers.map(provider => provider?.trim()).filter(Boolean))) as string[];
+}
 
 function providerFromModelId(id: string, fallbackProvider = 'openai') {
   if (id.includes('/')) return id.split('/')[0];
@@ -34,6 +40,61 @@ function toModelRecord(id: string, source: string, provider = providerFromModelI
     enabled: true,
     last_discovered_at: new Date().toISOString(),
   };
+}
+
+function isLikelyChatModel(provider: string, id: string) {
+  const model = modelFromModelId(id).toLowerCase();
+  if (provider === 'openai') {
+    if (/(embedding|whisper|tts|moderation|image|sora|realtime|audio|transcribe)/.test(model)) return false;
+    return /^(gpt-[0-9]|gpt-4|gpt-5|o[0-9]|chat-latest|computer-use)/.test(model);
+  }
+  if (provider === 'anthropic') return model.startsWith('claude-');
+  return true;
+}
+
+async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
+  if (!isLLMBackendConfigured()) return [];
+
+  const records: ProviderModelRecord[] = [];
+  const providers = uniqueProviders([process.env.LLM_PROVIDER, ...GATEWAY_DISCOVERY_PROVIDERS]);
+
+  for (const provider of providers) {
+    try {
+      const resp = await fetch(`${process.env.LLM_BASE_URL}/v1/models`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.LLM_API_KEY || ''}`,
+          'x-portkey-provider': provider,
+        },
+      });
+      if (!resp.ok) continue;
+
+      const payload = await resp.json() as { data?: Array<{ id?: string }> };
+      const models = Array.isArray(payload.data) ? payload.data : [];
+      for (const model of models) {
+        if (typeof model.id !== 'string' || !model.id) continue;
+        if (!isLikelyChatModel(provider, model.id)) continue;
+        records.push(toModelRecord(model.id, 'gateway', provider));
+      }
+    } catch {
+      // A single provider discovery failure should not block other providers.
+    }
+  }
+
+  return records;
+}
+
+async function discoverDirectOllamaModels(): Promise<ProviderModelRecord[]> {
+  if (!process.env.OLLAMA_BASE_URL) return [];
+  try {
+    const resp = await fetch(`${process.env.OLLAMA_BASE_URL}/api/tags`);
+    if (!resp.ok) return [];
+    const data = await resp.json() as { models?: { name?: string }[] };
+    return (data.models || [])
+      .filter((model): model is { name: string } => typeof model.name === 'string' && Boolean(model.name))
+      .map((model) => toModelRecord(model.name, 'ollama', 'ollama'));
+  } catch {
+    return [];
+  }
 }
 
 function listResponse(records: ProviderModelRecord[]) {
@@ -74,45 +135,18 @@ function parseAgentAllowedModels(agentYaml: string): ProviderModelSelection[] | 
 }
 
 export async function getModelsList() {
-  // If LLM_ALLOWED_MODELS is set, return only those (skip gateway/Ollama call)
+  const gatewayRecords = await discoverGatewayModels();
+  const ollamaRecords = await discoverDirectOllamaModels();
+  const discoveredRecords = [...gatewayRecords, ...ollamaRecords];
+  if (discoveredRecords.length) {
+    return listResponse(agentStore.replaceProviderModels(discoveredRecords));
+  }
+
   if (ALLOWED_MODELS) {
-    return listResponse(agentStore.upsertProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env'))));
+    return listResponse(agentStore.replaceProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env-seed'))));
   }
 
-  // Proxy to LLM gateway when configured
-  if (isLLMBackendConfigured()) {
-    try {
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${process.env.LLM_API_KEY || ''}`,
-      };
-      if (process.env.LLM_PROVIDER) headers['x-portkey-provider'] = process.env.LLM_PROVIDER;
-
-      const resp = await fetch(`${process.env.LLM_BASE_URL}/v1/models`, { headers });
-      if (resp.ok) {
-        const payload = await resp.json() as { object: string; data?: Array<{ id?: string; owned_by?: string }> };
-        const records = (payload.data || [])
-          .filter(model => typeof model.id === 'string' && model.id)
-          .map(model => toModelRecord(model.id!, 'gateway', providerFromModelId(model.id!, model.owned_by || 'openai')));
-        return listResponse(agentStore.upsertProviderModels(records));
-      }
-    } catch {
-      // Gateway unavailable, fall through to next provider
-    }
-  }
-
-  if (process.env.OLLAMA_BASE_URL) {
-    try {
-      const resp = await fetch(`${process.env.OLLAMA_BASE_URL}/api/tags`);
-      if (resp.ok) {
-        const data = await resp.json() as { models: { name: string }[] };
-        return listResponse(agentStore.upsertProviderModels((data.models || []).map((m) => toModelRecord(m.name, 'ollama', 'ollama'))));
-      }
-    } catch {
-      // Ollama unavailable, fall through to fallback list
-    }
-  }
-
-  return listResponse(agentStore.upsertProviderModels(FALLBACK_MODELS));
+  return listResponse(agentStore.replaceProviderModels(FALLBACK_MODELS));
 }
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {

@@ -665,6 +665,15 @@ export class AgentStore {
         return this.listProviderModels();
     }
 
+    replaceProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
+        const replace = this.db.transaction((items: typeof records) => {
+            this.db.prepare('UPDATE provider_models SET enabled = 0').run();
+            this.upsertProviderModels(items);
+        });
+        replace(records);
+        return this.listProviderModels();
+    }
+
     listProviderModels(): ProviderModelRecord[] {
         const rows = this.db.prepare(`
           SELECT id, provider, model, label, source, enabled, last_discovered_at
