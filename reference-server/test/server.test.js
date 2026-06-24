@@ -1,22 +1,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
+
+const PORT = 3000;
+const BASE = `http://localhost:${PORT}`;
+
+// Poll until the server answers /health, instead of a fixed sleep — a fixed
+// delay is flaky on slow hosts (Windows CI, constrained containers).
+async function waitForReady(maxMs = 20_000) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    try {
+      const r = await fetch(`${BASE}/health`);
+      if (r.status === 200) return;
+    } catch { /* not ready yet */ }
+    await setTimeout(200);
+  }
+  throw new Error('server never became ready');
+}
+
+function stop(server) {
+  try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* already dead */ }
+}
+
+function startServer() {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-server-test-'));
+  const dbPath = path.join(tmp, 'ozwell.db');
+  const server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+    detached: true,
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development' }
+  });
+  return { server, tmp };
+}
+
+function cleanup(server, tmp) {
+  stop(server);
+  try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+}
 
 test('Reference Server - Health Check', async () => {
   // Start the server in a new process group
-  const server = spawn('npm', ['start'], {
-    cwd: process.cwd(),
-    stdio: 'pipe',
-    detached: true
-  });
+  // Spawn the prebuilt server with node directly (not `npm start`): npm is
+  // npm.cmd on Windows and `spawn('npm')` fails with ENOENT without a shell.
+  const { server, tmp } = startServer();
 
   try {
-    // Wait for server to start
-    await setTimeout(3000);
+    await waitForReady();
 
     // Test health endpoint
-    const response = await fetch('http://localhost:3000/health');
+    const response = await fetch(`${BASE}/health`);
     assert.strictEqual(response.status, 200);
 
     const data = await response.json();
@@ -24,32 +62,21 @@ test('Reference Server - Health Check', async () => {
     assert.ok(data.timestamp, 'should have a timestamp');
 
   } finally {
-    // Kill entire process group (negative PID kills process group)
-    try {
-      process.kill(-server.pid, 'SIGTERM');
-      await setTimeout(1000);
-      // Force kill if still running
-      process.kill(-server.pid, 'SIGKILL');
-    } catch (err) {
-      // Process already dead, ignore error
-    }
+    cleanup(server, tmp);
   }
 });
 
 test('Reference Server - OpenAPI Spec', async () => {
   // Start the server in a new process group
-  const server = spawn('npm', ['start'], {
-    cwd: process.cwd(),
-    stdio: 'pipe',
-    detached: true
-  });
+  // Spawn the prebuilt server with node directly (not `npm start`): npm is
+  // npm.cmd on Windows and `spawn('npm')` fails with ENOENT without a shell.
+  const { server, tmp } = startServer();
 
   try {
-    // Wait for server to start
-    await setTimeout(3000);
+    await waitForReady();
 
     // Test OpenAPI endpoint
-    const response = await fetch('http://localhost:3000/openapi.json');
+    const response = await fetch(`${BASE}/openapi.json`);
     assert.strictEqual(response.status, 200);
 
     const spec = await response.json();
@@ -58,14 +85,6 @@ test('Reference Server - OpenAPI Spec', async () => {
     assert.ok(spec.paths);
 
   } finally {
-    // Kill entire process group (negative PID kills process group)
-    try {
-      process.kill(-server.pid, 'SIGTERM');
-      await setTimeout(1000);
-      // Force kill if still running
-      process.kill(-server.pid, 'SIGKILL');
-    } catch (err) {
-      // Process already dead, ignore error
-    }
+    cleanup(server, tmp);
   }
 });

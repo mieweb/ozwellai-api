@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,9 @@ async function waitForReady(maxMs = 10_000) {
 function startServer() {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
-    const server = spawn('npm', ['run', 'dev'], {
+    // Spawn the prebuilt server with node directly (not `npm start`): npm is
+    // npm.cmd on Windows and `spawn('npm')` fails with ENOENT without a shell.
+    const server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
@@ -38,7 +40,16 @@ function startServer() {
 }
 
 function stopServer(server, tmp) {
-    try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    // Windows has no POSIX process groups — process.kill(-pid) throws and leaves
+    // the server alive, so later tests bind-collide or hit a stale server.
+    // Use taskkill /T to kill the whole tree on Windows.
+    try {
+        if (process.platform === 'win32') {
+            spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']);
+        } else {
+            process.kill(-server.pid, 'SIGKILL');
+        }
+    } catch { /* ignore */ }
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
