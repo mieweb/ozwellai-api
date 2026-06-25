@@ -45,7 +45,7 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
           }
         } else {
           // Drain extra file streams
-          for await (const _ of part.file) { /* drain */ }
+          part.file.resume();
         }
       } else {
         fields[part.fieldname] = { value: part.value };
