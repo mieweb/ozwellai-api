@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, isLLMBackendConfigured } from '../util';
+import { validateAuth, createError, extractToken, isLLMBackendConfigured } from '../util';
+import { agentStore } from '../storage/agents';
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
@@ -25,6 +26,13 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     if (!validateAuth(request.headers.authorization)) {
       reply.code(401);
       return createError('Invalid API key provided', 'invalid_request_error');
+    }
+
+    // Validate token exists in database
+    const token = extractToken(request.headers.authorization);
+    if (!agentStore.validateKey(token)) {
+      reply.code(401);
+      return createError('API key not found. Verify the key exists in the database.', 'invalid_request_error');
     }
 
     // Parse all multipart parts in order-independent fashion

@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const API_KEY = 'ozw_test-audio-key';
+const API_KEY = 'ozw_demo_localhost_key_for_testing';
 const PORT = 3335;
 const BASE = `http://localhost:${PORT}`;
 
@@ -202,6 +202,18 @@ test('audio transcription — 401 with invalid key', async () => {
     body: form,
   });
   assert.equal(r.status, 401);
+});
+
+test('audio transcription — 401 with well-formed but unregistered key', async () => {
+  const form = createAudioFormData({ model: 'whisper-1' });
+  const r = await fetch(`${BASE}/v1/audio/transcriptions`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ozw_does_not_exist' },
+    body: form,
+  });
+  assert.equal(r.status, 401);
+  const json = await r.json();
+  assert.match(json.error.message, /not found/i);
 });
 
 test('audio transcription — 400 without model', async () => {
