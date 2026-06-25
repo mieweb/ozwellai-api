@@ -295,10 +295,18 @@ export class OzwellAI {
   /**
    * Create an audio transcription.
    * Transcribes audio into text using the specified model (e.g., whisper-1).
+   *
+   * Returns `string` for text/srt/vtt formats, `AudioTranscriptionResponse` for json/verbose_json.
    */
   async createTranscription(
+    request: AudioTranscriptionRequest & { response_format: 'text' | 'srt' | 'vtt' }
+  ): Promise<string>;
+  async createTranscription(
+    request: AudioTranscriptionRequest & { response_format?: 'json' | 'verbose_json' }
+  ): Promise<AudioTranscriptionResponse>;
+  async createTranscription(
     request: AudioTranscriptionRequest
-  ): Promise<AudioTranscriptionResponse> {
+  ): Promise<AudioTranscriptionResponse | string> {
     const formData = new FormData();
     formData.append('file', request.file);
     formData.append('model', request.model);
@@ -315,7 +323,7 @@ export class OzwellAI {
       ? 'text'
       : 'json';
 
-    return this.makeRequest<AudioTranscriptionResponse>('/v1/audio/transcriptions', {
+    return this.makeRequest<AudioTranscriptionResponse | string>('/v1/audio/transcriptions', {
       method: 'POST',
       body: formData,
     }, responseType);

@@ -56,7 +56,17 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
           part.file.resume();
         }
       } else {
-        fields[part.fieldname] = { value: part.value };
+        // Accumulate repeated fields (e.g. timestamp_granularities) into arrays
+        if (fields[part.fieldname]) {
+          const existing = fields[part.fieldname].value;
+          fields[part.fieldname] = {
+            value: Array.isArray(existing)
+              ? [...existing, part.value]
+              : [existing, part.value],
+          };
+        } else {
+          fields[part.fieldname] = { value: part.value };
+        }
       }
     }
 
@@ -66,6 +76,17 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     }
     const model = fields.model?.value as string | undefined;
     const responseFormat = (fields.response_format?.value as string) || 'json';
+
+    // Validate response_format
+    const validFormats = ['json', 'text', 'srt', 'verbose_json', 'vtt'];
+    if (!validFormats.includes(responseFormat)) {
+      reply.code(400);
+      return createError(
+        `Invalid response_format '${responseFormat}'. Supported formats: ${validFormats.join(', ')}`,
+        'invalid_request_error',
+        'response_format',
+      );
+    }
     const language = fields.language?.value as string | undefined;
     const temperature = fields.temperature?.value as string | undefined;
     const rawGranularities = fields.timestamp_granularities?.value;

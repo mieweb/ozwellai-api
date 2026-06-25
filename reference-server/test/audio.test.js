@@ -240,6 +240,37 @@ test('audio transcription — 400 with unsupported model', async () => {
   assert.match(json.error.message, /not found/);
 });
 
+test('audio transcription — 400 with invalid response_format', async () => {
+  const form = createAudioFormData({ model: 'whisper-1', responseFormat: 'foo' });
+  const r = await fetch(`${BASE}/v1/audio/transcriptions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}` },
+    body: form,
+  });
+  assert.equal(r.status, 400);
+  const json = await r.json();
+  assert.match(json.error.message, /Invalid response_format/);
+});
+
+test('audio transcription — verbose_json with both word and segment granularities', async () => {
+  const form = createAudioFormData({
+    model: 'whisper-1',
+    responseFormat: 'verbose_json',
+    granularities: ['word', 'segment'],
+  });
+  const r = await fetch(`${BASE}/v1/audio/transcriptions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}` },
+    body: form,
+  });
+  assert.equal(r.status, 200);
+  const json = await r.json();
+  assert.ok(Array.isArray(json.words), 'expected words array when both granularities requested');
+  assert.ok(json.words.length > 0);
+  assert.ok(Array.isArray(json.segments), 'expected segments array when both granularities requested');
+  assert.ok(json.segments.length > 0);
+});
+
 test('audio transcription — 400 with invalid file type', async () => {
   const form = new FormData();
   form.append('file', new Blob(['not audio'], { type: 'text/plain' }), 'test.txt');
