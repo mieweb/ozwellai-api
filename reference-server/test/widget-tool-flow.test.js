@@ -3,10 +3,20 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
+const WIDGET_APP_PATH = new URL('../embed/src/WidgetApp.tsx', import.meta.url);
+const WIDGET_TYPES_PATH = new URL('../embed/src/types.ts', import.meta.url);
 const LOADER_PATH = new URL('../embed/ozwell-loader.js', import.meta.url);
 
 async function readWidgetSource() {
   return readFile(WIDGET_PATH, 'utf8');
+}
+
+async function readWidgetAppSource() {
+  return readFile(WIDGET_APP_PATH, 'utf8');
+}
+
+async function readWidgetTypesSource() {
+  return readFile(WIDGET_TYPES_PATH, 'utf8');
 }
 
 async function readLoaderSource() {
@@ -73,4 +83,28 @@ test('loader returns a tool error if the page handler never responds', async () 
   assert.match(source, /function finishToolCall\(message\)/);
   assert.match(source, /Tool "\$\{toolName\}" did not respond/);
   assert.match(source, /call respond\(\) or error\(\)/);
+});
+
+test('widget fetches effective provider model options for the selector', async () => {
+  const appSource = await readWidgetAppSource();
+  const bundleSource = await readWidgetSource();
+
+  assert.match(appSource, /\/v1\/models\/effective/);
+  assert.match(appSource, /function effectiveModelsEndpoint/);
+  assert.match(bundleSource, /\/v1\/models\/effective/);
+});
+
+test('widget chat payload can include selected provider and model', async () => {
+  const appSource = await readWidgetAppSource();
+  const typesSource = await readWidgetTypesSource();
+
+  assert.match(typesSource, /provider\?: string/);
+  assert.match(appSource, /requestBody\.provider = selectedModel\.provider/);
+  assert.match(appSource, /requestBody\.model = selectedModel\.model/);
+});
+
+test('widget preserves legacy model-only chat config when no provider is resolved', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(appSource, /else if \(configRef\.current\.model\) requestBody\.model = configRef\.current\.model;/);
 });
