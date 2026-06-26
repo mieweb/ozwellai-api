@@ -164,3 +164,18 @@ test('multimodal content — file content part streams without crashing', async 
     const text = await r.text();
     assert.ok(text.includes('data: [DONE]'), 'stream terminates with [DONE]');
 });
+
+test('multimodal content — invalid object content is rejected', async () => {
+    const r = await fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: H,
+        body: JSON.stringify({
+            messages: [{ role: 'user', content: { unexpected: 'object' } }],
+        }),
+    });
+
+    assert.equal(r.status, 400);
+    const j = await r.json();
+    assert.equal(j.error.type, 'invalid_request_error');
+    assert.equal(j.error.param, 'messages[0].content');
+});

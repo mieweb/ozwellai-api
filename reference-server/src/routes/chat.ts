@@ -63,6 +63,27 @@ type ChatMessage = {
   tool_calls?: ToolCall[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidMessageContent(content: unknown): boolean {
+  if (content == null || typeof content === 'string') return true;
+  if (!Array.isArray(content)) return false;
+
+  return content.every((part) => {
+    if (!isRecord(part)) return false;
+    if (part.type === 'text') return typeof part.text === 'string';
+    if (part.type === 'image_url') {
+      return isRecord(part.image_url) && typeof part.image_url.url === 'string';
+    }
+    if (part.type === 'file') {
+      return isRecord(part.file) && typeof part.file.file_data === 'string';
+    }
+    return false;
+  });
+}
+
 // Helper: try to detect tool calls from JSON content and convert to ToolCall[]
 function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
   if (!content) return null;
@@ -469,6 +490,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
+    const invalidMessageIndex = (body.messages as Message[]).findIndex((m) => !isValidMessageContent(m.content));
+    if (invalidMessageIndex !== -1) {
+      reply.code(400);
+      return createError(
+        `Invalid messages[${invalidMessageIndex}].content`,
+        'invalid_request_error',
+        `messages[${invalidMessageIndex}].content`
+      );
+    }
 
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
