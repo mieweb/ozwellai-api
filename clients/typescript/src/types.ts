@@ -1,6 +1,15 @@
 // Minimal type definitions for JSR publishing
 // Full spec available at: https://github.com/mieweb/ozwellai-api/tree/main/spec
 
+/** A single multimodal content part (OpenAI-compatible). */
+export type ContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } }
+  | { type: 'file'; file: { file_data: string; filename?: string } };
+
+/** Message content: plain text, or an array of content parts (text + images + files). */
+export type MessageContent = string | ContentPart[];
+
 /**
  * Request object for chat completion API calls.
  * Compatible with OpenAI's chat completion format.
@@ -12,8 +21,8 @@ export interface ChatCompletionRequest {
   messages: Array<{
     /** The role of the messages author */
     role: 'system' | 'user' | 'assistant' | 'function' | 'tool';
-    /** The contents of the message */
-    content: string;
+    /** The contents of the message — text string or multimodal content parts */
+    content: MessageContent;
     /** The name of the author of this message */
     name?: string;
   }>;

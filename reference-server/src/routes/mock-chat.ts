@@ -2,9 +2,42 @@
 // Used by the chat route to bypass the LLM for `type: mock` agents
 // and as a final fallback when no LLM backend is reachable.
 
+// A single multimodal content part (OpenAI-compatible). Only the text portion
+// is meaningful for the deterministic mock; image parts are ignored.
+export interface ContentPart {
+  type?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+// Message content may be a plain string or an array of multimodal parts
+// (text + image_url) for vision requests.
+export type MessageContent = string | ContentPart[];
+
 export interface ChatMessage {
   role: string;
-  content: string;
+  content: MessageContent;
+}
+
+// Flatten a message's content into a plain string. Strings pass through; arrays
+// of content parts are reduced to their concatenated `text` fields. This keeps
+// downstream string operations (e.g. toLowerCase, JSON.parse) safe when callers
+// send multimodal content arrays.
+export function contentToText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part;
+        if (part && typeof part === 'object' && typeof (part as ContentPart).text === 'string') {
+          return (part as ContentPart).text as string;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+  return '';
 }
 
 export interface ToolCall {
@@ -19,7 +52,9 @@ export interface ToolCall {
 export function extractUserMessage(messages: ChatMessage[]): string {
   // Get the last user message
   const lastUserMsg = messages.filter(msg => msg.role === 'user').pop();
-  return lastUserMsg?.content || '';
+  // Content may be a multimodal array (text + image_url); flatten to text so
+  // callers can safely run string operations on the result.
+  return contentToText(lastUserMsg?.content);
 }
 
 export function hasToolResult(messages: ChatMessage[]): boolean {
@@ -37,10 +72,11 @@ export function extractToolResult(messages: ChatMessage[]): Record<string, unkno
   const toolMsg = toolMessages[toolMessages.length - 1];
   if (!toolMsg) return null;
 
+  const raw = contentToText(toolMsg.content);
   try {
-    return JSON.parse(toolMsg.content);
+    return JSON.parse(raw);
   } catch {
-    return { message: toolMsg.content };
+    return { message: raw };
   }
 }
 

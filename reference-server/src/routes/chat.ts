@@ -5,7 +5,7 @@ import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
-import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, type ChatMessage as MockChatMessage } from './mock-chat';
+import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -22,7 +22,7 @@ type ToolFunction = {
 type ToolDef = { type: 'function'; function: ToolFunction };
 type ToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & { tools?: ToolDef[] };
-type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
+type NonNullableMessage = { role: Message['role']; content: NonNullable<Message['content']>; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
 type JSONSchemaParameters = {
@@ -62,6 +62,27 @@ type ChatMessage = {
   content?: string;
   tool_calls?: ToolCall[];
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidMessageContent(content: unknown): boolean {
+  if (content == null || typeof content === 'string') return true;
+  if (!Array.isArray(content)) return false;
+
+  return content.every((part) => {
+    if (!isRecord(part)) return false;
+    if (part.type === 'text') return typeof part.text === 'string';
+    if (part.type === 'image_url') {
+      return isRecord(part.image_url) && typeof part.image_url.url === 'string';
+    }
+    if (part.type === 'file') {
+      return isRecord(part.file) && typeof part.file.file_data === 'string';
+    }
+    return false;
+  });
+}
 
 // Helper: try to detect tool calls from JSON content and convert to ToolCall[]
 function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
@@ -329,7 +350,7 @@ function dispatchMockNonStream(
   warning: MockWarning,
 ) {
   const { assistantMsg, finishReason } = buildMockAssistant(messages);
-  const promptText = messages.map((m) => m.content).join(' ');
+  const promptText = messages.map((m) => contentToText(m.content)).join(' ');
   const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
   const promptTokens = countTokens(promptText);
   const completionTokens = countTokens(completionText);
@@ -455,7 +476,20 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               additionalProperties: true,
               properties: {
                 role: { type: 'string' },
-                content: { type: 'string' },
+                // Content may be a plain string (text) or an array of
+                // multimodal content parts (text + image_url) for vision.
+                //
+                // NOTE: We intentionally leave this schema unconstrained (no
+                // `type`/`anyOf`). Fastify's default ajv runs with
+                // `coerceTypes: true`, which unwraps a single-element array
+                // (`[x]` -> `x`) while attempting the scalar `string` branch of
+                // an `anyOf`. That mutation corrupted the payload and made
+                // single-part content arrays (e.g. one image_url) fail
+                // validation with FST_ERR_VALIDATION. An empty schema accepts
+                // string | array | object | null without any coercion; the
+                // route normalizes content at runtime (see normalizedMessages
+                // and contentToText).
+                content: {},
                 tool_calls: { type: 'array' },
                 tool_call_id: { type: 'string' }
               },
@@ -502,6 +536,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as ChatCompletionRequestWithTools;
+    const invalidMessageIndex = (body.messages as Message[]).findIndex((m) => !isValidMessageContent(m.content));
+    if (invalidMessageIndex !== -1) {
+      reply.code(400);
+      return createError(
+        `Invalid messages[${invalidMessageIndex}].content`,
+        'invalid_request_error',
+        `messages[${invalidMessageIndex}].content`
+      );
+    }
 
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;

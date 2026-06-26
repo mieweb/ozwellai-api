@@ -18,8 +18,17 @@ import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from '
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
+const DEFAULT_BODY_LIMIT_MB = 50;
+
+function getBodyLimitBytes(): number {
+  const raw = parseInt(process.env.BODY_LIMIT_MB || `${DEFAULT_BODY_LIMIT_MB}`, 10);
+  const mb = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BODY_LIMIT_MB;
+  return mb * 1024 * 1024;
+}
+
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
+  bodyLimit: getBodyLimitBytes(),
 });
 
 async function buildServer() {

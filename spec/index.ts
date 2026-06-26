@@ -1,9 +1,38 @@
 import { z } from 'zod';
 
+// Multimodal content parts (OpenAI-compatible).
+// A message's `content` may be a plain string, or an array of typed parts
+// to support vision (image) inputs alongside text.
+export const TextContentPartSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+
+export const ImageContentPartSchema = z.object({
+  type: z.literal('image_url'),
+  image_url: z.object({
+    url: z.string(),
+    detail: z.enum(['auto', 'low', 'high']).optional(),
+  }),
+});
+
+export const FileContentPartSchema = z.object({
+  type: z.literal('file'),
+  file: z.object({
+    file_data: z.string(),
+    filename: z.string().optional(),
+  }),
+});
+
+export const ContentPartSchema = z.union([TextContentPartSchema, ImageContentPartSchema, FileContentPartSchema]);
+
+// Message content: a string, or an array of content parts (text + images + files).
+export const MessageContentSchema = z.union([z.string(), z.array(ContentPartSchema)]);
+
 // Common schemas
 export const MessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'function', 'tool']),
-  content: z.string().nullable(),
+  content: MessageContentSchema.nullable(),
   name: z.string().optional(),
   function_call: z.object({
     name: z.string(),
@@ -168,6 +197,11 @@ export const ChatCompletionChunkSchema = z.object({
   })),
 });
 
+export type TextContentPart = z.infer<typeof TextContentPartSchema>;
+export type ImageContentPart = z.infer<typeof ImageContentPartSchema>;
+export type FileContentPart = z.infer<typeof FileContentPartSchema>;
+export type ContentPart = z.infer<typeof ContentPartSchema>;
+export type MessageContent = z.infer<typeof MessageContentSchema>;
 export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
