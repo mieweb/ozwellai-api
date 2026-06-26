@@ -143,6 +143,29 @@ const models = await client.listModels();
 console.log(models.data);
 ```
 
+### Audio Transcription
+
+```typescript
+// Transcribe an audio file
+const transcription = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+});
+
+console.log(transcription.text);
+
+// With options
+const detailed = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+  response_format: 'verbose_json',
+  language: 'en',
+  timestamp_granularities: ['word', 'segment'],
+});
+
+console.log('Duration:', detailed.duration);
+```
+
 ### Ozwell-Specific Features
 
 ```typescript
@@ -160,6 +183,8 @@ This package is written in TypeScript and includes full type definitions. All AP
 
 ```typescript
 import type {
+  AudioTranscriptionRequest,
+  AudioTranscriptionResponse,
   ChatCompletionRequest,
   ChatCompletionResponse,
   EmbeddingRequest,

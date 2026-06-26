@@ -215,3 +215,44 @@ export type FileObject = z.infer<typeof FileObjectSchema>;
 export type FileListResponse = z.infer<typeof FileListResponseSchema>;
 export type ModelsListResponse = z.infer<typeof ModelsListResponseSchema>;
 export type ChatCompletionChunk = z.infer<typeof ChatCompletionChunkSchema>;
+
+// Audio transcription schemas
+export const AudioTranscriptionRequestSchema = z.object({
+  file: z.any().describe('Audio file (mp3, mp4, mpeg, mpga, m4a, wav, webm)'),
+  model: z.string(),
+  response_format: z.enum(['json', 'text', 'srt', 'verbose_json', 'vtt']).optional(),
+  language: z.string().optional(),
+  temperature: z.number().min(0).max(1).optional(),
+  timestamp_granularities: z.array(z.enum(['word', 'segment'])).optional(),
+});
+
+export const TranscriptionWordSchema = z.object({
+  word: z.string(),
+  start: z.number(),
+  end: z.number(),
+});
+
+export const TranscriptionSegmentSchema = z.object({
+  id: z.number(),
+  seek: z.number().optional(),
+  start: z.number(),
+  end: z.number(),
+  text: z.string(),
+  tokens: z.array(z.number()).optional(),
+  temperature: z.number().optional(),
+  avg_logprob: z.number().optional(),
+  compression_ratio: z.number().optional(),
+  no_speech_prob: z.number().optional(),
+});
+
+export const AudioTranscriptionResponseSchema = z.object({
+  task: z.literal('transcribe'),
+  language: z.string(),
+  duration: z.number(),
+  text: z.string(),
+  words: z.array(TranscriptionWordSchema).optional(),
+  segments: z.array(TranscriptionSegmentSchema).optional(),
+});
+
+export type AudioTranscriptionRequest = z.infer<typeof AudioTranscriptionRequestSchema>;
+export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponseSchema>;

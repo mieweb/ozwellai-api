@@ -25,7 +25,7 @@ export interface ChatCompletionRequest {
     content: MessageContent;
     /** The name of the author of this message */
     name?: string;
-  }>;
+  }>; 
   /** The maximum number of tokens to generate in the chat completion */
   max_tokens?: number;
   /** What sampling temperature to use, between 0 and 2 */
@@ -291,5 +291,58 @@ export interface ChatCompletionChunk {
     };
     /** The reason the model stopped generating tokens */
     finish_reason: 'stop' | 'length' | 'function_call' | 'tool_calls' | 'content_filter' | null;
+  }>;
+}
+
+/**
+ * Request object for audio transcription API calls.
+ * Transcribes audio into text using a specified model.
+ */
+export interface AudioTranscriptionRequest {
+  /** Audio file to transcribe (mp3, mp4, mpeg, mpga, m4a, wav, webm) */
+  file: File | Blob;
+  /** Model ID to use (e.g., "whisper-1") */
+  model: string;
+  /** Output format: json, text, srt, verbose_json, or vtt (default: json) */
+  response_format?: 'json' | 'text' | 'srt' | 'verbose_json' | 'vtt';
+  /** ISO-639-1 language code */
+  language?: string;
+  /** Sampling temperature (0-1) */
+  temperature?: number;
+  /** Timestamp granularities: word, segment, or both */
+  timestamp_granularities?: Array<'word' | 'segment'>;
+}
+
+/**
+ * Response object from audio transcription API calls.
+ * Contains the transcribed text and optional timing information.
+ */
+export interface AudioTranscriptionResponse {
+  /** The task performed */
+  task: 'transcribe';
+  /** The language of the audio */
+  language: string;
+  /** Duration of the audio in seconds */
+  duration: number;
+  /** The transcribed text */
+  text: string;
+  /** Word-level timestamps (when requested) */
+  words?: Array<{
+    word: string;
+    start: number;
+    end: number;
+  }>;
+  /** Segment-level timestamps (when requested) */
+  segments?: Array<{
+    id: number;
+    seek?: number;
+    start: number;
+    end: number;
+    text: string;
+    tokens?: number[];
+    temperature?: number;
+    avg_logprob?: number;
+    compression_ratio?: number;
+    no_speech_prob?: number;
   }>;
 }
