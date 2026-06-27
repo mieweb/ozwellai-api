@@ -32,10 +32,10 @@ test('widget tool results are sent back with the matching OpenAI tool_call_id', 
   const source = await readWidgetSource();
 
   assert.match(source, /const toolCallId = data\.id;/);
-  assert.match(source, /role:\s*'tool'/);
+  assert.match(source, /role:\s*"tool"/);
   assert.match(source, /tool_call_id:\s*toolCallId/);
   assert.match(source, /content:\s*serializeToolResult\(result\)/);
-  assert.match(source, /sendMessageStreaming\('', tools\)/);
+  assert.match(source, /sendMessageStreaming\("", tools, thinkingRetryCount \+ 1\)/);
 });
 
 test('widget accepts falsy JSON-RPC ids and always serializes tool result content as a string', async () => {
@@ -44,7 +44,7 @@ test('widget accepts falsy JSON-RPC ids and always serializes tool result conten
   assert.match(source, /if \(toolCallId == null\)/);
   assert.doesNotMatch(source, /if \(!toolCallId\)/);
   assert.match(source, /function serializeToolResult\(result\)/);
-  assert.match(source, /return serialized === undefined \? 'null' : serialized;/);
+  assert.match(source, /return serialized === void 0 \? "null" : serialized;/);
 });
 
 test('loader strips callable tool functions before sending config through postMessage', async () => {
