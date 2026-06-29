@@ -313,6 +313,56 @@ console.log('File deleted');
 
 ---
 
+## Audio Transcription
+
+### Basic Transcription
+
+```typescript
+import fs from 'fs';
+
+const transcription = await client.audio.transcriptions.create({
+  file: fs.createReadStream('audio.mp3'),
+  model: 'whisper-1',
+});
+
+console.log(transcription.text);
+```
+
+### With Options
+
+```typescript
+const transcription = await client.audio.transcriptions.create({
+  file: fs.createReadStream('meeting.m4a'),
+  model: 'whisper-1',
+  language: 'en',
+  response_format: 'verbose_json',
+  timestamp_granularities: ['word', 'segment'],
+});
+
+console.log('Duration:', transcription.duration);
+console.log('Text:', transcription.text);
+
+// Word-level timestamps
+for (const word of transcription.words) {
+  console.log(`${word.word}: ${word.start}s - ${word.end}s`);
+}
+```
+
+### Subtitle Generation
+
+```typescript
+// Get SRT subtitles
+const srt = await client.audio.transcriptions.create({
+  file: fs.createReadStream('video-audio.mp3'),
+  model: 'whisper-1',
+  response_format: 'srt',
+});
+
+fs.writeFileSync('subtitles.srt', srt);
+```
+
+---
+
 ## Error Handling
 
 ### Basic Error Handling

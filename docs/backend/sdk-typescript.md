@@ -342,6 +342,52 @@ await client.files.delete('file-abc123');
 
 ---
 
+## Audio
+
+### Transcribe Audio
+
+```typescript
+const transcription = await client.createTranscription({
+  file: new File([audioBuffer], 'recording.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+});
+
+console.log(transcription.text);
+```
+
+### Response Formats
+
+```typescript
+// Get verbose JSON with timestamps
+const verbose = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+  response_format: 'verbose_json',
+  timestamp_granularities: ['word', 'segment'],
+});
+
+console.log('Duration:', verbose.duration);
+for (const word of verbose.words) {
+  console.log(`${word.word}: ${word.start}s - ${word.end}s`);
+}
+
+// Get plain text
+const text = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+  response_format: 'text',
+});
+
+// Get SRT subtitles
+const srt = await client.createTranscription({
+  file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
+  model: 'whisper-1',
+  response_format: 'srt',
+});
+```
+
+---
+
 ## Error Handling
 
 ### Error Types

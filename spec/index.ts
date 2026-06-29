@@ -1,9 +1,38 @@
 import { z } from 'zod';
 
+// Multimodal content parts (OpenAI-compatible).
+// A message's `content` may be a plain string, or an array of typed parts
+// to support vision (image) inputs alongside text.
+export const TextContentPartSchema = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+
+export const ImageContentPartSchema = z.object({
+  type: z.literal('image_url'),
+  image_url: z.object({
+    url: z.string(),
+    detail: z.enum(['auto', 'low', 'high']).optional(),
+  }),
+});
+
+export const FileContentPartSchema = z.object({
+  type: z.literal('file'),
+  file: z.object({
+    file_data: z.string(),
+    filename: z.string().optional(),
+  }),
+});
+
+export const ContentPartSchema = z.union([TextContentPartSchema, ImageContentPartSchema, FileContentPartSchema]);
+
+// Message content: a string, or an array of content parts (text + images + files).
+export const MessageContentSchema = z.union([z.string(), z.array(ContentPartSchema)]);
+
 // Common schemas
 export const MessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'function', 'tool']),
-  content: z.string().nullable(),
+  content: MessageContentSchema.nullable(),
   name: z.string().optional(),
   function_call: z.object({
     name: z.string(),
@@ -168,6 +197,11 @@ export const ChatCompletionChunkSchema = z.object({
   })),
 });
 
+export type TextContentPart = z.infer<typeof TextContentPartSchema>;
+export type ImageContentPart = z.infer<typeof ImageContentPartSchema>;
+export type FileContentPart = z.infer<typeof FileContentPartSchema>;
+export type ContentPart = z.infer<typeof ContentPartSchema>;
+export type MessageContent = z.infer<typeof MessageContentSchema>;
 export type Message = z.infer<typeof MessageSchema>;
 export type Model = z.infer<typeof ModelSchema>;
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
@@ -181,3 +215,44 @@ export type FileObject = z.infer<typeof FileObjectSchema>;
 export type FileListResponse = z.infer<typeof FileListResponseSchema>;
 export type ModelsListResponse = z.infer<typeof ModelsListResponseSchema>;
 export type ChatCompletionChunk = z.infer<typeof ChatCompletionChunkSchema>;
+
+// Audio transcription schemas
+export const AudioTranscriptionRequestSchema = z.object({
+  file: z.any().describe('Audio file (mp3, mp4, mpeg, mpga, m4a, wav, webm)'),
+  model: z.string(),
+  response_format: z.enum(['json', 'text', 'srt', 'verbose_json', 'vtt']).optional(),
+  language: z.string().optional(),
+  temperature: z.number().min(0).max(1).optional(),
+  timestamp_granularities: z.array(z.enum(['word', 'segment'])).optional(),
+});
+
+export const TranscriptionWordSchema = z.object({
+  word: z.string(),
+  start: z.number(),
+  end: z.number(),
+});
+
+export const TranscriptionSegmentSchema = z.object({
+  id: z.number(),
+  seek: z.number().optional(),
+  start: z.number(),
+  end: z.number(),
+  text: z.string(),
+  tokens: z.array(z.number()).optional(),
+  temperature: z.number().optional(),
+  avg_logprob: z.number().optional(),
+  compression_ratio: z.number().optional(),
+  no_speech_prob: z.number().optional(),
+});
+
+export const AudioTranscriptionResponseSchema = z.object({
+  task: z.literal('transcribe'),
+  language: z.string(),
+  duration: z.number(),
+  text: z.string(),
+  words: z.array(TranscriptionWordSchema).optional(),
+  segments: z.array(TranscriptionSegmentSchema).optional(),
+});
+
+export type AudioTranscriptionRequest = z.infer<typeof AudioTranscriptionRequestSchema>;
+export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponseSchema>;

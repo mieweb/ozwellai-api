@@ -246,6 +246,76 @@ GET /v1/files/{file_id}/content
 
 ---
 
+## Audio
+
+### Create Transcription
+
+Transcribes audio into the input language.
+
+```
+POST /v1/audio/transcriptions
+```
+
+This is a multipart/form-data endpoint.
+
+#### Request Body (multipart/form-data)
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file | Yes | The audio file to transcribe. Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm |
+| `model` | string | Yes | Model ID (currently `whisper-1`) |
+| `language` | string | No | Language code in ISO-639-1 format |
+| `response_format` | string | No | Output format: `json`, `text`, `srt`, `verbose_json`, `vtt`. Default: `json` |
+| `temperature` | number | No | Sampling temperature (0-1). Default: 0 |
+| `timestamp_granularities` | array | No | Timestamp granularities: `word`, `segment`. Requires `verbose_json` format |
+
+#### Example Request
+
+```bash
+curl https://ozwellapi.opensource.mieweb.org/v1/audio/transcriptions \
+  -H "Authorization: Bearer $OZWELL_API_KEY" \
+  -F "file=@audio.mp3" \
+  -F model=whisper-1
+```
+
+#### Response (json format)
+
+```json
+{
+  "text": "Hello, this is a transcription of the audio file."
+}
+```
+
+#### Response (verbose_json format)
+
+```json
+{
+  "task": "transcribe",
+  "language": "english",
+  "duration": 3.0,
+  "text": "Hello, this is a transcription of the audio file.",
+  "words": [
+    { "word": "Hello", "start": 0.0, "end": 0.5 }
+  ],
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 3.0,
+      "text": "Hello, this is a transcription of the audio file.",
+      "tokens": [50364, 639, 307],
+      "temperature": 0.0,
+      "avg_logprob": -0.25,
+      "compression_ratio": 1.0,
+      "no_speech_prob": 0.01
+    }
+  ]
+}
+```
+
+---
+
 ## Models
 
 ### List Models

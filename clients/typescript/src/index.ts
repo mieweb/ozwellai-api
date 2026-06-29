@@ -9,6 +9,8 @@ import type {
   FileListResponse,
   ResponseRequest,
   Response,
+  AudioTranscriptionRequest,
+  AudioTranscriptionResponse,
 } from './types.ts';
 
 /**
@@ -83,19 +85,26 @@ export class OzwellAI {
 
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    responseType: 'json' | 'text' = 'json'
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      const headers: Record<string, string> = {
+        ...this.defaultHeaders,
+        ...options.headers as Record<string, string>,
+      };
+      // Let fetch set Content-Type with the multipart boundary
+      if (options.body instanceof FormData) {
+        delete headers['Content-Type'];
+      }
+
       const response = await fetch(url, {
         ...options,
-        headers: {
-          ...this.defaultHeaders,
-          ...options.headers,
-        },
+        headers,
         signal: controller.signal,
       });
 
@@ -105,6 +114,9 @@ export class OzwellAI {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      if (responseType === 'text') {
+        return await response.text() as T;
+      }
       return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
@@ -244,10 +256,6 @@ export class OzwellAI {
     return this.makeRequest<FileObject>('/v1/files', {
       method: 'POST',
       body: formData,
-      headers: {
-        ...(this.apiKey ? { 'Authorization': `Bearer ${this.apiKey}` } : {}),
-        // Don't set Content-Type, let browser set it with boundary for FormData
-      },
     });
   }
 
@@ -283,6 +291,43 @@ export class OzwellAI {
       body: JSON.stringify(request),
     });
   }
+
+  /**
+   * Create an audio transcription.
+   * Transcribes audio into text using the specified model (e.g., whisper-1).
+   *
+   * Returns `string` for text/srt/vtt formats, `AudioTranscriptionResponse` for json/verbose_json.
+   */
+  async createTranscription(
+    request: AudioTranscriptionRequest & { response_format: 'text' | 'srt' | 'vtt' }
+  ): Promise<string>;
+  async createTranscription(
+    request: AudioTranscriptionRequest & { response_format?: 'json' | 'verbose_json' }
+  ): Promise<AudioTranscriptionResponse>;
+  async createTranscription(
+    request: AudioTranscriptionRequest
+  ): Promise<AudioTranscriptionResponse | string> {
+    const formData = new FormData();
+    formData.append('file', request.file);
+    formData.append('model', request.model);
+    if (request.response_format) formData.append('response_format', request.response_format);
+    if (request.language) formData.append('language', request.language);
+    if (request.temperature !== undefined) formData.append('temperature', String(request.temperature));
+    if (request.timestamp_granularities) {
+      for (const g of request.timestamp_granularities) {
+        formData.append('timestamp_granularities', g);
+      }
+    }
+
+    const responseType = request.response_format && ['text', 'srt', 'vtt'].includes(request.response_format)
+      ? 'text'
+      : 'json';
+
+    return this.makeRequest<AudioTranscriptionResponse | string>('/v1/audio/transcriptions', {
+      method: 'POST',
+      body: formData,
+    }, responseType);
+  }
 }
 
 export default OzwellAI;
@@ -299,4 +344,6 @@ export type {
   FileListResponse,
   ResponseRequest,
   Response,
+  AudioTranscriptionRequest,
+  AudioTranscriptionResponse,
 } from './types.ts';
