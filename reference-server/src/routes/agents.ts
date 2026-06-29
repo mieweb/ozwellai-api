@@ -2,7 +2,7 @@ import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
 import * as yaml from 'yaml';
 import { agentStore, Agent, ManagerIdentity, ManagerUser } from '../storage/agents';
-import { getModelsList } from './models';
+import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -200,6 +200,13 @@ function normalizeRestrictionBody(body: { allowed_models?: ProviderModelSelectio
             provider: item.provider as string,
             model: typeof item.model === 'string' ? item.model : null,
         }));
+}
+
+function normalizeDefaultModel(value: unknown) {
+    if (!value || typeof value !== 'object') return null;
+    const record = value as Record<string, unknown>;
+    if (typeof record.provider !== 'string' || typeof record.model !== 'string') return null;
+    return { provider: record.provider, model: record.model };
 }
 
 /** Parse YAML into a loose object. Throws on invalid YAML. */
@@ -724,7 +731,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         },
         preHandler: requireManagerAdmin,
     }, async (request) => {
-        await getModelsList();
+        getCachedModelsList();
         return {
             parent_key_id: request.params.key_id,
             allowed_models: agentStore.getParentKeyModelRestrictions(request.params.key_id),
@@ -760,7 +767,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         },
         preHandler: requireManagerAdmin,
     }, async (request) => {
-        await getModelsList();
+        getCachedModelsList();
         const allowedModels = agentStore.setParentKeyModelRestrictions(
             request.params.key_id,
             normalizeRestrictionBody(request.body),
@@ -828,6 +835,45 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             reply.code(500);
             return createError('Parent key claim failed', 'server_error');
         }
+    });
+
+    fastify.get('/v1/manager/notifications', {
+        schema: { tags: ['Manager Auth'], summary: 'List manager-console notifications' },
+        preHandler: managerHeaderAuth,
+    }, async (request) => {
+        const notifications = agentStore.listNotificationsForUser(request.managerUser!.id);
+        return {
+            object: 'list',
+            unread_count: notifications.filter(item => !item.read_at).length,
+            data: notifications,
+        };
+    });
+
+    fastify.post('/v1/manager/notifications/read-all', {
+        schema: { tags: ['Manager Auth'], summary: 'Mark manager-console notifications read' },
+        preHandler: managerHeaderAuth,
+    }, async (request) => {
+        return { updated: agentStore.markAllNotificationsRead(request.managerUser!.id) };
+    });
+
+    fastify.post<{ Params: { notification_id: string } }>('/v1/manager/notifications/:notification_id/read', {
+        schema: {
+            tags: ['Manager Auth'],
+            summary: 'Mark one manager-console notification read',
+            params: {
+                type: 'object',
+                properties: { notification_id: { type: 'string' } },
+                required: ['notification_id'],
+            },
+        },
+        preHandler: managerHeaderAuth,
+    }, async (request, reply) => {
+        const notification = agentStore.markNotificationRead(request.managerUser!.id, request.params.notification_id);
+        if (!notification) {
+            reply.code(404);
+            return createError('Notification not found', 'invalid_request_error', 'notification_id', 'not_found');
+        }
+        return notification;
     });
 
     // GET /v1/keys/validate — lightweight auth check, accepts both ozw_ and agnt_key-
@@ -936,6 +982,59 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         },
         preHandler: managerHeaderAuth,
     }, createAgentForCurrentKey);
+
+    fastify.get<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id/model-policy', {
+        schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Get agent provider/model policy' },
+        preHandler: managerHeaderAuth,
+    }, async (request, reply) => {
+        const parentKey = request.apiKey!.id;
+        const agent = agentStore.getOwned(request.params.agent_id, parentKey);
+        if (!agent) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+        getCachedModelsList();
+        const policy = agentStore.getAgentModelPolicy(agent.id, agent.yaml);
+        return {
+            agent_id: agent.id,
+            default_model: policy.default_provider && policy.default_model
+                ? { provider: policy.default_provider, model: policy.default_model }
+                : null,
+            allowed_models: policy.allowed_models,
+            source: policy.source,
+            effective_models: agentStore.listEffectiveProviderModelsForAgent(parentKey, agent.id, agent.yaml),
+        };
+    });
+
+    fastify.put<{
+        Params: { agent_id: string };
+        Body: { default_model?: unknown; allowed_models?: ProviderModelSelectionBody[] };
+    }>('/v1/manager/agents/:agent_id/model-policy', {
+        schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Update agent provider/model policy' },
+        preHandler: managerHeaderAuth,
+    }, async (request, reply) => {
+        const parentKey = request.apiKey!.id;
+        getCachedModelsList();
+        const policy = agentStore.setAgentModelPolicy(
+            request.params.agent_id,
+            parentKey,
+            normalizeDefaultModel(request.body?.default_model),
+            normalizeRestrictionBody(request.body),
+        );
+        if (!policy) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+        return {
+            agent_id: request.params.agent_id,
+            default_model: policy.default_provider && policy.default_model
+                ? { provider: policy.default_provider, model: policy.default_model }
+                : null,
+            allowed_models: policy.allowed_models,
+            source: policy.source,
+            effective_models: agentStore.listEffectiveProviderModelsForAgent(parentKey, request.params.agent_id),
+        };
+    });
 
     // GET /v1/manager/agents/:agent_id (get specific manager-authenticated user agent)
     fastify.get<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id', {
