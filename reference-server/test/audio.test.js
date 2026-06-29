@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const API_KEY = 'ozw_demo_localhost_key_for_testing';
-const PORT = 3335;
+const PORT = 3336;
 const BASE = `http://localhost:${PORT}`;
 
 let server;
