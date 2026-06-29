@@ -113,11 +113,13 @@ async function startJsonLLMServer({ modelsByProvider = null } = {}) {
     let capturedBody = null;
     let capturedHeaders = null;
     let requestCount = 0;
+    let modelRequestCount = 0;
     const providerModels = modelsByProvider || {
         openai: ['gpt-4o-mini', 'gpt-4o'],
     };
     const server = createServer((req, res) => {
         if (req.method === 'GET' && req.url === '/v1/models') {
+            modelRequestCount += 1;
             const provider = req.headers['x-portkey-provider'];
             if (!provider) {
                 res.writeHead(400, { 'content-type': 'application/json' });
@@ -171,6 +173,7 @@ async function startJsonLLMServer({ modelsByProvider = null } = {}) {
         getCapturedBody: () => capturedBody,
         getCapturedHeaders: () => capturedHeaders,
         getRequestCount: () => requestCount,
+        getModelRequestCount: () => modelRequestCount,
         close: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -828,6 +831,164 @@ allowedModels:
         assert.equal(consumer.status, 200);
         const body = await consumer.json();
         assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini']);
+
+        const policy = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}/model-policy`, {
+            headers: MANAGER_HEADERS,
+        });
+        assert.equal(policy.status, 200);
+        const policyBody = await policy.json();
+        assert.deepEqual(policyBody.default_model, { provider: 'openai', model: 'gpt-4o' });
+        assert.deepEqual(policyBody.allowed_models, [{ provider: 'openai', model: 'gpt-4o-mini' }]);
+        assert.equal(policyBody.source, 'db');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('models — agent without DB restrictions inherits all parent-allowed models', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Unrestricted Agent
+instructions: Test unrestricted model policy
+`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+
+        const consumer = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { 'Authorization': `Bearer ${created.agent_key}` },
+        });
+        assert.equal(consumer.status, 200);
+        const body = await consumer.json();
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini', 'openai/gpt-4o']);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('models — DB agent policy wins over legacy YAML model fields', async () => {
+    const { server, tmp } = startServer();
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: DB Policy Agent
+instructions: Test DB model policy
+provider: openai
+model: gpt-4o-mini
+allowedModels:
+  - provider: openai
+    model: gpt-4o-mini
+`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+
+        const savePolicy = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}/model-policy`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({
+                default_model: { provider: 'openai', model: 'gpt-4o' },
+                allowed_models: [{ provider: 'openai', model: 'gpt-4o' }],
+            }),
+        });
+        assert.equal(savePolicy.status, 200);
+        const saved = await savePolicy.json();
+        assert.deepEqual(saved.default_model, { provider: 'openai', model: 'gpt-4o' });
+        assert.deepEqual(saved.allowed_models, [{ provider: 'openai', model: 'gpt-4o' }]);
+
+        const consumer = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { 'Authorization': `Bearer ${created.agent_key}` },
+        });
+        assert.equal(consumer.status, 200);
+        const body = await consumer.json();
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o']);
+
+        const agent = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: MANAGER_HEADERS });
+        assert.equal(agent.status, 200);
+        assert.match((await agent.json()).yaml, /allowedModels:/);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('models — effective endpoint uses cached DB registry without live discovery', async () => {
+    const llm = await startJsonLLMServer({ modelsByProvider: { openai: ['gpt-5'] } });
+    const { server, tmp } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: llm.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_PROVIDER: 'openai',
+            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const me = await fetch(`${BASE}/v1/manager/parent-key/reveal`, {
+            method: 'POST',
+            headers: MANAGER_HEADERS,
+        });
+        const parentKey = (await me.json()).parent_key;
+        const effective = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { Authorization: `Bearer ${parentKey}` },
+        });
+        assert.equal(effective.status, 200);
+        assert.deepEqual((await effective.json()).data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
+        assert.equal(llm.getModelRequestCount(), 0);
+    } finally {
+        stopServer(server, tmp);
+        await llm.close();
+    }
+});
+
+test('manager notifications — admin model restriction creates readable bell notification', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const save = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({
+                allowed_models: [{ provider: 'openai', model: 'gpt-4o' }],
+            }),
+        });
+        assert.equal(save.status, 200);
+
+        const notifications = await fetch(`${BASE}/v1/manager/notifications`, { headers: MANAGER_HEADERS });
+        assert.equal(notifications.status, 200);
+        const body = await notifications.json();
+        assert.equal(body.unread_count, 1);
+        assert.equal(body.data[0].type, 'model_policy_changed');
+        assert.equal(body.data[0].read_at, null);
+
+        const read = await fetch(`${BASE}/v1/manager/notifications/${body.data[0].id}/read`, {
+            method: 'POST',
+            headers: MANAGER_HEADERS,
+        });
+        assert.equal(read.status, 200);
+        assert.equal((await read.json()).read_at !== null, true);
+
+        const db = new Database(dbPath);
+        try {
+            const eventCount = db.prepare('SELECT COUNT(*) AS count FROM notification_events').get().count;
+            assert.equal(eventCount, 1);
+        } finally {
+            db.close();
+        }
     } finally {
         stopServer(server, tmp);
     }
