@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, isLLMBackendConfigured, extractToken, isAgentKey } from '../util';
-import { agentStore, normalizeProviderModelSelections, ProviderModelRecord, ProviderModelSelection } from '../storage/agents';
-import * as yaml from 'yaml';
+import { agentStore, ProviderModelRecord } from '../storage/agents';
 
 const FALLBACK_MODELS = [
   { provider: 'openai', model: 'gpt-4o', id: 'gpt-4o', label: 'gpt-4o', source: 'fallback' },
@@ -109,31 +108,6 @@ function listResponse(records: ProviderModelRecord[]) {
   };
 }
 
-function parseAgentAllowedModels(agentYaml: string): ProviderModelSelection[] | null {
-  let parsed: Record<string, unknown> = {};
-  try {
-    const value = yaml.parse(agentYaml);
-    if (value && typeof value === 'object') parsed = value as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-  const explicit = Array.isArray(parsed.allowedModels)
-    ? normalizeProviderModelSelections(parsed.allowedModels.map(item => {
-      if (!item || typeof item !== 'object') return { provider: '' };
-      const record = item as Record<string, unknown>;
-      return {
-        provider: typeof record.provider === 'string' ? record.provider : '',
-        model: typeof record.model === 'string' ? record.model : null,
-      };
-    }))
-    : [];
-  if (explicit.length) return explicit;
-  if (typeof parsed.provider === 'string' && typeof parsed.model === 'string') {
-    return [{ provider: parsed.provider, model: parsed.model }];
-  }
-  return null;
-}
-
 export async function getModelsList() {
   const gatewayRecords = await discoverGatewayModels();
   const ollamaRecords = await discoverDirectOllamaModels();
@@ -141,6 +115,17 @@ export async function getModelsList() {
   if (discoveredRecords.length) {
     return listResponse(agentStore.replaceProviderModels(discoveredRecords));
   }
+
+  if (ALLOWED_MODELS) {
+    return listResponse(agentStore.replaceProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env-seed'))));
+  }
+
+  return listResponse(agentStore.replaceProviderModels(FALLBACK_MODELS));
+}
+
+export function getCachedModelsList() {
+  const cached = agentStore.listProviderModels();
+  if (cached.length) return listResponse(cached);
 
   if (ALLOWED_MODELS) {
     return listResponse(agentStore.replaceProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env-seed'))));
@@ -179,16 +164,17 @@ const modelsRoute: FastifyPluginAsync = async (fastify) => {
       return createError('API key not found. Verify the key exists in the database.', 'invalid_request_error');
     }
 
-    await getModelsList();
+    getCachedModelsList();
     if (isAgentKey(request.headers.authorization)) {
       const resolved = agentStore.getByKeyWithActiveParent(token);
       if (!resolved) {
         reply.code(401);
         return createError('Agent key not found', 'invalid_request_error');
       }
-      return listResponse(agentStore.listEffectiveProviderModels(
+      return listResponse(agentStore.listEffectiveProviderModelsForAgent(
         resolved.parentKey.id,
-        parseAgentAllowedModels(resolved.agent.yaml),
+        resolved.agent.id,
+        resolved.agent.yaml,
       ));
     }
 

@@ -1,12 +1,12 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
-import { agentStore, normalizeProviderModelSelections, type PageToolsPolicy, type ProviderModelSelection } from '../storage/agents';
+import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
-import { getModelsList } from './models';
+import { getCachedModelsList } from './models';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -339,18 +339,6 @@ function createLlmClient(provider: string | null) {
   });
 }
 
-function parseProviderModelSelections(value: unknown): ProviderModelSelection[] {
-  if (!Array.isArray(value)) return [];
-  return normalizeProviderModelSelections(value.map(item => {
-    if (!item || typeof item !== 'object') return { provider: '' };
-    const record = item as Record<string, unknown>;
-    return {
-      provider: typeof record.provider === 'string' ? record.provider : '',
-      model: typeof record.model === 'string' ? record.model : null,
-    };
-  }));
-}
-
 const ollamaClient = new OzwellAI({
   apiKey: 'ollama',
   baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
@@ -578,7 +566,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; provider: string | null; model: string | null; allowedModels: ProviderModelSelection[]; temperature: number | null; type: 'mock' | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (tokenIsAgentKey) {
       const agentKey = extractToken(request.headers.authorization);
@@ -628,9 +616,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           ? (tools as unknown[]).map((t) => typeof t === 'string' ? t : (t as { name: string }).name)
           : null,
         pageTools: (parsed.pageTools as PageToolsPolicy) ?? 'all',
-        provider: (parsed.provider as string | undefined) || null,
-        model: (parsed.model as string | undefined) || null,
-        allowedModels: parseProviderModelSelections(parsed.allowedModels),
+        modelPolicy: agentStore.getAgentModelPolicy(agent.id, agent.yaml),
         temperature: (parsed.temperature as number | undefined) ?? null,
         type: parsed.type === 'mock' ? 'mock' : null,
       };
@@ -673,7 +659,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       if (agentConfig.systemPrompt) {
         mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
       }
-      const mockModel = agentConfig.model || 'mock';
+      const mockModel = agentConfig.modelPolicy.default_model || 'mock';
       const response = respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin);
       recordUsage(mockModel, reply.statusCode, response);
       return response;
@@ -691,17 +677,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
 
     const { provider: requestedProvider, model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools & { response_format?: { type: string } };
-    await getModelsList();
-    const agentDefaultSelection = agentConfig?.provider && agentConfig.model
-      ? [{ provider: agentConfig.provider, model: agentConfig.model }]
-      : [];
-    const effectiveModels = agentStore.listEffectiveProviderModels(
-      usageContext?.parentKeyId ?? null,
-      agentConfig ? (agentConfig.allowedModels.length ? agentConfig.allowedModels : agentDefaultSelection) : null,
-    );
-    const selectedModel = requestedModel || agentConfig?.model || DEFAULT_MODEL;
+    getCachedModelsList();
+    const effectiveModels = agentConfig && usageContext?.parentKeyId && usageContext.agentId
+      ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
+      : agentStore.listEffectiveProviderModels(usageContext?.parentKeyId ?? null);
+    const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
     const selectedProvider = requestedProvider
-      || agentConfig?.provider
+      || agentConfig?.modelPolicy.default_provider
       || (() => {
         const matches = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
         return matches.length === 1 ? matches[0].provider : null;
@@ -734,7 +716,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           ? { max_completion_tokens: effectiveMaxTokens }
           : { max_tokens: effectiveMaxTokens };
 
-    request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.provider, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
+    request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.modelPolicy.default_provider, agentModel: agentConfig?.modelPolicy.default_model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
