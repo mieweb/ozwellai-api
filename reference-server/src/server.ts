@@ -14,12 +14,22 @@ import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
+import audioRoute from './routes/audio';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
+const DEFAULT_BODY_LIMIT_MB = 50;
+
+function getBodyLimitBytes(): number {
+  const raw = parseInt(process.env.BODY_LIMIT_MB || `${DEFAULT_BODY_LIMIT_MB}`, 10);
+  const mb = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_BODY_LIMIT_MB;
+  return mb * 1024 * 1024;
+}
+
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
+  bodyLimit: getBodyLimitBytes(),
 });
 
 async function buildServer() {
@@ -63,6 +73,10 @@ async function buildServer() {
           description: 'Local development',
         },
         {
+          url: 'https://ozwellapi-prod.os.mieweb.org',
+          description: 'Current official public server',
+        },
+        {
           url: 'https://ozwellapi.os.mieweb.org',
           description: 'Development server',
         },
@@ -88,6 +102,8 @@ async function buildServer() {
           EmbeddingResponse: schemas.EmbeddingResponseSchema,
           FileObject: schemas.FileObjectSchema,
           FileListResponse: schemas.FileListResponseSchema,
+          AudioTranscriptionRequest: schemas.AudioTranscriptionRequestSchema,
+          AudioTranscriptionResponse: schemas.AudioTranscriptionResponseSchema,
         },
       },
       security: [
@@ -141,6 +157,7 @@ async function buildServer() {
   await fastify.register(embeddingsRoute);
   await fastify.register(filesRoute);
   await fastify.register(agentsRoute);  // Agent registration CRUD
+  await fastify.register(audioRoute);   // Audio transcription
 
   // Serve public assets (documentation, misc)
   await fastify.register(fastifyStatic, {

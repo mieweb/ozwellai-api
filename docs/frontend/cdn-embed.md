@@ -17,7 +17,7 @@ Add this snippet to your HTML, just before the closing `</body>` tag:
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 
 <!-- Future production CDN (coming soon) -->
 <!--
@@ -206,7 +206,7 @@ Your agent definition (created via the [Agent Registration API](../backend/agent
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 That's the same script tag from [Quick Start](#quick-start). If your agent has tools defined, they just work — the widget discovers them during its MCP handshake with the server.
@@ -284,7 +284,7 @@ If you're using a parent API key (`ozw_...`) instead of an agent key, you can de
     }]
   };
 </script>
-<script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 `tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
@@ -319,8 +319,8 @@ For the full postMessage protocol details (useful if you're building a custom in
 :::note Current Script URLs
 The examples below use `cdn.ozwell.ai/embed.js` which is the future production CDN. For now, use:
 
-- **Current official public:** `https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js`
-- **Beta / development:** `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` *(unstable, active development — prefer the `opensource` host unless you specifically need the latest changes)*
+- **Current official public:** `https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js`
+- **Beta / development:** `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` *(unstable, active development — prefer the official public loader unless you specifically need the latest changes)*
 :::
 
 ### Basic Embed
@@ -404,7 +404,7 @@ A full working example — an AI assistant that can read and update form fields 
       debug: true  // shows tool pills in chat — turn off in production
     };
   </script>
-  <script src="https://ozwellapi.opensource.mieweb.org/embed/ozwell-loader.js"></script>
+  <script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
 
   <!-- 2. Handle tool calls -->
   <script>
@@ -472,9 +472,9 @@ If your site uses CSP headers, add Ozwell's domains:
 
 ```
 Content-Security-Policy: 
-  script-src 'self' https://ozwellapi.opensource.mieweb.org https://cdn.ozwell.ai;
+  script-src 'self' https://ozwellapi-prod.os.mieweb.org https://cdn.ozwell.ai;
   frame-src 'self' https://embed.ozwell.ai;
-  connect-src 'self' https://ozwellapi.opensource.mieweb.org;
+  connect-src 'self' https://ozwellapi-prod.os.mieweb.org;
 ```
 
 ---

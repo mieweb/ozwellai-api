@@ -6,12 +6,12 @@ Complete reference for all Ozwell API endpoints.
 
 | Environment | URL |
 |-------------|-----|
-| **Current official public** | `https://ozwellapi.opensource.mieweb.org` |
+| **Current official public** | `https://ozwellapi-prod.os.mieweb.org` |
 | **Beta / development** | `https://ozwellapi.os.mieweb.org` *(unstable, active development)* |
 | **Production** | `https://api.ozwell.ai` *(coming soon)* |
 
 :::tip
-All examples below use `https://ozwellapi.opensource.mieweb.org` as the current official public base URL. Use the beta / development URL only if you specifically need the latest in-progress changes.
+All examples below use `https://ozwellapi-prod.os.mieweb.org` as the current official public base URL. Use the beta / development URL only if you specifically need the latest in-progress changes.
 :::
 
 ## Chat
@@ -56,7 +56,7 @@ POST /v1/chat/completions
 #### Example Request
 
 ```bash
-curl https://ozwellapi.opensource.mieweb.org/v1/chat/completions \
+curl https://ozwellapi-prod.os.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,7 +118,7 @@ POST /v1/embeddings
 #### Example Request
 
 ```bash
-curl https://ozwellapi.opensource.mieweb.org/v1/embeddings \
+curl https://ozwellapi-prod.os.mieweb.org/v1/embeddings \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -169,7 +169,7 @@ POST /v1/files
 #### Example Request
 
 ```bash
-curl https://ozwellapi.opensource.mieweb.org/v1/files \
+curl https://ozwellapi-prod.os.mieweb.org/v1/files \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -F "file=@document.pdf" \
   -F "purpose=assistants"
@@ -246,6 +246,76 @@ GET /v1/files/{file_id}/content
 
 ---
 
+## Audio
+
+### Create Transcription
+
+Transcribes audio into the input language.
+
+```
+POST /v1/audio/transcriptions
+```
+
+This is a multipart/form-data endpoint.
+
+#### Request Body (multipart/form-data)
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file` | file | Yes | The audio file to transcribe. Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm |
+| `model` | string | Yes | Model ID (currently `whisper-1`) |
+| `language` | string | No | Language code in ISO-639-1 format |
+| `response_format` | string | No | Output format: `json`, `text`, `srt`, `verbose_json`, `vtt`. Default: `json` |
+| `temperature` | number | No | Sampling temperature (0-1). Default: 0 |
+| `timestamp_granularities` | array | No | Timestamp granularities: `word`, `segment`. Requires `verbose_json` format |
+
+#### Example Request
+
+```bash
+curl https://ozwellapi.opensource.mieweb.org/v1/audio/transcriptions \
+  -H "Authorization: Bearer $OZWELL_API_KEY" \
+  -F "file=@audio.mp3" \
+  -F model=whisper-1
+```
+
+#### Response (json format)
+
+```json
+{
+  "text": "Hello, this is a transcription of the audio file."
+}
+```
+
+#### Response (verbose_json format)
+
+```json
+{
+  "task": "transcribe",
+  "language": "english",
+  "duration": 3.0,
+  "text": "Hello, this is a transcription of the audio file.",
+  "words": [
+    { "word": "Hello", "start": 0.0, "end": 0.5 }
+  ],
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 3.0,
+      "text": "Hello, this is a transcription of the audio file.",
+      "tokens": [50364, 639, 307],
+      "temperature": 0.0,
+      "avg_logprob": -0.25,
+      "compression_ratio": 1.0,
+      "no_speech_prob": 0.01
+    }
+  ]
+}
+```
+
+---
+
 ## Models
 
 ### List Models
@@ -313,7 +383,7 @@ Includes all `chat/completions` parameters plus:
 #### Example Request
 
 ```bash
-curl https://ozwellapi.opensource.mieweb.org/v1/responses \
+curl https://ozwellapi-prod.os.mieweb.org/v1/responses \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -369,11 +439,11 @@ List endpoints support pagination:
 
 ```bash
 # First page
-curl "https://ozwellapi.opensource.mieweb.org/v1/files?limit=10" \
+curl "https://ozwellapi-prod.os.mieweb.org/v1/files?limit=10" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 
 # Next page
-curl "https://ozwellapi.opensource.mieweb.org/v1/files?limit=10&after=file-abc123" \
+curl "https://ozwellapi-prod.os.mieweb.org/v1/files?limit=10&after=file-abc123" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 

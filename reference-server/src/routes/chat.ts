@@ -5,7 +5,7 @@ import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
-import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, type ChatMessage as MockChatMessage } from './mock-chat';
+import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -30,7 +30,7 @@ type ChatCompletionRequestWithTools = ChatCompletionRequest & {
   tools?: ToolDef[];
   stream_options?: { include_usage?: boolean };
 };
-type NonNullableMessage = { role: Message['role']; content: string; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
+type NonNullableMessage = { role: Message['role']; content: NonNullable<Message['content']>; name?: Message['name']; tool_calls?: ToolCall[]; tool_call_id?: string };
 
 // JSON Schema type for tool function parameters
 type JSONSchemaParameters = {
@@ -76,6 +76,27 @@ type UsageContext = {
   parentKeyId: string | null;
   agentId: string | null;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isValidMessageContent(content: unknown): boolean {
+  if (content == null || typeof content === 'string') return true;
+  if (!Array.isArray(content)) return false;
+
+  return content.every((part) => {
+    if (!isRecord(part)) return false;
+    if (part.type === 'text') return typeof part.text === 'string';
+    if (part.type === 'image_url') {
+      return isRecord(part.image_url) && typeof part.image_url.url === 'string';
+    }
+    if (part.type === 'file') {
+      return isRecord(part.file) && typeof part.file.file_data === 'string';
+    }
+    return false;
+  });
+}
 
 // Helper: try to detect tool calls from JSON content and convert to ToolCall[]
 function tryExtractToolCallsFromContent(content: string | undefined, tools?: ToolDef[] | undefined): ToolCall[] | null {
@@ -343,7 +364,7 @@ function dispatchMockNonStream(
   warning: MockWarning,
 ) {
   const { assistantMsg, finishReason } = buildMockAssistant(messages);
-  const promptText = messages.map((m) => m.content).join(' ');
+  const promptText = messages.map((m) => contentToText(m.content)).join(' ');
   const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
   const promptTokens = countTokens(promptText);
   const completionTokens = countTokens(completionText);
@@ -469,7 +490,20 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               additionalProperties: true,
               properties: {
                 role: { type: 'string' },
-                content: { type: 'string' },
+                // Content may be a plain string (text) or an array of
+                // multimodal content parts (text + image_url) for vision.
+                //
+                // NOTE: We intentionally leave this schema unconstrained (no
+                // `type`/`anyOf`). Fastify's default ajv runs with
+                // `coerceTypes: true`, which unwraps a single-element array
+                // (`[x]` -> `x`) while attempting the scalar `string` branch of
+                // an `anyOf`. That mutation corrupted the payload and made
+                // single-part content arrays (e.g. one image_url) fail
+                // validation with FST_ERR_VALIDATION. An empty schema accepts
+                // string | array | object | null without any coercion; the
+                // route normalizes content at runtime (see normalizedMessages
+                // and contentToText).
+                content: {},
                 tool_calls: { type: 'array' },
                 tool_call_id: { type: 'string' }
               },
@@ -518,6 +552,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as ChatCompletionRequestWithTools;
     const tokenIsAgentKey = isAgentKey(request.headers.authorization);
     let usageContext: UsageContext | null = null;
+    const invalidMessageIndex = (body.messages as Message[]).findIndex((m) => !isValidMessageContent(m.content));
+    if (invalidMessageIndex !== -1) {
+      reply.code(400);
+      return createError(
+        `Invalid messages[${invalidMessageIndex}].content`,
+        'invalid_request_error',
+        `messages[${invalidMessageIndex}].content`
+      );
+    }
 
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
@@ -636,6 +679,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
     const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
+    // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
+    // Classified per call from the model actually being sent — the fallback retry switches models, so a
+    // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
+    // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
+    const tokenParamFor = (m: string): Record<string, number> =>
+      !effectiveMaxTokens ? {}
+        : /(^|\/)(o\d|gpt-5)/.test(m)
+          ? { max_completion_tokens: effectiveMaxTokens }
+          : { max_tokens: effectiveMaxTokens };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -713,7 +765,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-          ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
           ...(temperature !== undefined && { temperature }),
           ...(response_format && { response_format }),
         };
@@ -758,6 +809,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           try {
             const requestForClient = {
               ...requestOptions,
+              ...tokenParamFor(model),
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true as const,
               stream_options: { include_usage: true },
@@ -856,6 +908,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 const retryRequest = {
                   ...requestOptions,
                   model: DEFAULT_MODEL,
+                  ...tokenParamFor(DEFAULT_MODEL),
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
                   stream_options: { include_usage: true },
@@ -882,6 +935,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         } else {
           const requestForClientNonStream = {
             ...requestOptions,
+            ...tokenParamFor(model),
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false as const,
           };
@@ -926,7 +980,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const retryRequest = {
               model: DEFAULT_MODEL,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-              ...(effectiveMaxTokens && { max_tokens: effectiveMaxTokens }),
+              ...tokenParamFor(DEFAULT_MODEL),
               ...(temperature !== undefined && { temperature }),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
