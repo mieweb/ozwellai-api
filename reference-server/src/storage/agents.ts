@@ -250,8 +250,9 @@ export interface ProviderModelSelection {
 export interface AgentModelPolicy {
     default_provider: string | null;
     default_model: string | null;
+    updated_at: string | null;
     allowed_models: ProviderModelSelection[];
-    source: 'db' | 'yaml' | 'none';
+    source: 'db' | 'legacy_yaml' | 'none';
 }
 
 export interface ManagerNotification {
@@ -777,15 +778,16 @@ export class AgentStore {
 
     getAgentModelPolicy(agentId: string, fallbackYaml?: string | null): AgentModelPolicy {
         const setting = this.db.prepare(`
-          SELECT default_provider, default_model
+          SELECT default_provider, default_model, updated_at
           FROM agent_model_settings
           WHERE agent_id = ?
-        `).get(agentId) as { default_provider: string | null; default_model: string | null } | undefined;
+        `).get(agentId) as { default_provider: string | null; default_model: string | null; updated_at: string | null } | undefined;
         const restrictions = this.getAgentModelRestrictions(agentId);
         if (setting || restrictions.length) {
             return {
                 default_provider: setting?.default_provider ?? null,
                 default_model: setting?.default_model ?? null,
+                updated_at: setting?.updated_at ?? null,
                 allowed_models: restrictions,
                 source: 'db',
             };
@@ -793,12 +795,13 @@ export class AgentStore {
         if (fallbackYaml) {
             const fallback = modelPolicyFromYaml(fallbackYaml);
             if (fallback.default_provider || fallback.default_model || fallback.allowed_models.length) {
-                return { ...fallback, source: 'yaml' };
+                return { ...fallback, source: 'legacy_yaml' };
             }
         }
         return {
             default_provider: null,
             default_model: null,
+            updated_at: null,
             allowed_models: [],
             source: 'none',
         };
@@ -1123,32 +1126,48 @@ export class AgentStore {
         if (hasSetting || hasRestriction) return;
         const policy = modelPolicyFromYaml(agentYaml);
         if (!policy.default_provider && !policy.default_model && policy.allowed_models.length === 0) return;
-        this.db.prepare(`
-          INSERT INTO agent_model_settings (agent_id, default_provider, default_model, created_at, updated_at)
-          VALUES (@agent_id, @default_provider, @default_model, @created_at, @updated_at)
-        `).run({
-            agent_id: agentId,
-            default_provider: policy.default_provider,
-            default_model: policy.default_model,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        });
+
+        const resolvedProvider = policy.default_provider
+            ?? this.resolveUniqueProviderForModel(policy.default_model);
+        const now = new Date().toISOString();
+
+        if (resolvedProvider && policy.default_model) {
+            this.db.prepare(`
+              INSERT INTO agent_model_settings (agent_id, default_provider, default_model, created_at, updated_at)
+              VALUES (@agent_id, @default_provider, @default_model, @created_at, @updated_at)
+            `).run({
+                agent_id: agentId,
+                default_provider: resolvedProvider,
+                default_model: policy.default_model,
+                created_at: now,
+                updated_at: now,
+            });
+        }
         if (policy.allowed_models.length) {
             const insert = this.db.prepare(`
               INSERT INTO agent_model_restrictions (id, agent_id, provider, model, created_at)
               VALUES (@id, @agent_id, @provider, @model, @created_at)
             `);
-            const created_at = new Date().toISOString();
             for (const item of policy.allowed_models) {
                 insert.run({
                     id: `${agentId}:${item.provider}:${item.model || '*'}`,
                     agent_id: agentId,
                     provider: item.provider,
                     model: item.model ?? null,
-                    created_at,
+                    created_at: now,
                 });
             }
         }
+    }
+
+    private resolveUniqueProviderForModel(model: string | null): string | null {
+        if (!model) return null;
+        const rows = this.db.prepare(`
+          SELECT DISTINCT provider
+          FROM provider_models
+          WHERE enabled = 1 AND model = ?
+        `).all(model) as Array<{ provider: string }>;
+        return rows.length === 1 ? rows[0].provider : null;
     }
 
     private recordParentPolicyChange(parentKeyId: string, before: ProviderModelRecord[], after: ProviderModelRecord[]): void {
@@ -1175,6 +1194,16 @@ export class AgentStore {
         });
 
         if (!parentKey?.user_id) return;
+        const existingUnread = this.db.prepare(`
+          SELECT id
+          FROM notifications
+          WHERE user_id = ?
+            AND type = ?
+            AND metadata = ?
+            AND read_at IS NULL
+          LIMIT 1
+        `).get(parentKey.user_id, 'model_policy_changed', metadata);
+        if (existingUnread) return;
         this.db.prepare(`
           INSERT INTO notifications (id, user_id, type, message, metadata, created_at)
           VALUES (@id, @user_id, @type, @message, @metadata, @created_at)
@@ -1269,15 +1298,20 @@ function modelPolicyFromYaml(agentYaml: string): AgentModelPolicy {
         const value = yaml.parse(agentYaml);
         if (value && typeof value === 'object') parsed = value as Record<string, unknown>;
     } catch {
-        return { default_provider: null, default_model: null, allowed_models: [], source: 'none' };
+        return { default_provider: null, default_model: null, updated_at: null, allowed_models: [], source: 'none' };
     }
 
-    const defaultProvider = typeof parsed.provider === 'string' && parsed.provider.trim()
+    let defaultProvider = typeof parsed.provider === 'string' && parsed.provider.trim()
         ? parsed.provider.trim()
         : null;
-    const defaultModel = typeof parsed.model === 'string' && parsed.model.trim()
+    let defaultModel = typeof parsed.model === 'string' && parsed.model.trim()
         ? parsed.model.trim()
         : null;
+    if (defaultModel?.includes('/') && !defaultProvider) {
+        const [provider, ...modelParts] = defaultModel.split('/');
+        defaultProvider = provider || null;
+        defaultModel = modelParts.join('/') || defaultModel;
+    }
     const allowedModels = Array.isArray(parsed.allowedModels)
         ? normalizeProviderModelSelections(parsed.allowedModels.map(item => {
             if (!item || typeof item !== 'object') return { provider: '' };
@@ -1292,7 +1326,8 @@ function modelPolicyFromYaml(agentYaml: string): AgentModelPolicy {
     return {
         default_provider: defaultProvider,
         default_model: defaultModel,
+        updated_at: null,
         allowed_models: allowedModels,
-        source: 'yaml',
+        source: 'legacy_yaml',
     };
 }
