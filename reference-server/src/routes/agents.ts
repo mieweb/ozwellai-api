@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, Agent, ManagerIdentity, ManagerUser } from '../storage/agents';
+import { agentStore, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
@@ -203,6 +203,14 @@ function normalizeDefaultModel(value: unknown) {
     return { provider: record.provider, model: record.model };
 }
 
+function defaultAllowedByRestrictions(defaultModel: { provider: string; model: string } | null, restrictions: ProviderModelSelection[]) {
+    if (!defaultModel || restrictions.length === 0) return true;
+    return restrictions.some(item => (
+        item.provider === defaultModel.provider
+        && (item.model === null || item.model === defaultModel.model)
+    ));
+}
+
 /** Parse YAML into a loose object. Throws on invalid YAML. */
 function parseAgentYaml(yamlInput: string): ParsedAgentFields {
     const parsed = yaml.parse(yamlInput);
@@ -245,6 +253,10 @@ function parseAndValidate(
  */
 function toAgentView(agent: Agent) {
     const parsed = parseAgentYaml(agent.yaml);
+    const policy = agentStore.getAgentModelPolicy(agent.id, agent.yaml);
+    const defaultModel = policy.default_provider && policy.default_model
+        ? { provider: policy.default_provider, model: policy.default_model }
+        : null;
     return {
         agent_id: agent.id,
         key_hint: formatAgentKeyHint(agent.agent_key),
@@ -252,7 +264,11 @@ function toAgentView(agent: Agent) {
         yaml: agent.yaml,
         name: parsed.name,
         instructions: parsed.instructions,
-        model: parsed.model,
+        provider: policy.default_provider,
+        model: policy.default_model ?? parsed.model,
+        default_model: defaultModel,
+        model_policy_updated_at: policy.updated_at,
+        model_policy_source: policy.source,
         temperature: parsed.temperature,
         tools: parsed.tools,
         behavior: parsed.behavior,
@@ -313,6 +329,10 @@ function toAdminAgentView(agent: AdminAgentRow) {
     } catch {
         parsed = {};
     }
+    const policy = agentStore.getAgentModelPolicy(agent.id, agent.yaml);
+    const defaultModel = policy.default_provider && policy.default_model
+        ? { provider: policy.default_provider, model: policy.default_model }
+        : null;
     return {
         id: agent.id,
         key_hint: formatAgentKeyHint(agent.agent_key),
@@ -324,7 +344,11 @@ function toAdminAgentView(agent: AdminAgentRow) {
         username: agent.username ?? null,
         email: agent.email ?? null,
         name: parsed.name ?? null,
-        model: parsed.model ?? null,
+        provider: policy.default_provider,
+        model: policy.default_model ?? parsed.model ?? null,
+        default_model: defaultModel,
+        model_policy_updated_at: policy.updated_at,
+        model_policy_source: policy.source,
         created_at: agent.created_at,
         metrics: toMetrics(agent),
     };
@@ -848,7 +872,11 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         id: view.agent_id,
                         key_hint: view.key_hint,
                         name: view.name,
+                        provider: view.provider,
                         model: view.model,
+                        default_model: view.default_model,
+                        model_policy_updated_at: view.model_policy_updated_at,
+                        model_policy_source: view.model_policy_source,
                         tools: view.tools,
                         behavior: view.behavior,
                         created_at: view.created_at,
@@ -880,7 +908,11 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         id: view.agent_id,
                         key_hint: view.key_hint,
                         name: view.name,
+                        provider: view.provider,
                         model: view.model,
+                        default_model: view.default_model,
+                        model_policy_updated_at: view.model_policy_updated_at,
+                        model_policy_source: view.model_policy_source,
                         tools: view.tools,
                         behavior: view.behavior,
                         created_at: view.created_at,
@@ -956,6 +988,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 ? { provider: policy.default_provider, model: policy.default_model }
                 : null,
             allowed_models: policy.allowed_models,
+            model_policy_updated_at: policy.updated_at,
             source: policy.source,
             effective_models: agentStore.listEffectiveProviderModelsForAgent(parentKey, agent.id, agent.yaml),
         };
@@ -970,11 +1003,22 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     }, async (request, reply) => {
         const parentKey = request.apiKey!.id;
         getCachedModelsList();
+        const defaultModel = normalizeDefaultModel(request.body?.default_model);
+        const allowedModels = normalizeRestrictionBody(request.body);
+        if (!defaultAllowedByRestrictions(defaultModel, allowedModels)) {
+            reply.code(400);
+            return createError(
+                'Default model must be included in allowed_models when allowed_models is not empty',
+                'invalid_request_error',
+                'default_model',
+                'default_model_not_allowed'
+            );
+        }
         const policy = agentStore.setAgentModelPolicy(
             request.params.agent_id,
             parentKey,
-            normalizeDefaultModel(request.body?.default_model),
-            normalizeRestrictionBody(request.body),
+            defaultModel,
+            allowedModels,
         );
         if (!policy) {
             reply.code(404);
@@ -986,6 +1030,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 ? { provider: policy.default_provider, model: policy.default_model }
                 : null,
             allowed_models: policy.allowed_models,
+            model_policy_updated_at: policy.updated_at,
             source: policy.source,
             effective_models: agentStore.listEffectiveProviderModelsForAgent(parentKey, request.params.agent_id),
         };

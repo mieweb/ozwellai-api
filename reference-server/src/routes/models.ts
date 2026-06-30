@@ -41,16 +41,6 @@ function toModelRecord(id: string, source: string, provider = providerFromModelI
   };
 }
 
-function isLikelyChatModel(provider: string, id: string) {
-  const model = modelFromModelId(id).toLowerCase();
-  if (provider === 'openai') {
-    if (/(embedding|whisper|tts|moderation|image|sora|realtime|audio|transcribe)/.test(model)) return false;
-    return /^(gpt-[0-9]|gpt-4|gpt-5|o[0-9]|chat-latest|computer-use)/.test(model);
-  }
-  if (provider === 'anthropic') return model.startsWith('claude-');
-  return true;
-}
-
 async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
   if (!isLLMBackendConfigured()) return [];
 
@@ -71,7 +61,6 @@ async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
       const models = Array.isArray(payload.data) ? payload.data : [];
       for (const model of models) {
         if (typeof model.id !== 'string' || !model.id) continue;
-        if (!isLikelyChatModel(provider, model.id)) continue;
         records.push(toModelRecord(model.id, 'gateway', provider));
       }
     } catch {
