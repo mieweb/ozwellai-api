@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import * as yaml from 'yaml';
 import { generateId, getKeyHint, KEY_PREFIX } from '../util';
 
 interface DbAgentRow {
@@ -93,6 +94,7 @@ export function initializeAuthTables(db: Database.Database): void {
         agent_id TEXT,
         auth_type TEXT NOT NULL,
         route TEXT NOT NULL,
+        provider TEXT,
         model TEXT,
         status_code INTEGER NOT NULL,
         prompt_tokens INTEGER,
@@ -110,6 +112,7 @@ export function initializeAuthTables(db: Database.Database): void {
     ensureColumn(db, 'api_keys', 'source', 'TEXT');
     ensureColumn(db, 'api_keys', 'revoked_reason', 'TEXT');
     ensureColumn(db, 'api_keys', 'replaced_by_key_id', 'TEXT');
+    ensureColumn(db, 'usage_events', 'provider', 'TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
     console.log('[auth] Auth tables initialized');
 }
@@ -221,11 +224,45 @@ export interface UsageEventInput {
     agent_id: string | null;
     auth_type: 'parent' | 'agent';
     route: string;
+    provider?: string | null;
     model: string | null;
     status_code: number;
     prompt_tokens?: number | null;
     completion_tokens?: number | null;
     total_tokens?: number | null;
+}
+
+export interface ProviderModelRecord {
+    id: string;
+    provider: string;
+    model: string;
+    label: string;
+    source: string;
+    enabled: boolean;
+    last_discovered_at: string | null;
+}
+
+export interface ProviderModelSelection {
+    provider: string;
+    model?: string | null;
+}
+
+export interface AgentModelPolicy {
+    default_provider: string | null;
+    default_model: string | null;
+    updated_at: string | null;
+    allowed_models: ProviderModelSelection[];
+    source: 'db' | 'legacy_yaml' | 'none';
+}
+
+export interface ManagerNotification {
+    id: string;
+    user_id: string;
+    type: string;
+    message: string;
+    metadata: Record<string, unknown> | null;
+    read_at: string | null;
+    created_at: string;
 }
 
 export interface AdminSummary {
@@ -283,6 +320,7 @@ export class AgentStore {
     private stmtMoveAgentsToParent: Database.Statement;
     private stmtAttachApiKeyToUser: Database.Statement;
     private stmtRevokeApiKey: Database.Statement;
+    private stmtUpsertProviderModel: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -356,6 +394,17 @@ export class AgentStore {
               replaced_by_key_id = @replaced_by_key_id
           WHERE id = @id
         `);
+        this.stmtUpsertProviderModel = this.db.prepare(`
+          INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
+          VALUES (@provider, @model, @id, @label, @source, @enabled, @last_discovered_at, @created_at)
+          ON CONFLICT(provider, model) DO UPDATE SET
+            id = excluded.id,
+            label = excluded.label,
+            source = excluded.source,
+            enabled = excluded.enabled,
+            last_discovered_at = excluded.last_discovered_at
+        `);
+        this.migrateAgentModelPoliciesFromYaml();
     }
 
     private initTable() {
@@ -370,6 +419,66 @@ export class AgentStore {
       );
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
+
+      CREATE TABLE IF NOT EXISTS provider_models (
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        source TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_discovered_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (provider, model)
+      );
+      CREATE INDEX IF NOT EXISTS idx_provider_models_enabled ON provider_models(enabled);
+
+      CREATE TABLE IF NOT EXISTS parent_key_model_restrictions (
+        id TEXT PRIMARY KEY,
+        parent_key_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_parent_key_model_restrictions_parent_key ON parent_key_model_restrictions(parent_key_id);
+
+      CREATE TABLE IF NOT EXISTS agent_model_settings (
+        agent_id TEXT PRIMARY KEY,
+        default_provider TEXT,
+        default_model TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_model_restrictions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_model_restrictions_agent_id ON agent_model_restrictions(agent_id);
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        metadata TEXT,
+        read_at TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+
+      CREATE TABLE IF NOT EXISTS notification_events (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        parent_key_id TEXT,
+        type TEXT NOT NULL,
+        metadata TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_notification_events_parent_key_id ON notification_events(parent_key_id);
     `);
     }
 
@@ -551,11 +660,11 @@ export class AgentStore {
     recordUsageEvent(input: UsageEventInput): void {
         this.db.prepare(`
           INSERT INTO usage_events (
-            id, parent_key_id, agent_id, auth_type, route, model, status_code,
+            id, parent_key_id, agent_id, auth_type, route, provider, model, status_code,
             prompt_tokens, completion_tokens, total_tokens, created_at
           )
           VALUES (
-            @id, @parent_key_id, @agent_id, @auth_type, @route, @model, @status_code,
+            @id, @parent_key_id, @agent_id, @auth_type, @route, @provider, @model, @status_code,
             @prompt_tokens, @completion_tokens, @total_tokens, @created_at
           )
         `).run({
@@ -564,6 +673,7 @@ export class AgentStore {
             agent_id: input.agent_id,
             auth_type: input.auth_type,
             route: input.route,
+            provider: input.provider ?? null,
             model: input.model,
             status_code: input.status_code,
             prompt_tokens: input.prompt_tokens ?? null,
@@ -571,6 +681,215 @@ export class AgentStore {
             total_tokens: input.total_tokens ?? null,
             created_at: new Date().toISOString(),
         });
+    }
+
+    upsertProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
+        const now = new Date().toISOString();
+        const upsert = this.db.transaction((items: typeof records) => {
+            for (const item of items) {
+                this.stmtUpsertProviderModel.run({
+                    provider: item.provider,
+                    model: item.model,
+                    id: item.id,
+                    label: item.label,
+                    source: item.source,
+                    enabled: item.enabled === false ? 0 : 1,
+                    last_discovered_at: item.last_discovered_at ?? now,
+                    created_at: now,
+                });
+            }
+        });
+        upsert(records);
+        return this.listProviderModels();
+    }
+
+    replaceProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
+        const replace = this.db.transaction((items: typeof records) => {
+            this.db.prepare('UPDATE provider_models SET enabled = 0').run();
+            this.upsertProviderModels(items);
+        });
+        replace(records);
+        return this.listProviderModels();
+    }
+
+    listProviderModels(): ProviderModelRecord[] {
+        const rows = this.db.prepare(`
+          SELECT id, provider, model, label, source, enabled, last_discovered_at
+          FROM provider_models
+          WHERE enabled = 1
+          ORDER BY rowid ASC
+        `).all() as Array<Omit<ProviderModelRecord, 'enabled'> & { enabled: number }>;
+        return rows.map(row => ({ ...row, enabled: Boolean(row.enabled) }));
+    }
+
+    getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {
+        return this.db.prepare(`
+          SELECT provider, model
+          FROM parent_key_model_restrictions
+          WHERE parent_key_id = ?
+          ORDER BY rowid ASC
+        `).all(parentKeyId) as ProviderModelSelection[];
+    }
+
+    setParentKeyModelRestrictions(parentKeyId: string, selections: ProviderModelSelection[]): ProviderModelSelection[] {
+        const before = this.listEffectiveProviderModels(parentKeyId);
+        const normalized = normalizeProviderModelSelections(selections);
+        const save = this.db.transaction(() => {
+            this.db.prepare('DELETE FROM parent_key_model_restrictions WHERE parent_key_id = ?').run(parentKeyId);
+            const insert = this.db.prepare(`
+              INSERT INTO parent_key_model_restrictions (id, parent_key_id, provider, model, created_at)
+              VALUES (@id, @parent_key_id, @provider, @model, @created_at)
+            `);
+            const created_at = new Date().toISOString();
+            for (const item of normalized) {
+                insert.run({
+                    id: `${parentKeyId}:${item.provider}:${item.model || '*'}`,
+                    parent_key_id: parentKeyId,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at,
+                });
+            }
+        });
+        save();
+        this.recordParentPolicyChange(parentKeyId, before, this.listEffectiveProviderModels(parentKeyId));
+        return this.getParentKeyModelRestrictions(parentKeyId);
+    }
+
+    getAgentModelPolicy(agentId: string, fallbackYaml?: string | null): AgentModelPolicy {
+        const setting = this.db.prepare(`
+          SELECT default_provider, default_model, updated_at
+          FROM agent_model_settings
+          WHERE agent_id = ?
+        `).get(agentId) as { default_provider: string | null; default_model: string | null; updated_at: string | null } | undefined;
+        const restrictions = this.getAgentModelRestrictions(agentId);
+        if (setting || restrictions.length) {
+            return {
+                default_provider: setting?.default_provider ?? null,
+                default_model: setting?.default_model ?? null,
+                updated_at: setting?.updated_at ?? null,
+                allowed_models: restrictions,
+                source: 'db',
+            };
+        }
+        if (fallbackYaml) {
+            const fallback = modelPolicyFromYaml(fallbackYaml);
+            if (fallback.default_provider || fallback.default_model || fallback.allowed_models.length) {
+                return { ...fallback, source: 'legacy_yaml' };
+            }
+        }
+        return {
+            default_provider: null,
+            default_model: null,
+            updated_at: null,
+            allowed_models: [],
+            source: 'none',
+        };
+    }
+
+    getAgentModelRestrictions(agentId: string): ProviderModelSelection[] {
+        return this.db.prepare(`
+          SELECT provider, model
+          FROM agent_model_restrictions
+          WHERE agent_id = ?
+          ORDER BY rowid ASC
+        `).all(agentId) as ProviderModelSelection[];
+    }
+
+    setAgentModelPolicy(
+        agentId: string,
+        parentKey: string,
+        defaultSelection: ProviderModelSelection | null,
+        restrictions: ProviderModelSelection[],
+    ): AgentModelPolicy | null {
+        if (!this.getOwned(agentId, parentKey)) return null;
+        const normalizedDefault = defaultSelection?.provider && defaultSelection.model
+            ? { provider: defaultSelection.provider.trim(), model: defaultSelection.model.trim() }
+            : null;
+        const normalizedRestrictions = normalizeProviderModelSelections(restrictions);
+        const save = this.db.transaction(() => {
+            const now = new Date().toISOString();
+            this.db.prepare(`
+              INSERT INTO agent_model_settings (agent_id, default_provider, default_model, created_at, updated_at)
+              VALUES (@agent_id, @default_provider, @default_model, @created_at, @updated_at)
+              ON CONFLICT(agent_id) DO UPDATE SET
+                default_provider = excluded.default_provider,
+                default_model = excluded.default_model,
+                updated_at = excluded.updated_at
+            `).run({
+                agent_id: agentId,
+                default_provider: normalizedDefault?.provider ?? null,
+                default_model: normalizedDefault?.model ?? null,
+                created_at: now,
+                updated_at: now,
+            });
+            this.db.prepare('DELETE FROM agent_model_restrictions WHERE agent_id = ?').run(agentId);
+            const insert = this.db.prepare(`
+              INSERT INTO agent_model_restrictions (id, agent_id, provider, model, created_at)
+              VALUES (@id, @agent_id, @provider, @model, @created_at)
+            `);
+            for (const item of normalizedRestrictions) {
+                insert.run({
+                    id: `${agentId}:${item.provider}:${item.model || '*'}`,
+                    agent_id: agentId,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at: now,
+                });
+            }
+        });
+        save();
+        return this.getAgentModelPolicy(agentId);
+    }
+
+    listEffectiveProviderModelsForAgent(parentKeyId: string, agentId: string, fallbackYaml?: string | null): ProviderModelRecord[] {
+        const policy = this.getAgentModelPolicy(agentId, fallbackYaml);
+        return this.listEffectiveProviderModels(parentKeyId, policy.allowed_models);
+    }
+
+    listEffectiveProviderModels(parentKeyId: string | null, agentAllowedModels?: ProviderModelSelection[] | null): ProviderModelRecord[] {
+        const models = this.listProviderModels();
+        const parentRestrictions = parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [];
+        const parentFiltered = parentRestrictions.length
+            ? models.filter(model => selectionAllows(parentRestrictions, model.provider, model.model))
+            : models;
+        const agentSelections = normalizeProviderModelSelections(agentAllowedModels || []);
+        return agentSelections.length
+            ? parentFiltered.filter(model => selectionAllows(agentSelections, model.provider, model.model))
+            : parentFiltered;
+    }
+
+    listNotificationsForUser(userId: string): ManagerNotification[] {
+        const rows = this.db.prepare(`
+          SELECT id, user_id, type, message, metadata, read_at, created_at
+          FROM notifications
+          WHERE user_id = ?
+          ORDER BY created_at DESC, rowid DESC
+        `).all(userId) as Array<Omit<ManagerNotification, 'metadata'> & { metadata: string | null }>;
+        return rows.map(row => ({
+            ...row,
+            metadata: row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : null,
+        }));
+    }
+
+    markNotificationRead(userId: string, notificationId: string): ManagerNotification | null {
+        const now = new Date().toISOString();
+        const result = this.db.prepare(`
+          UPDATE notifications
+          SET read_at = COALESCE(read_at, ?)
+          WHERE id = ? AND user_id = ?
+        `).run(now, notificationId, userId);
+        if (result.changes === 0) return null;
+        return this.listNotificationsForUser(userId).find(item => item.id === notificationId) ?? null;
+    }
+
+    markAllNotificationsRead(userId: string): number {
+        const result = this.db.prepare(`
+          UPDATE notifications
+          SET read_at = COALESCE(read_at, ?)
+          WHERE user_id = ? AND read_at IS NULL
+        `).run(new Date().toISOString(), userId);
+        return result.changes;
     }
 
     getAdminSummary(): AdminSummary {
@@ -771,9 +1090,117 @@ export class AgentStore {
         return revoke();
     }
 
+    private migrateAgentModelPoliciesFromYaml(): void {
+        const agents = this.db.prepare('SELECT id, yaml FROM agents').all() as Array<{ id: string; yaml: string }>;
+        const migrate = this.db.transaction((rows: typeof agents) => {
+            for (const agent of rows) {
+                this.migrateAgentModelPolicyFromYaml(agent.id, agent.yaml);
+            }
+        });
+        migrate(agents);
+    }
+
+    private migrateAgentModelPolicyFromYaml(agentId: string, agentYaml: string): void {
+        const hasSetting = this.db.prepare('SELECT 1 FROM agent_model_settings WHERE agent_id = ?').get(agentId);
+        const hasRestriction = this.db.prepare('SELECT 1 FROM agent_model_restrictions WHERE agent_id = ? LIMIT 1').get(agentId);
+        if (hasSetting || hasRestriction) return;
+        const policy = modelPolicyFromYaml(agentYaml);
+        if (!policy.default_provider && !policy.default_model && policy.allowed_models.length === 0) return;
+
+        const resolvedProvider = policy.default_provider
+            ?? this.resolveUniqueProviderForModel(policy.default_model);
+        const now = new Date().toISOString();
+
+        if (resolvedProvider && policy.default_model) {
+            this.db.prepare(`
+              INSERT INTO agent_model_settings (agent_id, default_provider, default_model, created_at, updated_at)
+              VALUES (@agent_id, @default_provider, @default_model, @created_at, @updated_at)
+            `).run({
+                agent_id: agentId,
+                default_provider: resolvedProvider,
+                default_model: policy.default_model,
+                created_at: now,
+                updated_at: now,
+            });
+        }
+        if (policy.allowed_models.length) {
+            const insert = this.db.prepare(`
+              INSERT INTO agent_model_restrictions (id, agent_id, provider, model, created_at)
+              VALUES (@id, @agent_id, @provider, @model, @created_at)
+            `);
+            for (const item of policy.allowed_models) {
+                insert.run({
+                    id: `${agentId}:${item.provider}:${item.model || '*'}`,
+                    agent_id: agentId,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at: now,
+                });
+            }
+        }
+    }
+
+    private resolveUniqueProviderForModel(model: string | null): string | null {
+        if (!model) return null;
+        const rows = this.db.prepare(`
+          SELECT DISTINCT provider
+          FROM provider_models
+          WHERE enabled = 1 AND model = ?
+        `).all(model) as Array<{ provider: string }>;
+        return rows.length === 1 ? rows[0].provider : null;
+    }
+
+    private recordParentPolicyChange(parentKeyId: string, before: ProviderModelRecord[], after: ProviderModelRecord[]): void {
+        const afterKeys = new Set(after.map(model => `${model.provider}:${model.model}`));
+        const removed = before.filter(model => !afterKeys.has(`${model.provider}:${model.model}`));
+        if (removed.length === 0) return;
+
+        const parentKey = this.db.prepare('SELECT user_id FROM api_keys WHERE id = ?').get(parentKeyId) as { user_id: string | null } | undefined;
+        const metadata = JSON.stringify({
+            parent_key_id: parentKeyId,
+            removed_models: removed.map(model => ({ provider: model.provider, model: model.model })),
+        });
+        const now = new Date().toISOString();
+        this.db.prepare(`
+          INSERT INTO notification_events (id, user_id, parent_key_id, type, metadata, created_at)
+          VALUES (@id, @user_id, @parent_key_id, @type, @metadata, @created_at)
+        `).run({
+            id: generateId('notification-event'),
+            user_id: parentKey?.user_id ?? null,
+            parent_key_id: parentKeyId,
+            type: 'model_policy_changed',
+            metadata,
+            created_at: now,
+        });
+
+        if (!parentKey?.user_id) return;
+        const existingUnread = this.db.prepare(`
+          SELECT id
+          FROM notifications
+          WHERE user_id = ?
+            AND type = ?
+            AND metadata = ?
+            AND read_at IS NULL
+          LIMIT 1
+        `).get(parentKey.user_id, 'model_policy_changed', metadata);
+        if (existingUnread) return;
+        this.db.prepare(`
+          INSERT INTO notifications (id, user_id, type, message, metadata, created_at)
+          VALUES (@id, @user_id, @type, @message, @metadata, @created_at)
+        `).run({
+            id: generateId('notification'),
+            user_id: parentKey.user_id,
+            type: 'model_policy_changed',
+            message: `${removed.length} model option${removed.length === 1 ? '' : 's'} removed by admin policy.`,
+            metadata,
+            created_at: now,
+        });
+    }
+
     createAgent(params: { id: string; agent_key: string; parent_key: string; yaml: string }): Agent {
         const created_at = Math.floor(Date.now() / 1000);
         this.stmtInsert.run({ ...params, created_at });
+        this.migrateAgentModelPolicyFromYaml(params.id, params.yaml);
         return { ...params, created_at };
     }
 
@@ -822,3 +1249,65 @@ export class AgentStore {
 
 // Singleton instance
 export const agentStore = new AgentStore();
+
+export function normalizeProviderModelSelections(selections: ProviderModelSelection[]): ProviderModelSelection[] {
+    const seen = new Set<string>();
+    const normalized: ProviderModelSelection[] = [];
+    for (const selection of selections) {
+        if (!selection || typeof selection.provider !== 'string') continue;
+        const provider = selection.provider.trim();
+        const rawModel = typeof selection.model === 'string' ? selection.model.trim() : null;
+        if (!provider) continue;
+        const key = `${provider}:${rawModel || '*'}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push({ provider, model: rawModel || null });
+    }
+    return normalized;
+}
+
+function selectionAllows(selections: ProviderModelSelection[], provider: string, model: string): boolean {
+    return selections.some(selection => (
+        selection.provider === provider && (!selection.model || selection.model === model)
+    ));
+}
+
+function modelPolicyFromYaml(agentYaml: string): AgentModelPolicy {
+    let parsed: Record<string, unknown> = {};
+    try {
+        const value = yaml.parse(agentYaml);
+        if (value && typeof value === 'object') parsed = value as Record<string, unknown>;
+    } catch {
+        return { default_provider: null, default_model: null, updated_at: null, allowed_models: [], source: 'none' };
+    }
+
+    let defaultProvider = typeof parsed.provider === 'string' && parsed.provider.trim()
+        ? parsed.provider.trim()
+        : null;
+    let defaultModel = typeof parsed.model === 'string' && parsed.model.trim()
+        ? parsed.model.trim()
+        : null;
+    if (defaultModel?.includes('/') && !defaultProvider) {
+        const [provider, ...modelParts] = defaultModel.split('/');
+        defaultProvider = provider || null;
+        defaultModel = modelParts.join('/') || defaultModel;
+    }
+    const allowedModels = Array.isArray(parsed.allowedModels)
+        ? normalizeProviderModelSelections(parsed.allowedModels.map(item => {
+            if (!item || typeof item !== 'object') return { provider: '' };
+            const record = item as Record<string, unknown>;
+            return {
+                provider: typeof record.provider === 'string' ? record.provider : '',
+                model: typeof record.model === 'string' ? record.model : null,
+            };
+        }))
+        : [];
+
+    return {
+        default_provider: defaultProvider,
+        default_model: defaultModel,
+        updated_at: null,
+        allowed_models: allowedModels,
+        source: 'legacy_yaml',
+    };
+}
