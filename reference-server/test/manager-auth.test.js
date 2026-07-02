@@ -34,6 +34,11 @@ const OTHER_MANAGER_HEADERS = {
     'x-groups': 'ldapusers',
 };
 const OTHER_H_YAML = { 'Content-Type': 'application/yaml', ...OTHER_MANAGER_HEADERS };
+const EMAIL_ADMIN_HEADERS = {
+    'x-user-id': 'external-email-admin',
+    'x-username': 'emailadmin',
+    'x-email': 'Admin@Example.Test',
+};
 
 async function waitForReady(maxMs = 10_000) {
     const start = Date.now();
@@ -47,7 +52,7 @@ async function waitForReady(maxMs = 10_000) {
     throw new Error('server never became ready');
 }
 
-function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv = {} } = {}) {
+function startServer({ trustHeaders = true, adminExternalUserIds = '', adminEmails = '', extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-manager-auth-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
     const server = spawn('npm', ['run', 'dev'], {
@@ -60,6 +65,7 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             DB_PATH: dbPath,
             TRUST_FORWARD_AUTH_HEADERS: trustHeaders ? 'true' : 'false',
             ADMIN_EXTERNAL_USER_IDS: adminExternalUserIds,
+            ADMIN_EMAILS: adminEmails,
             ALLOW_MOCK: 'true',
             LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
             OLLAMA_BASE_URL: '',
@@ -493,8 +499,11 @@ test('manager auth — /v1/manager/models returns allowed models without bearer 
     }
 });
 
-test('manager admin — bootstrap admin can view users and non-admin cannot', async () => {
-    const { server, tmp } = startServer({ adminExternalUserIds: '2009' });
+test('manager admin — configured user ids or emails become admins on first login', async () => {
+    const { server, tmp } = startServer({
+        adminExternalUserIds: '2009',
+        adminEmails: 'admin@example.test',
+    });
     try {
         await waitForReady();
 
@@ -502,19 +511,29 @@ test('manager admin — bootstrap admin can view users and non-admin cannot', as
         assert.equal(adminMe.status, 200);
         assert.equal((await adminMe.json()).is_admin, true);
 
+        const emailAdminMe = await fetch(`${BASE}/v1/manager/me`, { headers: EMAIL_ADMIN_HEADERS });
+        assert.equal(emailAdminMe.status, 200);
+        assert.equal((await emailAdminMe.json()).is_admin, true);
+
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
 
         const users = await fetch(`${BASE}/v1/manager/admin/users`, { headers: MANAGER_HEADERS });
         assert.equal(users.status, 200);
         const usersBody = await users.json();
         const adminUser = usersBody.data.find(user => user.external_user_id === '2009');
+        const emailAdminUser = usersBody.data.find(user => user.external_user_id === 'external-email-admin');
         const otherUser = usersBody.data.find(user => user.external_user_id === '2010');
+        assert.ok(adminUser, 'expected configured admin user id to be listed');
+        assert.ok(emailAdminUser, 'expected configured admin email user to be listed');
+        assert.ok(otherUser, 'expected non-admin manager user to be listed');
         assert.equal(adminUser.is_admin, true);
         assert.match(adminUser.current_parent_key.key_hint, /^ozw_\.\.\.[a-z0-9]{4}$/);
         assert.equal(adminUser.current_parent_key.status, 'active');
         assert.equal(adminUser.current_parent_key.revoked_at, null);
         assert.equal(adminUser.agent_count, 0);
         assert.equal(adminUser.metrics.request_count, 0);
+        assert.equal(emailAdminUser.is_admin, true);
+        assert.match(emailAdminUser.current_parent_key.key_hint, /^ozw_\.\.\.[a-z0-9]{4}$/);
         assert.equal(otherUser.is_admin, false);
         assert.match(otherUser.current_parent_key.key_hint, /^ozw_\.\.\.[a-z0-9]{4}$/);
 
