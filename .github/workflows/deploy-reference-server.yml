@@ -66,47 +66,62 @@ jobs:
         with:
           name: reference-server-build
 
-      # v0.1.7
+      - name: Set up SSH
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEPLOY_HOST" ]]; then
+            echo "OZWELL_REFSERVER_DEPLOY_HOST is required (format: user@hostname)"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          deploy_hostname="${DEPLOY_HOST#*@}"
+          ssh-keyscan "$deploy_hostname" >> ~/.ssh/known_hosts
+
       - name: Upload to server
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
-        with:
-          host: ${{ vars.OZWELL_PROD_HOST }}
-          port: 2061
-          username: ${{ vars.OZWELL_PROD_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: reference-server-build.tar.gz
-          target: /tmp/
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
+        run: rsync -ruva --progress reference-server-build.tar.gz "$DEPLOY_HOST:/tmp/"
 
-      # v1.0.0
       - name: Extract and restart service
-        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
-        with:
-          host: ${{ vars.OZWELL_PROD_HOST }}
-          port: 2061
-          username: ${{ vars.OZWELL_PROD_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ vars.OZWELL_REFSERVER_DEPLOY_PATH || '~/ozwellai-api' }}
+          RESTART_COMMAND: ${{ vars.OZWELL_REFSERVER_RESTART_COMMAND || 'sudo systemctl restart refserver' }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' RESTART_COMMAND='$RESTART_COMMAND' bash -s" <<'REMOTE'
+            set -euo pipefail
 
-            # Ensure directory structure exists (no git repo needed)
-            mkdir -p ~/ozwellai-api/reference-server
-            mkdir -p ~/ozwellai-api/clients/typescript
-            mkdir -p ~/ozwellai-api/spec
-            cd ~/ozwellai-api
+            deploy_path="${DEPLOY_PATH:-~/ozwellai-api}"
+            case "$deploy_path" in
+              "~") deploy_path="$HOME" ;;
+              "~/"*) deploy_path="$HOME/${deploy_path#~/}" ;;
+            esac
 
-            # Clean old build outputs to prevent stale files
+            mkdir -p "$deploy_path/reference-server"
+            mkdir -p "$deploy_path/clients/typescript"
+            mkdir -p "$deploy_path/spec"
+            cd "$deploy_path"
+
             rm -rf reference-server/dist clients/typescript/dist spec/dist
-
-            # Extract the pre-built package
             tar -xzf /tmp/reference-server-build.tar.gz
 
-            # Install production dependencies only (no build needed)
             cd reference-server
             npm ci --omit=dev
 
-            # Restart service
-            pm2 restart refserver
-            pm2 save
+            touch .env
+            if grep -q '^PORT=' .env; then
+              sed -i 's/^PORT=.*/PORT=8000/' .env
+            else
+              printf '\nPORT=8000\n' >> .env
+            fi
 
-            # Cleanup
+            eval "$RESTART_COMMAND"
             rm /tmp/reference-server-build.tar.gz
+          REMOTE
