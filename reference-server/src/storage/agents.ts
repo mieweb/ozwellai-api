@@ -275,14 +275,6 @@ export class AgentStore {
     private stmtRotateKey: Database.Statement;
     private stmtDeleteOwned: Database.Statement;
     private stmtGetOwned: Database.Statement;
-    private stmtUpsertManagerUser: Database.Statement;
-    private stmtGetManagerUserByExternalId: Database.Statement;
-    private stmtGetActiveApiKeyForUser: Database.Statement;
-    private stmtCreateParentApiKey: Database.Statement;
-    private stmtGetApiKeyByKey: Database.Statement;
-    private stmtMoveAgentsToParent: Database.Statement;
-    private stmtAttachApiKeyToUser: Database.Statement;
-    private stmtRevokeApiKey: Database.Statement;
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
@@ -308,54 +300,6 @@ export class AgentStore {
         `);
         this.stmtDeleteOwned = this.db.prepare('DELETE FROM agents WHERE id = ? AND parent_key = ?');
         this.stmtGetOwned = this.db.prepare('SELECT * FROM agents WHERE id = ? AND parent_key = ?');
-        this.stmtUpsertManagerUser = this.db.prepare(`
-          INSERT INTO users (id, external_user_id, username, first_name, last_name, email, groups, last_seen_at)
-          VALUES (@id, @external_user_id, @username, @first_name, @last_name, @email, @groups, datetime('now'))
-          ON CONFLICT(external_user_id) DO UPDATE SET
-            username = excluded.username,
-            first_name = excluded.first_name,
-            last_name = excluded.last_name,
-            email = excluded.email,
-            groups = excluded.groups,
-            last_seen_at = datetime('now')
-        `);
-        this.stmtGetManagerUserByExternalId = this.db.prepare('SELECT * FROM users WHERE external_user_id = ?');
-        this.stmtGetActiveApiKeyForUser = this.db.prepare(`
-          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
-          FROM api_keys
-          WHERE user_id = ?
-            AND COALESCE(status, 'active') = 'active'
-            AND revoked_at IS NULL
-          ORDER BY created_at ASC
-          LIMIT 1
-        `);
-        this.stmtCreateParentApiKey = this.db.prepare(`
-          INSERT INTO api_keys (id, name, key, key_hint, user_id, status, source, created_at)
-          VALUES (@id, @name, @key, @key_hint, @user_id, @status, @source, @created_at)
-        `);
-        this.stmtGetApiKeyByKey = this.db.prepare(`
-          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
-          FROM api_keys
-          WHERE key = ?
-        `);
-        this.stmtMoveAgentsToParent = this.db.prepare(`
-          UPDATE agents SET parent_key = @to_parent_key
-          WHERE parent_key = @from_parent_key
-        `);
-        this.stmtAttachApiKeyToUser = this.db.prepare(`
-          UPDATE api_keys
-          SET user_id = @user_id, status = 'active', source = @source, revoked_at = NULL
-          WHERE id = @id
-        `);
-        this.stmtRevokeApiKey = this.db.prepare(`
-          UPDATE api_keys
-          SET user_id = NULL,
-              status = 'revoked',
-              revoked_at = @revoked_at,
-              revoked_reason = @revoked_reason,
-              replaced_by_key_id = @replaced_by_key_id
-          WHERE id = @id
-        `);
     }
 
     private initTable() {
@@ -409,7 +353,17 @@ export class AgentStore {
     }
 
     upsertManagerUser(identity: ManagerIdentity): ManagerUser {
-        this.stmtUpsertManagerUser.run({
+        this.db.prepare(`
+          INSERT INTO users (id, external_user_id, username, first_name, last_name, email, groups, last_seen_at)
+          VALUES (@id, @external_user_id, @username, @first_name, @last_name, @email, @groups, datetime('now'))
+          ON CONFLICT(external_user_id) DO UPDATE SET
+            username = excluded.username,
+            first_name = excluded.first_name,
+            last_name = excluded.last_name,
+            email = excluded.email,
+            groups = excluded.groups,
+            last_seen_at = datetime('now')
+        `).run({
             id: managerUserId(identity.external_user_id),
             external_user_id: identity.external_user_id,
             username: identity.username ?? null,
@@ -422,12 +376,20 @@ export class AgentStore {
     }
 
     getManagerUserByExternalId(externalUserId: string): ManagerUser | null {
-        const row = this.stmtGetManagerUserByExternalId.get(externalUserId) as DbManagerUserRow | undefined;
+        const row = this.db.prepare('SELECT * FROM users WHERE external_user_id = ?').get(externalUserId) as DbManagerUserRow | undefined;
         return row ? toManagerUser(row) : null;
     }
 
     getActiveApiKeyForUser(userId: string): ParentApiKey | undefined {
-        return this.stmtGetActiveApiKeyForUser.get(userId) as ParentApiKey | undefined;
+        return this.db.prepare(`
+          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+          FROM api_keys
+          WHERE user_id = ?
+            AND COALESCE(status, 'active') = 'active'
+            AND revoked_at IS NULL
+          ORDER BY created_at ASC
+          LIMIT 1
+        `).get(userId) as ParentApiKey | undefined;
     }
 
     createParentApiKeyForUser(user: ManagerUser): ParentApiKey {
@@ -442,7 +404,10 @@ export class AgentStore {
             source: 'auto',
             revoked_at: null,
         };
-        this.stmtCreateParentApiKey.run({
+        this.db.prepare(`
+          INSERT INTO api_keys (id, name, key, key_hint, user_id, status, source, created_at)
+          VALUES (@id, @name, @key, @key_hint, @user_id, @status, @source, @created_at)
+        `).run({
             ...parentKey,
             created_at: new Date().toISOString(),
         });
@@ -469,7 +434,11 @@ export class AgentStore {
     }
 
     getApiKeyByKey(key: string): ParentApiKey | undefined {
-        return this.stmtGetApiKeyByKey.get(key) as ParentApiKey | undefined;
+        return this.db.prepare(`
+          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+          FROM api_keys
+          WHERE key = ?
+        `).get(key) as ParentApiKey | undefined;
     }
 
     claimParentApiKey(userId: string, parentKey: string): ClaimParentKeyResult {
@@ -487,14 +456,25 @@ export class AgentStore {
             let revokedParentKeyId: string | null = null;
 
             if (current && current.id !== target.id) {
-                const result = this.stmtMoveAgentsToParent.run({
+                const result = this.db.prepare(`
+                  UPDATE agents SET parent_key = @to_parent_key
+                  WHERE parent_key = @from_parent_key
+                `).run({
                     from_parent_key: current.id,
                     to_parent_key: target.id,
                 });
                 migratedAgents = result.changes;
 
                 if (current.source === 'auto') {
-                    this.stmtRevokeApiKey.run({
+                    this.db.prepare(`
+                      UPDATE api_keys
+                      SET user_id = NULL,
+                          status = 'revoked',
+                          revoked_at = @revoked_at,
+                          revoked_reason = @revoked_reason,
+                          replaced_by_key_id = @replaced_by_key_id
+                      WHERE id = @id
+                    `).run({
                         id: current.id,
                         revoked_at: new Date().toISOString(),
                         revoked_reason: 'replaced_by_claimed_key',
@@ -504,7 +484,11 @@ export class AgentStore {
                 }
             }
 
-            this.stmtAttachApiKeyToUser.run({
+            this.db.prepare(`
+              UPDATE api_keys
+              SET user_id = @user_id, status = 'active', source = @source, revoked_at = NULL
+              WHERE id = @id
+            `).run({
                 id: target.id,
                 user_id: userId,
                 source: target.source || 'claimed',
