@@ -26,10 +26,10 @@ Ozwell's API follows the OpenAI API specification, providing a familiar interfac
 
 ### 1. Get Your API Key
 
-1. Log in to your Ozwell dashboard
-2. Navigate to **Settings → API Keys**
-3. Click **Create API Key**
-4. Copy the generated key (starts with `ozw_`)
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials
+2. Open agent management
+3. Ozwell creates your parent key automatically, or use **Claim key** to link an existing `ozw_` key
+4. Use **Show key** if you need the `ozw_` key for server-side API calls
 
 ### 2. Install the SDK
 
@@ -63,10 +63,10 @@ console.log(response.choices[0].message.content);
 All API requests should be made to:
 
 ```
-https://api.ozwell.ai/v1
+https://ozwellapi.os.mieweb.org/v1
 ```
 
-For self-hosted deployments, use your custom base URL.
+For Ozwell Manager features, use `https://ozwellapi.os.mieweb.org/v1`. For self-hosted deployments, use your custom base URL.
 
 ---
 

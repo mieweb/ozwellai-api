@@ -1,19 +1,13 @@
 # Agent Registration API
 
 :::tip Fastest Way to Create an Agent
-The easiest path is to open `https://tryozwell.os.mieweb.org/register.html` and create/manage your agents through the register page UI.
+The easiest path is to log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials and create/manage agents in the manager UI.
 
-To get an Ozwell API key (`ozw_` prefix) for agent creation, contact:
-
-- **`horner@mieweb.com`** (Doug Horner)
-- **`adamerla128@gmail.com`** (Aditya Damerla)
+Ozwell Manager uses the container console login. After login, Ozwell reads trusted forwarded identity headers, provisions or links your `ozw_` parent key, and creates agent keys for your agents.
 :::
 
 :::info Getting an API Key
-The Ozwell Dashboard for key provisioning is **coming soon**. In the meantime, to get an API key (`ozw_` prefix), contact:
-
-- **`adamerla128@gmail.com`** (Aditya Damerla)
-- **`horner@mieweb.com`** (Doug Horner)
+For managed Ozwell, first-time users get an `ozw_` parent key automatically after logging in to Ozwell Manager. Existing users can claim an existing `ozw_` key there.
 :::
 
 Agents let you define a persona, model, temperature, and allowed tools server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
@@ -24,15 +18,17 @@ Agent chat requests are processed by whichever backend the server has configured
 
 | Environment | URL |
 |-------------|-----|
-| **Current official public** | `https://ozwellapi-prod.os.mieweb.org` |
-| **Beta / development** | `https://ozwellapi.os.mieweb.org` *(unstable, active development)* |
-| **Production** | `https://api.ozwell.ai` *(coming soon)* |
+| **Recommended for Ozwell Manager** | `https://ozwellapi.os.mieweb.org` |
+| **Legacy production API** | `https://ozwellapi-prod.os.mieweb.org` |
+| **Future production API** | `https://api.ozwell.ai` *(coming soon)* |
 
-Use the current official public environment above for normal testing and integrations. The beta / development URL may change or break and should only be used if you specifically need the latest in-progress changes.
+Use the recommended URL for the full manager-console experience. The legacy production API still uses the old seeded-key database flow.
 
 ## Authentication
 
-All agent management endpoints require a parent API key (`ozw_` prefix) in the `Authorization` header:
+Ozwell Manager uses trusted forwarded identity headers from the manager console/proxy. Users do not paste a parent key into the manager UI.
+
+The lower-level agent management API still supports parent API key auth (`ozw_` prefix) in the `Authorization` header:
 
 ```
 Authorization: Bearer ozw_your_api_key_here
@@ -42,10 +38,10 @@ Authorization: Bearer ozw_your_api_key_here
 
 ### Option A — Create an agent in the UI
 
-1. Get an Ozwell API key by contacting **`horner@mieweb.com`** or **`adamerla128@gmail.com`**
-2. Open `https://tryozwell.os.mieweb.org/register.html`
-3. Create or edit your agent in the register page
-4. Copy the returned `agent_key` and use it in your widget embed
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials.
+2. Create or edit your agent in the manager page.
+3. Copy the returned `agent_key` and use it in your widget embed.
+4. Use **Claim key** if you need to attach an existing `ozw_` parent key and migrate older agents.
 
 ### Option B — Create an agent via API
 
@@ -54,7 +50,7 @@ If you want the lower-level/manual flow, use the API directly:
 ### Step 1 — Set your server and key
 
 ```bash
-BASE="https://ozwellapi-prod.os.mieweb.org"
+BASE="https://ozwellapi.os.mieweb.org"
 AUTH="Authorization: Bearer ozw_your_api_key_here"
 ```
 
@@ -112,7 +108,7 @@ curl -s -X POST "$BASE/v1/agents" \
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-abc123...' };
 </script>
-<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 That's it — 4 steps: set credentials, create agent, copy the key, embed it.
