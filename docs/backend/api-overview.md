@@ -19,6 +19,7 @@ Ozwell's API follows the OpenAI API specification, providing a familiar interfac
 | [Endpoints](./api-endpoints.md) | Complete API endpoint documentation |
 | [Authentication](./api-authentication.md) | API keys and authentication |
 | [Examples](./api-examples.md) | Code samples and recipes |
+| [OpenAI-compatible clients](./openai-compatible-clients.md) | Configure OpenCode, VS Code, and similar tools |
 
 ---
 
