@@ -30,6 +30,32 @@ interface DbAgentWithParentRow extends DbAgentRow {
     api_key_name: string;
 }
 
+type UsageMetricRow = {
+    request_count: number;
+    error_count: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    last_used_at: string | null;
+};
+
+type CloudD1Result<T = Record<string, unknown>> = { results: T[] };
+
+type CloudD1Statement = {
+    bind(...args: unknown[]): CloudD1Statement;
+    all<T = Record<string, unknown>>(): Promise<CloudD1Result<T>>;
+    first<T = Record<string, unknown>>(): Promise<T | null>;
+    run(): Promise<unknown>;
+};
+
+type CloudD1Database = {
+    prepare(sql: string): CloudD1Statement;
+};
+
+type CloudLocalModule = {
+    createSqliteD1(filePath: string): Promise<CloudD1Database>;
+};
+
 const DB_PATH = process.env.DB_PATH
     ?? path.join(process.cwd(), 'data', 'ozwell.db');
 
@@ -52,6 +78,8 @@ export function getDatabase(): Database.Database {
     if (!_db) _db = new Database(DB_PATH);
     return _db;
 }
+
+const importEsm = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<CloudLocalModule>;
 
 // ── Auth tables (api_keys) ──────────────────────────────────────────
 
@@ -282,6 +310,168 @@ export interface AdminSummary {
     };
 }
 
+class UsageEventStore {
+    private cloudDb: Promise<CloudD1Database>;
+
+    constructor() {
+        this.cloudDb = importEsm('@mieweb/cloud-local')
+            .then(({ createSqliteD1 }) => createSqliteD1(DB_PATH));
+    }
+
+    async record(input: UsageEventInput): Promise<void> {
+        const db = await this.cloudDb;
+        await db.prepare(`
+          INSERT INTO usage_events (
+            id, parent_key_id, agent_id, auth_type, route, provider, model, status_code,
+            prompt_tokens, completion_tokens, total_tokens, created_at
+          )
+          VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?
+          )
+        `).bind(
+            generateId('usage'),
+            input.parent_key_id,
+            input.agent_id,
+            input.auth_type,
+            input.route,
+            input.provider ?? null,
+            input.model,
+            input.status_code,
+            input.prompt_tokens ?? null,
+            input.completion_tokens ?? null,
+            input.total_tokens ?? null,
+            new Date().toISOString(),
+        ).run();
+    }
+
+    async summaryTotals() {
+        const db = await this.cloudDb;
+        return await db.prepare(`
+          SELECT
+            COUNT(*) AS requests_total,
+            COUNT(CASE WHEN status_code >= 400 THEN 1 END) AS errors_total,
+            COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+            COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+            COALESCE(SUM(total_tokens), 0) AS total_tokens
+          FROM usage_events
+        `).first<{
+            requests_total: number;
+            errors_total: number;
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+        }>() ?? {
+            requests_total: 0,
+            errors_total: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+        };
+    }
+
+    async agentMetrics(agentId: string): Promise<UsageMetricRow> {
+        const db = await this.cloudDb;
+        return await db.prepare(`
+          SELECT
+            COUNT(*) AS request_count,
+            COUNT(CASE WHEN status_code >= 400 THEN 1 END) AS error_count,
+            COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+            COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+            COALESCE(SUM(total_tokens), 0) AS total_tokens,
+            MAX(created_at) AS last_used_at
+          FROM usage_events
+          WHERE agent_id = ?
+        `).bind(agentId).first<UsageMetricRow>() ?? emptyUsageMetrics();
+    }
+
+    async userMetricsByUserId(): Promise<Map<string, Pick<UsageMetricRow, 'request_count' | 'total_tokens' | 'last_used_at'>>> {
+        const db = await this.cloudDb;
+        const { results: rows } = await db.prepare(`
+          SELECT
+            k.user_id,
+            COUNT(e.id) AS request_count,
+            COALESCE(SUM(e.total_tokens), 0) AS total_tokens,
+            MAX(e.created_at) AS last_used_at
+          FROM usage_events e
+          JOIN api_keys k ON k.id = e.parent_key_id
+          WHERE k.user_id IS NOT NULL
+          GROUP BY k.user_id
+        `).all<{
+            user_id: string;
+            request_count: number;
+            total_tokens: number;
+            last_used_at: string | null;
+        }>();
+        return new Map(rows.map(row => [row.user_id, {
+            request_count: row.request_count,
+            total_tokens: row.total_tokens,
+            last_used_at: row.last_used_at,
+        }]));
+    }
+
+    async parentKeyMetricsById(): Promise<Map<string, UsageMetricRow>> {
+        const db = await this.cloudDb;
+        const { results: rows } = await db.prepare(`
+          SELECT
+            parent_key_id,
+            COUNT(*) AS request_count,
+            COUNT(CASE WHEN status_code >= 400 THEN 1 END) AS error_count,
+            COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+            COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+            COALESCE(SUM(total_tokens), 0) AS total_tokens,
+            MAX(created_at) AS last_used_at
+          FROM usage_events
+          WHERE parent_key_id IS NOT NULL
+          GROUP BY parent_key_id
+        `).all<UsageMetricRow & { parent_key_id: string }>();
+        return new Map(rows.map(row => [row.parent_key_id, {
+            request_count: row.request_count,
+            error_count: row.error_count,
+            prompt_tokens: row.prompt_tokens,
+            completion_tokens: row.completion_tokens,
+            total_tokens: row.total_tokens,
+            last_used_at: row.last_used_at,
+        }]));
+    }
+
+    async agentMetricsById(): Promise<Map<string, UsageMetricRow>> {
+        const db = await this.cloudDb;
+        const { results: rows } = await db.prepare(`
+          SELECT
+            agent_id,
+            COUNT(*) AS request_count,
+            COUNT(CASE WHEN status_code >= 400 THEN 1 END) AS error_count,
+            COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+            COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+            COALESCE(SUM(total_tokens), 0) AS total_tokens,
+            MAX(created_at) AS last_used_at
+          FROM usage_events
+          WHERE agent_id IS NOT NULL
+          GROUP BY agent_id
+        `).all<UsageMetricRow & { agent_id: string }>();
+        return new Map(rows.map(row => [row.agent_id, {
+            request_count: row.request_count,
+            error_count: row.error_count,
+            prompt_tokens: row.prompt_tokens,
+            completion_tokens: row.completion_tokens,
+            total_tokens: row.total_tokens,
+            last_used_at: row.last_used_at,
+        }]));
+    }
+}
+
+function emptyUsageMetrics(): UsageMetricRow {
+    return {
+        request_count: 0,
+        error_count: 0,
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        last_used_at: null,
+    };
+}
+
 function toManagerUser(row: DbManagerUserRow): ManagerUser {
     return {
         ...row,
@@ -304,6 +494,7 @@ function adminExternalUserIds(): Set<string> {
 
 export class AgentStore {
     private db: Database.Database;
+    private usageStore: UsageEventStore;
     private stmtInsert: Database.Statement;
     private stmtGetByKey: Database.Statement;
     private stmtGetById: Database.Statement;
@@ -328,6 +519,7 @@ export class AgentStore {
     constructor() {
         this.db = getDatabase();
         this.initTable();
+        this.usageStore = new UsageEventStore();
 
         this.stmtInsert = this.db.prepare(`
           INSERT INTO agents (id, agent_key, parent_key, yaml, created_at)
@@ -657,30 +849,8 @@ export class AgentStore {
         };
     }
 
-    recordUsageEvent(input: UsageEventInput): void {
-        this.db.prepare(`
-          INSERT INTO usage_events (
-            id, parent_key_id, agent_id, auth_type, route, provider, model, status_code,
-            prompt_tokens, completion_tokens, total_tokens, created_at
-          )
-          VALUES (
-            @id, @parent_key_id, @agent_id, @auth_type, @route, @provider, @model, @status_code,
-            @prompt_tokens, @completion_tokens, @total_tokens, @created_at
-          )
-        `).run({
-            id: generateId('usage'),
-            parent_key_id: input.parent_key_id,
-            agent_id: input.agent_id,
-            auth_type: input.auth_type,
-            route: input.route,
-            provider: input.provider ?? null,
-            model: input.model,
-            status_code: input.status_code,
-            prompt_tokens: input.prompt_tokens ?? null,
-            completion_tokens: input.completion_tokens ?? null,
-            total_tokens: input.total_tokens ?? null,
-            created_at: new Date().toISOString(),
-        });
+    async recordUsageEvent(input: UsageEventInput): Promise<void> {
+        await this.usageStore.record(input);
     }
 
     upsertProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
@@ -892,7 +1062,8 @@ export class AgentStore {
         return result.changes;
     }
 
-    getAdminSummary(): AdminSummary {
+    async getAdminSummary(): Promise<AdminSummary> {
+        const usage = await this.usageStore.summaryTotals();
         const row = this.db.prepare(`
           SELECT
             (SELECT COUNT(*) FROM users) AS users_total,
@@ -901,12 +1072,7 @@ export class AgentStore {
             (SELECT COUNT(*) FROM api_keys) AS parent_keys_total,
             (SELECT COUNT(*) FROM api_keys WHERE COALESCE(status, 'active') = 'active' AND revoked_at IS NULL) AS parent_keys_active,
             (SELECT COUNT(*) FROM api_keys WHERE COALESCE(status, 'active') = 'revoked' OR revoked_at IS NOT NULL) AS parent_keys_revoked,
-            (SELECT COUNT(*) FROM agents) AS agents_total,
-            (SELECT COUNT(*) FROM usage_events) AS requests_total,
-            (SELECT COUNT(*) FROM usage_events WHERE status_code >= 400) AS errors_total,
-            COALESCE((SELECT SUM(prompt_tokens) FROM usage_events), 0) AS prompt_tokens,
-            COALESCE((SELECT SUM(completion_tokens) FROM usage_events), 0) AS completion_tokens,
-            COALESCE((SELECT SUM(total_tokens) FROM usage_events), 0) AS total_tokens
+            (SELECT COUNT(*) FROM agents) AS agents_total
         `).get() as Record<string, number>;
         return {
             users_total: row.users_total,
@@ -917,38 +1083,22 @@ export class AgentStore {
             parent_keys_revoked: row.parent_keys_revoked,
             agents_total: row.agents_total,
             usage: {
-                requests_total: row.requests_total,
-                errors_total: row.errors_total,
-                prompt_tokens: row.prompt_tokens,
-                completion_tokens: row.completion_tokens,
-                total_tokens: row.total_tokens,
+                requests_total: usage.requests_total,
+                errors_total: usage.errors_total,
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                total_tokens: usage.total_tokens,
             },
         };
     }
 
-    getAgentMetrics(agentId: string) {
-        return this.db.prepare(`
-          SELECT
-            COUNT(*) AS request_count,
-            COUNT(CASE WHEN status_code >= 400 THEN 1 END) AS error_count,
-            COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
-            COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
-            COALESCE(SUM(total_tokens), 0) AS total_tokens,
-            MAX(created_at) AS last_used_at
-          FROM usage_events
-          WHERE agent_id = ?
-        `).get(agentId) as {
-            request_count: number;
-            error_count: number;
-            prompt_tokens: number;
-            completion_tokens: number;
-            total_tokens: number;
-            last_used_at: string | null;
-        };
+    async getAgentMetrics(agentId: string) {
+        return await this.usageStore.agentMetrics(agentId);
     }
 
-    listAdminUsers() {
-        return this.db.prepare(`
+    async listAdminUsers() {
+        const usageByUserId = await this.usageStore.userMetricsByUserId();
+        const rows = this.db.prepare(`
           SELECT
             u.id, u.external_user_id, u.username, u.first_name, u.last_name, u.email,
             u.status, u.is_admin, u.created_at, u.last_seen_at,
@@ -964,76 +1114,63 @@ export class AgentStore {
               FROM agents a
               JOIN api_keys k ON k.id = a.parent_key
               WHERE k.user_id = u.id
-            ) AS agent_count,
-            (
-              SELECT COUNT(*)
-              FROM usage_events e
-              JOIN api_keys k ON k.id = e.parent_key_id
-              WHERE k.user_id = u.id
-            ) AS request_count,
-            COALESCE((
-              SELECT SUM(e.total_tokens)
-              FROM usage_events e
-              JOIN api_keys k ON k.id = e.parent_key_id
-              WHERE k.user_id = u.id
-            ), 0) AS total_tokens,
-            (
-              SELECT MAX(e.created_at)
-              FROM usage_events e
-              JOIN api_keys k ON k.id = e.parent_key_id
-              WHERE k.user_id = u.id
-            ) AS last_used_at
+            ) AS agent_count
           FROM users u
           ORDER BY u.last_seen_at DESC
-        `).all();
+        `).all() as Array<Record<string, unknown> & { id: string }>;
+        return rows.map(row => {
+            const usage = usageByUserId.get(row.id);
+            return {
+                ...row,
+                request_count: usage?.request_count ?? 0,
+                total_tokens: usage?.total_tokens ?? 0,
+                last_used_at: usage?.last_used_at ?? null,
+            };
+        });
     }
 
-    getAdminUserDetail(userId: string) {
+    async getAdminUserDetail(userId: string) {
         const user = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
         if (!user) return null;
-        const parentKeys = (this.listAdminParentKeys() as Array<{ user_id: string | null }>).filter(key => key.user_id === userId);
-        const agents = (this.listAdminAgents() as Array<{ user_id: string | null }>).filter(agent => agent.user_id === userId);
+        const parentKeys = ((await this.listAdminParentKeys()) as unknown as Array<{ user_id: string | null }>).filter(key => key.user_id === userId);
+        const agents = ((await this.listAdminAgents()) as unknown as Array<{ user_id: string | null }>).filter(agent => agent.user_id === userId);
         return { user, parent_keys: parentKeys, agents };
     }
 
-    listAdminParentKeys() {
-        return this.db.prepare(`
+    async listAdminParentKeys() {
+        const metricsByParentKeyId = await this.usageStore.parentKeyMetricsById();
+        const rows = this.db.prepare(`
           SELECT
             k.id, k.name, k.key_hint, k.user_id, k.status, k.source, k.revoked_at,
             k.revoked_reason, k.replaced_by_key_id, k.created_at,
             u.external_user_id, u.username, u.email,
-            (SELECT COUNT(*) FROM agents a WHERE a.parent_key = k.id) AS agent_count,
-            (SELECT COUNT(*) FROM usage_events e WHERE e.parent_key_id = k.id) AS request_count,
-            (SELECT COUNT(*) FROM usage_events e WHERE e.parent_key_id = k.id AND e.status_code >= 400) AS error_count,
-            COALESCE((SELECT SUM(e.prompt_tokens) FROM usage_events e WHERE e.parent_key_id = k.id), 0) AS prompt_tokens,
-            COALESCE((SELECT SUM(e.completion_tokens) FROM usage_events e WHERE e.parent_key_id = k.id), 0) AS completion_tokens,
-            COALESCE((SELECT SUM(e.total_tokens) FROM usage_events e WHERE e.parent_key_id = k.id), 0) AS total_tokens,
-            (SELECT MAX(e.created_at) FROM usage_events e WHERE e.parent_key_id = k.id) AS last_used_at
+            (SELECT COUNT(*) FROM agents a WHERE a.parent_key = k.id) AS agent_count
           FROM api_keys k
           LEFT JOIN users u ON u.id = k.user_id
           ORDER BY k.created_at DESC
-        `).all();
+        `).all() as Array<Record<string, unknown> & { id: string }>;
+        return rows.map(row => ({
+            ...row,
+            ...(metricsByParentKeyId.get(row.id) ?? emptyUsageMetrics()),
+        }));
     }
 
-    listAdminAgents() {
-        return this.db.prepare(`
+    async listAdminAgents() {
+        const metricsByAgentId = await this.usageStore.agentMetricsById();
+        const rows = this.db.prepare(`
           SELECT
             a.id, a.agent_key, a.parent_key, a.yaml, a.created_at,
             k.user_id, k.name AS parent_key_name, k.key_hint AS parent_key_hint,
-            u.external_user_id, u.username, u.email,
-            COUNT(e.id) AS request_count,
-            COUNT(CASE WHEN e.status_code >= 400 THEN e.id END) AS error_count,
-            COALESCE(SUM(e.prompt_tokens), 0) AS prompt_tokens,
-            COALESCE(SUM(e.completion_tokens), 0) AS completion_tokens,
-            COALESCE(SUM(e.total_tokens), 0) AS total_tokens,
-            MAX(e.created_at) AS last_used_at
+            u.external_user_id, u.username, u.email
           FROM agents a
           LEFT JOIN api_keys k ON k.id = a.parent_key
           LEFT JOIN users u ON u.id = k.user_id
-          LEFT JOIN usage_events e ON e.agent_id = a.id
-          GROUP BY a.id
           ORDER BY a.created_at DESC
-        `).all();
+        `).all() as Array<Record<string, unknown> & { id: string }>;
+        return rows.map(row => ({
+            ...row,
+            ...(metricsByAgentId.get(row.id) ?? emptyUsageMetrics()),
+        }));
     }
 
     promoteManagerUser(userId: string): ManagerUser | null {
