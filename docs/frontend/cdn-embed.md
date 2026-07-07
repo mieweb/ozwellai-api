@@ -7,17 +7,17 @@ The widget sends requests to the reference server, which routes them to whicheve
 ## Quick Start
 
 :::info Getting an Agent Key
-To get an API key and create an agent, see the [Agent Registration API](../backend/agents.md) or contact **`adamerla128@gmail.com`**.
+To create an agent and get an agent key, log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials.
 :::
 
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
-<!-- Current official public environment -->
+<!-- Current recommended environment -->
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 
 <!-- Future production CDN (coming soon) -->
 <!--
@@ -40,8 +40,8 @@ Ozwell supports two authentication modes:
 
 Agent keys connect to a server-side agent definition that manages the system prompt, model, temperature, and allowed tools.
 
-1. Get an API key (`ozw_` prefix) — contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`**
-2. Create an agent via the [Agent Registration API](../backend/agents.md)
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials
+2. Create an agent in the manager UI
 3. Copy the **Agent Key** from the response (starts with `agnt_key-`)
 4. Use it in the embed config
 
@@ -49,10 +49,8 @@ Agent keys connect to a server-side agent definition that manages the system pro
 
 Parent keys give you raw completions access — you provide the system prompt, model, and tools inline in your client config.
 
-1. Contact **`adamerla128@gmail.com`** or **`horner@mieweb.com`** for an API key
-2. Use the key directly (starts with `ozw_`)
-
-*Self-service key creation via the [Ozwell Dashboard](https://dashboard.ozwell.ai) is coming soon.*
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials
+2. Use **Show key** to copy your parent key (starts with `ozw_`)
 
 ---
 
@@ -206,7 +204,7 @@ Your agent definition (created via the [Agent Registration API](../backend/agent
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 That's the same script tag from [Quick Start](#quick-start). If your agent has tools defined, they just work — the widget discovers them during its MCP handshake with the server.
@@ -284,7 +282,7 @@ If you're using a parent API key (`ozw_...`) instead of an agent key, you can de
     }]
   };
 </script>
-<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 `tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
@@ -319,8 +317,7 @@ For the full postMessage protocol details (useful if you're building a custom in
 :::note Current Script URLs
 The examples below use `cdn.ozwell.ai/embed.js` which is the future production CDN. For now, use:
 
-- **Current official public:** `https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js`
-- **Beta / development:** `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` *(unstable, active development — prefer the official public loader unless you specifically need the latest changes)*
+- **Current recommended loader:** `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`
 :::
 
 ### Basic Embed
@@ -404,7 +401,7 @@ A full working example — an AI assistant that can read and update form fields 
       debug: true  // shows tool pills in chat — turn off in production
     };
   </script>
-  <script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+  <script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 
   <!-- 2. Handle tool calls -->
   <script>
@@ -472,9 +469,9 @@ If your site uses CSP headers, add Ozwell's domains:
 
 ```
 Content-Security-Policy: 
-  script-src 'self' https://ozwellapi-prod.os.mieweb.org https://cdn.ozwell.ai;
+  script-src 'self' https://ozwellapi.os.mieweb.org https://cdn.ozwell.ai;
   frame-src 'self' https://embed.ozwell.ai;
-  connect-src 'self' https://ozwellapi-prod.os.mieweb.org;
+  connect-src 'self' https://ozwellapi.os.mieweb.org;
 ```
 
 ---

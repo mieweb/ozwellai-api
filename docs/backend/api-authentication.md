@@ -2,11 +2,10 @@
 
 Ozwell uses API keys to authenticate requests. This guide covers key types, security best practices, and implementation patterns.
 
-:::info Getting an API Key Now
-The Ozwell Dashboard for self-service key provisioning is **coming soon**. In the meantime, to get an API key, contact:
+:::info Getting an API Key
+For the managed Ozwell deployment, log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials. The manager console handles login, then Ozwell provisions or links your `ozw_` parent key automatically.
 
-- **`adamerla128@gmail.com`** (Aditya Damerla)
-- **`horner@mieweb.com`** (Doug Horner)
+Existing users can claim an existing `ozw_` key in Ozwell Manager. Any agents created on the temporary auto-generated key move to the claimed key.
 :::
 
 ## API Key Types
@@ -60,20 +59,19 @@ const apiKey = 'agnt_key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 ## Creating API Keys
 
-### Contact Us (Current)
+### Via Ozwell Manager
 
-API key provisioning is currently manual. Contact the team to get a key:
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials.
+2. Open the agent management page.
+3. Ozwell creates an `ozw_` parent key for first-time users.
+4. If you already have an `ozw_` key, use **Claim key** to link it to your manager identity.
+5. Use **Show key** when you need to copy your parent key for server-side API use.
 
-- **`adamerla128@gmail.com`** (Aditya Damerla)
-- **`horner@mieweb.com`** (Doug Horner)
+The app trusts forwarded identity headers only when deployed behind the trusted manager console/proxy. Do not trust `x-user-*` headers from direct public traffic.
 
-### Via Dashboard *(Coming Soon)*
+### Manual Provisioning
 
-1. Log in to [Ozwell Dashboard](https://dashboard.ozwell.ai) *(coming soon)*
-2. Navigate to **Settings → API Keys**
-3. Click **Create API Key** or **Create Scoped Key**
-4. Configure permissions (for scoped keys)
-5. Copy the key immediately — it won't be shown again
+Self-hosted deployments can still seed or create parent keys directly in their own database, but the managed deployment should use Ozwell Manager for normal user provisioning.
 
 ### Via API *(Coming Soon)*
 

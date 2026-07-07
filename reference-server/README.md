@@ -14,6 +14,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 - **Swagger Documentation**: Interactive API docs at `/docs`
 - **TypeScript**: Fully typed with Zod schema validation
 - **Agent Mode** *(PoC)*: Register agents with custom personas, tool allowlists, and scoped API keys
+- **Manager Auth Bridge**: Optional trusted-header auth for Ozwell Manager deployments
 - **No Database**: All data stored in JSON files under `/data` (agent/auth data uses SQLite)
 
 ## Architecture
@@ -91,6 +92,24 @@ Agent Mode lets you register "agents" — preconfigured AI personas with custom 
 
 > **🎬 Demo Video:** [Watch the Agent Mode demo on YouTube](https://youtube.com/shorts/u4DhC69JUfw?si=3TECDApOORKnrTmn)
 
+For the managed Ozwell deployment, users should create and manage agents through [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with their `manager.os.mieweb.org` credentials. Use `https://ozwellapi.os.mieweb.org` as the API base URL.
+
+#### Manager Auth Bridge
+
+Ozwell Manager sits behind the MIE container console/proxy. When **Require auth** is enabled, the proxy authenticates the user and forwards trusted identity headers such as `x-user-id`, `x-username`, and `x-email`.
+
+With `TRUST_FORWARD_AUTH_HEADERS=true`, the reference server can:
+
+- read the forwarded manager identity
+- create or update the local Ozwell user record
+- auto-create an `ozw_` parent key for first-time users
+- let users claim an existing `ozw_` parent key
+- move agents from the temporary auto-created key to the claimed key
+- revoke the replaced auto-created key
+- restrict admin endpoints with Ozwell's own `is_admin` flag
+
+This trust model is valid only behind the trusted console/proxy. Do not expose manager-auth routes directly to clients that can spoof `x-user-*` headers.
+
 #### How It Works
 
 ```mermaid
@@ -103,7 +122,7 @@ sequenceDiagram
 
     rect rgb(240, 248, 255)
     Note over Admin,DB: 🔧 Setup Phase
-    Note over Admin,DB: Get a parent key (ozw_...) via the API key endpoint
+    Note over Admin,DB: Managed flow: log in to Ozwell Manager; server provisions or links ozw_ key
     end
 
     rect rgb(255, 248, 240)
@@ -128,7 +147,7 @@ sequenceDiagram
 
 | Concept | Description |
 |---------|-------------|
-| **Parent Key** (`ozw_...`) | Issued to a user via `/v1/api-keys`. Used to manage agents. |
+| **Parent Key** (`ozw_...`) | Issued to a user automatically through Ozwell Manager, claimed from an existing key, or seeded manually in self-hosted deployments. Used to manage agents. |
 | **Agent Key** (`agnt_key-...`) | Scoped key issued when an agent is registered. Used for chat. |
 | **Agent Definition** | Name, model, temperature, tools allowlist, behavior (tone, language, rules), and instructions. |
 | **Tool Filtering** | When chatting with an agent key, only tools in the agent's allowlist are forwarded to the LLM. |
@@ -251,10 +270,10 @@ The server will start at `http://localhost:3000`
 <script src="http://localhost:3000/embed/ozwell-loader.js"></script>
 ```
 
-**Hosted/public environment:**
+**Current recommended environment:**
 
 ```html
-<script src="https://ozwellapi-prod.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
 **Live Demo:** <https://tryozwell.os.mieweb.org>
