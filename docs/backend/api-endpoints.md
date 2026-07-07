@@ -6,12 +6,12 @@ Complete reference for all Ozwell API endpoints.
 
 | Environment | URL |
 |-------------|-----|
-| **Current official public** | `https://ozwellapi-prod.os.mieweb.org` |
-| **Beta / development** | `https://ozwellapi.os.mieweb.org` *(unstable, active development)* |
-| **Production** | `https://api.ozwell.ai` *(coming soon)* |
+| **Recommended for Ozwell Manager** | `https://ozwellapi.os.mieweb.org` |
+| **Legacy production API** | `https://ozwellapi-prod.os.mieweb.org` |
+| **Future production API** | `https://api.ozwell.ai` *(coming soon)* |
 
 :::tip
-All examples below use `https://ozwellapi-prod.os.mieweb.org` as the current official public base URL. Use the beta / development URL only if you specifically need the latest in-progress changes.
+Use `https://ozwellapi.os.mieweb.org` for Ozwell Manager features. The legacy production API still uses the old seeded-key database flow.
 :::
 
 ## Chat
@@ -56,7 +56,7 @@ POST /v1/chat/completions
 #### Example Request
 
 ```bash
-curl https://ozwellapi-prod.os.mieweb.org/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,7 +118,7 @@ POST /v1/embeddings
 #### Example Request
 
 ```bash
-curl https://ozwellapi-prod.os.mieweb.org/v1/embeddings \
+curl https://ozwellapi.os.mieweb.org/v1/embeddings \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -169,7 +169,7 @@ POST /v1/files
 #### Example Request
 
 ```bash
-curl https://ozwellapi-prod.os.mieweb.org/v1/files \
+curl https://ozwellapi.os.mieweb.org/v1/files \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -F "file=@document.pdf" \
   -F "purpose=assistants"
@@ -383,7 +383,7 @@ Includes all `chat/completions` parameters plus:
 #### Example Request
 
 ```bash
-curl https://ozwellapi-prod.os.mieweb.org/v1/responses \
+curl https://ozwellapi.os.mieweb.org/v1/responses \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -439,11 +439,11 @@ List endpoints support pagination:
 
 ```bash
 # First page
-curl "https://ozwellapi-prod.os.mieweb.org/v1/files?limit=10" \
+curl "https://ozwellapi.os.mieweb.org/v1/files?limit=10" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 
 # Next page
-curl "https://ozwellapi-prod.os.mieweb.org/v1/files?limit=10&after=file-abc123" \
+curl "https://ozwellapi.os.mieweb.org/v1/files?limit=10&after=file-abc123" \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 

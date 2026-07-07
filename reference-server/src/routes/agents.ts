@@ -250,31 +250,16 @@ function toMetrics(row: AdminMetricRow) {
     };
 }
 
-type AdminMetrics = ReturnType<typeof toMetrics>;
-
-function emptyMetrics(): AdminMetrics {
-    return {
-        request_count: 0,
-        error_count: 0,
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        last_used_at: null,
-    };
-}
-
-function sumMetrics(rows: Array<{ metrics: AdminMetrics }>): AdminMetrics {
-    return rows.reduce((total, row) => ({
+function metricDifference(totalRows: Array<{ metrics: ReturnType<typeof toMetrics> }>, attributedRows: Array<{ metrics: ReturnType<typeof toMetrics> }>) {
+    const sum = (rows: Array<{ metrics: ReturnType<typeof toMetrics> }>) => rows.reduce((total, row) => ({
         request_count: total.request_count + row.metrics.request_count,
         error_count: total.error_count + row.metrics.error_count,
         prompt_tokens: total.prompt_tokens + row.metrics.prompt_tokens,
         completion_tokens: total.completion_tokens + row.metrics.completion_tokens,
         total_tokens: total.total_tokens + row.metrics.total_tokens,
-        last_used_at: null,
-    }), emptyMetrics());
-}
-
-function subtractMetrics(total: AdminMetrics, attributed: AdminMetrics): AdminMetrics {
+    }), { request_count: 0, error_count: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 });
+    const total = sum(totalRows);
+    const attributed = sum(attributedRows);
     return {
         request_count: Math.max(total.request_count - attributed.request_count, 0),
         error_count: Math.max(total.error_count - attributed.error_count, 0),
@@ -397,6 +382,178 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         required: ['agent_id']
     };
 
+    type AgentParams = { agent_id: string };
+    type AgentBody = string | { yaml: string };
+
+    async function listAgentsForCurrentKey(request: FastifyRequest, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+
+        try {
+            const agents = agentStore.listByParent(parentKey);
+            return {
+                object: 'list',
+                data: agents.map(a => {
+                    const view = toAgentView(a);
+                    return {
+                        id: view.agent_id,
+                        key_hint: view.key_hint,
+                        name: view.name,
+                        model: view.model,
+                        tools: view.tools,
+                        behavior: view.behavior,
+                        created_at: view.created_at,
+                        metrics: view.metrics,
+                    };
+                }),
+            };
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Failed to list agents', 'server_error');
+        }
+    }
+
+    async function createAgentForCurrentKey(request: FastifyRequest<{ Body: AgentBody }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+
+        try {
+            const yamlInput = extractYamlInput(request.body);
+            if (!yamlInput) {
+                reply.code(400);
+                return createError("'yaml' field is required", 'invalid_request_error');
+            }
+
+            const validation = parseAndValidate(yamlInput, reply);
+            if (validation.error) return validation.error;
+
+            const agent = agentStore.createAgent({
+                id: generateId('agent'),
+                agent_key: generateAgentKey(),
+                parent_key: parentKey,
+                yaml: yamlInput,
+            });
+
+            reply.code(201);
+            reply.header('Cache-Control', 'no-store');
+            return {
+                agent_id: agent.id,
+                agent_key: agent.agent_key,
+                key_hint: formatAgentKeyHint(agent.agent_key),
+                created_at: agent.created_at,
+            };
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent registration failed', 'server_error');
+        }
+    }
+
+    async function getAgentForCurrentKey(request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        try {
+            const agent = agentStore.getOwned(agent_id, parentKey);
+            if (!agent) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error');
+            }
+            return toAgentView(agent);
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Failed to retrieve agent', 'server_error');
+        }
+    }
+
+    async function updateAgentForCurrentKey(request: FastifyRequest<{ Params: AgentParams; Body: AgentBody }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        try {
+            const yamlInput = extractYamlInput(request.body);
+            if (!yamlInput) {
+                reply.code(400);
+                return createError("'yaml' field is required", 'invalid_request_error');
+            }
+
+            const validation = parseAndValidate(yamlInput, reply);
+            if (validation.error) return validation.error;
+
+            const updated = agentStore.updateAgent(agent_id, parentKey, yamlInput);
+            if (!updated) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error');
+            }
+
+            return { ...toAgentView(updated), updated: true };
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent update failed', 'server_error');
+        }
+    }
+
+    async function revealAgentKeyForCurrentKey(request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        const agent = agentStore.getOwned(agent_id, parentKey);
+        if (!agent) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+
+        reply.header('Cache-Control', 'no-store');
+        fastify.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'agent_key revealed');
+        return {
+            agent_id: agent.id,
+            agent_key: agent.agent_key,
+            key_hint: formatAgentKeyHint(agent.agent_key),
+        };
+    }
+
+    async function rotateAgentKeyForCurrentKey(request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        const newKey = generateAgentKey();
+        const updated = agentStore.rotateKey(agent_id, parentKey, newKey);
+        if (!updated) {
+            reply.code(404);
+            return createError('Agent not found', 'invalid_request_error');
+        }
+
+        reply.header('Cache-Control', 'no-store');
+        fastify.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'agent_key rotated');
+        return {
+            agent_id: updated.id,
+            agent_key: newKey,
+            key_hint: formatAgentKeyHint(newKey),
+            rotated_at: Math.floor(Date.now() / 1000),
+        };
+    }
+
+    async function deleteAgentForCurrentKey(request: FastifyRequest<{ Params: AgentParams }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        const { agent_id } = request.params;
+
+        try {
+            const deleted = agentStore.deleteAgent(agent_id, parentKey);
+            if (!deleted) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error');
+            }
+
+            reply.code(200);
+            return { id: agent_id, deleted: true };
+        } catch (error) {
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent deletion failed', 'server_error');
+        }
+    }
+
     // GET /v1/manager/me — trusted manager-console identity bridge.
     fastify.get('/v1/manager/me', {
         schema: { tags: ['Manager Auth'], summary: 'Get manager-console authenticated user status' },
@@ -456,7 +613,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             },
             parent_keys: parentKeys,
             agents,
-            unattributed_usage: subtractMetrics(sumMetrics(parentKeys), sumMetrics(agents)),
+            unattributed_usage: metricDifference(parentKeys, agents),
         };
     });
 
@@ -645,40 +802,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             }
         },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-
-        try {
-            const yamlInput = extractYamlInput(request.body);
-            if (!yamlInput) {
-                reply.code(400);
-                return createError("'yaml' field is required", 'invalid_request_error');
-            }
-
-            const validation = parseAndValidate(yamlInput, reply);
-            if (validation.error) return validation.error;
-
-            const agent = agentStore.createAgent({
-                id: generateId('agent'),
-                agent_key: generateAgentKey(),
-                parent_key: parentKey,
-                yaml: yamlInput,
-            });
-
-            reply.code(201);
-            reply.header('Cache-Control', 'no-store');
-            return {
-                agent_id: agent.id,
-                agent_key: agent.agent_key,
-                key_hint: formatAgentKeyHint(agent.agent_key),
-                created_at: agent.created_at,
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent registration failed', 'server_error');
-        }
-    });
+    }, createAgentForCurrentKey);
 
     // GET /v1/agents/me — agent key self-lookup (used by embed loader to discover tools)
     fastify.get('/v1/agents/me', {
@@ -715,65 +839,13 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.get('/v1/agents', {
         schema: { headers: authHeaders, tags: ['Agents'], summary: 'List all agents' },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-
-        try {
-            const agents = agentStore.listByParent(parentKey);
-            return {
-                object: 'list',
-                data: agents.map(a => {
-                    const view = toAgentView(a);
-                    return {
-                        id: view.agent_id,
-                        key_hint: view.key_hint,
-                        name: view.name,
-                        model: view.model,
-                        tools: view.tools,
-                        behavior: view.behavior,
-                        created_at: view.created_at,
-                        metrics: view.metrics,
-                    };
-                }),
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Failed to list agents', 'server_error');
-        }
-    });
+    }, listAgentsForCurrentKey);
 
     // GET /v1/manager/agents (list agents using trusted manager-console auth)
     fastify.get('/v1/manager/agents', {
         schema: { tags: ['Manager Agents'], summary: 'List manager-authenticated user agents' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-
-        try {
-            const agents = agentStore.listByParent(parentKey);
-            return {
-                object: 'list',
-                data: agents.map(a => {
-                    const view = toAgentView(a);
-                    return {
-                        id: view.agent_id,
-                        key_hint: view.key_hint,
-                        name: view.name,
-                        model: view.model,
-                        tools: view.tools,
-                        behavior: view.behavior,
-                        created_at: view.created_at,
-                        metrics: view.metrics,
-                    };
-                }),
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Failed to list agents', 'server_error');
-        }
-    });
+    }, listAgentsForCurrentKey);
 
     // POST /v1/manager/agents (create agent using trusted manager-console auth)
     fastify.post<{ Body: string | { yaml: string } }>('/v1/manager/agents', {
@@ -783,292 +855,67 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             consumes: ['application/yaml', 'application/json'],
         },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-
-        try {
-            const yamlInput = extractYamlInput(request.body);
-            if (!yamlInput) {
-                reply.code(400);
-                return createError("'yaml' field is required", 'invalid_request_error');
-            }
-
-            const validation = parseAndValidate(yamlInput, reply);
-            if (validation.error) return validation.error;
-
-            const agent = agentStore.createAgent({
-                id: generateId('agent'),
-                agent_key: generateAgentKey(),
-                parent_key: parentKey,
-                yaml: yamlInput,
-            });
-
-            reply.code(201);
-            reply.header('Cache-Control', 'no-store');
-            return {
-                agent_id: agent.id,
-                agent_key: agent.agent_key,
-                key_hint: formatAgentKeyHint(agent.agent_key),
-                created_at: agent.created_at,
-            };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent registration failed', 'server_error');
-        }
-    });
+    }, createAgentForCurrentKey);
 
     // GET /v1/manager/agents/:agent_id (get specific manager-authenticated user agent)
     fastify.get<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id', {
         schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Get manager-authenticated user agent details' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const agent = agentStore.getOwned(agent_id, parentKey);
-            if (!agent) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-            return toAgentView(agent);
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Failed to retrieve agent', 'server_error');
-        }
-    });
+    }, getAgentForCurrentKey);
 
     // PUT /v1/manager/agents/:agent_id (update manager-authenticated user agent)
     fastify.put<{ Params: { agent_id: string }; Body: string | { yaml: string } }>('/v1/manager/agents/:agent_id', {
         schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Update manager-authenticated user agent' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const yamlInput = extractYamlInput(request.body);
-            if (!yamlInput) {
-                reply.code(400);
-                return createError("'yaml' field is required", 'invalid_request_error');
-            }
-
-            const validation = parseAndValidate(yamlInput, reply);
-            if (validation.error) return validation.error;
-
-            const updated = agentStore.updateAgent(agent_id, parentKey, yamlInput);
-            if (!updated) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-
-            return { ...toAgentView(updated), updated: true };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent update failed', 'server_error');
-        }
-    });
+    }, updateAgentForCurrentKey);
 
     // POST /v1/manager/agents/:agent_id/reveal-key (return full agent_key)
     fastify.post<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id/reveal-key', {
         schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Reveal manager-authenticated user agent key' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        const agent = agentStore.getOwned(agent_id, parentKey);
-        if (!agent) {
-            reply.code(404);
-            return createError('Agent not found', 'invalid_request_error');
-        }
-
-        reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'manager agent_key revealed');
-        return {
-            agent_id: agent.id,
-            agent_key: agent.agent_key,
-            key_hint: formatAgentKeyHint(agent.agent_key),
-        };
-    });
+    }, revealAgentKeyForCurrentKey);
 
     // POST /v1/manager/agents/:agent_id/rotate-key (generate new key)
     fastify.post<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id/rotate-key', {
         schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Rotate manager-authenticated user agent key' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        const newKey = generateAgentKey();
-        const updated = agentStore.rotateKey(agent_id, parentKey, newKey);
-        if (!updated) {
-            reply.code(404);
-            return createError('Agent not found', 'invalid_request_error');
-        }
-
-        reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'manager agent_key rotated');
-        return {
-            agent_id: updated.id,
-            agent_key: newKey,
-            key_hint: formatAgentKeyHint(newKey),
-            rotated_at: Math.floor(Date.now() / 1000),
-        };
-    });
+    }, rotateAgentKeyForCurrentKey);
 
     // DELETE /v1/manager/agents/:agent_id (delete manager-authenticated user agent)
     fastify.delete<{ Params: { agent_id: string } }>('/v1/manager/agents/:agent_id', {
         schema: { params: agentIdParam, tags: ['Manager Agents'], summary: 'Delete manager-authenticated user agent' },
         preHandler: managerHeaderAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const deleted = agentStore.deleteAgent(agent_id, parentKey);
-            if (!deleted) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-
-            reply.code(200);
-            return { id: agent_id, deleted: true };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent deletion failed', 'server_error');
-        }
-    });
+    }, deleteAgentForCurrentKey);
 
     // GET /v1/agents/:agent_id (get specific agent)
     fastify.get<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Get agent details' },
         preHandler: apiKeyAuth,
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const agent = agentStore.getOwned(agent_id, parentKey);
-            if (!agent) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-            return toAgentView(agent);
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Failed to retrieve agent', 'server_error');
-        }
-    });
+    }, getAgentForCurrentKey);
 
     // PUT /v1/agents/:agent_id (update agent)
     fastify.put<{ Params: { agent_id: string }; Body: string | { yaml: string } }>('/v1/agents/:agent_id', {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Update an agent' },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const yamlInput = extractYamlInput(request.body);
-            if (!yamlInput) {
-                reply.code(400);
-                return createError("'yaml' field is required", 'invalid_request_error');
-            }
-
-            const validation = parseAndValidate(yamlInput, reply);
-            if (validation.error) return validation.error;
-
-            const updated = agentStore.updateAgent(agent_id, parentKey, yamlInput);
-            if (!updated) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-
-            return { ...toAgentView(updated), updated: true };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent update failed', 'server_error');
-        }
-    });
+    }, updateAgentForCurrentKey);
 
     // POST /v1/agents/:agent_id/reveal-key (return full agent_key — explicit user action)
     fastify.post<{ Params: { agent_id: string } }>('/v1/agents/:agent_id/reveal-key', {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Reveal full agent key (parent key auth required)' },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        const agent = agentStore.getOwned(agent_id, parentKey);
-        if (!agent) {
-            reply.code(404);
-            return createError('Agent not found', 'invalid_request_error');
-        }
-
-        reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'agent_key revealed');
-        return {
-            agent_id: agent.id,
-            agent_key: agent.agent_key,
-            key_hint: formatAgentKeyHint(agent.agent_key),
-        };
-    });
+    }, revealAgentKeyForCurrentKey);
 
     // POST /v1/agents/:agent_id/rotate-key (generate new key, invalidate old)
     fastify.post<{ Params: { agent_id: string } }>('/v1/agents/:agent_id/rotate-key', {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Rotate agent key (invalidates old key)' },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        const newKey = generateAgentKey();
-        const updated = agentStore.rotateKey(agent_id, parentKey, newKey);
-        if (!updated) {
-            reply.code(404);
-            return createError('Agent not found', 'invalid_request_error');
-        }
-
-        reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: request.apiKey!.id }, 'agent_key rotated');
-        return {
-            agent_id: updated.id,
-            agent_key: newKey,
-            key_hint: formatAgentKeyHint(newKey),
-            rotated_at: Math.floor(Date.now() / 1000),
-        };
-    });
+    }, rotateAgentKeyForCurrentKey);
 
     // DELETE /v1/agents/:agent_id (delete agent)
     fastify.delete<{ Params: { agent_id: string } }>('/v1/agents/:agent_id', {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Delete an agent' },
         preHandler: apiKeyAuth
-    }, async (request, reply) => {
-        const parentKey = request.apiKey!.id;
-        const { agent_id } = request.params;
-
-        try {
-            const deleted = agentStore.deleteAgent(agent_id, parentKey);
-            if (!deleted) {
-                reply.code(404);
-                return createError('Agent not found', 'invalid_request_error');
-            }
-
-            reply.code(200);
-            return { id: agent_id, deleted: true };
-        } catch (error) {
-            fastify.log.error(error);
-            reply.code(500);
-            return createError('Agent deletion failed', 'server_error');
-        }
-    });
+    }, deleteAgentForCurrentKey);
 };
 
 export default agentsRoute;

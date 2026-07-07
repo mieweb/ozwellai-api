@@ -292,7 +292,7 @@ const client = new OzwellClient({
 
 ## Next Steps
 
-1. **Get your API key:** Create a general-purpose key in your dashboard
+1. **Get your API key:** Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) and use **Show key**
 2. **Install the SDK:** Follow the installation instructions above
 3. **Explore endpoints:** See the [API Reference](./api-endpoints.md)
 4. **View examples:** Check [code samples](./api-examples.md)
