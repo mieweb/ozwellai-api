@@ -680,15 +680,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
     const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
+    const usesReasoningParams = (m: string) => /(^|\/)(o\d|gpt-5)/.test(m);
     // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
     // Classified per call from the model actually being sent — the fallback retry switches models, so a
     // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
     // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
     const tokenParamFor = (m: string): Record<string, number> =>
       !effectiveMaxTokens ? {}
-        : /(^|\/)(o\d|gpt-5)/.test(m)
+        : usesReasoningParams(m)
           ? { max_completion_tokens: effectiveMaxTokens }
           : { max_tokens: effectiveMaxTokens };
+    const temperatureParamFor = (m: string): Record<string, number> =>
+      temperature === undefined || usesReasoningParams(m) ? {} : { temperature };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -766,7 +769,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const requestOptions: ChatCompletionRequestWithTools = {
           model,
           messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-          ...(temperature !== undefined && { temperature }),
           ...(response_format && { response_format }),
         };
 
@@ -811,6 +813,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const requestForClient = {
               ...requestOptions,
               ...tokenParamFor(model),
+              ...temperatureParamFor(model),
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true as const,
               stream_options: { include_usage: true },
@@ -910,6 +913,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   ...requestOptions,
                   model: DEFAULT_MODEL,
                   ...tokenParamFor(DEFAULT_MODEL),
+                  ...temperatureParamFor(DEFAULT_MODEL),
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
                   stream_options: { include_usage: true },
@@ -937,6 +941,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           const requestForClientNonStream = {
             ...requestOptions,
             ...tokenParamFor(model),
+            ...temperatureParamFor(model),
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false as const,
           };
@@ -982,7 +987,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               model: DEFAULT_MODEL,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
               ...tokenParamFor(DEFAULT_MODEL),
-              ...(temperature !== undefined && { temperature }),
+              ...temperatureParamFor(DEFAULT_MODEL),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
               stream: false as const,
