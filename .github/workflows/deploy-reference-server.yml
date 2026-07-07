@@ -58,7 +58,9 @@ jobs:
   deploy:
     name: Deploy to ozwell-prod refserver
     needs: build
-    runs-on: ubuntu-latest
+    # Placeholder pending Aaron's exact self-hosted runner labels.
+    # Expected target server name from Aaron: ozwell-phxdc-node1.
+    runs-on: [self-hosted, ozwell-phxdc-node1]
 
     steps:
       - name: Download build artifact
@@ -66,39 +68,46 @@ jobs:
         with:
           name: reference-server-build
 
-      - name: Set up SSH
+      - name: Prepare SSH host
         env:
-          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
+          # Placeholder pending Aaron's exact deploy host value.
+          # Aaron's build-dev.yaml pattern uses user@hostname; runner-local SSH may only need ozwell-phxdc-node1.
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
         run: |
           set -euo pipefail
           if [[ -z "$DEPLOY_HOST" ]]; then
-            echo "OZWELL_REFSERVER_DEPLOY_HOST is required (format: user@hostname)"
+            echo "OZWELL_REFSERVER_DEPLOY_HOST is required (format: user@hostname or runner SSH host alias)"
             exit 1
           fi
 
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+
+          # Placeholder fallback: Aaron expects the deploy key to be installed on the self-hosted runner.
+          # If runner-level SSH is not available, uncomment these lines and set OZWELL_REFSERVER_SSH_PRIVATE_KEY.
+          # echo "${{ secrets.OZWELL_REFSERVER_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          # chmod 600 ~/.ssh/id_ed25519
 
           deploy_hostname="${DEPLOY_HOST#*@}"
           ssh-keyscan "$deploy_hostname" >> ~/.ssh/known_hosts
 
       - name: Upload to server
         env:
-          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
         run: rsync -ruva --progress reference-server-build.tar.gz "$DEPLOY_HOST:/tmp/"
 
       - name: Extract and restart service
         env:
-          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST }}
-          DEPLOY_PATH: ${{ vars.OZWELL_REFSERVER_DEPLOY_PATH || '~/ozwellai-api' }}
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
+          # Placeholder path from Aaron; keep as a var so it can be changed without editing the workflow.
+          DEPLOY_PATH: ${{ vars.OZWELL_REFSERVER_DEPLOY_PATH || '/storage/apps/ozwellai-api' }}
+          # Placeholder pending Aaron's final service command: sudo systemctl vs systemctl --user.
           RESTART_COMMAND: ${{ vars.OZWELL_REFSERVER_RESTART_COMMAND || 'sudo systemctl restart refserver' }}
         run: |
           set -euo pipefail
           ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' RESTART_COMMAND='$RESTART_COMMAND' bash -s" <<'REMOTE'
             set -euo pipefail
 
-            deploy_path="${DEPLOY_PATH:-~/ozwellai-api}"
+            deploy_path="${DEPLOY_PATH:-/storage/apps/ozwellai-api}"
             case "$deploy_path" in
               "~") deploy_path="$HOME" ;;
               "~/"*) deploy_path="$HOME/${deploy_path#~/}" ;;
