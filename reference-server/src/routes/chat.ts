@@ -625,13 +625,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       usageContext = { authType: 'parent', parentKeyId: parentKey?.id ?? null, agentId: null };
     }
 
-    const recordUsage = (model: string | null, statusCode: number, response?: unknown, provider?: string | null) => {
+    const recordUsage = async (model: string | null, statusCode: number, response?: unknown, provider?: string | null) => {
       if (!usageContext) return;
       const usage = response && typeof response === 'object' && 'usage' in response
         ? (response as { usage?: TokenUsage }).usage
         : undefined;
       try {
-        agentStore.recordUsageEvent({
+        await agentStore.recordUsageEvent({
           parent_key_id: usageContext.parentKeyId,
           agent_id: usageContext.agentId,
           auth_type: usageContext.authType,
@@ -661,7 +661,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
       const mockModel = agentConfig.modelPolicy.default_model || 'mock';
       const response = respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin);
-      recordUsage(mockModel, reply.statusCode, response);
+      await recordUsage(mockModel, reply.statusCode, response);
       return response;
     }
 
@@ -778,7 +778,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
       const response = respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin);
-      recordUsage(model, reply.statusCode, response, provider);
+      await recordUsage(model, reply.statusCode, response, provider);
       return response;
     }
 
@@ -906,7 +906,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
-            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
+            await recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -948,7 +948,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
                   reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
-                recordUsage(fallbackRetryModel, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined, provider);
+                await recordUsage(fallbackRetryModel, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined, provider);
               } catch (retryError) {
                 request.log.error({ err: retryError }, 'Fallback model also failed');
               }
@@ -989,7 +989,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           } catch (e) {
             // No-op: parsing fallback should not break the response
           }
-          recordUsage(model, 200, response, provider);
+          await recordUsage(model, 200, response, provider);
           return response;
         }
       } catch (error: unknown) {
@@ -1028,7 +1028,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 }
               }
             }
-            recordUsage(fallbackRetryModel, 200, retryResponse, provider);
+            await recordUsage(fallbackRetryModel, 200, retryResponse, provider);
             return {
               ...retryResponse,
               warning: buildFallbackWarning(model, fallbackRetryModel),
@@ -1043,7 +1043,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // LLM error final fallback: deterministic mock (if enabled), else a real 503.
     // Reached only from the non-stream path — streaming failures end the stream above.
     const response = respondMockOrError('llm_error', model, normalizedMessages, stream, reply, request.headers.origin);
-    recordUsage(model, reply.statusCode, response, provider);
+    await recordUsage(model, reply.statusCode, response, provider);
     return response;
   });
 };

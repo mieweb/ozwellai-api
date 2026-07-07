@@ -251,7 +251,7 @@ function parseAndValidate(
  * Throws on malformed stored YAML — callers wrap in try/catch returning 500.
  * Should not happen in practice: writes validate via parseAndValidate before insert.
  */
-function toAgentView(agent: Agent) {
+async function toAgentView(agent: Agent) {
     const parsed = parseAgentYaml(agent.yaml);
     const policy = agentStore.getAgentModelPolicy(agent.id, agent.yaml);
     const defaultModel = policy.default_provider && policy.default_model
@@ -272,7 +272,7 @@ function toAgentView(agent: Agent) {
         temperature: parsed.temperature,
         tools: parsed.tools,
         behavior: parsed.behavior,
-        metrics: agentStore.getAgentMetrics(agent.id),
+        metrics: await agentStore.getAgentMetrics(agent.id),
     };
 }
 
@@ -460,15 +460,15 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         schema: { tags: ['Manager Admin'], summary: 'Get admin console summary metrics' },
         preHandler: requireManagerAdmin,
     }, async () => {
-        return agentStore.getAdminSummary();
+        return await agentStore.getAdminSummary();
     });
 
     fastify.get('/v1/manager/admin/users', {
         schema: { tags: ['Manager Admin'], summary: 'List manager users' },
         preHandler: requireManagerAdmin,
     }, async () => {
-        const users = agentStore.listAdminUsers() as AdminUserRow[];
-        const parentKeys = agentStore.listAdminParentKeys() as AdminParentKeyRow[];
+        const users = await agentStore.listAdminUsers() as AdminUserRow[];
+        const parentKeys = await agentStore.listAdminParentKeys() as AdminParentKeyRow[];
         return {
             object: 'list',
             data: users.map(user => toAdminUserView(user, parentKeys)),
@@ -487,7 +487,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         },
         preHandler: requireManagerAdmin,
     }, async (request, reply) => {
-        const detail = agentStore.getAdminUserDetail(request.params.user_id);
+        const detail = await agentStore.getAdminUserDetail(request.params.user_id);
         if (!detail) {
             reply.code(404);
             return createError('User not found', 'invalid_request_error', 'user_id', 'not_found');
@@ -866,8 +866,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             const agents = agentStore.listByParent(parentKey);
             return {
                 object: 'list',
-                data: agents.map(a => {
-                    const view = toAgentView(a);
+                data: await Promise.all(agents.map(async a => {
+                    const view = await toAgentView(a);
                     return {
                         id: view.agent_id,
                         key_hint: view.key_hint,
@@ -882,7 +882,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         created_at: view.created_at,
                         metrics: view.metrics,
                     };
-                }),
+                })),
             };
         } catch (error) {
             fastify.log.error(error);
@@ -902,8 +902,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             const agents = agentStore.listByParent(parentKey);
             return {
                 object: 'list',
-                data: agents.map(a => {
-                    const view = toAgentView(a);
+                data: await Promise.all(agents.map(async a => {
+                    const view = await toAgentView(a);
                     return {
                         id: view.agent_id,
                         key_hint: view.key_hint,
@@ -918,7 +918,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         created_at: view.created_at,
                         metrics: view.metrics,
                     };
-                }),
+                })),
             };
         } catch (error) {
             fastify.log.error(error);
@@ -1050,7 +1050,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
-            return toAgentView(agent);
+            return await toAgentView(agent);
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
@@ -1082,7 +1082,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            return { ...toAgentView(updated), updated: true };
+            return { ...await toAgentView(updated), updated: true };
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
@@ -1176,7 +1176,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
-            return toAgentView(agent);
+            return await toAgentView(agent);
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
@@ -1208,7 +1208,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 return createError('Agent not found', 'invalid_request_error');
             }
 
-            return { ...toAgentView(updated), updated: true };
+            return { ...await toAgentView(updated), updated: true };
         } catch (error) {
             fastify.log.error(error);
             reply.code(500);
