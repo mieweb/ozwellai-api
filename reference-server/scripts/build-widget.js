@@ -62,11 +62,12 @@ function localMiewebUiPlugin() {
     setup(build) {
       if (!hasLocalBuild) {
         if (hasLocalSource) {
-          throw new Error(
-            'Local mieweb/ui submodule is present but not built. Run: cd vendor/mieweb-ui && corepack pnpm install && corepack pnpm run build'
+          console.warn(
+            '[build-widget] Local mieweb/ui submodule is present but not built; using installed @mieweb/ui package.'
           );
+        } else {
+          console.warn('[build-widget] Local mieweb/ui submodule not found; using installed @mieweb/ui package.');
         }
-        console.warn('[build-widget] Local mieweb/ui submodule not found; using installed @mieweb/ui package.');
         return;
       }
 

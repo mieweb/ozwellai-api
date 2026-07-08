@@ -141,3 +141,6 @@ vite.config.ts.timestamp-*
 # macOS files
 .DS_Store
 .playwright-mcp/*
+
+# Generated widget bundle. Source lives in reference-server/embed/src.
+reference-server/embed/ozwell.js

@@ -5,7 +5,7 @@
   "main": "dist/reference-server/src/server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
-    "build": "tsc",
+    "build": "tsc && npm run build:widget",
     "build:widget": "node scripts/build-widget.js",
     "start": "node dist/reference-server/src/server.js",
     "spec": "node scripts/write-spec.js",
