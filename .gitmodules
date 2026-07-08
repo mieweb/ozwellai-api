@@ -1,4 +1,4 @@
 [submodule "vendor/mieweb-ui"]
 	path = vendor/mieweb-ui
 	url = https://github.com/mieweb/ui.git
-	branch = superchat
+	branch = main
