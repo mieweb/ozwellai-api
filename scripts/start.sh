@@ -69,6 +69,7 @@ npm run build
 echo -e "${GREEN}Starting reference server on port $REFERENCE_PORT in $PROJECT_ROOT/reference-server ...${NC}"
 cd "$PROJECT_ROOT/reference-server"
 npm install
+npm run build:widget
 OLLAMA_BASE_URL="$OLLAMA_BASE_URL" npm run dev &
 REFERENCE_PID=$!
 
