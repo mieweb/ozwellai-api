@@ -63,6 +63,12 @@ app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
 });
 
+// register.html was retired; agent management moved to Ozwell Manager.
+// Keep old bookmarks/inbound links working with a permanent redirect.
+app.get('/register.html', (req, res) => {
+  res.redirect(301, 'https://ozwellmanager.os.mieweb.org/');
+});
+
 app.get('*', (req, res, next) => {
   if (req.path === '/' || req.path === '') {
     return res.type('html').send(renderHtml('landing.html'));
