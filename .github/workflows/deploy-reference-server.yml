@@ -1,6 +1,7 @@
 name: Deploy Reference Server
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
