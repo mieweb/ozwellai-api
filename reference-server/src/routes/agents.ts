@@ -61,16 +61,22 @@ function readHeader(request: FastifyRequest, name: string): string | undefined {
     return value;
 }
 
+// Header names are env-configurable so a future SSO/proxy change is a config
+// change, not a code change (per MIE infra guidance). Defaults match the
+// current authentik / oauth2-proxy scheme.
 function readForwardedIdentity(request: FastifyRequest): ManagerIdentity | null {
-    const externalUserId = readHeader(request, 'x-user-id');
-    if (!externalUserId) return null;
+    const externalUserId = readHeader(request, process.env.MANAGER_USER_HEADER || 'x-user');
+    const email = readHeader(request, process.env.MANAGER_EMAIL_HEADER || 'x-email');
+    // Email is the primary identity key (stable across IdP/header changes), so
+    // it is required. Both the old and new proxy schemes forward it.
+    if (!email) return null;
     return {
-        external_user_id: externalUserId,
-        username: readHeader(request, 'x-username'),
-        first_name: readHeader(request, 'x-user-first-name'),
-        last_name: readHeader(request, 'x-user-last-name'),
-        email: readHeader(request, 'x-email'),
-        groups: readHeader(request, 'x-groups'),
+        external_user_id: externalUserId || email,
+        username: readHeader(request, process.env.MANAGER_USERNAME_HEADER || 'x-preferred-username'),
+        first_name: readHeader(request, process.env.MANAGER_FIRSTNAME_HEADER || 'x-user-first-name'),
+        last_name: readHeader(request, process.env.MANAGER_LASTNAME_HEADER || 'x-user-last-name'),
+        email,
+        groups: readHeader(request, process.env.MANAGER_GROUPS_HEADER || 'x-groups'),
     };
 }
 

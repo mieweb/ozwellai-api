@@ -753,6 +753,46 @@ test('manager auth — streaming LLM usage chunks are requested and recorded', a
     }
 });
 
+test('manager auth — gpt-5 streaming request omits unsupported temperature', async () => {
+    const upstream = await startStreamingLLMServer();
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: '',
+            LLM_MODEL: 'openai/gpt-5.1',
+            LLM_ALLOWED_MODELS: 'openai/gpt-5.1',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                model: 'openai/gpt-5.1',
+                messages: [{ role: 'user', content: 'hello stream usage' }],
+                stream: true,
+            }),
+        });
+        assert.equal(chat.status, 200);
+        await chat.text();
+
+        const body = upstream.getCapturedBody();
+        assert.equal('temperature' in body, false);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
 test('manager admin — global key and agent table routes are not exposed', async () => {
     const { server, tmp } = startServer({ adminExternalUserIds: '2009' });
     try {
