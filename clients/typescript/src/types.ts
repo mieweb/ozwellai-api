@@ -44,6 +44,21 @@ export interface ChatCompletionRequest {
   frequency_penalty?: number;
   /** Modify the likelihood of specified tokens appearing in the completion */
   logit_bias?: Record<string, number>;
+  /**
+   * An object specifying the format the model must output.
+   * Use `json_schema` for structured output validated against a JSON Schema.
+   */
+  response_format?:
+    | { type: 'text' }
+    | { type: 'json_object' }
+    | {
+        type: 'json_schema';
+        json_schema: {
+          name: string;
+          strict?: boolean;
+          schema: Record<string, unknown>;
+        };
+      };
   /** A unique identifier representing your end-user */
   user?: string;
 }
