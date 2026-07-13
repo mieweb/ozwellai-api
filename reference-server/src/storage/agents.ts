@@ -265,6 +265,15 @@ function adminExternalUserIds(): Set<string> {
     );
 }
 
+function adminEmails(): Set<string> {
+    return new Set(
+        (process.env.ADMIN_EMAILS || '')
+            .split(',')
+            .map(value => value.trim().toLowerCase())
+            .filter(Boolean),
+    );
+}
+
 export class AgentStore {
     private db: Database.Database;
     private stmtInsert: Database.Statement;
@@ -353,6 +362,35 @@ export class AgentStore {
     }
 
     upsertManagerUser(identity: ManagerIdentity): ManagerUser {
+        // Match existing users by email — stable across IdP/proxy changes. When
+        // the forwarded id value changes (e.g. old numeric id -> new OIDC sub),
+        // re-link the existing row and migrate external_user_id in place so the
+        // user keeps their id, parent key, agents, and admin status.
+        const fields = {
+            external_user_id: identity.external_user_id,
+            username: identity.username ?? null,
+            first_name: identity.first_name ?? null,
+            last_name: identity.last_name ?? null,
+            email: identity.email ?? null,
+            groups: identity.groups ?? null,
+        };
+
+        const existing = identity.email ? this.getManagerUserByEmail(identity.email) : null;
+        if (existing) {
+            this.db.prepare(`
+              UPDATE users SET
+                external_user_id = @external_user_id,
+                username = @username,
+                first_name = @first_name,
+                last_name = @last_name,
+                email = @email,
+                groups = @groups,
+                last_seen_at = datetime('now')
+              WHERE id = @id
+            `).run({ id: existing.id, ...fields });
+            return this.getManagerUserByEmail(identity.email!)!;
+        }
+
         this.db.prepare(`
           INSERT INTO users (id, external_user_id, username, first_name, last_name, email, groups, last_seen_at)
           VALUES (@id, @external_user_id, @username, @first_name, @last_name, @email, @groups, datetime('now'))
@@ -363,20 +401,17 @@ export class AgentStore {
             email = excluded.email,
             groups = excluded.groups,
             last_seen_at = datetime('now')
-        `).run({
-            id: managerUserId(identity.external_user_id),
-            external_user_id: identity.external_user_id,
-            username: identity.username ?? null,
-            first_name: identity.first_name ?? null,
-            last_name: identity.last_name ?? null,
-            email: identity.email ?? null,
-            groups: identity.groups ?? null,
-        });
+        `).run({ id: managerUserId(identity.external_user_id), ...fields });
         return this.getManagerUserByExternalId(identity.external_user_id)!;
     }
 
     getManagerUserByExternalId(externalUserId: string): ManagerUser | null {
         const row = this.db.prepare('SELECT * FROM users WHERE external_user_id = ?').get(externalUserId) as DbManagerUserRow | undefined;
+        return row ? toManagerUser(row) : null;
+    }
+
+    getManagerUserByEmail(email: string): ManagerUser | null {
+        const row = this.db.prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email) as DbManagerUserRow | undefined;
         return row ? toManagerUser(row) : null;
     }
 
@@ -417,7 +452,8 @@ export class AgentStore {
     ensureManagerUserProvisioned(identity: ManagerIdentity): { user: ManagerUser; parentKey: ParentApiKey } {
         const provision = this.db.transaction((managerIdentity: ManagerIdentity) => {
             let user = this.upsertManagerUser(managerIdentity);
-            const bootstrapAdmin = adminExternalUserIds().has(user.external_user_id);
+            const bootstrapAdmin = adminExternalUserIds().has(user.external_user_id)
+                || (user.email ? adminEmails().has(user.email.toLowerCase()) : false);
             if (user.status !== 'active' || (bootstrapAdmin && !user.is_admin)) {
                 this.db.prepare('UPDATE users SET status = ?, is_admin = CASE WHEN ? THEN 1 ELSE is_admin END WHERE id = ?')
                     .run('active', bootstrapAdmin ? 1 : 0, user.id);
