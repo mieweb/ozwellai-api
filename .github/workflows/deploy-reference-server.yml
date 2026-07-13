@@ -9,6 +9,9 @@ on:
       - 'reference-server/**'
       - 'clients/typescript/**'
       - 'spec/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-deploy-package.sh'
       - '.github/workflows/deploy-reference-server.yml'
 
 concurrency:
@@ -30,6 +33,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: |
+            package-lock.json
             spec/package-lock.json
             clients/typescript/package-lock.json
             reference-server/package-lock.json
@@ -117,9 +121,9 @@ jobs:
             rm -rf reference-server/dist clients/typescript/dist spec/dist
             tar -xzf /tmp/reference-server-build.tar.gz
 
-            cd reference-server
-            npm ci --omit=dev
+            npm ci --omit=dev --workspace reference-server --include-workspace-root=false
 
+            cd reference-server
             touch .env
             if grep -q '^PORT=' .env; then
               sed -i 's/^PORT=.*/PORT=8000/' .env
