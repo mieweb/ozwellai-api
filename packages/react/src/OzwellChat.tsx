@@ -30,7 +30,6 @@ export function OzwellChat(props: OzwellChatProps) {
 
     // Configuration
     endpoint,
-    provider,
     model,
     system,
     welcomeMessage,
@@ -138,7 +137,6 @@ export function OzwellChat(props: OzwellChatProps) {
     const config: Partial<OzwellConfig> = {
       // Core config
       endpoint,
-      provider,
       model,
       system,
       welcomeMessage,
@@ -216,7 +214,6 @@ export function OzwellChat(props: OzwellChatProps) {
   }, [
     scriptStatus,
     endpoint,
-    provider,
     model,
     system,
     welcomeMessage,
