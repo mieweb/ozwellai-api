@@ -56,9 +56,6 @@ export interface OzwellConfig {
   /** Model name (e.g., 'llama3', 'gpt-4') */
   model?: string;
 
-  /** Provider name (e.g., 'openai', 'anthropic', 'ollama') */
-  provider?: string;
-
   /** System prompt for the assistant */
   system?: string;
 
