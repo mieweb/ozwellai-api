@@ -34,6 +34,15 @@ const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearl
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
 
+type ProviderModelOption = {
+  provider: string;
+  model: string;
+  id: string;
+  label: string;
+};
+
+type ProviderModelSelection = Pick<ProviderModelOption, 'provider' | 'model'>;
+
 const DEFAULT_CONFIG: Required<Pick<OzwellConfig, 'title' | 'placeholder' | 'endpoint' | 'debug' | 'thinkingEnabled' | 'thinkingDefaultMode'>> = {
   title: 'Ozwell',
   placeholder: 'Ask a question...',
@@ -127,6 +136,84 @@ function requestHeaders(config: OzwellConfig) {
   if (authKey) headers.Authorization = `Bearer ${authKey}`;
   if (config.headers) Object.assign(headers, config.headers);
   return headers;
+}
+
+function effectiveModelsEndpoint(endpoint?: string) {
+  let url: URL;
+  try {
+    url = new URL(endpoint || DEFAULT_CONFIG.endpoint, window.location.href);
+  } catch {
+    url = new URL(DEFAULT_CONFIG.endpoint, window.location.href);
+  }
+  url.pathname = '/v1/models/effective';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function normalizeEffectiveModels(payload: unknown): ProviderModelOption[] {
+  const data = payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown[] }).data)
+    ? (payload as { data: unknown[] }).data
+    : [];
+  const seen = new Set<string>();
+  const models: ProviderModelOption[] = [];
+
+  for (const item of data) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const provider = typeof record.provider === 'string' ? record.provider.trim() : '';
+    const model = typeof record.model === 'string' ? record.model.trim() : '';
+    if (!provider || !model) continue;
+    const key = `${provider}:${model}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const id = typeof record.id === 'string' && record.id.trim() ? record.id : model;
+    const label = typeof record.label === 'string' && record.label.trim() ? record.label : model;
+    models.push({ provider, model, id, label });
+  }
+
+  return models;
+}
+
+function providerLabel(provider: string) {
+  return provider
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ') || provider;
+}
+
+function modelOptionLabel(option: ProviderModelSelection | ProviderModelOption) {
+  const label = 'label' in option && option.label ? option.label : option.model;
+  return `${providerLabel(option.provider)} / ${label}`;
+}
+
+function sameProviderModel(left: ProviderModelSelection | null, right: ProviderModelSelection | null) {
+  return left?.provider === right?.provider && left?.model === right?.model;
+}
+
+function resolveActiveModel(
+  config: OzwellConfig,
+  models: ProviderModelOption[],
+  current: ProviderModelSelection | null
+): ProviderModelSelection | null {
+  if (models.length === 0) return null;
+  if (config.provider && config.model) {
+    const configured = models.find((item) => item.provider === config.provider && (item.model === config.model || item.id === config.model));
+    if (configured) return { provider: configured.provider, model: configured.model };
+  }
+
+  if (config.model) {
+    const matches = models.filter((item) => item.model === config.model || item.id === config.model);
+    if (matches.length === 1) return { provider: matches[0].provider, model: matches[0].model };
+  }
+
+  const currentAllowed = current
+    ? models.find((item) => item.provider === current.provider && item.model === current.model)
+    : null;
+  if (currentAllowed) return { provider: currentAllowed.provider, model: currentAllowed.model };
+
+  return { provider: models[0].provider, model: models[0].model };
 }
 
 function parseToolCallsFromContent(content: string) {
@@ -306,8 +393,13 @@ export function WidgetApp() {
   const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
   const [messagesMenuOpen, setMessagesMenuOpen] = useState(false);
   const [messagesButtonFlare, setMessagesButtonFlare] = useState(false);
+  const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
+  const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
   const configRef = useRef(config);
+  const activeModelRef = useRef(activeModel);
+  const modelSelectorRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef(historyMessages);
   const parentOriginRef = useRef<string | null>(null);
   const pendingToolCallsRef = useRef<Record<string, true>>({});
@@ -320,9 +412,75 @@ export function WidgetApp() {
   const messagesFlaredRef = useRef(false);
 
   useEffect(() => { configRef.current = config; }, [config]);
+  useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
+
+  useEffect(() => {
+    const authKey = getAuthKey(config);
+    if (!authKey) {
+      setEffectiveModels([]);
+      setActiveModel(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const endpoint = effectiveModelsEndpoint(config.endpoint);
+
+    async function fetchEffectiveModels() {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: requestHeaders(config),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          setEffectiveModels([]);
+          return;
+        }
+        const payload = await response.json();
+        setEffectiveModels(normalizeEffectiveModels(payload));
+      } catch (error) {
+        if (!controller.signal.aborted && configRef.current.debug) {
+          console.debug('[Ozwell] Effective model fetch failed', error);
+        }
+        if (!controller.signal.aborted) setEffectiveModels([]);
+      }
+    }
+
+    void fetchEffectiveModels();
+
+    return () => controller.abort();
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers]);
+
+  useEffect(() => {
+    const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
+    setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
+  }, [config.provider, config.model, effectiveModels]);
+
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+
+    function handleModelMenuOutsidePointerDown(event: PointerEvent) {
+      if (!modelSelectorRef.current?.contains(event.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    }
+
+    function handleModelMenuKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setModelMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handleModelMenuOutsidePointerDown, true);
+    document.addEventListener('keydown', handleModelMenuKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handleModelMenuOutsidePointerDown, true);
+      document.removeEventListener('keydown', handleModelMenuKeyDown);
+    };
+  }, [modelMenuOpen]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
     window.parent.postMessage(message, parentOriginRef.current || '*');
@@ -446,7 +604,14 @@ export function WidgetApp() {
         messages: requestMessages,
         stream: true,
       };
-      if (configRef.current.model) requestBody.model = configRef.current.model;
+      const selectedModel = activeModelRef.current;
+      if (selectedModel) {
+        requestBody.provider = selectedModel.provider;
+        requestBody.model = selectedModel.model;
+      } else if (configRef.current.provider && configRef.current.model) {
+        requestBody.provider = configRef.current.provider;
+        requestBody.model = configRef.current.model;
+      } else if (configRef.current.model) requestBody.model = configRef.current.model;
       if (tools.length > 0) requestBody.tools = tools;
 
       const response = await fetch(configRef.current.endpoint || '/v1/chat/completions', {
@@ -899,6 +1064,16 @@ export function WidgetApp() {
     THINKING_MODE_OPTIONS.find((option) => option.value === String(thinkingMode))?.label || 'Auto'
   ), [thinkingMode]);
 
+  const selectedModelOption = useMemo(() => (
+    activeModel
+      ? effectiveModels.find((item) => item.provider === activeModel.provider && item.model === activeModel.model) || null
+      : null
+  ), [activeModel, effectiveModels]);
+
+  const selectedModelLabel = selectedModelOption ? modelOptionLabel(selectedModelOption) : '';
+
+  const showModelSelector = effectiveModels.length > 1 && Boolean(selectedModelOption);
+
   const scrollToMessage = useCallback((chatIndex: number) => {
     const messageNodes = document.querySelectorAll<HTMLElement>(
       '[data-slot="ai-chat-messages"] [data-slot="ai-message"]'
@@ -911,49 +1086,49 @@ export function WidgetApp() {
     <div className="ozwell-widget-shell">
       {(config.thinkingEnabled || showMessagesNav) && (
         <div className="ozwell-reasoning-bar">
-          {config.thinkingEnabled ? (
-            <div className="ozwell-thinking-control">
-              <Dropdown
-                open={thinkingMenuOpen}
-                onOpenChange={setThinkingMenuOpen}
-                placement="bottom-start"
-                width={248}
-                className="ozwell-thinking-menu"
-                trigger={(
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="ozwell-thinking-trigger"
-                    aria-label={`Show thinking: ${selectedThinkingLabel}`}
-                  >
-                    Show thinking: {selectedThinkingLabel}
-                  </Button>
-                )}
-              >
-                <DropdownContent className="ozwell-thinking-menu-content">
-                  {THINKING_MODE_OPTIONS.map((option) => (
-                    <DropdownItem
-                      key={option.value}
-                      searchText={`${option.label} ${option.description}`}
-                      onClick={() => selectThinkingMode(option.value)}
-                      className="ozwell-thinking-menu-item"
-                      aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
+          <div className="ozwell-left-controls">
+            {config.thinkingEnabled ? (
+              <div className="ozwell-thinking-control">
+                <Dropdown
+                  open={thinkingMenuOpen}
+                  onOpenChange={setThinkingMenuOpen}
+                  placement="bottom-start"
+                  width={248}
+                  className="ozwell-thinking-menu"
+                  trigger={(
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="ozwell-thinking-trigger"
+                      aria-label={`Show thinking: ${selectedThinkingLabel}`}
                     >
-                      <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
-                        <span className="ozwell-thinking-option">
-                          <span className="ozwell-thinking-option-label">{option.label}</span>
-                          <span className="ozwell-thinking-option-description">{option.description}</span>
-                        </span>
-                      </Tooltip>
-                    </DropdownItem>
-                  ))}
-                </DropdownContent>
-              </Dropdown>
-            </div>
-          ) : (
-            <span className="ozwell-control-spacer" aria-hidden="true" />
-          )}
+                      Show thinking: {selectedThinkingLabel}
+                    </Button>
+                  )}
+                >
+                  <DropdownContent className="ozwell-thinking-menu-content">
+                    {THINKING_MODE_OPTIONS.map((option) => (
+                      <DropdownItem
+                        key={option.value}
+                        searchText={`${option.label} ${option.description}`}
+                        onClick={() => selectThinkingMode(option.value)}
+                        className="ozwell-thinking-menu-item"
+                        aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
+                      >
+                        <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
+                          <span className="ozwell-thinking-option">
+                            <span className="ozwell-thinking-option-label">{option.label}</span>
+                            <span className="ozwell-thinking-option-description">{option.description}</span>
+                          </span>
+                        </Tooltip>
+                      </DropdownItem>
+                    ))}
+                  </DropdownContent>
+                </Dropdown>
+              </div>
+            ) : null}
+          </div>
           <div className="ozwell-reasoning-controls">
             {showMessagesNav && (
               <Dropdown
@@ -1016,6 +1191,56 @@ export function WidgetApp() {
         onClose={() => postToParent({ source: 'ozwell-chat-widget', type: 'closed' })}
         renderTextContent={renderTextContent}
       />
+
+      {showModelSelector && selectedModelOption ? (
+        <div className="ozwell-composer-model-control" ref={modelSelectorRef}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="ozwell-composer-model-trigger"
+            aria-label={`Model: ${selectedModelLabel}`}
+            aria-haspopup="menu"
+            aria-expanded={modelMenuOpen}
+            onClick={() => setModelMenuOpen((open) => !open)}
+          >
+            <span className="ozwell-composer-model-label">{selectedModelOption.label}</span>
+            <span className="ozwell-composer-model-chevron" aria-hidden="true">{modelMenuOpen ? '⌃' : '⌄'}</span>
+          </Button>
+
+          {modelMenuOpen ? (
+            <div className="ozwell-composer-model-menu" role="menu">
+              <DropdownContent className="ozwell-model-menu-content">
+                <div className="ozwell-model-menu-summary" aria-hidden="true">
+                  <span>Model</span>
+                  <strong>{selectedModelOption.label}</strong>
+                </div>
+                {effectiveModels.map((option) => {
+                  const optionLabel = modelOptionLabel(option);
+                  const selected = option.provider === selectedModelOption.provider && option.model === selectedModelOption.model;
+                  return (
+                    <DropdownItem
+                      key={`${option.provider}:${option.model}`}
+                      searchText={optionLabel}
+                      onClick={() => {
+                        setActiveModel({ provider: option.provider, model: option.model });
+                        setModelMenuOpen(false);
+                      }}
+                      className="ozwell-model-menu-item"
+                      aria-current={selected ? 'true' : undefined}
+                    >
+                      <span className="ozwell-model-option">
+                        <span className="ozwell-model-provider">{providerLabel(option.provider)}</span>
+                        <span className="ozwell-model-name">{option.label}</span>
+                      </span>
+                    </DropdownItem>
+                  );
+                })}
+              </DropdownContent>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="ozwell-footer">Powered by Ozwell</div>
     </div>
