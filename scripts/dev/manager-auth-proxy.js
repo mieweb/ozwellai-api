@@ -7,11 +7,11 @@ const listenPort = Number(process.env.LOCAL_AUTH_PROXY_PORT || 3100);
 const target = new URL(process.env.LOCAL_AUTH_PROXY_TARGET || 'http://localhost:3000');
 
 const injectedHeaders = {
-  'x-user-id': process.env.LOCAL_AUTH_X_USER_ID || 'local-dev-user-1',
-  'x-username': process.env.LOCAL_AUTH_X_USERNAME || 'localdev',
-  'x-user-first-name': process.env.LOCAL_AUTH_X_USER_FIRST_NAME || 'Local',
-  'x-user-last-name': process.env.LOCAL_AUTH_X_USER_LAST_NAME || 'Developer',
-  'x-email': process.env.LOCAL_AUTH_X_EMAIL || 'localdev@example.test',
+  'x-user': process.env.LOCAL_AUTH_X_USER || process.env.LOCAL_AUTH_X_USER_ID || 'local-dev-user-1',
+  'x-preferred-username': process.env.LOCAL_AUTH_X_USERNAME || 'exampleuser',
+  'x-user-first-name': process.env.LOCAL_AUTH_X_USER_FIRST_NAME || 'Example',
+  'x-user-last-name': process.env.LOCAL_AUTH_X_USER_LAST_NAME || 'User',
+  'x-email': process.env.LOCAL_AUTH_X_EMAIL || 'example-user@example.test',
   'x-groups': process.env.LOCAL_AUTH_X_GROUPS || 'ldapusers',
 };
 
@@ -49,5 +49,5 @@ const server = http.createServer((clientReq, clientRes) => {
 
 server.listen(listenPort, '127.0.0.1', () => {
   console.log(`[manager-auth-proxy] http://localhost:${listenPort} -> ${target.origin}`);
-  console.log(`[manager-auth-proxy] injecting x-user-id=${injectedHeaders['x-user-id']} x-username=${injectedHeaders['x-username']} x-email=${injectedHeaders['x-email']}`);
+  console.log(`[manager-auth-proxy] injecting x-user=${injectedHeaders['x-user']} x-preferred-username=${injectedHeaders['x-preferred-username']} x-email=${injectedHeaders['x-email']}`);
 });
