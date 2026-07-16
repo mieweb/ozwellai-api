@@ -64,7 +64,6 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             LLM_BASE_URL: '',
             LLM_API_KEY: '',
             LLM_PROVIDER: '',
-            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
             OLLAMA_BASE_URL: '',
             NODE_ENV: 'development',
             ...extraEnv,
@@ -642,14 +641,14 @@ test('manager auth — /v1/manager/models returns allowed models without bearer 
         const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
         assert.equal(res.status, 200);
         const body = await res.json();
-        assert.deepEqual(body.data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
-        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini', 'openai/gpt-4o']);
+        assert.deepEqual(body.data.map(model => model.id), ['gpt-4o-mini']);
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini']);
     } finally {
         stopServer(server, tmp);
     }
 });
 
-test('manager models — gateway discovery stores all provider models and is preferred over legacy seed', async () => {
+test('manager models — gateway discovery stores all provider models', async () => {
     const upstream = await startJsonLLMServer({
         modelsByProvider: {
             openai: ['gpt-4o-mini', 'text-embedding-3-small', 'tts-1', 'gpt-image-1'],
@@ -662,7 +661,6 @@ test('manager models — gateway discovery stores all provider models and is pre
             LLM_BASE_URL: upstream.baseURL,
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: 'openai',
-            LLM_ALLOWED_MODELS: 'stale-env-model',
         },
     });
     try {
@@ -683,7 +681,6 @@ test('manager models — gateway discovery stores all provider models and is pre
                 'ollama/qwen2.5-coder:7b:gateway',
             ],
         );
-        assert.equal(body.data.some(model => model.model === 'stale-env-model'), false);
     } finally {
         stopServer(server, tmp);
         await upstream.close();
@@ -701,7 +698,6 @@ test('manager models — gateway refresh hides stale registry rows from older so
             LLM_BASE_URL: upstream.baseURL,
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: 'openai',
-            LLM_ALLOWED_MODELS: 'stale-env-model',
         },
     });
     try {
@@ -713,7 +709,7 @@ test('manager models — gateway refresh hides stale registry rows from older so
             db.prepare(`
               INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).run('openai', 'stale-env-model', 'stale-env-model', 'stale-env-model', 'env', 1, new Date().toISOString(), new Date().toISOString());
+            `).run('openai', 'stale-registry-model', 'stale-registry-model', 'stale-registry-model', 'previous-refresh', 1, new Date().toISOString(), new Date().toISOString());
         } finally {
             db.close();
         }
@@ -741,7 +737,6 @@ test('manager models — direct Ollama discovery supplements gateway discovery',
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: 'openai',
             OLLAMA_BASE_URL: ollama.baseURL,
-            LLM_ALLOWED_MODELS: '',
         },
     });
     try {
@@ -773,25 +768,25 @@ test('manager admin — parent key model restrictions can be saved and narrow ef
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
             body: JSON.stringify({
-                allowed_models: [{ provider: 'openai', model: 'gpt-4o' }],
+                allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }],
             }),
         });
         assert.equal(save.status, 200);
-        assert.deepEqual((await save.json()).allowed_models, [{ provider: 'openai', model: 'gpt-4o' }]);
+        assert.deepEqual((await save.json()).allowed_models, [{ provider: 'openai', model: 'gpt-4o-mini' }]);
 
         const load = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
             headers: MANAGER_HEADERS,
         });
         assert.equal(load.status, 200);
         const loadBody = await load.json();
-        assert.deepEqual(loadBody.allowed_models, [{ provider: 'openai', model: 'gpt-4o' }]);
-        assert.deepEqual(loadBody.effective_models.map(model => model.id), ['gpt-4o']);
+        assert.deepEqual(loadBody.allowed_models, [{ provider: 'openai', model: 'gpt-4o-mini' }]);
+        assert.deepEqual(loadBody.effective_models.map(model => model.id), ['gpt-4o-mini']);
 
         const consumer = await fetch(`${BASE}/v1/models/effective`, {
             headers: { 'Authorization': `Bearer ${key.key}` },
         });
         assert.equal(consumer.status, 200);
-        assert.deepEqual((await consumer.json()).data.map(model => model.id), ['gpt-4o']);
+        assert.deepEqual((await consumer.json()).data.map(model => model.id), ['gpt-4o-mini']);
     } finally {
         stopServer(server, tmp);
     }
@@ -859,14 +854,14 @@ instructions: Test unrestricted model policy
         });
         assert.equal(consumer.status, 200);
         const body = await consumer.json();
-        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini', 'openai/gpt-4o']);
+        assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}`), ['openai/gpt-4o-mini']);
     } finally {
         stopServer(server, tmp);
     }
 });
 
 test('models — DB agent policy wins over legacy YAML model fields', async () => {
-    const { server, tmp } = startServer();
+    const { server, tmp } = startServer({ extraEnv: { LLM_MODEL: 'gpt-4o' } });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
@@ -1082,7 +1077,6 @@ test('models — effective endpoint uses cached DB registry without live discove
             LLM_BASE_URL: llm.baseURL,
             LLM_API_KEY: 'test-key',
             LLM_PROVIDER: 'openai',
-            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
         },
     });
     try {
@@ -1098,7 +1092,7 @@ test('models — effective endpoint uses cached DB registry without live discove
             headers: { Authorization: `Bearer ${parentKey}` },
         });
         assert.equal(effective.status, 200);
-        assert.deepEqual((await effective.json()).data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
+        assert.deepEqual((await effective.json()).data.map(model => model.id), ['gpt-4o-mini']);
         assert.equal(llm.getModelRequestCount(), 0);
     } finally {
         stopServer(server, tmp);
@@ -1379,7 +1373,6 @@ test('manager auth — streaming LLM usage chunks are requested and recorded', a
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'test-stream-model',
-            LLM_ALLOWED_MODELS: 'test-stream-model',
             ALLOW_MOCK: '',
         },
     });
@@ -1438,7 +1431,6 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'openai/gpt-5.1',
-            LLM_ALLOWED_MODELS: 'openai/gpt-5.1',
             ALLOW_MOCK: '',
         },
     });
@@ -1544,7 +1536,6 @@ test('chat — model-only requests require provider when model id is ambiguous',
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'shared-model',
-            LLM_ALLOWED_MODELS: 'openai/shared-model,anthropic/shared-model',
             ALLOW_MOCK: '',
         },
     });
@@ -1552,6 +1543,8 @@ test('chat — model-only requests require provider when model id is ambiguous',
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
+        const models = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
+        assert.equal(models.status, 200);
 
         const ambiguous = await fetch(`${BASE}/v1/chat/completions`, {
             method: 'POST',
@@ -1582,7 +1575,6 @@ test('chat — fallback retry does not use a model blocked by restrictions', asy
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'gpt-4o',
-            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
             ALLOW_MOCK: '',
         },
     });
@@ -1590,6 +1582,8 @@ test('chat — fallback retry does not use a model blocked by restrictions', asy
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
+        const models = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
+        assert.equal(models.status, 200);
 
         const save = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
             method: 'PUT',

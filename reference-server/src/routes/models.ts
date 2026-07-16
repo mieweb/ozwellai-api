@@ -2,17 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, isLLMBackendConfigured, extractToken, isAgentKey } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
 
-const FALLBACK_MODELS = [
-  { provider: 'openai', model: 'gpt-4o', id: 'gpt-4o', label: 'gpt-4o', source: 'fallback' },
-  { provider: 'openai', model: 'gpt-4o-mini', id: 'gpt-4o-mini', label: 'gpt-4o-mini', source: 'fallback' },
-];
-
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
-
-// Legacy bootstrap seed. Live gateway discovery is preferred whenever configured.
-const ALLOWED_MODELS = process.env.LLM_ALLOWED_MODELS
-  ? process.env.LLM_ALLOWED_MODELS.split(',').map(m => m.trim()).filter(Boolean)
-  : null;
 
 function uniqueProviders(providers: Array<string | undefined>) {
   return Array.from(new Set(providers.map(provider => provider?.trim()).filter(Boolean))) as string[];
@@ -105,22 +95,20 @@ export async function getModelsList() {
     return listResponse(agentStore.replaceProviderModels(discoveredRecords));
   }
 
-  if (ALLOWED_MODELS) {
-    return listResponse(agentStore.replaceProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env-seed'))));
-  }
-
-  return listResponse(agentStore.replaceProviderModels(FALLBACK_MODELS));
+  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  return listResponse(agentStore.replaceProviderModels([
+    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
+  ]));
 }
 
 export function getCachedModelsList() {
   const cached = agentStore.listProviderModels();
   if (cached.length) return listResponse(cached);
 
-  if (ALLOWED_MODELS) {
-    return listResponse(agentStore.replaceProviderModels(ALLOWED_MODELS.map(id => toModelRecord(id, 'env-seed'))));
-  }
-
-  return listResponse(agentStore.replaceProviderModels(FALLBACK_MODELS));
+  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  return listResponse(agentStore.replaceProviderModels([
+    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
+  ]));
 }
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
