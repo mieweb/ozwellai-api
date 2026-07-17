@@ -87,13 +87,19 @@ function listResponse(records: ProviderModelRecord[]) {
   };
 }
 
-export async function getModelsList() {
+export async function refreshProviderModels() {
   const gatewayRecords = await discoverGatewayModels();
   const ollamaRecords = await discoverDirectOllamaModels();
   const discoveredRecords = [...gatewayRecords, ...ollamaRecords];
+  return agentStore.replaceProviderModels(discoveredRecords);
+}
+
+export async function getModelsList() {
+  const discoveredRecords = await refreshProviderModels();
   if (discoveredRecords.length) {
-    return listResponse(agentStore.replaceProviderModels(discoveredRecords));
+    return listResponse(discoveredRecords);
   }
+  if (agentStore.hasProviderModelRegistry()) return listResponse([]);
 
   const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
   return listResponse(agentStore.replaceProviderModels([
@@ -104,6 +110,7 @@ export async function getModelsList() {
 export function getCachedModelsList() {
   const cached = agentStore.listProviderModels();
   if (cached.length) return listResponse(cached);
+  if (agentStore.hasProviderModelRegistry()) return listResponse([]);
 
   const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
   return listResponse(agentStore.replaceProviderModels([
