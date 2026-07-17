@@ -742,6 +742,10 @@ export class AgentStore {
         return rows.map(row => ({ ...row, enabled: Boolean(row.enabled) }));
     }
 
+    hasProviderModelRegistry(): boolean {
+        return Boolean(this.db.prepare('SELECT 1 FROM provider_models LIMIT 1').get());
+    }
+
     getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {
         return this.db.prepare(`
           SELECT provider, model

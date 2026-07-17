@@ -65,6 +65,7 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             LLM_API_KEY: '',
             LLM_PROVIDER: '',
             OLLAMA_BASE_URL: '',
+            MODEL_DISCOVERY_REFRESH_MS: '0',
             NODE_ENV: 'development',
             ...extraEnv,
         }
@@ -725,6 +726,104 @@ test('manager models — gateway refresh hides stale registry rows from older so
         assert.equal(res.status, 200);
         const body = await res.json();
         assert.deepEqual(body.data.map(model => `${model.provider}/${model.model}:${model.source}`), ['openai/gpt-4o-mini:gateway']);
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('manager models — automatic discovery refresh replaces stale registry rows', async () => {
+    const upstream = await startJsonLLMServer({
+        modelsByProvider: {
+            openai: ['gpt-4o-mini'],
+        },
+    });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: 'openai',
+            MODEL_DISCOVERY_REFRESH_MS: '100',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run('openai', 'stale-model', 'stale-model', 'stale-model', 'old-registry', 1, new Date().toISOString(), new Date().toISOString());
+        } finally {
+            db.close();
+        }
+
+        const me = await fetch(`${BASE}/v1/manager/parent-key/reveal`, {
+            method: 'POST',
+            headers: MANAGER_HEADERS,
+        });
+        const parentKey = (await me.json()).parent_key;
+
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+            const effective = await fetch(`${BASE}/v1/models/effective`, {
+                headers: { Authorization: `Bearer ${parentKey}` },
+            });
+            assert.equal(effective.status, 200);
+            const ids = (await effective.json()).data.map(model => model.id);
+            if (ids.includes('gpt-4o-mini') && !ids.includes('stale-model')) return;
+            await delay(100);
+        }
+
+        assert.fail('automatic model discovery refresh did not replace stale registry rows');
+    } finally {
+        stopServer(server, tmp);
+        await upstream.close();
+    }
+});
+
+test('manager models — automatic discovery refresh can clear unavailable provider models', async () => {
+    const upstream = await startJsonLLMServer({ modelsByProvider: {} });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: upstream.baseURL,
+            LLM_API_KEY: 'test-upstream-key',
+            LLM_PROVIDER: 'openai',
+            MODEL_DISCOVERY_REFRESH_MS: '100',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO provider_models (provider, model, id, label, source, enabled, last_discovered_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run('openai', 'stale-model', 'stale-model', 'stale-model', 'old-registry', 1, new Date().toISOString(), new Date().toISOString());
+        } finally {
+            db.close();
+        }
+
+        const me = await fetch(`${BASE}/v1/manager/parent-key/reveal`, {
+            method: 'POST',
+            headers: MANAGER_HEADERS,
+        });
+        const parentKey = (await me.json()).parent_key;
+
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+            const effective = await fetch(`${BASE}/v1/models/effective`, {
+                headers: { Authorization: `Bearer ${parentKey}` },
+            });
+            assert.equal(effective.status, 200);
+            const ids = (await effective.json()).data.map(model => model.id);
+            if (ids.length === 0) return;
+            await delay(100);
+        }
+
+        assert.fail('automatic model discovery refresh did not clear unavailable provider models');
     } finally {
         stopServer(server, tmp);
         await upstream.close();
