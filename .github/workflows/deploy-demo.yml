@@ -1,16 +1,18 @@
 name: Deploy Demo Site
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'landing-page/**'
       - '.github/workflows/deploy-demo.yml'
       - 'reference-server/embed/**'
 
 concurrency:
-  group: deploy-demo
+  group: deploy-demo-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -32,9 +34,10 @@ jobs:
           path: landing-page-build.tar.gz
           retention-days: 1
 
-  deploy:
+  deploy-prod:
     name: Deploy to ozwell-prod landing
     needs: build
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
 
     steps:
@@ -84,3 +87,75 @@ jobs:
 
             # Cleanup
             rm /tmp/landing-page-build.tar.gz
+
+  deploy-dev:
+    name: Deploy to ozwell-dev2 landing
+    needs: build
+    if: github.ref_name == 'dev'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: landing-page-build
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SSH_PRIVATE_KEY" ]]; then
+            echo "SSH_PRIVATE_KEY is required"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOSTNAME" >> ~/.ssh/known_hosts
+
+      - name: Upload to dev2
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
+        run: rsync -e "ssh -p $DEPLOY_PORT" -ruva --progress landing-page-build.tar.gz "$DEPLOY_USER@$DEPLOY_HOSTNAME:/tmp/"
+
+      - name: Extract and restart dev2 landing
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
+          DEPLOY_PATH: ${{ vars.OZWELL_DEV2_DEPLOY_PATH || '/home/adamerla/ozwellai-api' }}
+          DEV_MANAGER_URL: ${{ vars.OZWELL_DEV2_MANAGER_URL || 'https://ozwellconsole.os.mieweb.org' }}
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOSTNAME" "DEPLOY_PATH='$DEPLOY_PATH' DEV_MANAGER_URL='$DEV_MANAGER_URL' bash -s" <<'REMOTE'
+            set -euo pipefail
+
+            deploy_path="${DEPLOY_PATH:-/home/adamerla/ozwellai-api}"
+            dev_manager_url="${DEV_MANAGER_URL:-https://ozwellconsole.os.mieweb.org}"
+            cd "$deploy_path"
+
+            tar -xzf /tmp/landing-page-build.tar.gz
+
+            cd landing-page
+            npm ci --omit=dev
+
+            touch .env
+            if grep -q '^MANAGER_URL=' .env; then
+              sed -i "s|^MANAGER_URL=.*|MANAGER_URL=${dev_manager_url}|" .env
+            else
+              printf '\nMANAGER_URL=%s\n' "$dev_manager_url" >> .env
+            fi
+
+            pm2 stop landing || true
+            pm2 delete landing || true
+            pm2 start server.js --name landing
+            pm2 save
+
+            rm /tmp/landing-page-build.tar.gz
+          REMOTE
