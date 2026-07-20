@@ -5,14 +5,18 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'reference-server/**'
       - 'clients/typescript/**'
       - 'spec/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-deploy-package.sh'
       - '.github/workflows/deploy-reference-server.yml'
 
 concurrency:
-  group: deploy-reference-server
+  group: deploy-reference-server-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -56,9 +60,10 @@ jobs:
           path: reference-server-build.tar.gz
           retention-days: 1
 
-  deploy:
+  deploy-prod:
     name: Deploy to ozwell-prod refserver
     needs: build
+    if: github.ref_name == 'main'
     # Placeholder pending Aaron's exact self-hosted runner labels.
     # Expected target server name from Aaron: ozwell-phxdc-node1.
     runs-on: [self-hosted, ozwell-phxdc-node1]
@@ -128,5 +133,69 @@ jobs:
             fi
 
             eval "$RESTART_COMMAND"
+            rm /tmp/reference-server-build.tar.gz
+          REMOTE
+
+  deploy-dev:
+    name: Deploy to ozwell-dev2 refserver
+    needs: build
+    if: github.ref_name == 'dev'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reference-server-build
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SSH_PRIVATE_KEY" ]]; then
+            echo "SSH_PRIVATE_KEY is required"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$DEPLOY_PORT" "$DEPLOY_HOSTNAME" >> ~/.ssh/known_hosts
+
+      - name: Upload to dev2
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
+        run: rsync -e "ssh -p $DEPLOY_PORT" -ruva --progress reference-server-build.tar.gz "$DEPLOY_USER@$DEPLOY_HOSTNAME:/tmp/"
+
+      - name: Extract and restart dev2 refserver
+        env:
+          DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
+          DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
+          DEPLOY_PATH: ${{ vars.OZWELL_DEV2_DEPLOY_PATH || '/home/adamerla/ozwellai-api' }}
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOSTNAME" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+            set -euo pipefail
+
+            deploy_path="${DEPLOY_PATH:-/home/adamerla/ozwellai-api}"
+            cd "$deploy_path"
+
+            rm -rf reference-server/dist clients/typescript/dist spec/dist
+            tar -xzf /tmp/reference-server-build.tar.gz
+
+            npm ci --omit=dev --workspace reference-server --include-workspace-root=false
+
+            cd reference-server
+            pm2 stop refserver || true
+            pm2 delete refserver || true
+            pm2 start npm --name refserver -- start
+            pm2 save
+
             rm /tmp/reference-server-build.tar.gz
           REMOTE
