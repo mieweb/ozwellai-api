@@ -1,0 +1,162 @@
+name: Deploy Reference Server Dev
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'reference-server/**'
+      - 'clients/typescript/**'
+      - 'spec/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'scripts/build-deploy-package.sh'
+      - '.github/workflows/deploy-reference-server-dev.yml'
+
+concurrency:
+  group: deploy-reference-server-dev
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Reference Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            spec/package-lock.json
+            clients/typescript/package-lock.json
+            reference-server/package-lock.json
+
+      - name: Install and build spec
+        working-directory: ./spec
+        run: npm ci && npm run build
+
+      - name: Install and build TypeScript client
+        working-directory: ./clients/typescript
+        run: npm ci && npm run build
+
+      - name: Install and build reference server
+        working-directory: ./reference-server
+        run: npm ci && npm run build
+
+      - name: Create deployment package
+        run: ./scripts/build-deploy-package.sh
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-server-dev-build
+          path: reference-server-build.tar.gz
+          retention-days: 1
+
+  deploy:
+    name: Deploy to ozwell-dev refserver
+    needs: build
+    runs-on: [self-hosted, "${{ vars.OZWELL_REFSERVER_DEV_RUNNER_LABEL || 'ozwell-dev2' }}"]
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: reference-server-dev-build
+
+      - name: Prepare SSH host
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEV_DEPLOY_HOST || 'ozwell-dev2' }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DEPLOY_HOST" ]]; then
+            echo "OZWELL_REFSERVER_DEV_DEPLOY_HOST is required (format: user@hostname or runner SSH host alias)"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+
+          deploy_hostname="${DEPLOY_HOST#*@}"
+          ssh-keyscan "$deploy_hostname" >> ~/.ssh/known_hosts
+
+      - name: Upload to dev server
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEV_DEPLOY_HOST || 'ozwell-dev2' }}
+        run: rsync -ruva --progress reference-server-build.tar.gz "$DEPLOY_HOST:/tmp/"
+
+      - name: Extract and restart dev service
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEV_DEPLOY_HOST || 'ozwell-dev2' }}
+          DEPLOY_PATH: ${{ vars.OZWELL_REFSERVER_DEV_DEPLOY_PATH || '/storage/apps/ozwellai-api-dev' }}
+          ENV_FILE: ${{ vars.OZWELL_REFSERVER_DEV_ENV_FILE || '/storage/apps/env/ozwellai-api-dev.env' }}
+          START_SCRIPT: ${{ vars.OZWELL_REFSERVER_DEV_START_SCRIPT || '/storage/apps/env/start-ozwellai-api-dev.sh' }}
+          SERVICE_USER: ${{ vars.OZWELL_REFSERVER_DEV_SERVICE_USER || 'ozwell' }}
+          NODE_BIN: ${{ vars.OZWELL_REFSERVER_DEV_NODE_BIN || '/usr/bin/node' }}
+          RESTART_COMMAND: ${{ vars.OZWELL_REFSERVER_DEV_RESTART_COMMAND || 'sudo systemctl restart ozwellai-api-dev' }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' ENV_FILE='$ENV_FILE' START_SCRIPT='$START_SCRIPT' SERVICE_USER='$SERVICE_USER' NODE_BIN='$NODE_BIN' RESTART_COMMAND='$RESTART_COMMAND' bash -s" <<'REMOTE'
+            set -euo pipefail
+
+            deploy_path="${DEPLOY_PATH:-/storage/apps/ozwellai-api-dev}"
+            env_file="${ENV_FILE:-/storage/apps/env/ozwellai-api-dev.env}"
+            start_script="${START_SCRIPT:-/storage/apps/env/start-ozwellai-api-dev.sh}"
+            service_user="${SERVICE_USER:-ozwell}"
+            node_bin="${NODE_BIN:-/usr/bin/node}"
+            case "$deploy_path" in
+              "~") deploy_path="$HOME" ;;
+              "~/"*) deploy_path="$HOME/${deploy_path#~/}" ;;
+            esac
+            case "$env_file" in
+              "~") env_file="$HOME" ;;
+              "~/"*) env_file="$HOME/${env_file#~/}" ;;
+            esac
+            case "$start_script" in
+              "~") start_script="$HOME" ;;
+              "~/"*) start_script="$HOME/${start_script#~/}" ;;
+            esac
+
+            mkdir -p "$deploy_path/reference-server"
+            mkdir -p "$deploy_path/clients/typescript"
+            mkdir -p "$deploy_path/spec"
+            mkdir -p "$deploy_path/data"
+            mkdir -p "$deploy_path/reference-server/data"
+            sudo chown -R "$service_user:$service_user" "$deploy_path/data" "$deploy_path/reference-server/data"
+            cd "$deploy_path"
+
+            rm -rf reference-server/dist clients/typescript/dist spec/dist
+            tar -xzf /tmp/reference-server-build.tar.gz
+
+            npm ci --omit=dev --workspace reference-server --include-workspace-root=false
+
+            sudo mkdir -p "$(dirname "$env_file")"
+            sudo touch "$env_file"
+
+            set_env_var() {
+              key="$1"
+              value="$2"
+              if sudo grep -q "^${key}=" "$env_file"; then
+                sudo sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+              else
+                printf '\n%s=%s\n' "$key" "$value" | sudo tee -a "$env_file" >/dev/null
+              fi
+            }
+
+            set_env_var PORT 8000
+            set_env_var NODE_ENV production
+            set_env_var DB_PATH "$deploy_path/data/ozwell.db"
+
+            sudo mkdir -p "$(dirname "$start_script")"
+            printf '#!/bin/bash\ncd %s/reference-server\nexec %s %s/reference-server/dist/reference-server/src/server.js\n' "$deploy_path" "$node_bin" "$deploy_path" | sudo tee "$start_script" >/dev/null
+            sudo chmod +x "$start_script"
+
+            eval "$RESTART_COMMAND"
+            rm /tmp/reference-server-build.tar.gz
+          REMOTE
