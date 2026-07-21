@@ -210,15 +210,22 @@ test('manager auth — /v1/manager/me auto-provisions user and parent key from t
 
         const db = new Database(dbPath);
         try {
-            const user = db.prepare('SELECT external_user_id, username, email, status, is_admin FROM users WHERE external_user_id = ?').get('admin-user');
-            assert.deepEqual(user, {
+            const user = db.prepare('SELECT id, external_user_id, username, email, status, is_admin FROM users WHERE external_user_id = ?').get('admin-user');
+            assert.match(user.id, /^mgr_/);
+            assert.deepEqual({
+                external_user_id: user.external_user_id,
+                username: user.username,
+                email: user.email,
+                status: user.status,
+                is_admin: user.is_admin,
+            }, {
                 external_user_id: 'admin-user',
                 username: 'testadmin',
                 email: 'test-admin@example.test',
                 status: 'active',
                 is_admin: 0,
             });
-            const key = db.prepare('SELECT id, key, user_id, status FROM api_keys WHERE user_id = ?').get('mgr_admin-user');
+            const key = db.prepare('SELECT id, key, user_id, status FROM api_keys WHERE user_id = ?').get(user.id);
             assert.ok(key.id);
             assert.match(key.key, /^ozw_/);
             assert.doesNotMatch(key.key, /^ozw_manager-/);
