@@ -591,6 +591,78 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
     }
 });
 
+test('manager admin — can create a service parent key without a linked user', async () => {
+    const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+
+        const denied = await fetch(`${BASE}/v1/manager/admin/service-keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...OTHER_MANAGER_HEADERS },
+            body: JSON.stringify({ name: 'workspace-sync-prod' }),
+        });
+        assert.equal(denied.status, 403);
+
+        const createKey = await fetch(`${BASE}/v1/manager/admin/service-keys`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ name: 'workspace-sync-prod' }),
+        });
+        assert.equal(createKey.status, 201);
+        assert.equal(createKey.headers.get('cache-control'), 'no-store');
+        const keyBody = await createKey.json();
+        assert.match(keyBody.parent_key, /^ozw_/);
+        assert.equal(keyBody.name, 'workspace-sync-prod');
+        assert.equal(keyBody.user_id, null);
+        assert.equal(keyBody.owner_type, 'service');
+        assert.equal(keyBody.owner_name, 'workspace-sync-prod');
+        assert.ok(keyBody.created_by_user_id);
+
+        const validate = await fetch(`${BASE}/v1/keys/validate`, {
+            headers: { Authorization: `Bearer ${keyBody.parent_key}` },
+        });
+        assert.equal(validate.status, 200);
+
+        const createAgent = await fetch(`${BASE}/v1/agents`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/yaml',
+                Authorization: `Bearer ${keyBody.parent_key}`,
+            },
+            body: `name: Service Mock\ninstructions: Mock for service key\ntype: mock\n`,
+        });
+        assert.equal(createAgent.status, 201);
+        const agent = await createAgent.json();
+
+        const serviceKeys = await fetch(`${BASE}/v1/manager/admin/service-keys`, { headers: MANAGER_HEADERS });
+        assert.equal(serviceKeys.status, 200);
+        const serviceKey = (await serviceKeys.json()).data.find(key => key.id === keyBody.parent_key_id);
+        assert.equal(serviceKey?.owner_type, 'service');
+        assert.equal(serviceKey?.owner_name, 'workspace-sync-prod');
+
+        const revoke = await fetch(`${BASE}/v1/manager/admin/parent-keys/${keyBody.parent_key_id}/revoke`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ reason: 'service_removed' }),
+        });
+        assert.equal(revoke.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${agent.agent_key}`,
+            },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+        });
+        assert.equal(chat.status, 401);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {

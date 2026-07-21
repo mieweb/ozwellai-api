@@ -157,6 +157,9 @@ type AdminParentKeyRow = AdminMetricRow & {
     name: string;
     key_hint: string | null;
     user_id: string | null;
+    owner_type?: string | null;
+    owner_name?: string | null;
+    created_by_user_id?: string | null;
     external_user_id?: string | null;
     username?: string | null;
     email?: string | null;
@@ -207,6 +210,12 @@ function normalizeDefaultModel(value: unknown) {
     const record = value as Record<string, unknown>;
     if (typeof record.provider !== 'string' || typeof record.model !== 'string') return null;
     return { provider: record.provider, model: record.model };
+}
+
+function normalizeServiceKeyName(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const name = value.trim();
+    return name ? name : null;
 }
 
 function defaultAllowedByRestrictions(defaultModel: { provider: string; model: string } | null, restrictions: ProviderModelSelection[]) {
@@ -351,6 +360,9 @@ function toAdminParentKeyView(key: AdminParentKeyRow) {
         name: key.name,
         key_hint: key.key_hint ? `ozw_...${key.key_hint}` : null,
         user_id: key.user_id ?? null,
+        owner_type: key.owner_type ?? 'user',
+        owner_name: key.owner_name ?? null,
+        created_by_user_id: key.created_by_user_id ?? null,
         external_user_id: key.external_user_id ?? null,
         username: key.username ?? null,
         email: key.email ?? null,
@@ -716,6 +728,48 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             reply.code(code === 'cannot_remove_last_admin' ? 409 : 400);
             return createError('User cannot be demoted', 'invalid_request_error', 'user_id', code);
         }
+    });
+
+    fastify.get('/v1/manager/admin/service-keys', {
+        schema: { tags: ['Manager Admin'], summary: 'List service parent keys' },
+        preHandler: requireManagerAdmin,
+    }, async () => {
+        return {
+            object: 'list',
+            data: (agentStore.listAdminServiceParentKeys() as AdminParentKeyRow[]).map(toAdminParentKeyView),
+        };
+    });
+
+    fastify.post<{ Body: { name?: unknown } }>('/v1/manager/admin/service-keys', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Create a service parent key',
+            body: {
+                type: 'object',
+                properties: { name: { type: 'string' } },
+                required: ['name'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const name = normalizeServiceKeyName(request.body?.name);
+        if (!name) {
+            reply.code(400);
+            return createError('Service key name is required', 'invalid_request_error', 'name', 'missing_name');
+        }
+        const key = agentStore.createServiceParentApiKey(name, request.managerUser!.id);
+        reply.code(201);
+        reply.header('Cache-Control', 'no-store');
+        return {
+            parent_key_id: key.id,
+            parent_key: key.key,
+            parent_key_hint: formatParentKeyHint(key.key),
+            name: key.name,
+            user_id: key.user_id,
+            owner_type: key.owner_type,
+            owner_name: key.owner_name,
+            created_by_user_id: key.created_by_user_id,
+        };
     });
 
     fastify.post<{ Params: { key_id: string }; Body: { reason?: string } }>('/v1/manager/admin/parent-keys/:key_id/revoke', {

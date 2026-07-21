@@ -112,8 +112,12 @@ export function initializeAuthTables(db: Database.Database): void {
     ensureColumn(db, 'api_keys', 'source', 'TEXT');
     ensureColumn(db, 'api_keys', 'revoked_reason', 'TEXT');
     ensureColumn(db, 'api_keys', 'replaced_by_key_id', 'TEXT');
+    ensureColumn(db, 'api_keys', 'owner_type', "TEXT DEFAULT 'user'");
+    ensureColumn(db, 'api_keys', 'owner_name', 'TEXT');
+    ensureColumn(db, 'api_keys', 'created_by_user_id', 'TEXT');
     ensureColumn(db, 'usage_events', 'provider', 'TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_api_keys_owner_type ON api_keys(owner_type)');
     console.log('[auth] Auth tables initialized');
 }
 
@@ -206,6 +210,9 @@ export interface ParentApiKey {
     key: string;
     key_hint: string;
     user_id: string | null;
+    owner_type: string;
+    owner_name: string | null;
+    created_by_user_id: string | null;
     status: string;
     source: string | null;
     revoked_at: string | null;
@@ -526,7 +533,10 @@ export class AgentStore {
 
     getActiveApiKeyForUser(userId: string): ParentApiKey | undefined {
         return this.db.prepare(`
-          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+          SELECT
+            id, name, key, key_hint, user_id,
+            COALESCE(owner_type, 'user') AS owner_type, owner_name, created_by_user_id,
+            COALESCE(status, 'active') AS status, source, revoked_at
           FROM api_keys
           WHERE user_id = ?
             AND COALESCE(status, 'active') = 'active'
@@ -544,13 +554,53 @@ export class AgentStore {
             key,
             key_hint: getKeyHint(key),
             user_id: user.id,
+            owner_type: 'user',
+            owner_name: user.username || user.email || user.external_user_id,
+            created_by_user_id: user.id,
             status: 'active',
             source: 'auto',
             revoked_at: null,
         };
         this.db.prepare(`
-          INSERT INTO api_keys (id, name, key, key_hint, user_id, status, source, created_at)
-          VALUES (@id, @name, @key, @key_hint, @user_id, @status, @source, @created_at)
+          INSERT INTO api_keys (
+            id, name, key, key_hint, user_id, owner_type, owner_name,
+            created_by_user_id, status, source, created_at
+          )
+          VALUES (
+            @id, @name, @key, @key_hint, @user_id, @owner_type, @owner_name,
+            @created_by_user_id, @status, @source, @created_at
+          )
+        `).run({
+            ...parentKey,
+            created_at: new Date().toISOString(),
+        });
+        return parentKey;
+    }
+
+    createServiceParentApiKey(name: string, createdByUserId: string): ParentApiKey {
+        const key = `${KEY_PREFIX}${generateId()}`;
+        const parentKey: ParentApiKey = {
+            id: generateId('api-key'),
+            name,
+            key,
+            key_hint: getKeyHint(key),
+            user_id: null,
+            owner_type: 'service',
+            owner_name: name,
+            created_by_user_id: createdByUserId,
+            status: 'active',
+            source: 'admin_service',
+            revoked_at: null,
+        };
+        this.db.prepare(`
+          INSERT INTO api_keys (
+            id, name, key, key_hint, user_id, owner_type, owner_name,
+            created_by_user_id, status, source, created_at
+          )
+          VALUES (
+            @id, @name, @key, @key_hint, @user_id, @owner_type, @owner_name,
+            @created_by_user_id, @status, @source, @created_at
+          )
         `).run({
             ...parentKey,
             created_at: new Date().toISOString(),
@@ -580,7 +630,10 @@ export class AgentStore {
 
     getApiKeyByKey(key: string): ParentApiKey | undefined {
         return this.db.prepare(`
-          SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+          SELECT
+            id, name, key, key_hint, user_id,
+            COALESCE(owner_type, 'user') AS owner_type, owner_name, created_by_user_id,
+            COALESCE(status, 'active') AS status, source, revoked_at
           FROM api_keys
           WHERE key = ?
         `).get(key) as ParentApiKey | undefined;
@@ -640,7 +693,10 @@ export class AgentStore {
             });
 
             const claimed = this.db.prepare(`
-              SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
+              SELECT
+                id, name, key, key_hint, user_id,
+                COALESCE(owner_type, 'user') AS owner_type, owner_name, created_by_user_id,
+                COALESCE(status, 'active') AS status, source, revoked_at
               FROM api_keys WHERE id = ?
             `).get(target.id) as ParentApiKey;
 
@@ -1023,7 +1079,9 @@ export class AgentStore {
     listAdminParentKeys() {
         return this.db.prepare(`
           SELECT
-            k.id, k.name, k.key_hint, k.user_id, k.status, k.source, k.revoked_at,
+            k.id, k.name, k.key_hint, k.user_id,
+            COALESCE(k.owner_type, 'user') AS owner_type, k.owner_name, k.created_by_user_id,
+            k.status, k.source, k.revoked_at,
             k.revoked_reason, k.replaced_by_key_id, k.created_at,
             u.external_user_id, u.username, u.email,
             (SELECT COUNT(*) FROM agents a WHERE a.parent_key = k.id) AS agent_count,
@@ -1037,6 +1095,10 @@ export class AgentStore {
           LEFT JOIN users u ON u.id = k.user_id
           ORDER BY k.created_at DESC
         `).all();
+    }
+
+    listAdminServiceParentKeys() {
+        return (this.listAdminParentKeys() as Array<{ owner_type: string }>).filter(key => key.owner_type === 'service');
     }
 
     listAdminAgents() {
@@ -1088,7 +1150,10 @@ export class AgentStore {
     revokeParentApiKey(keyId: string, reason = 'admin_revoked'): ParentApiKey | null {
         const revoke = this.db.transaction(() => {
             const existing = this.db.prepare(`
-              SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at, revoked_reason, replaced_by_key_id
+              SELECT
+                id, name, key, key_hint, user_id,
+                COALESCE(owner_type, 'user') AS owner_type, owner_name, created_by_user_id,
+                COALESCE(status, 'active') AS status, source, revoked_at, revoked_reason, replaced_by_key_id
               FROM api_keys
               WHERE id = ?
             `).get(keyId) as ParentApiKey | undefined;
@@ -1106,7 +1171,10 @@ export class AgentStore {
                 revoked_reason: reason,
             });
             return this.db.prepare(`
-              SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at, revoked_reason, replaced_by_key_id
+              SELECT
+                id, name, key, key_hint, user_id,
+                COALESCE(owner_type, 'user') AS owner_type, owner_name, created_by_user_id,
+                COALESCE(status, 'active') AS status, source, revoked_at, revoked_reason, replaced_by_key_id
               FROM api_keys
               WHERE id = ?
             `).get(keyId) as ParentApiKey;
