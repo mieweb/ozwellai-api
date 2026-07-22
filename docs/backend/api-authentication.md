@@ -23,8 +23,8 @@ Ozwell provides two types of API keys for different use cases:
 Full-access keys for server-side integrations:
 
 - ✅ Access all API endpoints
-- ✅ All models and capabilities
-- ✅ No agent restrictions
+- ✅ Models and capabilities allowed by the parent-key policy
+- ✅ Can manage agents and agent model policies
 - ⚠️ **Never expose client-side**
 
 ```bash
@@ -50,12 +50,30 @@ const apiKey = 'ozw_scoped_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 ### Agent Keys
 
-Agent keys are generated automatically when you create an agent via the [Agent Registration API](./agents.md). They are scoped to that agent's configuration (model, tools, instructions) and safe for use in browser embeds.
+Agent keys are generated automatically when you create an agent via the [Agent Registration API](./agents.md). They are scoped to that agent's behavior, tools, and model policy, and are safe for use in browser embeds.
 
 ```javascript
 // Safe for frontend use — scoped to one agent
 const apiKey = 'agnt_key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 ```
+
+## Key Lifecycle
+
+### Parent Keys (`ozw_`)
+
+1. **Provision:** Ozwell Manager creates a parent key the first time a signed-in user opens the manager console.
+2. **Claim:** A user can claim an existing parent key. Agents from the temporary auto-created key move to the claimed key, and the replaced auto key is revoked.
+3. **Reveal:** Users can reveal/copy the active parent key only through an explicit manager action.
+4. **Restrict:** Admins can restrict the providers/models available to a parent key. Empty restrictions mean all enabled discovered models are allowed.
+5. **Revoke:** Admins can revoke a parent key. Agent keys under that parent key stop working.
+
+### Agent Keys (`agnt_key-`)
+
+1. **Create:** Creating an agent generates an agent key tied to that parent key.
+2. **Use:** Browser embeds use the agent key. The server applies the agent behavior, tools, and effective model policy.
+3. **Reveal:** Users can reveal/copy an agent key through an explicit manager or API action.
+4. **Rotate:** Rotating an agent key generates a replacement and invalidates the old value.
+5. **Delete:** Deleting the agent removes the agent and invalidates its agent key.
 
 ## Creating API Keys
 

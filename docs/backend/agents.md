@@ -10,7 +10,9 @@ Ozwell Manager uses the container console login. After login, Ozwell reads trust
 For managed Ozwell, first-time users get an `ozw_` parent key automatically after logging in to Ozwell Manager. Existing users can claim an existing `ozw_` key there.
 :::
 
-Agents let you define a persona, model, temperature, and allowed tools server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
+Agents let you define persona, temperature, tools, and model policy server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
+
+See [Authentication](./api-authentication.md#key-lifecycle) for the parent-key and agent-key lifecycle.
 
 Agent chat requests are processed by whichever backend the server has configured (LLM gateway, Ollama, or mock). See the reference server README for backend configuration details.
 
@@ -122,7 +124,7 @@ That's it — 4 steps: set credentials, create agent, copy the key, embed it.
 | **API Key** | `ozw_` | Manage agents (create, update, delete) | Developers / admins |
 | **Agent Key** | `agnt_key-` | Authenticate chat requests for a specific agent | End-user widgets / embeds |
 
-Agent keys are generated automatically when you create an agent. They are scoped to that agent's configuration (model, tools, instructions).
+Agent keys are generated automatically when you create an agent. They are scoped to that agent's behavior, tools, and model policy.
 
 ---
 
