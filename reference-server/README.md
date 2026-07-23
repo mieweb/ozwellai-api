@@ -392,7 +392,7 @@ Restart the server after changing `.env`; these values are read at startup.
 
 - `GET /docs` - Swagger UI documentation
 - `GET /openapi.json` - OpenAPI 3.1 specification
-- `GET /health` - Health check
+- `GET /health` - Health check with status, timestamp, and commit metadata
 
 ## Authentication
 

@@ -8,6 +8,7 @@ import { setTimeout } from 'node:timers/promises';
 
 const PORT = 3000;
 const BASE = `http://localhost:${PORT}`;
+const TEST_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
 // Poll until the server answers /health, instead of a fixed sleep — a fixed
 // delay is flaky on slow hosts (Windows CI, constrained containers).
@@ -34,7 +35,7 @@ function startServer() {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development' }
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development', GIT_COMMIT: TEST_COMMIT }
   });
   return { server, tmp };
 }
@@ -60,6 +61,8 @@ test('Reference Server - Health Check', async () => {
     const data = await response.json();
     assert.strictEqual(data.status, 'ok');
     assert.ok(data.timestamp, 'should have a timestamp');
+    assert.strictEqual(typeof data.commit, 'string');
+    assert.strictEqual(data.commit, TEST_COMMIT);
 
   } finally {
     cleanup(server, tmp);
