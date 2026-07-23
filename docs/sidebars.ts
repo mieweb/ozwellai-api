@@ -64,6 +64,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'backend/api-overview',
             'backend/api-endpoints',
+            'backend/openai-compatible-clients',
             'backend/agents',
             'backend/api-authentication',
             'backend/api-examples',

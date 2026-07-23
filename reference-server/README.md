@@ -291,6 +291,65 @@ For local dev or demos without a backend, set `ALLOW_MOCK=true` to use determini
 
 See [embed/README.md](embed/README.md) for full documentation.
 
+### Local OpenAI-Compatible Client Testing
+
+For OpenCode, VS Code custom endpoints, or similar tools pointed at a local reference server:
+
+| Setting | Value |
+|---------|-------|
+| Base URL | `http://127.0.0.1:3000/v1` |
+| Chat completions URL | `http://127.0.0.1:3000/v1/chat/completions` |
+| Demo API key | `ozw_demo_localhost_key_for_testing` |
+| Known-good OpenAI model | `gpt-5.4-mini` |
+
+OpenCode provider example:
+
+```json
+{
+  "ozwell-local": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "Ozwell Local",
+    "options": {
+      "baseURL": "http://127.0.0.1:3000/v1",
+      "apiKey": "ozw_demo_localhost_key_for_testing"
+    },
+    "models": {
+      "gpt-5.4-mini": {}
+    }
+  }
+}
+```
+
+VS Code custom endpoint model example:
+
+```json
+{
+  "id": "gpt-5.4-mini",
+  "name": "gpt-5.4-mini",
+  "url": "http://127.0.0.1:3000/v1/chat/completions",
+  "toolCalling": true,
+  "vision": true,
+  "maxInputTokens": 128000,
+  "maxOutputTokens": 32000
+}
+```
+
+Current branch uses one provider header for all LLM calls. For OpenAI models:
+
+```env
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-5.4-mini
+```
+
+For Anthropic models:
+
+```env
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-sonnet-4-6
+```
+
+Restart the server after changing `.env`; these values are read at startup.
+
 ### Available Scripts
 
 - `npm run dev` - Start development server with hot reload
