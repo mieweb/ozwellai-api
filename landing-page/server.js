@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || process.env.EMBED_TEST_PORT || 8080);
 const referenceBaseUrl = (process.env.REFERENCE_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '');
+const managerUrl = (process.env.MANAGER_URL || 'https://ozwellmanager.os.mieweb.org/').replace(/\/$/, '');
 
 // Agent keys injected into HTML at serve time (keeps keys out of source control)
 const landingAgentKey = process.env.LANDING_AGENT_KEY || '';
@@ -47,6 +48,7 @@ function renderHtml(filename) {
   const html = fs.readFileSync(filePath, 'utf8');
   return html
     .replace(/__REFERENCE_BASE_URL__/g, referenceBaseUrl)
+    .replace(/__MANAGER_URL__/g, managerUrl)
     .replace(/__LANDING_AGENT_KEY__/g, landingAgentKey)
     .replace(/__TICTACTOE_AGENT_KEY__/g, tictactoeAgentKey);
 }
@@ -66,7 +68,7 @@ app.get('/tictactoe.html', (req, res) => {
 // register.html was retired; agent management moved to Ozwell Manager.
 // Keep old bookmarks/inbound links working with a permanent redirect.
 app.get('/register.html', (req, res) => {
-  res.redirect(301, 'https://ozwellmanager.os.mieweb.org/');
+  res.redirect(301, `${managerUrl}/`);
 });
 
 app.get('*', (req, res, next) => {

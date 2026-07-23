@@ -16,6 +16,10 @@ mkdir -p "$DEPLOY_DIR/reference-server"
 mkdir -p "$DEPLOY_DIR/clients/typescript"
 mkdir -p "$DEPLOY_DIR/spec"
 
+# Copy workspace root manifests so remote npm ci uses the root lockfile.
+cp "$PROJECT_ROOT/package.json" "$DEPLOY_DIR/"
+cp "$PROJECT_ROOT/package-lock.json" "$DEPLOY_DIR/"
+
 # Copy spec (needed as local dependency)
 echo "  Copying spec..."
 cp -r "$PROJECT_ROOT/spec/dist" "$DEPLOY_DIR/spec/"
