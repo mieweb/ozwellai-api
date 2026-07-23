@@ -1,11 +1,12 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
-import { agentStore, type PageToolsPolicy } from '../storage/agents';
+import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
+import { getCachedModelsList } from './models';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -27,6 +28,7 @@ type TokenUsage = {
   total_tokens?: number;
 };
 type ChatCompletionRequestWithTools = ChatCompletionRequest & {
+  provider?: string;
   tools?: ToolDef[];
   stream_options?: { include_usage?: boolean };
 };
@@ -326,17 +328,16 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 
-// Pre-construct LLM clients once (reused across all requests)
-const llmClient = isLLMBackendConfigured()
-  ? new OzwellAI({
-      apiKey: process.env.LLM_API_KEY || '',
-      baseURL: process.env.LLM_BASE_URL!,
-      timeout: 120000,
-      defaultHeaders: {
-        ...(LLM_PROVIDER && { 'x-portkey-provider': LLM_PROVIDER }),
-      },
-    })
-  : null;
+function createLlmClient(provider: string | null) {
+  return new OzwellAI({
+    apiKey: process.env.LLM_API_KEY || '',
+    baseURL: process.env.LLM_BASE_URL!,
+    timeout: 120000,
+    defaultHeaders: {
+      ...((provider || LLM_PROVIDER) && { 'x-portkey-provider': provider || LLM_PROVIDER }),
+    },
+  });
+}
 
 const ollamaClient = new OzwellAI({
   apiKey: 'ollama',
@@ -479,6 +480,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       body: {
         type: 'object',
         properties: {
+          provider: { type: 'string' },
           model: { type: 'string' },
           messages: {
             type: 'array',
@@ -567,7 +569,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; model: string | null; temperature: number | null; type: 'mock' | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (tokenIsAgentKey) {
       const agentKey = extractToken(request.headers.authorization);
@@ -617,7 +619,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           ? (tools as unknown[]).map((t) => typeof t === 'string' ? t : (t as { name: string }).name)
           : null,
         pageTools: (parsed.pageTools as PageToolsPolicy) ?? 'all',
-        model: (parsed.model as string | undefined) || null,
+        modelPolicy: agentStore.getAgentModelPolicy(agent.id, agent.yaml),
         temperature: (parsed.temperature as number | undefined) ?? null,
         type: parsed.type === 'mock' ? 'mock' : null,
       };
@@ -626,7 +628,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       usageContext = { authType: 'parent', parentKeyId: parentKey?.id ?? null, agentId: null };
     }
 
-    const recordUsage = (model: string | null, statusCode: number, response?: unknown) => {
+    const recordUsage = (model: string | null, statusCode: number, response?: unknown, provider?: string | null) => {
       if (!usageContext) return;
       const usage = response && typeof response === 'object' && 'usage' in response
         ? (response as { usage?: TokenUsage }).usage
@@ -637,6 +639,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           agent_id: usageContext.agentId,
           auth_type: usageContext.authType,
           route: '/v1/chat/completions',
+          provider: provider ?? null,
           model,
           status_code: statusCode,
           prompt_tokens: usage?.prompt_tokens ?? null,
@@ -659,7 +662,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       if (agentConfig.systemPrompt) {
         mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
       }
-      const mockModel = agentConfig.model || 'mock';
+      const mockModel = agentConfig.modelPolicy.default_model || 'mock';
       const response = respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin);
       recordUsage(mockModel, reply.statusCode, response);
       return response;
@@ -676,9 +679,32 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Determine default model based on backend
     const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
 
-    const { model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
-    // Agent-configured model takes precedence, then client request, then server default
-    const model = agentConfig?.model || requestedModel || DEFAULT_MODEL;
+    const { provider: requestedProvider, model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
+    getCachedModelsList();
+    const effectiveModels = agentConfig && usageContext?.parentKeyId && usageContext.agentId
+      ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
+      : agentStore.listEffectiveProviderModels(usageContext?.parentKeyId ?? null);
+    const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
+    const selectedProvider = requestedProvider
+      || agentConfig?.modelPolicy.default_provider
+      || (() => {
+        const matches = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
+        return matches.length === 1 ? matches[0].provider : null;
+      })();
+    if (!selectedProvider) {
+      reply.code(400);
+      return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
+    }
+    const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));
+    if (!allowedModel) {
+      reply.code(403);
+      return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
+    }
+    const provider = allowedModel.provider;
+    const model = allowedModel.model;
+    const fallbackModel = effectiveModels.find(item => item.provider === provider && (item.model === DEFAULT_MODEL || item.id === DEFAULT_MODEL));
+    const fallbackRetryAllowed = Boolean(fallbackModel);
+    const fallbackRetryModel = fallbackModel?.model || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
@@ -696,7 +722,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const temperatureParamFor = (m: string): Record<string, number> =>
       temperature === undefined || usesReasoningParams(m) ? {} : { temperature };
 
-    request.log.info({ backend, llmConfigured, ollamaAvailable, model, requestedModel, agentModel: agentConfig?.model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
+    request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.modelPolicy.default_provider, agentModel: agentConfig?.modelPolicy.default_model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
     // Normalize message content so it matches the ChatCompletionRequest type (non-nullable content)
     // Preserve tool_calls (on assistant messages) and tool_call_id (on tool messages)
@@ -758,7 +784,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
       const response = respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin);
-      recordUsage(model, reply.statusCode, response);
+      recordUsage(model, reply.statusCode, response, provider);
       return response;
     }
 
@@ -766,7 +792,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     {
       try {
         // Select pre-constructed client based on backend
-        const client = llmConfigured ? llmClient! : ollamaClient;
+        const client = llmConfigured ? createLlmClient(provider) : ollamaClient;
 
         // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {
@@ -886,7 +912,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
-            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined);
+            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -906,17 +932,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             }
 
             // Model not found → retry with fallback model
-            if (isModelNotFoundError(streamError) && model !== DEFAULT_MODEL && llmConfigured) {
-              request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
-              const warning = buildFallbackWarning(model, DEFAULT_MODEL);
+            if (isModelNotFoundError(streamError) && model !== fallbackRetryModel && llmConfigured && fallbackRetryAllowed) {
+              request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+              const warning = buildFallbackWarning(model, fallbackRetryModel);
               reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
 
               try {
                 const retryRequest = {
                   ...requestOptions,
-                  model: DEFAULT_MODEL,
-                  ...tokenParamFor(DEFAULT_MODEL),
-                  ...temperatureParamFor(DEFAULT_MODEL),
+                  model: fallbackRetryModel,
+                  ...tokenParamFor(fallbackRetryModel),
+                  ...temperatureParamFor(fallbackRetryModel),
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
                   stream_options: { include_usage: true },
@@ -929,7 +955,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, retryThinkBuffer);
                   reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
-                recordUsage(DEFAULT_MODEL, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined);
+                recordUsage(fallbackRetryModel, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined, provider);
               } catch (retryError) {
                 request.log.error({ err: retryError }, 'Fallback model also failed');
               }
@@ -971,7 +997,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           } catch (e) {
             // No-op: parsing fallback should not break the response
           }
-          recordUsage(model, 200, response);
+          recordUsage(model, 200, response, provider);
           return response;
         }
       } catch (error: unknown) {
@@ -983,19 +1009,19 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         // Model not found → retry with fallback model
-        if (isModelNotFoundError(error) && model !== DEFAULT_MODEL && llmConfigured) {
-          request.log.info({ originalModel: model, fallbackModel: DEFAULT_MODEL }, 'Model not found, retrying with fallback');
+        if (isModelNotFoundError(error) && model !== fallbackRetryModel && llmConfigured && fallbackRetryAllowed) {
+          request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
           try {
             const retryRequest = {
-              model: DEFAULT_MODEL,
+              model: fallbackRetryModel,
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
-              ...tokenParamFor(DEFAULT_MODEL),
-              ...temperatureParamFor(DEFAULT_MODEL),
+              ...tokenParamFor(fallbackRetryModel),
+              ...temperatureParamFor(fallbackRetryModel),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
               stream: false as const,
             };
-            const retryResponse = await llmClient!.createChatCompletion(retryRequest as unknown as ClientChatCompletionRequest);
+            const retryResponse = await createLlmClient(provider).createChatCompletion(retryRequest as unknown as ClientChatCompletionRequest);
             if (retryResponse && Array.isArray(retryResponse.choices)) {
               for (const choice of retryResponse.choices) {
                 const msg = choice.message as ChatMessage;
@@ -1010,10 +1036,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 }
               }
             }
-            recordUsage(DEFAULT_MODEL, 200, retryResponse);
+            recordUsage(fallbackRetryModel, 200, retryResponse, provider);
             return {
               ...retryResponse,
-              warning: buildFallbackWarning(model, DEFAULT_MODEL),
+              warning: buildFallbackWarning(model, fallbackRetryModel),
             };
           } catch (retryError) {
             request.log.error({ err: retryError }, 'Fallback model also failed');
@@ -1025,7 +1051,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // LLM error final fallback: deterministic mock (if enabled), else a real 503.
     // Reached only from the non-stream path — streaming failures end the stream above.
     const response = respondMockOrError('llm_error', model, normalizedMessages, stream, reply, request.headers.origin);
-    recordUsage(model, reply.statusCode, response);
+    recordUsage(model, reply.statusCode, response, provider);
     return response;
   });
 };

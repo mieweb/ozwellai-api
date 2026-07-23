@@ -61,8 +61,11 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             TRUST_FORWARD_AUTH_HEADERS: trustHeaders ? 'true' : 'false',
             ADMIN_EXTERNAL_USER_IDS: adminExternalUserIds,
             ALLOW_MOCK: 'true',
-            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
+            LLM_BASE_URL: '',
+            LLM_API_KEY: '',
+            LLM_PROVIDER: '',
             OLLAMA_BASE_URL: '',
+            MODEL_DISCOVERY_REFRESH_MS: '0',
             NODE_ENV: 'development',
             ...extraEnv,
         }
@@ -72,6 +75,7 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
 
 async function startStreamingLLMServer() {
     let capturedBody = null;
+    let capturedHeaders = null;
     const server = createServer((req, res) => {
         if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
             res.writeHead(404).end();
@@ -81,6 +85,7 @@ async function startStreamingLLMServer() {
         let raw = '';
         req.on('data', chunk => { raw += chunk; });
         req.on('end', () => {
+            capturedHeaders = req.headers;
             capturedBody = JSON.parse(raw);
             res.writeHead(200, { 'content-type': 'text/event-stream' });
             res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n');
@@ -99,6 +104,7 @@ async function startStreamingLLMServer() {
     return {
         baseURL: `http://127.0.0.1:${port}`,
         getCapturedBody: () => capturedBody,
+        getCapturedHeaders: () => capturedHeaders,
         close: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -485,21 +491,6 @@ test('manager auth — claim-key rejects keys already linked to another manager 
     }
 });
 
-test('manager auth — /v1/manager/models returns allowed models without bearer auth', async () => {
-    const { server, tmp } = startServer();
-    try {
-        await waitForReady();
-        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
-
-        const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
-        assert.equal(res.status, 200);
-        const body = await res.json();
-        assert.deepEqual(body.data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
-    } finally {
-        stopServer(server, tmp);
-    }
-});
-
 test('manager admin — bootstrap admin can view users and non-admin cannot', async () => {
     const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
@@ -768,7 +759,6 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'openai/gpt-5.1',
-            LLM_ALLOWED_MODELS: 'openai/gpt-5.1',
             ALLOW_MOCK: '',
         },
     });

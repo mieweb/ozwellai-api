@@ -10,7 +10,9 @@ Ozwell Manager uses the container console login. After login, Ozwell reads trust
 For managed Ozwell, first-time users get an `ozw_` parent key automatically after logging in to Ozwell Manager. Existing users can claim an existing `ozw_` key there.
 :::
 
-Agents let you define a persona, model, temperature, and allowed tools server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
+Agents let you define persona, temperature, tools, and model policy server-side. Clients authenticate with a lightweight **agent key** (`agnt_key-`) instead of a full API key — keeping your configuration secure and your embed code simple.
+
+See [Authentication](./api-authentication.md#key-lifecycle) for the parent-key and agent-key lifecycle.
 
 Agent chat requests are processed by whichever backend the server has configured (LLM gateway, Ollama, or mock). See the reference server README for backend configuration details.
 
@@ -122,7 +124,7 @@ That's it — 4 steps: set credentials, create agent, copy the key, embed it.
 | **API Key** | `ozw_` | Manage agents (create, update, delete) | Developers / admins |
 | **Agent Key** | `agnt_key-` | Authenticate chat requests for a specific agent | End-user widgets / embeds |
 
-Agent keys are generated automatically when you create an agent. They are scoped to that agent's configuration (model, tools, instructions).
+Agent keys are generated automatically when you create an agent. They are scoped to that agent's behavior, tools, and model policy.
 
 ---
 
@@ -150,11 +152,13 @@ Create a new agent with a YAML configuration wrapped in JSON.
 |-------|------|----------|-------------|
 | `name` | string | Yes | Display name for the agent |
 | `instructions` | string | Yes | System prompt / persona. **Must describe when and how to use each tool** — the LLM relies on instructions (not tool descriptions) to decide which tool to call. |
-| `model` | string | No | Model ID (default: server's configured model). On the LLM backend, if the model doesn't exist on the current provider, the server falls back to `LLM_MODEL`. |
+| `model` | string | No | Legacy model default. New provider/model defaults and restrictions live in the manager model-policy APIs, not in behavior YAML. |
 | `temperature` | number | No | Sampling temperature 0-2 (default: `0.7`) |
 | `tools` | array | No | Server-side tool definitions. Each entry can be a name string or an object with `name`, `description`, and `inputSchema` fields. These are always available to the agent. Page-provided tools are separate and controlled by `pageTools`. |
 | `pageTools` | string or object | No | Controls which page-provided tools (via `postMessage_` prefix) the agent can call. `all` (default) — accept everything. `{ restricted: [...] }` — only these page tools. `{ blocked: [...] }` — all page tools except these. |
 | `behavior` | object | No | Optional tone and rules (e.g., `tone`, `rules` array) |
+
+Provider/model policy is stored separately from YAML so agent behavior remains provider-agnostic. Existing YAML with `model` still works as legacy fallback, but new saves should use `GET`/`PUT /v1/manager/agents/{agent_id}/model-policy` for fallback provider/model and allowed-model restrictions.
 
 #### Example
 

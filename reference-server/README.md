@@ -21,13 +21,13 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 
 ### How the Server Picks an LLM Backend
 
-The server doesn't require any particular LLM provider. On each request it checks what's available and picks the best option:
+The server doesn't require any particular LLM provider. Chat requests route through the configured backend, while provider/model availability is discovered into SQLite and narrowed by manager policy:
 
 1. **LLM Backend** — `LLM_BASE_URL` is set in `.env`. Works with any OpenAI-compatible API: OpenAI, Portkey Gateway, etc.
 2. **Ollama (fallback)** — No `LLM_BASE_URL` configured, but Ollama is reachable on the network.
 3. **Mock** — Nothing else is available. Returns canned responses for demos.
 
-Just set the environment variables and restart the server. See `.env.example` for all options.
+Set the gateway environment variables for connectivity; use the manager APIs/UI for model availability and restrictions. See `.env.example` for all options.
 
 ### Streaming Architecture
 
@@ -507,9 +507,9 @@ Environment variables:
 
 - `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
 - `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
-- `LLM_MODEL` - Fallback model — used when an agent's configured model doesn't exist on this provider (default: `gpt-4o-mini`)
-- `LLM_PROVIDER` - Only for Portkey Gateway, sent as `x-portkey-provider` header
-- `LLM_ALLOWED_MODELS` - Comma-separated list of models to show in the register page dropdown. When set, skips the gateway `/v1/models` call. If unset, shows all models from the provider.
+- `LLM_MODEL` - Fallback/default model, still subject to the effective model policy (default: `gpt-4o-mini`)
+- `LLM_PROVIDER` - Optional default gateway routing provider. Chat requests with `provider` set `x-portkey-provider` dynamically.
+- `MODEL_DISCOVERY_REFRESH_MS` - Provider/model registry refresh interval (default: 10 minutes)
 
 **Ollama (fallback):**
 
@@ -528,27 +528,25 @@ See `.env.example` for a complete example configuration.
 
 ### Model Selection
 
-If the client sends a `model` field in the request, it is used as-is. Otherwise the server picks a default based on the active backend:
+Models are provider-aware records such as `{ provider: "openai", model: "gpt-4o-mini" }`. The effective list for a request is:
 
-| Backend | Env var         | Default        | Example values                                       |
-|---------|-----------------|----------------|------------------------------------------------------|
-| LLM     | `LLM_MODEL`    | `gpt-4o-mini`  | `gpt-4.1-mini`, `gpt-4o`, `claude-sonnet-4-20250514` |
-| Ollama  | `OLLAMA_MODEL`  | auto-detect    | `llama3.1:latest`, `mistral:latest`                  |
-| Mock    | `DEFAULT_MODEL` | `gpt-4o-mini`  | fallback/default selection; mock responses report `ozwell-mock` |
+```text
+enabled discovered models ∩ parent-key restrictions ∩ agent model policy
+```
 
-**Model fallback (LLM backend only):** If the agent's model doesn't exist on the current provider (e.g. an Ollama model when using OpenAI), the server automatically retries with `LLM_MODEL` and the chat widget shows a toast notification explaining the switch.
+Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`. If no request model is provided, the server uses the agent model-policy default, then `LLM_MODEL` if it is allowed by the effective policy.
 
 **Output limit:** No completion-token cap by default — the provider's own default applies. Set `LLM_MAX_TOKENS` to impose a server-wide ceiling. A client that sends its own `max_tokens` always overrides the env value.
 
 ### Backend Selection
 
-The server auto-detects which backend to use at startup:
+The server auto-detects which backend to use:
 
 1. **LLM Backend** — if `LLM_BASE_URL` is set, all requests go through it (OpenAI, Portkey Gateway, etc.)
 2. **Ollama** — if `LLM_BASE_URL` is not set and Ollama is reachable at `OLLAMA_BASE_URL`
 3. **Mock responses** — only if `ALLOW_MOCK=true` (see below); otherwise the request returns a 503
 
-Only one backend is active at a time. Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — LLM takes priority.
+Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — the gateway handles chat routing when `LLM_BASE_URL` is set, and direct Ollama can still contribute discovered model records when configured.
 
 ### Mock responses (`ALLOW_MOCK`)
 
@@ -631,7 +629,7 @@ src/
 │   ├── chat.ts         # Implements the `/v1/chat/completions` endpoint supporting both streaming and non-streaming chat completions, with OpenAI-compatible request/response formats including message handling, model validation, and token usage tracking. Provides the core conversational AI functionality that mimics OpenAI's chat completions API, enabling clients to interact with language models for generating human-like responses in chat applications.
 │   ├── embeddings.ts   # Handles the `/v1/embeddings` endpoint for generating vector embeddings from text inputs, supporting multiple embedding models with configurable dimensions and batch processing. Enables text-to-vector conversion for semantic search, similarity matching, clustering, and other NLP tasks that require numerical representations of text for machine learning applications.
 │   ├── files.ts        # Manages file operations through multiple endpoints (`/v1/files`) including upload, listing, retrieval, content download, and deletion, with persistent storage in a local data directory. Supports file management capabilities for AI applications, allowing clients to upload training data, documents, images, or other assets that language models or processing pipelines might need to access.
-│   ├── models.ts       # Provides the `/v1/models` endpoint — proxies to the LLM gateway or Ollama for live model lists, with `LLM_ALLOWED_MODELS` filtering and a hardcoded fallback. Allows API clients to discover available models for the register page dropdown.
+│   ├── models.ts       # Provides provider-aware `/v1/models` and `/v1/models/effective` endpoints backed by the discovered model registry and manager restrictions.
 │   ├── responses.ts    # Implements a custom `/v1/responses` endpoint for generating responses with semantic event-based streaming (start/content/completion events), offering an alternative to standard chat completions. Provides a specialized response generation method with more granular streaming control, potentially for applications requiring real-time feedback or different interaction patterns than traditional chat completions.
 │   └── mock-chat.ts    # Provides mock AI responses for testing and demos without requiring Ollama. Generates deterministic responses based on input patterns for predictable testing scenarios.
 └── util/               # Utility functions
