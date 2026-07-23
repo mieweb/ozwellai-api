@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 import path from 'path';
 
 // Import routes
-import modelsRoute from './routes/models';
+import modelsRoute, { refreshProviderModels } from './routes/models';
 import chatRoute from './routes/chat';
 import responsesRoute from './routes/responses';
 import embeddingsRoute from './routes/embeddings';
@@ -20,6 +20,7 @@ import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from '
 import * as schemas from '../../spec';
 
 const DEFAULT_BODY_LIMIT_MB = 50;
+const DEFAULT_MODEL_DISCOVERY_REFRESH_MS = 10 * 60 * 1000;
 
 function getBodyLimitBytes(): number {
   const raw = parseInt(process.env.BODY_LIMIT_MB || `${DEFAULT_BODY_LIMIT_MB}`, 10);
@@ -31,6 +32,36 @@ const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
   bodyLimit: getBodyLimitBytes(),
 });
+
+function getModelDiscoveryRefreshMs(): number {
+  const raw = parseInt(process.env.MODEL_DISCOVERY_REFRESH_MS || `${DEFAULT_MODEL_DISCOVERY_REFRESH_MS}`, 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+function scheduleModelDiscoveryRefresh(server: FastifyInstance) {
+  const refreshMs = getModelDiscoveryRefreshMs();
+  if (!refreshMs) return;
+
+  const refresh = async () => {
+    try {
+      const models = await refreshProviderModels();
+      server.log.info({ model_count: models.length }, 'Provider model registry refreshed');
+    } catch (err) {
+      server.log.warn({ err }, 'Provider model registry refresh failed');
+    }
+  };
+
+  const firstRun = setTimeout(() => { void refresh(); }, 1000);
+  const interval = setInterval(() => { void refresh(); }, refreshMs);
+  firstRun.unref?.();
+  interval.unref?.();
+
+  server.addHook('onClose', (_instance, done) => {
+    clearTimeout(firstRun);
+    clearInterval(interval);
+    done();
+  });
+}
 
 async function buildServer() {
   const rootDir = path.resolve(process.cwd());
@@ -235,6 +266,7 @@ if (require.main === module) {
         }
       }
 
+      scheduleModelDiscoveryRefresh(server);
       await server.listen({ port, host });
       console.log(`🚀 OzwellAI Reference Server running at http://${displayHost}:${port}`);
       console.log(`📖 API Documentation available at http://${displayHost}:${port}/docs`);

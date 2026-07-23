@@ -65,6 +65,22 @@ export const ErrorSchema = z.object({
   }),
 });
 
+// Response format for chat completions (OpenAI-compatible).
+// `json_schema` lets callers request structured output validated against a
+// JSON Schema — used by ozwell-workspace to replace OpenAI's zodTextFormat().
+export const ResponseFormatSchema = z.union([
+  z.object({ type: z.literal('text') }),
+  z.object({ type: z.literal('json_object') }),
+  z.object({
+    type: z.literal('json_schema'),
+    json_schema: z.object({
+      name: z.string(),
+      strict: z.boolean().optional(),
+      schema: z.record(z.unknown()),
+    }),
+  }),
+]);
+
 // Chat completions schemas
 export const ChatCompletionRequestSchema = z.object({
   model: z.string(),
@@ -78,6 +94,7 @@ export const ChatCompletionRequestSchema = z.object({
   presence_penalty: z.number().min(-2).max(2).optional(),
   frequency_penalty: z.number().min(-2).max(2).optional(),
   logit_bias: z.record(z.string(), z.number()).optional(),
+  response_format: ResponseFormatSchema.optional(),
   user: z.string().optional(),
 });
 

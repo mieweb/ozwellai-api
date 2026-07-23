@@ -28,7 +28,8 @@ POST /v1/chat/completions
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | No | Model ID (e.g., `gpt-4.1-mini`). If omitted, uses the server's default. If the model doesn't exist on the provider, falls back to `LLM_MODEL`. |
+| `provider` | string | No | Provider ID (e.g., `openai`, `anthropic`, `ollama`). Required when `model` is ambiguous across allowed providers. |
+| `model` | string | No | Model ID (e.g., `gpt-4.1-mini`). If omitted, uses the agent model-policy default, then `LLM_MODEL` if allowed. |
 | `messages` | array | Yes | Array of message objects |
 | `temperature` | number | No | Sampling temperature (0-2). Default: 1 |
 | `top_p` | number | No | Nucleus sampling. Default: 1 |
@@ -60,6 +61,7 @@ curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "provider": "openai",
     "model": "gpt-4",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
@@ -320,7 +322,7 @@ curl https://ozwellapi.opensource.mieweb.org/v1/audio/transcriptions \
 
 ### List Models
 
-List available models. Proxies to the configured LLM gateway or Ollama for live model lists. When `LLM_ALLOWED_MODELS` is set, returns only those models (skips the upstream call).
+List discovered provider/model records. The registry is stored in the backend database and refreshed from the configured gateway/Ollama discovery paths.
 
 ```
 GET /v1/models
@@ -334,18 +336,36 @@ GET /v1/models
   "data": [
     {
       "id": "gpt-4.1-mini",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
       "object": "model",
       "created": 0,
-      "owned_by": "curated"
+      "owned_by": "openai"
     },
     {
       "id": "gpt-4o-mini",
+      "provider": "openai",
+      "model": "gpt-4o-mini",
       "object": "model",
       "created": 0,
-      "owned_by": "curated"
+      "owned_by": "openai"
     }
   ]
 }
+```
+
+### List Effective Models
+
+List the provider/model records allowed for the current parent key or agent key.
+
+```
+GET /v1/models/effective
+```
+
+The effective list is:
+
+```text
+enabled discovered models ∩ parent-key restrictions ∩ agent model policy
 ```
 
 ### Retrieve Model
@@ -355,6 +375,32 @@ Get details about a specific model.
 ```
 GET /v1/models/{model_id}
 ```
+
+### Manager Model Policy Endpoints
+
+Manager-console routes expose the same provider-aware policy controls:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/manager/models` | List/refresh discovered provider models for the manager console |
+| `GET /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Read parent-key restrictions |
+| `PUT /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Save parent-key restrictions with `allowed_models` |
+| `GET /v1/manager/agents/{agent_id}/model-policy` | Read an agent fallback model and allowed-model policy |
+| `PUT /v1/manager/agents/{agent_id}/model-policy` | Save an agent fallback model and allowed-model policy |
+| `GET /v1/manager/notifications` | List model-policy notifications |
+
+Restriction bodies use provider-aware entries:
+
+```json
+{
+  "allowed_models": [
+    { "provider": "openai", "model": "gpt-4o-mini" },
+    { "provider": "anthropic" }
+  ]
+}
+```
+
+An empty `allowed_models` array means unrestricted within the higher-level effective policy.
 
 ---
 

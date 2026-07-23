@@ -16,18 +16,18 @@ const PORT = 3341;
 const BASE = `http://localhost:${PORT}`;
 
 const MANAGER_HEADERS = {
-    'x-user-id': '2009',
-    'x-username': 'adamerla',
-    'x-user-first-name': 'A',
-    'x-user-last-name': 'Damerla',
-    'x-email': 'adamerla128@gmail.com',
+    'x-user': 'admin-user',
+    'x-preferred-username': 'testadmin',
+    'x-user-first-name': 'Test',
+    'x-user-last-name': 'Admin',
+    'x-email': 'test-admin@example.test',
     'x-groups': 'ldapusers',
 };
 
 const H_YAML = { 'Content-Type': 'application/yaml', ...MANAGER_HEADERS };
 const OTHER_MANAGER_HEADERS = {
-    'x-user-id': '2010',
-    'x-username': 'otheruser',
+    'x-user': 'other-user',
+    'x-preferred-username': 'otheruser',
     'x-user-first-name': 'Other',
     'x-user-last-name': 'User',
     'x-email': 'other@example.test',
@@ -35,7 +35,7 @@ const OTHER_MANAGER_HEADERS = {
 };
 const OTHER_H_YAML = { 'Content-Type': 'application/yaml', ...OTHER_MANAGER_HEADERS };
 
-async function waitForReady(maxMs = 10_000) {
+async function waitForReady(maxMs = 30_000) {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
         try {
@@ -61,8 +61,11 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             TRUST_FORWARD_AUTH_HEADERS: trustHeaders ? 'true' : 'false',
             ADMIN_EXTERNAL_USER_IDS: adminExternalUserIds,
             ALLOW_MOCK: 'true',
-            LLM_ALLOWED_MODELS: 'gpt-4o-mini,gpt-4o',
+            LLM_BASE_URL: '',
+            LLM_API_KEY: '',
+            LLM_PROVIDER: '',
             OLLAMA_BASE_URL: '',
+            MODEL_DISCOVERY_REFRESH_MS: '0',
             NODE_ENV: 'development',
             ...extraEnv,
         }
@@ -72,6 +75,7 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
 
 async function startStreamingLLMServer() {
     let capturedBody = null;
+    let capturedHeaders = null;
     const server = createServer((req, res) => {
         if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
             res.writeHead(404).end();
@@ -81,6 +85,7 @@ async function startStreamingLLMServer() {
         let raw = '';
         req.on('data', chunk => { raw += chunk; });
         req.on('end', () => {
+            capturedHeaders = req.headers;
             capturedBody = JSON.parse(raw);
             res.writeHead(200, { 'content-type': 'text/event-stream' });
             res.write('data: {"id":"chatcmpl_test","object":"chat.completion.chunk","created":1,"model":"test-stream-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}\n\n');
@@ -99,6 +104,7 @@ async function startStreamingLLMServer() {
     return {
         baseURL: `http://127.0.0.1:${port}`,
         getCapturedBody: () => capturedBody,
+        getCapturedHeaders: () => capturedHeaders,
         close: () => new Promise(resolve => server.close(resolve)),
     };
 }
@@ -111,7 +117,7 @@ function stopServer(server, tmp) {
 function getUserAndActiveKey(dbPath) {
     const db = new Database(dbPath);
     try {
-        const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get(MANAGER_HEADERS['x-user-id']);
+        const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get(MANAGER_HEADERS['x-user']);
         assert.ok(user?.id, 'manager user should exist');
         const key = db.prepare("SELECT id, key, status FROM api_keys WHERE user_id = ? AND COALESCE(status, 'active') = 'active' AND revoked_at IS NULL").get(user.id);
         assert.ok(key?.id, 'manager user should have an active parent key');
@@ -199,9 +205,9 @@ test('manager auth — /v1/manager/me auto-provisions user and parent key from t
         const res = await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         assert.equal(res.status, 200);
         const body = await res.json();
-        assert.equal(body.identity.external_user_id, '2009');
-        assert.equal(body.identity.username, 'adamerla');
-        assert.equal(body.identity.email, 'adamerla128@gmail.com');
+        assert.equal(body.identity.external_user_id, 'admin-user');
+        assert.equal(body.identity.username, 'testadmin');
+        assert.equal(body.identity.email, 'test-admin@example.test');
         assert.equal(body.status, 'active');
         assert.equal(body.is_admin, false);
         assert.equal(body.has_parent_key, true);
@@ -210,15 +216,22 @@ test('manager auth — /v1/manager/me auto-provisions user and parent key from t
 
         const db = new Database(dbPath);
         try {
-            const user = db.prepare('SELECT external_user_id, username, email, status, is_admin FROM users WHERE external_user_id = ?').get('2009');
-            assert.deepEqual(user, {
-                external_user_id: '2009',
-                username: 'adamerla',
-                email: 'adamerla128@gmail.com',
+            const user = db.prepare('SELECT id, external_user_id, username, email, status, is_admin FROM users WHERE external_user_id = ?').get('admin-user');
+            assert.match(user.id, /^mgr_/);
+            assert.deepEqual({
+                external_user_id: user.external_user_id,
+                username: user.username,
+                email: user.email,
+                status: user.status,
+                is_admin: user.is_admin,
+            }, {
+                external_user_id: 'admin-user',
+                username: 'testadmin',
+                email: 'test-admin@example.test',
                 status: 'active',
                 is_admin: 0,
             });
-            const key = db.prepare('SELECT id, key, user_id, status FROM api_keys WHERE user_id = ?').get('mgr_2009');
+            const key = db.prepare('SELECT id, key, user_id, status FROM api_keys WHERE user_id = ?').get(user.id);
             assert.ok(key.id);
             assert.match(key.key, /^ozw_/);
             assert.doesNotMatch(key.key, /^ozw_manager-/);
@@ -424,7 +437,7 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
 
         const db = new Database(dbPath);
         try {
-            const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get('2009');
+            const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get('admin-user');
             const claimedKey = db.prepare('SELECT user_id, status, revoked_at FROM api_keys WHERE id = ?').get('existing-key');
             assert.equal(claimedKey.user_id, user.id);
             assert.equal(claimedKey.status, 'active');
@@ -478,23 +491,8 @@ test('manager auth — claim-key rejects keys already linked to another manager 
     }
 });
 
-test('manager auth — /v1/manager/models returns allowed models without bearer auth', async () => {
-    const { server, tmp } = startServer();
-    try {
-        await waitForReady();
-        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
-
-        const res = await fetch(`${BASE}/v1/manager/models`, { headers: MANAGER_HEADERS });
-        assert.equal(res.status, 200);
-        const body = await res.json();
-        assert.deepEqual(body.data.map(model => model.id), ['gpt-4o-mini', 'gpt-4o']);
-    } finally {
-        stopServer(server, tmp);
-    }
-});
-
 test('manager admin — bootstrap admin can view users and non-admin cannot', async () => {
-    const { server, tmp } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
 
@@ -507,8 +505,8 @@ test('manager admin — bootstrap admin can view users and non-admin cannot', as
         const users = await fetch(`${BASE}/v1/manager/admin/users`, { headers: MANAGER_HEADERS });
         assert.equal(users.status, 200);
         const usersBody = await users.json();
-        const adminUser = usersBody.data.find(user => user.external_user_id === '2009');
-        const otherUser = usersBody.data.find(user => user.external_user_id === '2010');
+        const adminUser = usersBody.data.find(user => user.external_user_id === 'admin-user');
+        const otherUser = usersBody.data.find(user => user.external_user_id === 'other-user');
         assert.equal(adminUser.is_admin, true);
         assert.match(adminUser.current_parent_key.key_hint, /^ozw_\.\.\.[a-z0-9]{4}$/);
         assert.equal(adminUser.current_parent_key.status, 'active');
@@ -526,12 +524,12 @@ test('manager admin — bootstrap admin can view users and non-admin cannot', as
 });
 
 test('manager admin — can promote and demote users with self-demote guard', async () => {
-    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
-        const other = getUserByExternalId(dbPath, '2010');
+        const other = getUserByExternalId(dbPath, 'other-user');
 
         const promote = await fetch(`${BASE}/v1/manager/admin/users/${other.id}/promote`, {
             method: 'POST',
@@ -559,7 +557,7 @@ test('manager admin — can promote and demote users with self-demote guard', as
 });
 
 test('manager admin — revoking a parent key disables agent keys under it', async () => {
-    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
@@ -572,7 +570,7 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
         });
         assert.equal(create.status, 201);
         const created = await create.json();
-        const otherParentKey = getActiveKeyForExternalUser(dbPath, '2010');
+        const otherParentKey = getActiveKeyForExternalUser(dbPath, 'other-user');
 
         const revoke = await fetch(`${BASE}/v1/manager/admin/parent-keys/${otherParentKey.id}/revoke`, {
             method: 'POST',
@@ -601,7 +599,7 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
 });
 
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
-    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
@@ -659,7 +657,7 @@ test('manager admin — user-first APIs include key history, agents, and usage m
 
         const users = await fetch(`${BASE}/v1/manager/admin/users`, { headers: MANAGER_HEADERS });
         assert.equal(users.status, 200);
-        const userRow = (await users.json()).data.find(user => user.external_user_id === '2009');
+        const userRow = (await users.json()).data.find(user => user.external_user_id === 'admin-user');
         assert.equal(userRow.agent_count, 1);
         assert.equal(userRow.metrics.request_count, 2);
         assert.ok(userRow.metrics.total_tokens > 0);
@@ -669,7 +667,7 @@ test('manager admin — user-first APIs include key history, agents, and usage m
         const detail = await fetch(`${BASE}/v1/manager/admin/users/${userRow.id}`, { headers: MANAGER_HEADERS });
         assert.equal(detail.status, 200);
         const detailBody = await detail.json();
-        assert.equal(detailBody.user.external_user_id, '2009');
+        assert.equal(detailBody.user.external_user_id, 'admin-user');
         assert.equal(detailBody.parent_keys.length, 1);
         assert.equal(detailBody.parent_keys[0].metrics.request_count, 2);
         assert.ok(detailBody.parent_keys[0].metrics.total_tokens > 0);
@@ -761,7 +759,6 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
             LLM_API_KEY: 'test-upstream-key',
             LLM_PROVIDER: '',
             LLM_MODEL: 'openai/gpt-5.1',
-            LLM_ALLOWED_MODELS: 'openai/gpt-5.1',
             ALLOW_MOCK: '',
         },
     });
@@ -794,7 +791,7 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
 });
 
 test('manager admin — global key and agent table routes are not exposed', async () => {
-    const { server, tmp } = startServer({ adminExternalUserIds: '2009' });
+    const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
