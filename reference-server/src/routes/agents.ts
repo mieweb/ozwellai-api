@@ -747,6 +747,69 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         };
     });
 
+    fastify.post<{ Params: { agent_id: string }; Body: { destination_user_id?: string; reason?: string } }>('/v1/manager/admin/agents/:agent_id/transfer', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Transfer an agent to another manager user',
+            params: {
+                type: 'object',
+                properties: { agent_id: { type: 'string' } },
+                required: ['agent_id'],
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    destination_user_id: { type: 'string' },
+                    reason: { type: 'string' },
+                },
+                required: ['destination_user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const destinationUserId = request.body?.destination_user_id;
+        if (!destinationUserId) {
+            reply.code(400);
+            return createError('Destination user is required', 'invalid_request_error', 'destination_user_id', 'destination_user_required');
+        }
+        try {
+            const result = agentStore.transferAgentToUser(
+                request.params.agent_id,
+                destinationUserId,
+                request.managerUser!.id,
+                request.body?.reason,
+            );
+            fastify.log.info({
+                agentId: result.agent_id,
+                actorUserId: request.managerUser!.id,
+                sourceParentKeyId: result.source_parent_key_id,
+                destinationParentKeyId: result.destination_parent_key_id,
+            }, 'agent ownership transferred');
+            return result;
+        } catch (error) {
+            const code = error instanceof Error ? error.message : 'agent_transfer_failed';
+            if (code === 'agent_not_found') {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error', 'agent_id', code);
+            }
+            if (code === 'destination_user_not_found') {
+                reply.code(404);
+                return createError('Destination user not found', 'invalid_request_error', 'destination_user_id', code);
+            }
+            if (code === 'destination_parent_key_not_found') {
+                reply.code(409);
+                return createError('Destination user has no active parent key', 'invalid_request_error', 'destination_user_id', code);
+            }
+            if (code === 'agent_already_owned_by_destination') {
+                reply.code(400);
+                return createError('Agent is already owned by destination user', 'invalid_request_error', 'destination_user_id', code);
+            }
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent transfer failed', 'server_error');
+        }
+    });
+
     fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {
         schema: {
             tags: ['Manager Admin'],

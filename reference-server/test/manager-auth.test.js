@@ -598,6 +598,117 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
     }
 });
 
+test('manager admin — transfers an agent to another user parent key', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: OTHER_H_YAML,
+            body: `name: Transfer Mock\ninstructions: Mock for transfer test\ntype: mock\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+        const destinationUser = getUserByExternalId(dbPath, 'admin-user');
+        const destinationParentKey = getActiveKeyForExternalUser(dbPath, 'admin-user');
+
+        const transfer = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: destinationUser.id, reason: 'test_handoff' }),
+        });
+        assert.equal(transfer.status, 200);
+        const transferBody = await transfer.json();
+        assert.equal(transferBody.agent_id, created.agent_id);
+        assert.equal(transferBody.destination_user_id, destinationUser.id);
+        assert.equal(transferBody.destination_parent_key_id, destinationParentKey.id);
+
+        const oldOwnerGet = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: OTHER_MANAGER_HEADERS });
+        assert.equal(oldOwnerGet.status, 404);
+
+        const newOwnerGet = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: MANAGER_HEADERS });
+        assert.equal(newOwnerGet.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${created.agent_key}`,
+            },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'hello transfer' }] }),
+        });
+        assert.equal(chat.status, 200);
+
+        const db = new Database(dbPath);
+        try {
+            const movedAgent = db.prepare('SELECT parent_key FROM agents WHERE id = ?').get(created.agent_id);
+            assert.equal(movedAgent.parent_key, destinationParentKey.id);
+            const event = db.prepare("SELECT user_id, parent_key_id, type, metadata FROM notification_events WHERE type = 'agent_ownership_transferred'").get();
+            assert.equal(event.user_id, destinationUser.id);
+            assert.equal(event.parent_key_id, destinationParentKey.id);
+            assert.deepEqual(JSON.parse(event.metadata), {
+                agent_id: created.agent_id,
+                actor_user_id: destinationUser.id,
+                source_user_id: getUserByExternalId(dbPath, 'other-user').id,
+                source_parent_key_id: getActiveKeyForExternalUser(dbPath, 'other-user').id,
+                destination_user_id: destinationUser.id,
+                destination_parent_key_id: destinationParentKey.id,
+                reason: 'test_handoff',
+            });
+        } finally {
+            db.close();
+        }
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — transfer rejects non-admins and invalid targets', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Guard Mock\ninstructions: Mock for guard test\ntype: mock\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+        const other = getUserByExternalId(dbPath, 'other-user');
+
+        const denied = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...OTHER_MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: other.id }),
+        });
+        assert.equal(denied.status, 403);
+
+        const missingAgent = await fetch(`${BASE}/v1/manager/admin/agents/missing-agent/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: other.id }),
+        });
+        assert.equal(missingAgent.status, 404);
+        assert.equal((await missingAgent.json()).error.code, 'agent_not_found');
+
+        const missingUser = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: 'missing-user' }),
+        });
+        assert.equal(missingUser.status, 404);
+        assert.equal((await missingUser.json()).error.code, 'destination_user_not_found');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
