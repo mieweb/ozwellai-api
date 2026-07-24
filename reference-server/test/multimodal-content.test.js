@@ -30,7 +30,7 @@ async function waitForReady(maxMs = 10_000) {
 before(async () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-multimodal-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
-    server = spawn('npm', ['run', 'dev'], {
+    server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
