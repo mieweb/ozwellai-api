@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable } from '../util';
+import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, extractToken, isAgentKey } from '../util';
+import { agentStore } from '../storage/agents';
 
 // Hoist static env reads (these never change at runtime)
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
@@ -115,6 +116,11 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       reply.code(401);
       return createError('Invalid API key provided', 'invalid_request_error');
     }
+    const token = extractToken(request.headers.authorization);
+    if (!agentStore.validateKey(token)) {
+      reply.code(401);
+      return createError('API key not found. Verify the key exists in the database.', 'invalid_request_error');
+    }
 
     const body = request.body as {
       model: string;
@@ -123,6 +129,10 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       encoding_format?: string;
     };
     const { model, input, dimensions, encoding_format } = body;
+    const tokenIsAgentKey = isAgentKey(request.headers.authorization);
+    const resolvedAgent = tokenIsAgentKey ? agentStore.getByKeyWithActiveParent(token) : null;
+    const parentKey = tokenIsAgentKey ? resolvedAgent?.parentKey : agentStore.lookupApiKey(token);
+    const agentId = resolvedAgent?.agent.id ?? null;
 
     // Normalize input to an array (batch) and reject empty batches.
     const inputs = Array.isArray(input) ? input : [input];
@@ -130,6 +140,29 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       reply.code(400);
       return createError('Input must not be empty', 'invalid_request_error', 'input');
     }
+    const estimatedTokens = inputs.reduce((sum, text) => sum + countTokens(text), 0);
+    const quotaBlocks = agentStore.getQuotaBlocks(parentKey?.id ?? null, agentId, estimatedTokens);
+    if (quotaBlocks.length > 0) {
+      reply.code(429);
+      const block = quotaBlocks[0];
+      return createError(`Monthly token quota exceeded for ${block.scope_type} ${block.scope_id}`, 'rate_limit_error', null, 'quota_exceeded');
+    }
+
+    const recordUsage = (statusCode: number, response?: { usage?: { prompt_tokens?: number; total_tokens?: number } }, provider?: string | null) => {
+      if (!parentKey) return;
+      agentStore.recordUsageEvent({
+        parent_key_id: parentKey.id,
+        agent_id: agentId,
+        auth_type: agentId ? 'agent' : 'parent',
+        route: '/v1/embeddings',
+        provider: provider ?? null,
+        model,
+        status_code: statusCode,
+        prompt_tokens: response?.usage?.prompt_tokens ?? null,
+        completion_tokens: null,
+        total_tokens: response?.usage?.total_tokens ?? null,
+      });
+    };
 
     // Add OpenAI-compatible headers
     reply.headers({
@@ -166,7 +199,9 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         // Upstream is OpenAI-compatible; return its body verbatim.
-        return await upstream.json();
+        const response = await upstream.json();
+        recordUsage(200, response, LLM_PROVIDER || null);
+        return response;
       } catch (err) {
         request.log.error({ err }, 'LLM embeddings backend request failed');
         reply.code(502);
@@ -187,7 +222,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
           index,
         }));
         const totalTokens = inputs.reduce((sum, text) => sum + countTokens(text), 0);
-        return {
+        const response = {
           object: 'list' as const,
           data,
           model,
@@ -196,6 +231,8 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
             total_tokens: totalTokens,
           },
         };
+        recordUsage(200, response, 'ollama');
+        return response;
       } catch (err) {
         request.log.error({ err }, 'Ollama embeddings backend request failed');
         reply.code(502);
@@ -226,7 +263,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
     }));
     const totalTokens = inputs.reduce((sum, text) => sum + countTokens(text), 0);
 
-    return {
+    const response = {
       object: 'list' as const,
       data,
       model,
@@ -236,6 +273,8 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       },
       warning: buildMockWarning(model),
     };
+    recordUsage(200, response, 'mock');
+    return response;
   });
 };
 
