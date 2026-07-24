@@ -105,9 +105,10 @@ jobs:
           SERVICE_USER: ${{ vars.OZWELL_REFSERVER_SERVICE_USER || 'ozwell' }}
           NODE_BIN: ${{ vars.OZWELL_REFSERVER_NODE_BIN || '/usr/bin/node' }}
           RESTART_COMMAND: ${{ vars.OZWELL_REFSERVER_RESTART_COMMAND || 'sudo systemctl restart ozwellai-api' }}
+          GIT_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
-          ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' ENV_FILE='$ENV_FILE' START_SCRIPT='$START_SCRIPT' SERVICE_USER='$SERVICE_USER' NODE_BIN='$NODE_BIN' RESTART_COMMAND='$RESTART_COMMAND' bash -s" <<'REMOTE'
+          ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' ENV_FILE='$ENV_FILE' START_SCRIPT='$START_SCRIPT' SERVICE_USER='$SERVICE_USER' NODE_BIN='$NODE_BIN' RESTART_COMMAND='$RESTART_COMMAND' GIT_COMMIT='$GIT_COMMIT' bash -s" <<'REMOTE'
             set -euo pipefail
 
             deploy_path="${DEPLOY_PATH:-/storage/apps/ozwellai-api}"
@@ -115,6 +116,7 @@ jobs:
             start_script="${START_SCRIPT:-/storage/apps/env/start-ozwellai-api.sh}"
             service_user="${SERVICE_USER:-ozwell}"
             node_bin="${NODE_BIN:-/usr/bin/node}"
+            git_commit="${GIT_COMMIT:-unknown}"
             case "$deploy_path" in
               "~") deploy_path="$HOME" ;;
               "~/"*) deploy_path="$HOME/${deploy_path#~/}" ;;
@@ -157,6 +159,7 @@ jobs:
             set_env_var PORT 8000
             set_env_var NODE_ENV production
             set_env_var DB_PATH "$deploy_path/data/ozwell.db"
+            set_env_var GIT_COMMIT "$git_commit"
 
             sudo mkdir -p "$(dirname "$start_script")"
             printf '#!/bin/bash\ncd %s/reference-server\nexec %s %s/reference-server/dist/reference-server/src/server.js\n' "$deploy_path" "$node_bin" "$deploy_path" | sudo tee "$start_script" >/dev/null

@@ -6,6 +6,7 @@ import multipart from '@fastify/multipart';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
+import { execSync } from 'child_process';
 
 // Import routes
 import modelsRoute, { refreshProviderModels } from './routes/models';
@@ -28,10 +29,34 @@ function getBodyLimitBytes(): number {
   return mb * 1024 * 1024;
 }
 
+function getCommitHash(): string {
+  const configuredCommit = process.env.GIT_COMMIT || process.env.APP_REVISION || process.env.SOURCE_VERSION || process.env.GITHUB_SHA;
+  if (configuredCommit?.trim()) {
+    return configuredCommit.trim();
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return 'unknown';
+  }
+
+  try {
+    return execSync('git rev-parse HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1000,
+      maxBuffer: 128 * 1024,
+    }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
   bodyLimit: getBodyLimitBytes(),
 });
+
+const commitHash = getCommitHash();
 
 function getModelDiscoveryRefreshMs(): number {
   const raw = parseInt(process.env.MODEL_DISCOVERY_REFRESH_MS || `${DEFAULT_MODEL_DISCOVERY_REFRESH_MS}`, 10);
@@ -166,7 +191,7 @@ async function buildServer() {
 
   // Health check endpoint
   fastify.get('/health', async (_request, _reply) => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+    return { status: 'ok', timestamp: new Date().toISOString(), commit: commitHash };
   });
 
   // OpenAPI spec endpoint
