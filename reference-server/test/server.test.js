@@ -28,14 +28,22 @@ function stop(server) {
   try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* already dead */ }
 }
 
-function startServer() {
+function startServer(envOverrides = {}) {
   const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-server-test-'));
   const dbPath = path.join(tmp, 'ozwell.db');
   const server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,
-    env: { ...process.env, HOST: '127.0.0.1', PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development', GIT_COMMIT: TEST_COMMIT }
+    env: {
+      ...process.env,
+      HOST: '127.0.0.1',
+      PORT: String(PORT),
+      DB_PATH: dbPath,
+      NODE_ENV: 'development',
+      GIT_COMMIT: TEST_COMMIT,
+      ...envOverrides,
+    }
   });
   return { server, tmp };
 }
@@ -63,6 +71,30 @@ test('Reference Server - Health Check', async () => {
     assert.ok(data.timestamp, 'should have a timestamp');
     assert.strictEqual(typeof data.commit, 'string');
     assert.strictEqual(data.commit, TEST_COMMIT);
+
+  } finally {
+    cleanup(server, tmp);
+  }
+});
+
+test('Reference Server - Health Check uses unknown commit in production without revision metadata', async () => {
+  const { server, tmp } = startServer({
+    NODE_ENV: 'production',
+    GIT_COMMIT: '',
+    APP_REVISION: '',
+    SOURCE_VERSION: '',
+    GITHUB_SHA: '',
+  });
+
+  try {
+    await waitForReady();
+
+    const response = await fetch(`${BASE}/health`);
+    assert.strictEqual(response.status, 200);
+
+    const data = await response.json();
+    assert.strictEqual(data.status, 'ok');
+    assert.strictEqual(data.commit, 'unknown');
 
   } finally {
     cleanup(server, tmp);

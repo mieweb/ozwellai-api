@@ -35,8 +35,17 @@ function getCommitHash(): string {
     return configuredCommit.trim();
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    return 'unknown';
+  }
+
   try {
-    return execSync('git rev-parse HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execSync('git rev-parse HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1000,
+      maxBuffer: 128 * 1024,
+    }).trim();
   } catch {
     return 'unknown';
   }
