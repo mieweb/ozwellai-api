@@ -651,9 +651,30 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     };
 
+    const quotaError = (requestedTokens: number) => {
+      if (!usageContext) return null;
+      const blocks = agentStore.getQuotaBlocks(usageContext.parentKeyId, usageContext.agentId, Math.max(requestedTokens, 1));
+      if (blocks.length === 0) return null;
+      reply.code(429);
+      const block = blocks[0];
+      return createError(
+        `Monthly token quota exceeded for ${block.scope_type} ${block.scope_id}`,
+        'rate_limit_error',
+        null,
+        'quota_exceeded',
+      );
+    };
+
+    const estimateChatTokens = (items: Message[], maxTokens?: number) => (
+      items.reduce((sum, message) => sum + countTokens(contentToText(message.content)), 0)
+      + (typeof maxTokens === 'number' && maxTokens > 0 ? Math.floor(maxTokens) : 0)
+    );
+
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {
-      const { messages: rawMessages, stream = false } = body as ChatCompletionRequestWithTools;
+      const { messages: rawMessages, stream = false, max_tokens } = body as ChatCompletionRequestWithTools;
+      const quota = quotaError(estimateChatTokens(rawMessages as Message[], max_tokens));
+      if (quota) return quota;
       const mockMessages: NonNullableMessage[] = (rawMessages as Message[]).map((m) => ({
         role: m.role,
         content: m.content ?? '',
@@ -742,6 +763,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         content: agentConfig.systemPrompt,
       });
     }
+
+    const quota = quotaError(estimateChatTokens(messages as Message[], max_tokens));
+    if (quota) return quota;
 
     // --- Agent: filter tools ---
     // Tools arriving from the widget use two namespaces:
@@ -910,9 +934,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               }
             }
 
+            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
-            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
