@@ -219,6 +219,15 @@ export interface ClaimParentKeyResult {
     revokedParentKeyId: string | null;
 }
 
+export interface TransferAgentOwnershipResult {
+    agent_id: string;
+    source_user_id: string | null;
+    source_parent_key_id: string;
+    destination_user_id: string;
+    destination_parent_key_id: string;
+    transferred_at: string;
+}
+
 export interface UsageEventInput {
     parent_key_id: string | null;
     agent_id: string | null;
@@ -1112,6 +1121,58 @@ export class AgentStore {
             `).get(keyId) as ParentApiKey;
         });
         return revoke();
+    }
+
+    transferAgentToUser(agentId: string, destinationUserId: string, actorUserId: string, reason?: string): TransferAgentOwnershipResult {
+        const transfer = this.db.transaction(() => {
+            const agent = this.db.prepare(`
+              SELECT a.id, a.parent_key, k.user_id AS source_user_id
+              FROM agents a
+              LEFT JOIN api_keys k ON k.id = a.parent_key
+              WHERE a.id = ?
+            `).get(agentId) as { id: string; parent_key: string; source_user_id: string | null } | undefined;
+            if (!agent) throw new Error('agent_not_found');
+
+            const destinationUser = this.db.prepare('SELECT id FROM users WHERE id = ?').get(destinationUserId) as { id: string } | undefined;
+            if (!destinationUser) throw new Error('destination_user_not_found');
+
+            const destinationParentKey = this.getActiveApiKeyForUser(destinationUserId);
+            if (!destinationParentKey) throw new Error('destination_parent_key_not_found');
+            if (agent.parent_key === destinationParentKey.id) throw new Error('agent_already_owned_by_destination');
+
+            this.db.prepare('UPDATE agents SET parent_key = ? WHERE id = ?').run(destinationParentKey.id, agentId);
+
+            const transferredAt = new Date().toISOString();
+            const result: TransferAgentOwnershipResult = {
+                agent_id: agentId,
+                source_user_id: agent.source_user_id,
+                source_parent_key_id: agent.parent_key,
+                destination_user_id: destinationUserId,
+                destination_parent_key_id: destinationParentKey.id,
+                transferred_at: transferredAt,
+            };
+            this.db.prepare(`
+              INSERT INTO notification_events (id, user_id, parent_key_id, type, metadata, created_at)
+              VALUES (@id, @user_id, @parent_key_id, @type, @metadata, @created_at)
+            `).run({
+                id: generateId('notification-event'),
+                user_id: destinationUserId,
+                parent_key_id: destinationParentKey.id,
+                type: 'agent_ownership_transferred',
+                metadata: JSON.stringify({
+                    agent_id: result.agent_id,
+                    actor_user_id: actorUserId,
+                    source_user_id: result.source_user_id,
+                    source_parent_key_id: result.source_parent_key_id,
+                    destination_user_id: result.destination_user_id,
+                    destination_parent_key_id: result.destination_parent_key_id,
+                    reason: reason || null,
+                }),
+                created_at: transferredAt,
+            });
+            return result;
+        });
+        return transfer();
     }
 
     private migrateAgentModelPoliciesFromYaml(): void {
