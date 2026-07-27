@@ -103,17 +103,16 @@ test('widget chat payload can include selected provider and model', async () => 
   assert.match(appSource, /requestBody\.model = selectedModel\.model/);
 });
 
-test('widget model selector is anchored to the composer and closes on outside click', async () => {
+test('widget model selector uses the shared composer selector anchored to the composer', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();
 
-  assert.match(appSource, /ozwell-composer-model-control/);
-  assert.match(appSource, /providerFilter === 'any'/);
-  assert.match(appSource, /visibleModelOptions/);
-  assert.match(appSource, /ozwell-composer-model-menu/);
-  assert.match(appSource, /document\.addEventListener\('pointerdown', handleModelMenuOutsidePointerDown, true\)/);
+  assert.match(appSource, /ComposerModelSelector/);
+  assert.match(appSource, /composerProps=\{\{ inputTrailing: composerModelSelector \}\}/);
+  assert.match(appSource, /providerFilter=\{providerFilter\}/);
+  assert.match(appSource, /boundaryRef=\{shellRef\}/);
   assert.doesNotMatch(appSource, /className="ozwell-model-menu"/);
-  assert.match(bundleSource, /ozwell-composer-model-control/);
+  assert.match(bundleSource, /composer-model-selector-trigger/);
 });
 
 test('widget preserves legacy model-only chat config when no provider is resolved', async () => {

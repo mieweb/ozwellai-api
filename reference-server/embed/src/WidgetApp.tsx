@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AIChat,
   Button,
+  ComposerModelSelector,
   Dropdown,
   DropdownContent,
   DropdownItem,
@@ -39,6 +40,7 @@ type ProviderModelOption = {
   model: string;
   id: string;
   label: string;
+  providerLabel?: string;
 };
 
 type ProviderModelSelection = Pick<ProviderModelOption, 'provider' | 'model'>;
@@ -169,7 +171,7 @@ function normalizeEffectiveModels(payload: unknown): ProviderModelOption[] {
     seen.add(key);
     const id = typeof record.id === 'string' && record.id.trim() ? record.id : model;
     const label = typeof record.label === 'string' && record.label.trim() ? record.label : model;
-    models.push({ provider, model, id, label });
+    models.push({ provider, model, id, label, providerLabel: providerLabel(provider) });
   }
 
   return models;
@@ -181,11 +183,6 @@ function providerLabel(provider: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ') || provider;
-}
-
-function modelOptionLabel(option: ProviderModelSelection | ProviderModelOption) {
-  const label = 'label' in option && option.label ? option.label : option.model;
-  return `${providerLabel(option.provider)} / ${label}`;
 }
 
 function sameProviderModel(left: ProviderModelSelection | null, right: ProviderModelSelection | null) {
@@ -396,12 +393,10 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState('any');
-  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);
-  const modelSelectorRef = useRef<HTMLDivElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef(historyMessages);
   const parentOriginRef = useRef<string | null>(null);
   const pendingToolCallsRef = useRef<Record<string, true>>({});
@@ -460,31 +455,6 @@ export function WidgetApp() {
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
-
-  useEffect(() => {
-    if (!providerMenuOpen && !modelMenuOpen) return;
-
-    function handleModelMenuOutsidePointerDown(event: PointerEvent) {
-      if (!modelSelectorRef.current?.contains(event.target as Node)) {
-        setProviderMenuOpen(false);
-        setModelMenuOpen(false);
-      }
-    }
-
-    function handleModelMenuKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setProviderMenuOpen(false);
-        setModelMenuOpen(false);
-      }
-    }
-
-    document.addEventListener('pointerdown', handleModelMenuOutsidePointerDown, true);
-    document.addEventListener('keydown', handleModelMenuKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', handleModelMenuOutsidePointerDown, true);
-      document.removeEventListener('keydown', handleModelMenuKeyDown);
-    };
-  }, [providerMenuOpen, modelMenuOpen]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
     window.parent.postMessage(message, parentOriginRef.current || '*');
@@ -1074,15 +1044,22 @@ export function WidgetApp() {
       : null
   ), [activeModel, effectiveModels]);
 
-  const selectedModelLabel = selectedModelOption ? modelOptionLabel(selectedModelOption) : '';
-  const providerOptions = useMemo(() => Array.from(new Set(effectiveModels.map((item) => item.provider))), [effectiveModels]);
-  const visibleModelOptions = useMemo(() => (
-    providerFilter === 'any'
-      ? effectiveModels
-      : effectiveModels.filter((item) => item.provider === providerFilter)
-  ), [effectiveModels, providerFilter]);
-
   const showModelSelector = effectiveModels.length > 1 && Boolean(selectedModelOption);
+
+  const composerModelSelector = showModelSelector && selectedModelOption ? (
+    <ComposerModelSelector
+      models={effectiveModels}
+      value={activeModel}
+      onChange={setActiveModel}
+      providerFilter={providerFilter}
+      onProviderFilterChange={setProviderFilter}
+      boundaryRef={shellRef}
+      className="ozwell-composer-model-selector"
+    />
+  ) : undefined;
+  const inputPlaceholder = showModelSelector
+    ? 'Ask a question...'
+    : (config.placeholder || DEFAULT_CONFIG.placeholder);
 
   const scrollToMessage = useCallback((chatIndex: number) => {
     const messageNodes = document.querySelectorAll<HTMLElement>(
@@ -1093,7 +1070,7 @@ export function WidgetApp() {
   }, []);
 
   return (
-    <div className="ozwell-widget-shell">
+    <div className="ozwell-widget-shell" ref={shellRef}>
       {(config.thinkingEnabled || showMessagesNav) && (
         <div className="ozwell-reasoning-bar">
           <div className="ozwell-left-controls">
@@ -1192,7 +1169,7 @@ export function WidgetApp() {
         messages={chatMessages}
         isGenerating={sending}
         title={config.title || DEFAULT_CONFIG.title}
-        inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
+        inputPlaceholder={inputPlaceholder}
         showHeader={false}
         height="100%"
         variant="embedded"
@@ -1200,103 +1177,8 @@ export function WidgetApp() {
         onSendMessage={(message) => void sendMessage(message)}
         onClose={() => postToParent({ source: 'ozwell-chat-widget', type: 'closed' })}
         renderTextContent={renderTextContent}
+        composerProps={{ inputTrailing: composerModelSelector }}
       />
-
-      {showModelSelector && selectedModelOption ? (
-        <div className="ozwell-composer-model-control" ref={modelSelectorRef}>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="ozwell-composer-model-trigger"
-            aria-label={`Provider filter: ${providerFilter === 'any' ? 'Any' : providerLabel(providerFilter)}`}
-            aria-haspopup="menu"
-            aria-expanded={providerMenuOpen}
-            onClick={() => {
-              setProviderMenuOpen((open) => !open);
-              setModelMenuOpen(false);
-            }}
-          >
-            <span className="ozwell-composer-model-label">{providerFilter === 'any' ? 'Any provider' : providerLabel(providerFilter)}</span>
-            <span className="ozwell-composer-model-chevron" aria-hidden="true">{providerMenuOpen ? '⌃' : '⌄'}</span>
-          </Button>
-
-          {providerMenuOpen ? (
-            <div className="ozwell-composer-model-menu" role="menu">
-              <DropdownContent className="ozwell-model-menu-content">
-                {['any', ...providerOptions].map((provider) => (
-                  <DropdownItem
-                    key={provider}
-                    searchText={provider === 'any' ? 'Any provider' : providerLabel(provider)}
-                    onClick={() => {
-                      setProviderFilter(provider);
-                      if (provider !== 'any') {
-                        const currentVisible = activeModelRef.current?.provider === provider
-                          ? effectiveModels.find((item) => item.provider === provider && item.model === activeModelRef.current?.model)
-                          : null;
-                        const next = currentVisible || effectiveModels.find((item) => item.provider === provider);
-                        if (next) setActiveModel({ provider: next.provider, model: next.model });
-                      }
-                      setProviderMenuOpen(false);
-                    }}
-                    className="ozwell-model-menu-item"
-                    aria-current={provider === providerFilter ? 'true' : undefined}
-                  >
-                    <span className="ozwell-model-option">
-                      <span className="ozwell-model-name">{provider === 'any' ? 'Any provider' : providerLabel(provider)}</span>
-                    </span>
-                  </DropdownItem>
-                ))}
-              </DropdownContent>
-            </div>
-          ) : null}
-
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="ozwell-composer-model-trigger ozwell-composer-model-trigger-wide"
-            aria-label={`Model: ${selectedModelLabel}`}
-            aria-haspopup="menu"
-            aria-expanded={modelMenuOpen}
-            onClick={() => {
-              setModelMenuOpen((open) => !open);
-              setProviderMenuOpen(false);
-            }}
-          >
-            <span className="ozwell-composer-model-label">{selectedModelOption.label}</span>
-            <span className="ozwell-composer-model-chevron" aria-hidden="true">{modelMenuOpen ? '⌃' : '⌄'}</span>
-          </Button>
-
-          {modelMenuOpen ? (
-            <div className="ozwell-composer-model-menu ozwell-composer-model-menu-wide" role="menu">
-              <DropdownContent className="ozwell-model-menu-content">
-                {visibleModelOptions.map((option) => {
-                  const optionLabel = modelOptionLabel(option);
-                  const selected = option.provider === selectedModelOption.provider && option.model === selectedModelOption.model;
-                  return (
-                    <DropdownItem
-                      key={`${option.provider}:${option.model}`}
-                      searchText={optionLabel}
-                      onClick={() => {
-                        setActiveModel({ provider: option.provider, model: option.model });
-                        setModelMenuOpen(false);
-                      }}
-                      className="ozwell-model-menu-item"
-                      aria-current={selected ? 'true' : undefined}
-                    >
-                      <span className="ozwell-model-option">
-                        <span className="ozwell-model-provider">{providerLabel(option.provider)}</span>
-                        <span className="ozwell-model-name">{option.label}</span>
-                      </span>
-                    </DropdownItem>
-                  );
-                })}
-              </DropdownContent>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       <div className="ozwell-footer">Powered by Ozwell</div>
     </div>
