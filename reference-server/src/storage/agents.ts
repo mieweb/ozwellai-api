@@ -645,8 +645,7 @@ export class AgentStore {
                 if (current.source === 'auto') {
                     this.db.prepare(`
                       UPDATE api_keys
-                      SET user_id = NULL,
-                          status = 'revoked',
+                      SET status = 'revoked',
                           revoked_at = @revoked_at,
                           revoked_reason = @revoked_reason,
                           replaced_by_key_id = @replaced_by_key_id

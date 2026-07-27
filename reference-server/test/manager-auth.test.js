@@ -403,12 +403,35 @@ test('manager auth — users cannot access or mutate agents owned by another man
 });
 
 test('manager auth — claim-key moves auto-key agents to claimed parent key and revokes auto key', async () => {
-    const { server, tmp, dbPath } = startServer();
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
-        const { key: autoKey } = getUserAndActiveKey(dbPath);
+        const { user, key: autoKey } = getUserAndActiveKey(dbPath);
         seedClaimableKey(dbPath);
+        const usageDb = new Database(dbPath);
+        try {
+            usageDb.prepare(`
+              INSERT INTO usage_events (
+                id, parent_key_id, agent_id, auth_type, route, model, status_code,
+                prompt_tokens, completion_tokens, total_tokens, created_at
+              )
+              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                'usage-before-claim',
+                autoKey.id,
+                'parent',
+                '/v1/chat/completions',
+                'mock',
+                200,
+                100,
+                100,
+                200,
+                new Date().toISOString(),
+            );
+        } finally {
+            usageDb.close();
+        }
 
         const created = await fetch(`${BASE}/v1/manager/agents`, {
             method: 'POST',
@@ -435,6 +458,10 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
         assert.ok(listBody.data.some(agent => agent.id === 'existing-agent'), 'claimed key existing agent is listed');
         assert.ok(listBody.data.some(agent => agent.id === createdBody.agent_id), 'temporary agent moved to claimed key is listed');
 
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, { headers: MANAGER_HEADERS });
+        assert.equal(quota.status, 200);
+        assert.equal((await quota.json()).used_tokens, 200);
+
         const db = new Database(dbPath);
         try {
             const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get('admin-user');
@@ -444,7 +471,7 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
             assert.equal(claimedKey.revoked_at, null);
 
             const oldAutoKey = db.prepare('SELECT user_id, status, revoked_at, revoked_reason, replaced_by_key_id FROM api_keys WHERE id = ?').get(autoKey.id);
-            assert.equal(oldAutoKey.user_id, null);
+            assert.equal(oldAutoKey.user_id, user.id);
             assert.equal(oldAutoKey.status, 'revoked');
             assert.ok(oldAutoKey.revoked_at);
             assert.equal(oldAutoKey.revoked_reason, 'replaced_by_claimed_key');
