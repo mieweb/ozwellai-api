@@ -285,6 +285,44 @@ test('provider models — chat enforces allowed provider/model before gateway ca
     }
 });
 
+test('provider models — anthropic chat requests include default max_tokens', async () => {
+    const gateway = await startGateway({
+        anthropic: ['claude-sonnet-4-6'],
+    });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'claude-sonnet-4-6',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        assert.equal(models.status, 200);
+        const key = activeKey(dbPath);
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-6',
+                messages: [{ role: 'user', content: 'hello' }],
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
+        assert.equal(gateway.getLastBody().model, 'claude-sonnet-4-6');
+        assert.equal(gateway.getLastBody().max_tokens, 1024);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
 test('provider models — ambiguous legacy model-only request requires provider', async () => {
     const gateway = await startGateway({
         openai: ['shared-model'],
