@@ -108,6 +108,8 @@ test('widget model selector is anchored to the composer and closes on outside cl
   const bundleSource = await readWidgetSource();
 
   assert.match(appSource, /ozwell-composer-model-control/);
+  assert.match(appSource, /providerFilter === 'any'/);
+  assert.match(appSource, /visibleModelOptions/);
   assert.match(appSource, /ozwell-composer-model-menu/);
   assert.match(appSource, /document\.addEventListener\('pointerdown', handleModelMenuOutsidePointerDown, true\)/);
   assert.doesNotMatch(appSource, /className="ozwell-model-menu"/);
