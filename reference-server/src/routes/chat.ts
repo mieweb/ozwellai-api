@@ -730,7 +730,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
     const tokenParamFor = (m: string, targetProvider = provider) => providerTokenParams(targetProvider, m, max_tokens);
     const temperatureParamFor = (m: string): Record<string, number> =>
-      temperature === undefined || usesReasoningTokenParam(m) ? {} : { temperature };
+      temperature === undefined || provider === 'anthropic' || usesReasoningTokenParam(m) ? {} : { temperature };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.modelPolicy.default_provider, agentModel: agentConfig?.modelPolicy.default_model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
