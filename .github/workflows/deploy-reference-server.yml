@@ -202,7 +202,7 @@ jobs:
           DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
           DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
           DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
-        run: rsync -e "ssh -p $DEPLOY_PORT" -ruva --progress reference-server-build.tar.gz "$DEPLOY_USER@$DEPLOY_HOSTNAME:/tmp/"
+        run: rsync -e "ssh -p $DEPLOY_PORT" -av --progress reference-server-build.tar.gz "$DEPLOY_USER@$DEPLOY_HOSTNAME:/tmp/"
 
       - name: Extract and restart dev2 refserver
         env:
