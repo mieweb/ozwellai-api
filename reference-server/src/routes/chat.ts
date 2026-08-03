@@ -327,6 +327,23 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
+const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
+
+function usesReasoningTokenParam(model: string) {
+  return /(^|\/)(o\d|gpt-5)/.test(model);
+}
+
+function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
+  const effectiveMaxTokens = requestedMaxTokens
+    ?? LLM_MAX_TOKENS
+    ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : undefined);
+
+  if (!effectiveMaxTokens) return {};
+
+  return usesReasoningTokenParam(model)
+    ? { max_completion_tokens: effectiveMaxTokens }
+    : { max_tokens: effectiveMaxTokens };
+}
 
 function createLlmClient(provider: string | null) {
   return new OzwellAI({
@@ -707,20 +724,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const fallbackRetryModel = fallbackModel?.model || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
-    // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
-    const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
-    const usesReasoningParams = (m: string) => /(^|\/)(o\d|gpt-5)/.test(m);
     // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
     // Classified per call from the model actually being sent — the fallback retry switches models, so a
     // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
     // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
-    const tokenParamFor = (m: string): Record<string, number> =>
-      !effectiveMaxTokens ? {}
-        : usesReasoningParams(m)
-          ? { max_completion_tokens: effectiveMaxTokens }
-          : { max_tokens: effectiveMaxTokens };
+    const tokenParamFor = (m: string) => providerTokenParams(provider, m, max_tokens);
     const temperatureParamFor = (m: string): Record<string, number> =>
-      temperature === undefined || usesReasoningParams(m) ? {} : { temperature };
+      temperature === undefined || provider === 'anthropic' || usesReasoningTokenParam(m) ? {} : { temperature };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.modelPolicy.default_provider, agentModel: agentConfig?.modelPolicy.default_model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 

@@ -266,6 +266,7 @@ test('provider models — chat enforces allowed provider/model before gateway ca
         assert.equal(allowed.status, 200);
         assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'openai');
         assert.equal(gateway.getLastBody().model, 'gpt-4o');
+        assert.equal(gateway.getLastBody().temperature, 0.7);
 
         const blocked = await fetch(`${BASE}/v1/chat/completions`, {
             method: 'POST',
@@ -279,6 +280,96 @@ test('provider models — chat enforces allowed provider/model before gateway ca
         assert.equal(blocked.status, 403);
         assert.equal((await blocked.json()).error.code, 'model_not_allowed');
         assert.equal(gateway.getChatCount(), 1);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — anthropic chat requests include default max_tokens', async () => {
+    const gateway = await startGateway({
+        anthropic: ['claude-sonnet-4-6'],
+    });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'claude-sonnet-4-6',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        assert.equal(models.status, 200);
+        const key = activeKey(dbPath);
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({
+                provider: 'anthropic',
+                model: 'claude-sonnet-4-6',
+                messages: [{ role: 'user', content: 'hello' }],
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
+        assert.equal(gateway.getLastBody().model, 'claude-sonnet-4-6');
+        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().temperature, undefined);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — anthropic agent temperature is not forwarded', async () => {
+    const gateway = await startGateway({
+        anthropic: ['claude-sonnet-5'],
+    });
+    const { server, tmp } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'claude-sonnet-5',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        assert.equal(models.status, 200);
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Anthropic Temperature Agent
+instructions: Test Anthropic request params
+provider: anthropic
+model: claude-sonnet-5
+temperature: 0.7
+`,
+        });
+        assert.equal(create.status, 201);
+        const { agent_key } = await create.json();
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agent_key}` },
+            body: JSON.stringify({
+                provider: 'anthropic',
+                model: 'claude-sonnet-5',
+                messages: [{ role: 'user', content: 'hello' }],
+            }),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
+        assert.equal(gateway.getLastBody().model, 'claude-sonnet-5');
+        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().temperature, undefined);
     } finally {
         stopServer(server, tmp);
         await gateway.close();
