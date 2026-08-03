@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, extractToken, isAgentKey } from '../util';
+import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
+import { quotaExceededError, resolveRouteUsageContext } from './quota';
 
 // Hoist static env reads (these never change at runtime)
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
@@ -129,10 +130,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       encoding_format?: string;
     };
     const { model, input, dimensions, encoding_format } = body;
-    const tokenIsAgentKey = isAgentKey(request.headers.authorization);
-    const resolvedAgent = tokenIsAgentKey ? agentStore.getByKeyWithActiveParent(token) : null;
-    const parentKey = tokenIsAgentKey ? resolvedAgent?.parentKey : agentStore.lookupApiKey(token);
-    const agentId = resolvedAgent?.agent.id ?? null;
+    const usageContext = resolveRouteUsageContext(request.headers.authorization);
 
     // Normalize input to an array (batch) and reject empty batches.
     const inputs = Array.isArray(input) ? input : [input];
@@ -141,19 +139,15 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
       return createError('Input must not be empty', 'invalid_request_error', 'input');
     }
     const estimatedTokens = inputs.reduce((sum, text) => sum + countTokens(text), 0);
-    const quotaBlocks = agentStore.getQuotaBlocks(parentKey?.id ?? null, agentId, estimatedTokens);
-    if (quotaBlocks.length > 0) {
-      reply.code(429);
-      const block = quotaBlocks[0];
-      return createError(`Monthly token quota exceeded for ${block.scope_type} ${block.scope_id}`, 'rate_limit_error', null, 'quota_exceeded');
-    }
+    const quota = quotaExceededError(reply, usageContext.parentKeyId, usageContext.agentId, estimatedTokens);
+    if (quota) return quota;
 
     const recordUsage = (statusCode: number, response?: { usage?: { prompt_tokens?: number; total_tokens?: number } }, provider?: string | null) => {
-      if (!parentKey) return;
+      if (!usageContext.parentKey) return;
       agentStore.recordUsageEvent({
-        parent_key_id: parentKey.id,
-        agent_id: agentId,
-        auth_type: agentId ? 'agent' : 'parent',
+        parent_key_id: usageContext.parentKey.id,
+        agent_id: usageContext.agentId,
+        auth_type: usageContext.authType,
         route: '/v1/embeddings',
         provider: provider ?? null,
         model,

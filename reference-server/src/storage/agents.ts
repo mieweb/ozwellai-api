@@ -788,8 +788,9 @@ export class AgentStore {
           FROM quota_policies
           WHERE scope_type = ? AND scope_id = ?
         `).get(scopeType, scopeId) as { monthly_token_limit: number | null; status: 'active' | 'disabled' } | undefined;
-        const { start, end } = this.monthWindow();
-        const used = this.getMonthlyTokenUsage(scopeType, scopeId);
+        const now = new Date();
+        const { start, end } = this.monthWindow(now);
+        const used = this.getMonthlyTokenUsage(scopeType, scopeId, now);
         const active = policy?.status === 'active' && typeof policy.monthly_token_limit === 'number';
         const remaining = active ? Math.max((policy.monthly_token_limit as number) - used, 0) : null;
         return {

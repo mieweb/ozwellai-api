@@ -7,6 +7,7 @@ import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwel
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 import { getCachedModelsList } from './models';
+import { quotaExceededError, resolveRouteUsageContext } from './quota';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -556,6 +557,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     const body = request.body as ChatCompletionRequestWithTools;
     const tokenIsAgentKey = isAgentKey(request.headers.authorization);
+    const resolvedUsageContext = resolveRouteUsageContext(request.headers.authorization);
     let usageContext: UsageContext | null = null;
 
     const invalidMessageIndex = (body.messages as Message[]).findIndex((m) => !isValidMessageContent(m.content));
@@ -572,14 +574,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (tokenIsAgentKey) {
-      const agentKey = extractToken(request.headers.authorization);
-      const resolved = agentStore.getByKeyWithActiveParent(agentKey);
-      if (!resolved) {
+      if (!resolvedUsageContext.agent || !resolvedUsageContext.parentKey) {
         reply.code(401);
-        return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
+        return createError(`Agent key not found: ...${token.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
       }
-      const { agent, parentKey } = resolved;
-      usageContext = { authType: 'agent', parentKeyId: parentKey.id, agentId: agent.id };
+      const agent = resolvedUsageContext.agent;
+      usageContext = {
+        authType: resolvedUsageContext.authType,
+        parentKeyId: resolvedUsageContext.parentKeyId,
+        agentId: resolvedUsageContext.agentId,
+      };
 
       // Parse the YAML blob once — the source of truth for agent config
       let parsed: Record<string, unknown> = {};
@@ -624,8 +628,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: parsed.type === 'mock' ? 'mock' : null,
       };
     } else {
-      const parentKey = agentStore.lookupApiKey(token);
-      usageContext = { authType: 'parent', parentKeyId: parentKey?.id ?? null, agentId: null };
+      usageContext = {
+        authType: resolvedUsageContext.authType,
+        parentKeyId: resolvedUsageContext.parentKeyId,
+        agentId: null,
+      };
     }
 
     const recordUsage = (model: string | null, statusCode: number, response?: unknown, provider?: string | null) => {
@@ -653,22 +660,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     const quotaError = (requestedTokens: number) => {
       if (!usageContext) return null;
-      const blocks = agentStore.getQuotaBlocks(usageContext.parentKeyId, usageContext.agentId, Math.max(requestedTokens, 1));
-      if (blocks.length === 0) return null;
-      reply.code(429);
-      const block = blocks[0];
-      return createError(
-        `Monthly token quota exceeded for ${block.scope_type} ${block.scope_id}`,
-        'rate_limit_error',
-        null,
-        'quota_exceeded',
-      );
+      return quotaExceededError(reply, usageContext.parentKeyId, usageContext.agentId, requestedTokens);
     };
 
-    const estimateChatTokens = (items: Message[], maxTokens?: number) => (
-      items.reduce((sum, message) => sum + countTokens(contentToText(message.content)), 0)
-      + (typeof maxTokens === 'number' && maxTokens > 0 ? Math.floor(maxTokens) : 0)
-    );
+    const estimateChatTokens = (items: Message[], maxTokens?: number) => {
+      const outputBudget = maxTokens ?? LLM_MAX_TOKENS;
+      const inputTokens = items.reduce((sum, message) => sum + countTokens(contentToText(message.content)), 0);
+      const outputTokens = typeof outputBudget === 'number' && outputBudget > 0 ? Math.floor(outputBudget) : 0;
+      return inputTokens + outputTokens;
+    };
 
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {

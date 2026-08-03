@@ -757,6 +757,41 @@ test('manager admin — user monthly quota blocks chat over the limit', async ()
     }
 });
 
+test('manager admin — chat quota estimate uses server max tokens when request omits max_tokens', async () => {
+    const { server, tmp, dbPath } = startServer({
+        adminExternalUserIds: 'admin-user',
+        extraEnv: { LLM_MAX_TOKENS: '50' },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 20, status: 'active' }),
+        });
+        assert.equal(quota.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'hi' }],
+            }),
+        });
+        assert.equal(chat.status, 429);
+        const body = await chat.json();
+        assert.equal(body.error.code, 'quota_exceeded');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
 test('manager admin — disabled user quota allows chat', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {

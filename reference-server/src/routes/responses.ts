@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, parsePositiveEnvNumber, extractToken, isAgentKey } from '../util';
+import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, parsePositiveEnvNumber, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
+import { quotaExceededError, resolveRouteUsageContext } from './quota';
 
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 
@@ -41,10 +42,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
     const body = request.body as any;
     const { model, input, stream = false, max_tokens, temperature = 0.7 } = body;
     const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
-    const tokenIsAgentKey = isAgentKey(request.headers.authorization);
-    const resolvedAgent = tokenIsAgentKey ? agentStore.getByKeyWithActiveParent(token) : null;
-    const parentKey = tokenIsAgentKey ? resolvedAgent?.parentKey : agentStore.lookupApiKey(token);
-    const agentId = resolvedAgent?.agent.id ?? null;
+    const usageContext = resolveRouteUsageContext(request.headers.authorization);
 
     // Validate model
     const supportedModels = ['gpt-4o', 'gpt-4o-mini'];
@@ -54,19 +52,15 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     const requestedTokens = countTokens(input) + (typeof effectiveMaxTokens === 'number' && effectiveMaxTokens > 0 ? Math.floor(effectiveMaxTokens) : 0);
-    const quotaBlocks = agentStore.getQuotaBlocks(parentKey?.id ?? null, agentId, requestedTokens);
-    if (quotaBlocks.length > 0) {
-      reply.code(429);
-      const block = quotaBlocks[0];
-      return createError(`Monthly token quota exceeded for ${block.scope_type} ${block.scope_id}`, 'rate_limit_error', null, 'quota_exceeded');
-    }
+    const quota = quotaExceededError(reply, usageContext.parentKeyId, usageContext.agentId, requestedTokens);
+    if (quota) return quota;
 
     const recordUsage = (statusCode: number, usage: { input_tokens: number; output_tokens: number; total_tokens: number }) => {
-      if (!parentKey) return;
+      if (!usageContext.parentKey) return;
       agentStore.recordUsageEvent({
-        parent_key_id: parentKey.id,
-        agent_id: agentId,
-        auth_type: agentId ? 'agent' : 'parent',
+        parent_key_id: usageContext.parentKey.id,
+        agent_id: usageContext.agentId,
+        auth_type: usageContext.authType,
         route: '/v1/responses',
         provider: 'mock',
         model,
