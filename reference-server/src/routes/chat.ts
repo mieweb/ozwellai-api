@@ -728,7 +728,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Classified per call from the model actually being sent — the fallback retry switches models, so a
     // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
     // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
-    const tokenParamFor = (m: string, targetProvider = provider) => providerTokenParams(targetProvider, m, max_tokens);
+    const tokenParamFor = (m: string) => providerTokenParams(provider, m, max_tokens);
     const temperatureParamFor = (m: string): Record<string, number> =>
       temperature === undefined || provider === 'anthropic' || usesReasoningTokenParam(m) ? {} : { temperature };
 
