@@ -8,6 +8,7 @@ export interface OzwellConfig {
   openaiApiKey?: string;
   title?: string;
   placeholder?: string;
+  provider?: string;
   model?: string;
   system?: string;
   tools?: OpenAITool[];
