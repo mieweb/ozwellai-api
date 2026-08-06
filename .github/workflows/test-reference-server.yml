@@ -10,8 +10,34 @@ on:
         type: string
 
 jobs:
+  build-pinned-ui:
+    name: Build pinned mieweb UI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install and build pinned mieweb UI
+        working-directory: ./vendor/mieweb-ui
+        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
+
+      - name: Upload pinned mieweb UI
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinned-mieweb-ui-dist
+          path: vendor/mieweb-ui/dist
+
   test:
     name: Test on Node.js ${{ matrix.node-version }} (${{ matrix.os }})
+    needs: build-pinned-ui
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -33,9 +59,15 @@ jobs:
             spec/package-lock.json
             reference-server/package-lock.json
 
-      - name: Install and build pinned mieweb UI
+      - name: Download pinned mieweb UI
+        uses: actions/download-artifact@v4
+        with:
+          name: pinned-mieweb-ui-dist
+          path: vendor/mieweb-ui/dist
+
+      - name: Install pinned mieweb UI dependencies
         working-directory: ./vendor/mieweb-ui
-        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
+        run: corepack pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Install spec dependencies
         working-directory: ./spec
