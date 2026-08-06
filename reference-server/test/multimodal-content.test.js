@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -40,7 +40,13 @@ before(async () => {
 });
 
 after(() => {
-    try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try {
+        if (process.platform === 'win32') {
+            spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']);
+        } else {
+            process.kill(-server.pid, 'SIGKILL');
+        }
+    } catch { /* ignore */ }
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
