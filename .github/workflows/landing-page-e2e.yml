@@ -12,6 +12,7 @@ on:
       - 'reference-server/embed/**'
       - 'spec/**'
       - 'clients/typescript/**'
+      - 'vendor/mieweb-ui'
       - '.github/workflows/landing-page-e2e.yml'
       - 'scripts/test-e2e.sh'
   pull_request:
@@ -22,6 +23,7 @@ on:
       - 'reference-server/embed/**'
       - 'spec/**'
       - 'clients/typescript/**'
+      - 'vendor/mieweb-ui'
       - '.github/workflows/landing-page-e2e.yml'
       - 'scripts/test-e2e.sh'
 
@@ -39,6 +41,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,6 +53,10 @@ jobs:
 
       - name: Install all dependencies
         run: npm ci
+
+      - name: Install and build pinned mieweb UI
+        working-directory: ./vendor/mieweb-ui
+        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
 
       - name: Install landing-page dependencies
         working-directory: ./landing-page

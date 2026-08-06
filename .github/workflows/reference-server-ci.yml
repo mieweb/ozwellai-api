@@ -8,6 +8,7 @@ on:
     branches: [ main, develop ]
     paths:
       - 'reference-server/**'
+      - 'vendor/mieweb-ui'
       - 'spec/**'
       - '.github/workflows/reference-server-ci.yml'
       - '.github/workflows/test-reference-server.yml'
@@ -15,6 +16,7 @@ on:
     branches: [ main ]
     paths:
       - 'reference-server/**'
+      - 'vendor/mieweb-ui'
       - 'spec/**'
       - '.github/workflows/reference-server-ci.yml'
       - '.github/workflows/test-reference-server.yml'

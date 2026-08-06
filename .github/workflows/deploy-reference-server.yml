@@ -13,6 +13,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/build-deploy-package.sh'
+      - 'vendor/mieweb-ui'
       - '.github/workflows/deploy-reference-server.yml'
 
 concurrency:
@@ -27,6 +28,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,6 +41,10 @@ jobs:
             spec/package-lock.json
             clients/typescript/package-lock.json
             reference-server/package-lock.json
+
+      - name: Install and build pinned mieweb UI
+        working-directory: ./vendor/mieweb-ui
+        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
 
       - name: Install and build spec
         working-directory: ./spec
