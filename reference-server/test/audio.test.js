@@ -33,7 +33,7 @@ before(async () => {
   env.LLM_BASE_URL = '';
   env.LLM_API_KEY = '';
   env.LLM_PROVIDER = '';
-  server = spawn('npm', ['run', 'dev'], {
+  server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,

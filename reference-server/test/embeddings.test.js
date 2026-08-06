@@ -42,7 +42,7 @@ function spawnServer({ port, dbPath, allowMock }) {
   };
   if (allowMock) env.ALLOW_MOCK = 'true';
   else delete env.ALLOW_MOCK;
-  return spawn('npm', ['run', 'dev'], {
+  return spawn(process.execPath, ['dist/reference-server/src/server.js'], {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,
