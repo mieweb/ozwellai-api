@@ -18,7 +18,7 @@ graph TB
     end
     
     subgraph "Ozwell Iframe (Isolated)"
-        Iframe[iframe src=ozwellapi.os.mieweb.org/embed/ozwell.html]
+        Iframe[iframe srcdoc loads ozwellapi.os.mieweb.org/embed/ozwell.js]
         UI[Chat UI]
         State[Conversation State]
     end
@@ -51,7 +51,7 @@ The host site cannot see, intercept, or log what is said in the chat. This creat
 
 ### Origin Isolation
 
-The iframe runs on the loader origin (`ozwellapi.os.mieweb.org` for the current demo environment, `embed.ozwell.ai` for future production), which means:
+The loader creates an iframe with inline `srcdoc`; that iframe loads the widget bundle from the loader origin (`https://ozwellapi.os.mieweb.org/embed/ozwell.js` in the current demo environment, future production embed origin later), which means:
 
 - ❌ Cannot access parent page DOM
 - ❌ Cannot read parent page cookies/storage
@@ -65,7 +65,7 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  src="https://ozwellapi.os.mieweb.org/embed/ozwell.html"
+  srcdoc="...loads https://ozwellapi.os.mieweb.org/embed/ozwell.js..."
   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
   allow="clipboard-write"
 ></iframe>
