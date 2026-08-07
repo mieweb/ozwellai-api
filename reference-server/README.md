@@ -92,7 +92,7 @@ Agent Mode lets you register "agents" — preconfigured AI personas with custom 
 
 > **🎬 Demo Video:** [Watch the Agent Mode demo on YouTube](https://youtube.com/shorts/u4DhC69JUfw?si=3TECDApOORKnrTmn)
 
-For the managed Ozwell deployment, users should create and manage agents through [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with their `manager.os.mieweb.org` credentials. Use `https://ozwellapi.os.mieweb.org` as the API base URL.
+For the managed Ozwell deployment, users should log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials) and create/manage agents in the manager UI. Ozwell automatically provisions the user's `ozw_` parent key, then generates `agnt_key-` agent keys for embeds. Use `https://ozwellapi.os.mieweb.org` as the API base URL.
 
 #### Manager Auth Bridge
 
@@ -276,7 +276,7 @@ The server will start at `http://localhost:3000`
 <script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
 ```
 
-**Live Demo:** <https://tryozwell.os.mieweb.org>
+**Live Demo:** <https://ozwelldemo.os.mieweb.org>
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 

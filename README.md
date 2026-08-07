@@ -13,7 +13,14 @@
 
 ## Live Demo
 
-**Try it now:** [https://tryozwell.os.mieweb.org](https://tryozwell.os.mieweb.org)
+**Try it now:** [https://ozwelldemo.os.mieweb.org](https://ozwelldemo.os.mieweb.org)
+
+Current public URLs:
+- **Live demo:** <https://ozwelldemo.os.mieweb.org>
+- **API:** <https://ozwellapi.os.mieweb.org>
+- **Console:** <https://ozwellconsole.os.mieweb.org>
+
+Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint, so they are not advertised as the active path here.
 
 **Watch demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 

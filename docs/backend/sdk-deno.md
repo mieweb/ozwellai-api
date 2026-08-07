@@ -64,7 +64,7 @@ import { OzwellClient } from "jsr:@ozwell/api";
 
 const client = new OzwellClient({
   apiKey: Deno.env.get("OZWELL_API_KEY"),
-  baseUrl: "https://api.ozwell.ai/v1",  // Optional
+  baseUrl: "https://ozwellapi.os.mieweb.org/v1",  // Optional
   timeout: 30000,                         // Optional
   maxRetries: 3,                          // Optional
 });
@@ -103,7 +103,7 @@ Deno requires explicit permissions. The SDK needs:
 
 ```bash
 # Minimal permissions
-deno run --allow-env=OZWELL_API_KEY --allow-net=api.ozwell.ai main.ts
+deno run --allow-env=OZWELL_API_KEY --allow-net=ozwellapi.os.mieweb.org main.ts
 
 # Or allow all needed
 deno run --allow-env --allow-net --allow-read main.ts

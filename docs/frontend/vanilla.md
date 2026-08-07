@@ -2,6 +2,10 @@
 
 Integrate Ozwell into any website using plain JavaScript, without any framework dependencies.
 
+:::note Current Demo Environment
+Production CDN examples such as `cdn.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`.
+:::
+
 ## Quick Start
 
 ### Script Tag (CDN)

@@ -1,7 +1,7 @@
 # Agent Registration API
 
 :::tip Fastest Way to Create an Agent
-The easiest path is to log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials and create/manage agents in the manager UI.
+The easiest path is to log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials) and create/manage agents in the manager UI.
 
 Ozwell Manager uses the container console login. After login, Ozwell reads trusted forwarded identity headers, provisions or links your `ozw_` parent key, and creates agent keys for your agents.
 :::
@@ -20,11 +20,9 @@ Agent chat requests are processed by whichever backend the server has configured
 
 | Environment | URL |
 |-------------|-----|
-| **Recommended for Ozwell Manager** | `https://ozwellapi.os.mieweb.org` |
-| **Legacy production API** | `https://ozwellapi-prod.os.mieweb.org` |
-| **Future production API** | `https://api.ozwell.ai` *(coming soon)* |
+| **Current Ozwell Manager API** | `https://ozwellapi.os.mieweb.org` |
 
-Use the recommended URL for the full manager-console experience. The legacy production API still uses the old seeded-key database flow.
+Use the current Ozwell Manager API for the full manager-console experience. Production is temporarily unavailable while it migrates to the future `api.ozwell.ai` endpoint, so it is not advertised as the active API here.
 
 ## Authentication
 
@@ -40,10 +38,11 @@ Authorization: Bearer ozw_your_api_key_here
 
 ### Option A — Create an agent in the UI
 
-1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials.
-2. Create or edit your agent in the manager page.
-3. Copy the returned `agent_key` and use it in your widget embed.
-4. Use **Claim key** if you need to attach an existing `ozw_` parent key and migrate older agents.
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials).
+2. Ozwell automatically provisions your `ozw_` parent key if you do not already have one.
+3. Create or edit your agent in the manager page.
+4. Copy the returned `agent_key` and use it in your widget embed.
+5. Use **Claim key** only if you need to attach an existing `ozw_` parent key and migrate older agents.
 
 ### Option B — Create an agent via API
 

@@ -5,7 +5,7 @@ Direct HTTP access to the Ozwell API without any SDK. Use this when working with
 ## Base URL
 
 ```
-https://api.ozwell.ai/v1
+https://ozwellapi.os.mieweb.org/v1
 ```
 
 ---
@@ -36,7 +36,7 @@ Authorization: Bearer YOUR_API_KEY
 ### Create Chat Completion
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -77,7 +77,7 @@ curl https://api.ozwell.ai/v1/chat/completions \
 ### With Parameters
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -96,7 +96,7 @@ curl https://api.ozwell.ai/v1/chat/completions \
 ### Streaming
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -123,7 +123,7 @@ data: [DONE]
 ### Function Calling
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -186,7 +186,7 @@ curl https://api.ozwell.ai/v1/chat/completions \
 ### Submit Tool Result
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -218,7 +218,7 @@ curl https://api.ozwell.ai/v1/chat/completions \
 ### Create Embedding
 
 ```bash
-curl https://api.ozwell.ai/v1/embeddings \
+curl https://ozwellapi.os.mieweb.org/v1/embeddings \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -250,7 +250,7 @@ curl https://api.ozwell.ai/v1/embeddings \
 ### Batch Embeddings
 
 ```bash
-curl https://api.ozwell.ai/v1/embeddings \
+curl https://ozwellapi.os.mieweb.org/v1/embeddings \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -d '{
@@ -270,7 +270,7 @@ curl https://api.ozwell.ai/v1/embeddings \
 ### Upload File
 
 ```bash
-curl https://api.ozwell.ai/v1/files \
+curl https://ozwellapi.os.mieweb.org/v1/files \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -F "file=@document.pdf" \
   -F "purpose=assistants"
@@ -292,21 +292,21 @@ curl https://api.ozwell.ai/v1/files \
 ### List Files
 
 ```bash
-curl https://api.ozwell.ai/v1/files \
+curl https://ozwellapi.os.mieweb.org/v1/files \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
 ### Retrieve File
 
 ```bash
-curl https://api.ozwell.ai/v1/files/file-abc123 \
+curl https://ozwellapi.os.mieweb.org/v1/files/file-abc123 \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
 ### Download File Content
 
 ```bash
-curl https://api.ozwell.ai/v1/files/file-abc123/content \
+curl https://ozwellapi.os.mieweb.org/v1/files/file-abc123/content \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -o downloaded.pdf
 ```
@@ -314,7 +314,7 @@ curl https://api.ozwell.ai/v1/files/file-abc123/content \
 ### Delete File
 
 ```bash
-curl -X DELETE https://api.ozwell.ai/v1/files/file-abc123 \
+curl -X DELETE https://ozwellapi.os.mieweb.org/v1/files/file-abc123 \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
@@ -325,7 +325,7 @@ curl -X DELETE https://api.ozwell.ai/v1/files/file-abc123 \
 ### List Models
 
 ```bash
-curl https://api.ozwell.ai/v1/models \
+curl https://ozwellapi.os.mieweb.org/v1/models \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
@@ -354,7 +354,7 @@ curl https://api.ozwell.ai/v1/models \
 ### Retrieve Model
 
 ```bash
-curl https://api.ozwell.ai/v1/models/gpt-4 \
+curl https://ozwellapi.os.mieweb.org/v1/models/gpt-4 \
   -H "Authorization: Bearer $OZWELL_API_KEY"
 ```
 
@@ -441,7 +441,7 @@ func main() {
     
     jsonBody, _ := json.Marshal(reqBody)
     
-    req, _ := http.NewRequest("POST", "https://api.ozwell.ai/v1/chat/completions", bytes.NewBuffer(jsonBody))
+    req, _ := http.NewRequest("POST", "https://ozwellapi.os.mieweb.org/v1/chat/completions", bytes.NewBuffer(jsonBody))
     req.Header.Set("Content-Type", "application/json")
     req.Header.Set("Authorization", "Bearer "+os.Getenv("OZWELL_API_KEY"))
     
@@ -464,7 +464,7 @@ require 'net/http'
 require 'json'
 require 'uri'
 
-uri = URI('https://api.ozwell.ai/v1/chat/completions')
+uri = URI('https://ozwellapi.os.mieweb.org/v1/chat/completions')
 
 http = Net::HTTP.new(uri.host, uri.port)
 http.use_ssl = true
@@ -499,7 +499,7 @@ $data = [
     ]
 ];
 
-$ch = curl_init('https://api.ozwell.ai/v1/chat/completions');
+$ch = curl_init('https://ozwellapi.os.mieweb.org/v1/chat/completions');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -536,7 +536,7 @@ public class OzwellExample {
         
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("https://api.ozwell.ai/v1/chat/completions"))
+            .uri(URI.create("https://ozwellapi.os.mieweb.org/v1/chat/completions"))
             .header("Content-Type", "application/json")
             .header("Authorization", "Bearer " + apiKey)
             .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -563,7 +563,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     
     let response = client
-        .post("https://api.ozwell.ai/v1/chat/completions")
+        .post("https://ozwellapi.os.mieweb.org/v1/chat/completions")
         .header(CONTENT_TYPE, "application/json")
         .header(AUTHORIZATION, format!("Bearer {}", api_key))
         .json(&json!({
@@ -603,7 +603,7 @@ var requestBody = new {
 };
 
 var response = await client.PostAsync(
-    "https://api.ozwell.ai/v1/chat/completions",
+    "https://ozwellapi.os.mieweb.org/v1/chat/completions",
     new StringContent(
         JsonSerializer.Serialize(requestBody),
         Encoding.UTF8,
