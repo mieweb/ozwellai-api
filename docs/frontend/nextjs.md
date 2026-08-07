@@ -2,6 +2,10 @@
 
 Integrate Ozwell into your Next.js application with proper handling for SSR and the App Router.
 
+:::note Current Demo Environment
+Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` and API at `https://ozwellapi.os.mieweb.org`.
+:::
+
 ## Installation
 
 ```bash
@@ -343,7 +347,7 @@ const securityHeaders = [
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline';
       frame-src 'self' https://embed.ozwell.ai;
-      connect-src 'self' https://api.ozwell.ai;
+      connect-src 'self' https://ozwellapi.os.mieweb.org;
     `.replace(/\s{2,}/g, ' ').trim()
   }
 ];

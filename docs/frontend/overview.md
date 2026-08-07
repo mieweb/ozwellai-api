@@ -8,9 +8,13 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 Ozwell is an embeddable AI assistant that runs inside an iframe on your website. Users chat with it. The AI can call **tools you define** — JavaScript functions that read from or write to your page. Conversations are private by default; your page only sees tool calls and lifecycle events, never message content.
 
-> **Try it live:** See Ozwell in action at the [demo site](https://tryozwell.os.mieweb.org/).
+> **Try it live:** See Ozwell in action at the [demo site](https://ozwelldemo.os.mieweb.org/).
 >
 > **Recommended API for current Ozwell Manager experience:** `https://ozwellapi.os.mieweb.org`
+>
+> **Console:** `https://ozwellconsole.os.mieweb.org`
+>
+> Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint, so the current docs use the dev-container demo, API, and console URLs.
 
 ## What You're Building
 

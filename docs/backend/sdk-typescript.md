@@ -46,7 +46,7 @@ const client = new OzwellClient({
   apiKey: process.env.OZWELL_API_KEY,
   
   // Optional
-  baseUrl: 'https://api.ozwell.ai/v1',  // Custom API endpoint
+  baseUrl: 'https://ozwellapi.os.mieweb.org/v1',  // Custom API endpoint
   timeout: 30000,                         // Request timeout in ms
   maxRetries: 3,                          // Automatic retry count
   defaultHeaders: {                       // Custom headers
@@ -60,7 +60,7 @@ const client = new OzwellClient({
 ```bash
 # .env
 OZWELL_API_KEY=ozw_xxxxxxxxxxxxxxxx
-OZWELL_BASE_URL=https://api.ozwell.ai/v1  # Optional
+OZWELL_BASE_URL=https://ozwellapi.os.mieweb.org/v1  # Optional
 ```
 
 ```typescript

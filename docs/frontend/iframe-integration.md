@@ -2,6 +2,10 @@
 
 This guide covers the iframe-based architecture used by all Ozwell frontend integrations, including security considerations, communication patterns, and custom implementation details.
 
+:::note Current Demo Environment
+Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` and API at `https://ozwellapi.os.mieweb.org`.
+:::
+
 ## How It Works
 
 Ozwell's frontend integrations render the chat interface inside an isolated iframe. This architecture provides:
@@ -20,7 +24,7 @@ graph TB
     end
     
     subgraph "Ozwell API"
-        API[api.ozwell.ai]
+        API[ozwellapi.os.mieweb.org]
     end
     
     Parent --> Container
@@ -84,7 +88,7 @@ Content-Security-Policy:
   script-src 'self';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: https:;
-  connect-src https://api.ozwell.ai;
+  connect-src https://ozwellapi.os.mieweb.org;
   frame-ancestors https://*.your-domain.com;
 ```
 

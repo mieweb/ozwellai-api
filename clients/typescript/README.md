@@ -37,7 +37,7 @@ const client = new OzwellAI({
 ```typescript
 const client = new OzwellAI({
   apiKey: 'your-api-key',        // sent as Authorization: Bearer header
-  baseURL: 'https://api.ozwell.ai', // optional, defaults to official API
+  baseURL: 'https://ozwellapi.os.mieweb.org', // optional, defaults to official API
   timeout: 30000, // optional, defaults to 30 seconds
   defaultHeaders: { // optional
     'X-Custom-Header': 'value'

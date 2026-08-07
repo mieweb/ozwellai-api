@@ -27,7 +27,7 @@ Ozwell's API follows the OpenAI API specification, providing a familiar interfac
 
 ### 1. Get Your API Key
 
-1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your `manager.os.mieweb.org` credentials
+1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials)
 2. Open agent management
 3. Ozwell creates your parent key automatically, or use **Claim key** to link an existing `ozw_` key
 4. Use **Show key** if you need the `ozw_` key for server-side API calls
@@ -79,7 +79,7 @@ All requests must include:
 - **Content-Type: application/json** for request bodies
 
 ```bash
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer ozw_xxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "Hello!"}]}'
@@ -205,7 +205,7 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: process.env.OZWELL_API_KEY,
-  baseURL: 'https://api.ozwell.ai/v1',
+  baseURL: 'https://ozwellapi.os.mieweb.org/v1',
 });
 ```
 

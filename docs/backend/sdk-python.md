@@ -46,7 +46,7 @@ from ozwell import OzwellClient
 
 client = OzwellClient(
     api_key=os.environ["OZWELL_API_KEY"],
-    base_url="https://api.ozwell.ai/v1",  # Optional
+    base_url="https://ozwellapi.os.mieweb.org/v1",  # Optional
     timeout=30.0,                          # Optional, in seconds
     max_retries=3,                         # Optional
 )
@@ -553,7 +553,7 @@ from langchain.schema import HumanMessage, SystemMessage
 # Use Ozwell as the backend
 llm = ChatOpenAI(
     openai_api_key=os.environ["OZWELL_API_KEY"],
-    openai_api_base="https://api.ozwell.ai/v1",
+    openai_api_base="https://ozwellapi.os.mieweb.org/v1",
     model_name="gpt-4"
 )
 
