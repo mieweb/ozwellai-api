@@ -346,7 +346,7 @@ const securityHeaders = [
     value: `
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      frame-src 'self' https://embed.ozwell.ai;
+      frame-src 'self' https://ozwellapi.os.mieweb.org https://embed.ozwell.ai;
       connect-src 'self' https://ozwellapi.os.mieweb.org;
     `.replace(/\s{2,}/g, ' ').trim()
   }

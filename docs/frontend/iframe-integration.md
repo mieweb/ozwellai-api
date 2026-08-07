@@ -3,7 +3,7 @@
 This guide covers the iframe-based architecture used by all Ozwell frontend integrations, including security considerations, communication patterns, and custom implementation details.
 
 :::note Current Demo Environment
-Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js` and API at `https://ozwellapi.os.mieweb.org`.
+Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`; the iframe and API both use `https://ozwellapi.os.mieweb.org`.
 :::
 
 ## How It Works
@@ -18,7 +18,7 @@ graph TB
     end
     
     subgraph "Ozwell Iframe (Isolated)"
-        Iframe[iframe src=embed.ozwell.ai]
+        Iframe[iframe src=ozwellapi.os.mieweb.org/embed/ozwell.html]
         UI[Chat UI]
         State[Conversation State]
     end
@@ -51,7 +51,7 @@ The host site cannot see, intercept, or log what is said in the chat. This creat
 
 ### Origin Isolation
 
-The iframe runs on a separate origin (`embed.ozwell.ai`), which means:
+The iframe runs on the loader origin (`ozwellapi.os.mieweb.org` for the current demo environment, `embed.ozwell.ai` for future production), which means:
 
 - ❌ Cannot access parent page DOM
 - ❌ Cannot read parent page cookies/storage
@@ -65,7 +65,7 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  src="https://embed.ozwell.ai/..."
+  src="https://ozwellapi.os.mieweb.org/embed/ozwell.html"
   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
   allow="clipboard-write"
 ></iframe>

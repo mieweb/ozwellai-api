@@ -94,7 +94,7 @@ Self-hosted deployments can still seed or create parent keys directly in their o
 ### Via API *(Coming Soon)*
 
 ```bash
-curl https://ozwellapi.os.mieweb.org/v1/api-keys \
+curl https://api.ozwell.ai/v1/api-keys \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
