@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -38,7 +38,7 @@ async function waitForReady(maxMs = 30_000) {
 function startServer({ admin = false, extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-provider-model-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
-    const server = spawn('npm', ['run', 'dev'], {
+    const server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
@@ -62,7 +62,7 @@ function startServer({ admin = false, extraEnv = {} } = {}) {
 }
 
 function stopServer(server, tmp) {
-    try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
