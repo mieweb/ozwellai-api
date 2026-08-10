@@ -28,7 +28,7 @@ Backend integrations use **general-purpose API keys** that provide full access t
 
 ```bash
 # Example API request with authentication
-curl https://api.ozwell.ai/v1/chat/completions \
+curl https://ozwellapi.os.mieweb.org/v1/chat/completions \
   -H "Authorization: Bearer ozw_xxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,7 +141,7 @@ import { OzwellClient } from '@ozwell/api';
 
 const client = new OzwellClient({
   apiKey: process.env.OZWELL_API_KEY,
-  baseUrl: 'https://api.ozwell.ai/v1', // optional
+  baseUrl: 'https://ozwellapi.os.mieweb.org/v1', // optional
 });
 ```
 
@@ -173,7 +173,7 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: process.env.OZWELL_API_KEY,
-  baseURL: 'https://api.ozwell.ai/v1',
+  baseURL: 'https://ozwellapi.os.mieweb.org/v1',
 });
 
 // Use the client as you would with OpenAI
@@ -292,7 +292,7 @@ const client = new OzwellClient({
 
 ## Next Steps
 
-1. **Get your API key:** Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) and use **Show key**
+1. **Get access:** Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials). Ozwell automatically provisions your parent key, then lets you create agents with agent keys.
 2. **Install the SDK:** Follow the installation instructions above
 3. **Explore endpoints:** See the [API Reference](./api-endpoints.md)
 4. **View examples:** Check [code samples](./api-examples.md)

@@ -6,12 +6,10 @@ Complete reference for all Ozwell API endpoints.
 
 | Environment | URL |
 |-------------|-----|
-| **Recommended for Ozwell Manager** | `https://ozwellapi.os.mieweb.org` |
-| **Legacy production API** | `https://ozwellapi-prod.os.mieweb.org` |
-| **Future production API** | `https://api.ozwell.ai` *(coming soon)* |
+| **Current Ozwell Manager API** | `https://ozwellapi.os.mieweb.org` |
 
 :::tip
-Use `https://ozwellapi.os.mieweb.org` for Ozwell Manager features. The legacy production API still uses the old seeded-key database flow.
+Use `https://ozwellapi.os.mieweb.org` for current Ozwell Manager features. Production is temporarily unavailable while it migrates to the future `api.ozwell.ai` endpoint, so it is not advertised as the active API here.
 :::
 
 ## Chat
@@ -274,7 +272,7 @@ This is a multipart/form-data endpoint.
 #### Example Request
 
 ```bash
-curl https://ozwellapi.opensource.mieweb.org/v1/audio/transcriptions \
+curl https://ozwellapi.os.mieweb.org/v1/audio/transcriptions \
   -H "Authorization: Bearer $OZWELL_API_KEY" \
   -F "file=@audio.mp3" \
   -F model=whisper-1

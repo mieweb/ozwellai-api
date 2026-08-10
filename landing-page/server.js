@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || process.env.EMBED_TEST_PORT || 8080);
 const referenceBaseUrl = (process.env.REFERENCE_SERVER_URL || 'http://localhost:3000').replace(/\/$/, '');
-const managerUrl = (process.env.MANAGER_URL || 'https://ozwellmanager.os.mieweb.org/').replace(/\/$/, '');
+const managerUrl = (process.env.MANAGER_URL || 'https://ozwellconsole.os.mieweb.org/').replace(/\/$/, '');
 
 // Agent keys injected into HTML at serve time (keeps keys out of source control)
 const landingAgentKey = process.env.LANDING_AGENT_KEY || '';

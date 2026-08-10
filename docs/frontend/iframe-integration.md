@@ -2,6 +2,10 @@
 
 This guide covers the iframe-based architecture used by all Ozwell frontend integrations, including security considerations, communication patterns, and custom implementation details.
 
+:::note Current Demo Environment
+Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`; the iframe and API both use `https://ozwellapi.os.mieweb.org`.
+:::
+
 ## How It Works
 
 Ozwell's frontend integrations render the chat interface inside an isolated iframe. This architecture provides:
@@ -14,13 +18,13 @@ graph TB
     end
     
     subgraph "Ozwell Iframe (Isolated)"
-        Iframe[iframe src=embed.ozwell.ai]
+        Iframe[iframe srcdoc loads ozwellapi.os.mieweb.org/embed/ozwell.js]
         UI[Chat UI]
         State[Conversation State]
     end
     
     subgraph "Ozwell API"
-        API[api.ozwell.ai]
+        API[ozwellapi.os.mieweb.org]
     end
     
     Parent --> Container
@@ -47,7 +51,7 @@ The host site cannot see, intercept, or log what is said in the chat. This creat
 
 ### Origin Isolation
 
-The iframe runs on a separate origin (`embed.ozwell.ai`), which means:
+The loader creates an iframe with inline `srcdoc`; that iframe loads the widget bundle from the loader origin (`https://ozwellapi.os.mieweb.org/embed/ozwell.js` in the current demo environment, future production embed origin later), which means:
 
 - ❌ Cannot access parent page DOM
 - ❌ Cannot read parent page cookies/storage
@@ -61,7 +65,7 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  src="https://embed.ozwell.ai/..."
+  srcdoc="...loads https://ozwellapi.os.mieweb.org/embed/ozwell.js..."
   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
   allow="clipboard-write"
 ></iframe>
@@ -84,7 +88,7 @@ Content-Security-Policy:
   script-src 'self';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: https:;
-  connect-src https://api.ozwell.ai;
+  connect-src https://ozwellapi.os.mieweb.org;
   frame-ancestors https://*.your-domain.com;
 ```
 

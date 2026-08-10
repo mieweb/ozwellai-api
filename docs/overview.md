@@ -9,6 +9,10 @@ description: Welcome to the Ozwell API documentation - privacy-first AI integrat
 
 Welcome to the Ozwell API documentation. This guide will help you integrate Ozwell's AI capabilities into your applications, whether you're embedding a chat interface into your website or building custom backend workflows.
 
+:::note Current Demo Environment
+Production CDN/embed origins such as `cdn.ozwell.ai` and `embed.ozwell.ai` are future production examples. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, console at `https://ozwellconsole.os.mieweb.org`, and loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`.
+:::
+
 ## Privacy First
 
 **Ozwell is built on a foundation of user privacy and trust.**
@@ -333,7 +337,9 @@ If you're unsure whether your use case complies with our trademark policy, pleas
 
 ## Next Steps
 
-1. **See it in action?** Try the [live demo](https://tryozwell.os.mieweb.org/) to experience Ozwell's chat widget.
+1. **See it in action?** Try the [live demo](https://ozwelldemo.os.mieweb.org/) to experience Ozwell's chat widget.
+
+   Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, and console at `https://ozwellconsole.os.mieweb.org`.
 
 2. **New to Ozwell?** Start with the [CDN integration](./frontend/cdn-embed.md) for the fastest path to a working demo.
 
