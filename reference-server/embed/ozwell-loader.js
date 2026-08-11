@@ -936,6 +936,13 @@
         state.agentTools = data.tools;
         console.log('[OzwellChat] Agent tools discovered from server:', state.agentTools);
       }
+      if (!config.provider && !config.model && data.default_model?.provider && data.default_model?.model) {
+        state.runtimeConfig = {
+          ...state.runtimeConfig,
+          provider: data.default_model.provider,
+          model: data.default_model.model,
+        };
+      }
     } catch (e) {
       // Silent fail — tools will fall back to config.tools if any
     }

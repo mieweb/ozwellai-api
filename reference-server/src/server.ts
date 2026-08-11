@@ -221,6 +221,10 @@ async function buildServer() {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell-loader.js');
   });
 
+  fastify.get('/embed/ozwell-loader.js', async (_request, reply) => {
+    return reply.redirect('/widget');
+  });
+
   // Serve public assets (documentation, misc).
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'public'),

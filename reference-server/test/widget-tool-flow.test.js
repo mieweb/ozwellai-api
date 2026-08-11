@@ -115,6 +115,13 @@ test('widget fetches effective provider model options for the selector', async (
   assert.match(bundleSource, /\/v1\/models\/effective/);
 });
 
+test('loader forwards the agent default model to the widget before effective models load', async () => {
+  const loaderSource = await readLoaderSource();
+
+  assert.match(loaderSource, /default_model/);
+  assert.match(loaderSource, /state\.runtimeConfig/);
+});
+
 test('widget chat payload can include selected provider and model', async () => {
   const appSource = await readWidgetAppSource();
   const typesSource = await readWidgetTypesSource();

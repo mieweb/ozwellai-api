@@ -976,10 +976,14 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
         try {
             const parsed = parseAgentYaml(agent.yaml);
+            const policy = agentStore.getAgentModelPolicy(agent.id, agent.yaml);
             return {
                 id: agent.id,
                 name: parsed.name,
                 model: parsed.model,
+                default_model: policy.default_provider && policy.default_model
+                    ? { provider: policy.default_provider, model: policy.default_model }
+                    : null,
                 tools: normalizeTools(parsed.tools),
             };
         } catch (error) {
