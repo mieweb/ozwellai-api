@@ -125,7 +125,7 @@ instructions: |
     apiKey: 'agnt_key-your-agent-key-here'
   };
 &lt;/script&gt;
-&lt;script src="https://your-server.com/embed/ozwell-loader.js"&gt;&lt;/script&gt;</code></pre>
+&lt;script src="https://api.ozwell.ai/widget"&gt;&lt;/script&gt;</code></pre>
         <p>That's it for a basic chatbot! The widget automatically discovers
           available tools from your agent config.</p>
       </div>
@@ -292,7 +292,7 @@ instructions: |
     };
 
     const loader = document.createElement('script');
-    loader.src = `${normalizedBase}/embed/ozwell-loader.js`;  // DIRECT URL - no proxy (testing X-Frame-Options)
+    loader.src = `${normalizedBase}/widget`;  // DIRECT URL - no proxy (testing X-Frame-Options)
     loader.async = true;
     document.head.appendChild(loader);
   </script>

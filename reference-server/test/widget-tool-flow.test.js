@@ -6,6 +6,7 @@ const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
 const WIDGET_APP_PATH = new URL('../embed/src/WidgetApp.tsx', import.meta.url);
 const WIDGET_TYPES_PATH = new URL('../embed/src/types.ts', import.meta.url);
 const LOADER_PATH = new URL('../embed/ozwell-loader.js', import.meta.url);
+const SERVER_PATH = new URL('../src/server.ts', import.meta.url);
 
 async function readWidgetSource() {
   return readFile(WIDGET_PATH, 'utf8');
@@ -21,6 +22,10 @@ async function readWidgetTypesSource() {
 
 async function readLoaderSource() {
   return readFile(LOADER_PATH, 'utf8');
+}
+
+async function readServerSource() {
+  return readFile(SERVER_PATH, 'utf8');
 }
 
 test('widget tool results do not use success+message as a direct response shortcut', async () => {
@@ -67,6 +72,22 @@ test('loader strips callable tool functions before sending config through postMe
   assert.match(source, /\.map\(toolSchemaForWidget\)/);
 });
 
+test('loader opens the hosted widget frame instead of an inline document', async () => {
+  const source = await readLoaderSource();
+
+  assert.match(source, /widgetUrl: autoDetectedBase \? `\$\{autoDetectedBase\}\/widget\/frame\/`/);
+  assert.match(source, /iframe\.src = widgetSrc;/);
+  assert.doesNotMatch(source, /iframe\.srcdoc\s*=/);
+});
+
+test('server publishes the loader and iframe page below /widget', async () => {
+  const source = await readServerSource();
+
+  assert.match(source, /prefix: '\/widget\/'/);
+  assert.match(source, /fastify\.get\('\/widget'/);
+  assert.match(source, /sendFile\('ozwell-loader\.js'\)/);
+});
+
 test('loader preserves OpenAI-style function schema while keeping execution in ozwell-tool-call', async () => {
   const source = await readLoaderSource();
 
@@ -103,15 +124,14 @@ test('widget chat payload can include selected provider and model', async () => 
   assert.match(appSource, /requestBody\.model = selectedModel\.model/);
 });
 
-test('widget model selector uses the shared composer selector anchored to the composer', async () => {
+test('widget adapter uses OzwellChat for the shared model selector', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();
 
-  assert.match(appSource, /ComposerModelSelector/);
-  assert.match(appSource, /composerProps=\{\{ inputTrailing: composerModelSelector \}\}/);
-  assert.match(appSource, /providerFilter=\{providerFilter\}/);
-  assert.match(appSource, /boundaryRef=\{shellRef\}/);
-  assert.doesNotMatch(appSource, /className="ozwell-model-menu"/);
+  assert.match(appSource, /<OzwellChat/);
+  assert.match(appSource, /models=\{activeModel \? \{/);
+  assert.match(appSource, /providerFilter,/);
+  assert.match(appSource, /useState<string \| null>\(null\)/);
   assert.match(bundleSource, /composer-model-selector-trigger/);
 });
 

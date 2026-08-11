@@ -49,7 +49,7 @@
     defaultUI: true, // Enable floating button/wrapper by default
     // model is optional - server chooses default if not specified by client
     endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
-    widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
+    widgetUrl: autoDetectedBase ? `${autoDetectedBase}/widget/frame/` : '/widget/frame/',
     thinkingEnabled: false, // Display reasoning/thinking tokens from models
     thinkingDefaultMode: 2, // 0=None, 1=Peek, 2=Smart (expand-then-collapse), 3=Expanded
   };
@@ -156,23 +156,8 @@
       document.body;
 
     const iframe = document.createElement('iframe');
-    const widgetSrc = options.src || config.widgetUrl || config.src || '/embed/ozwell.html';
-
-    // Extract base URL for loading ozwell.js (remove /ozwell.html from path)
-    const widgetBaseUrl = widgetSrc.replace(/\/[^/]*$/, '');
-
-    // Use srcdoc instead of src to inline HTML (eliminates ozwell.html file)
-    iframe.srcdoc = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ozwell Chat Widget</title>
-  </head>
-  <body>
-    <script type="module" src="${widgetBaseUrl}/ozwell.js"></script>
-  </body>
-</html>`;
+    const widgetSrc = options.src || config.widgetUrl || config.src || '/widget/frame/';
+    iframe.src = widgetSrc;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);

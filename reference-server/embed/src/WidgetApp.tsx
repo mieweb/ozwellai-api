@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AIChat,
-  Button,
-  ComposerModelSelector,
-  Dropdown,
-  DropdownContent,
-  DropdownItem,
-  Toast,
-  Tooltip,
+  OzwellChat,
   type AIMessage,
   type MCPToolCall,
+  type OzwellThinkingMode,
 } from '@mieweb/ui';
 import { MarkdownContent } from './MarkdownContent';
 import type {
@@ -24,13 +18,6 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
-const THINKING_MODE_OPTIONS = [
-  { value: String(THINKING.NONE), label: 'Never', description: 'Hide all thinking blocks in the chat.' },
-  { value: String(THINKING.PEEK), label: 'Collapsed', description: 'Show a compact thinking row that can be opened.' },
-  { value: String(THINKING.SMART), label: 'Auto', description: 'Open while thinking, then collapse after the answer.' },
-  { value: String(THINKING.EXPANDED), label: 'Expanded', description: 'Keep thinking blocks open by default.' },
-];
-const MESSAGES_NAV_THRESHOLD = 3;
 const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
@@ -100,14 +87,6 @@ function serializeToolResult(result: unknown) {
 
 function getContentText(message: ChatHistoryMessage) {
   return typeof message.content === 'string' ? message.content : '';
-}
-
-function getDisplayText(message: WidgetMessage) {
-  return message.content
-    .filter((block) => block.type === 'text' && block.text)
-    .map((block) => block.text)
-    .join(' ')
-    .trim();
 }
 
 function historyToRequestMessages(messages: ChatHistoryMessage[]) {
@@ -328,44 +307,6 @@ function shouldCollapseThinking(mode: ThinkingMode, status: AIMessage['status'],
   return true;
 }
 
-function getThinkingCollapseState(message: WidgetMessage, thinkingMode: ThinkingMode) {
-  if (thinkingMode === THINKING.EXPANDED) return false;
-  if (thinkingMode === THINKING.PEEK) return true;
-  if (thinkingMode === THINKING.SMART) {
-    const hasTextContent = message.content.some((block) => block.type === 'text' && Boolean(block.text));
-    return message.status !== 'streaming' || hasTextContent;
-  }
-  return true;
-}
-
-function getThinkingDisplayId(message: WidgetMessage, thinkingMode: ThinkingMode, collapsed: boolean) {
-  const hasThinkingBlock = message.content.some((block) => block.type === 'thinking');
-  if (!hasThinkingBlock) return message.id;
-  return `${message.id}:thinking-${thinkingMode}-${collapsed ? 'closed' : 'open'}`;
-}
-
-function applyThinkingModeToMessage(message: WidgetMessage, thinkingMode: ThinkingMode): WidgetMessage {
-  if (thinkingMode === THINKING.NONE) {
-    return {
-      ...message,
-      content: message.content.filter((block) => block.type !== 'thinking'),
-    };
-  }
-
-  const collapsed = getThinkingCollapseState(message, thinkingMode);
-  return {
-    ...message,
-    id: getThinkingDisplayId(message, thinkingMode, collapsed),
-    content: message.content.map((block) => {
-      if (block.type !== 'thinking') return block;
-      return {
-        ...block,
-        collapsed,
-      };
-    }),
-  };
-}
-
 function systemDisplayMessage(content: string): WidgetMessage {
   return {
     id: createMessageId('system'),
@@ -387,16 +328,12 @@ export function WidgetApp() {
   const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(() => (window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART) as ThinkingMode);
-  const [thinkingMenuOpen, setThinkingMenuOpen] = useState(false);
-  const [messagesMenuOpen, setMessagesMenuOpen] = useState(false);
-  const [messagesButtonFlare, setMessagesButtonFlare] = useState(false);
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
-  const [providerFilter, setProviderFilter] = useState('any');
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);
-  const shellRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef(historyMessages);
   const parentOriginRef = useRef<string | null>(null);
   const pendingToolCallsRef = useRef<Record<string, true>>({});
@@ -406,7 +343,6 @@ export function WidgetApp() {
   const queuedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
-  const messagesFlaredRef = useRef(false);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
@@ -990,15 +926,14 @@ export function WidgetApp() {
   ), []);
 
   const chatMessages = useMemo(() => {
-    const modeAwareMessages = displayMessages
-      .map((message) => applyThinkingModeToMessage(message, thinkingMode))
+    const visibleMessages = displayMessages
       .filter((message) => (
         message.status === 'streaming'
         || message.content.length > 0
         || message.role === 'tool'
       ));
-    if (!queuedMessage) return modeAwareMessages;
-    return [...modeAwareMessages, {
+    if (!queuedMessage) return visibleMessages;
+    return [...visibleMessages, {
       id: 'queued-message',
       role: 'user' as const,
       content: [{ type: 'text' as const, text: queuedMessage }],
@@ -1006,181 +941,47 @@ export function WidgetApp() {
       status: 'pending' as const,
       metadata: { source: 'queued' },
     }];
-  }, [displayMessages, queuedMessage, thinkingMode]);
+  }, [displayMessages, queuedMessage]);
 
-  const userMessageItems = useMemo(() => (
-    displayMessages.flatMap((message, chatIndex) => {
-      if (message.role !== 'user') return [];
-      const text = getDisplayText(message);
-      if (!text) return [];
-      return [{ id: message.id, text, chatIndex }];
-    })
-  ), [displayMessages]);
+  const displayThinkingMode: OzwellThinkingMode = [
+    'never',
+    'collapsed',
+    'auto',
+    'expanded',
+  ][thinkingMode] as OzwellThinkingMode;
 
-  const showMessagesNav = userMessageItems.length >= MESSAGES_NAV_THRESHOLD;
-
-  useEffect(() => {
-    if (!showMessagesNav || messagesFlaredRef.current) return;
-    messagesFlaredRef.current = true;
-    setMessagesButtonFlare(true);
-    const timeoutId = window.setTimeout(() => setMessagesButtonFlare(false), 1800);
-    return () => window.clearTimeout(timeoutId);
-  }, [showMessagesNav]);
-
-  const selectThinkingMode = useCallback((value: string) => {
-    const nextMode = Number(value) as ThinkingMode;
+  const setDisplayThinkingMode = useCallback((mode: OzwellThinkingMode) => {
+    const nextMode = {
+      never: THINKING.NONE,
+      collapsed: THINKING.PEEK,
+      auto: THINKING.SMART,
+      expanded: THINKING.EXPANDED,
+    }[mode] as ThinkingMode;
     setThinkingMode(nextMode);
     setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-    setThinkingMenuOpen(false);
-  }, []);
-
-  const selectedThinkingLabel = useMemo(() => (
-    THINKING_MODE_OPTIONS.find((option) => option.value === String(thinkingMode))?.label || 'Auto'
-  ), [thinkingMode]);
-
-  const selectedModelOption = useMemo(() => (
-    activeModel
-      ? effectiveModels.find((item) => item.provider === activeModel.provider && item.model === activeModel.model) || null
-      : null
-  ), [activeModel, effectiveModels]);
-
-  const showModelSelector = effectiveModels.length > 1 && Boolean(selectedModelOption);
-
-  const composerModelSelector = showModelSelector && selectedModelOption ? (
-    <ComposerModelSelector
-      models={effectiveModels}
-      value={activeModel}
-      onChange={setActiveModel}
-      providerFilter={providerFilter}
-      onProviderFilterChange={setProviderFilter}
-      boundaryRef={shellRef}
-      className="ozwell-composer-model-selector"
-    />
-  ) : undefined;
-  const inputPlaceholder = showModelSelector
-    ? 'Ask a question...'
-    : (config.placeholder || DEFAULT_CONFIG.placeholder);
-
-  const scrollToMessage = useCallback((chatIndex: number) => {
-    const messageNodes = document.querySelectorAll<HTMLElement>(
-      '[data-slot="ai-chat-messages"] [data-slot="ai-message"]'
-    );
-    messageNodes[chatIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    setMessagesMenuOpen(false);
   }, []);
 
   return (
-    <div className="ozwell-widget-shell" ref={shellRef}>
-      {(config.thinkingEnabled || showMessagesNav) && (
-        <div className="ozwell-reasoning-bar">
-          <div className="ozwell-left-controls">
-            {config.thinkingEnabled ? (
-              <div className="ozwell-thinking-control">
-                <Dropdown
-                  open={thinkingMenuOpen}
-                  onOpenChange={setThinkingMenuOpen}
-                  placement="bottom-start"
-                  width={248}
-                  className="ozwell-thinking-menu"
-                  trigger={(
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="ozwell-thinking-trigger"
-                      aria-label={`Show thinking: ${selectedThinkingLabel}`}
-                    >
-                      Show thinking: {selectedThinkingLabel}
-                    </Button>
-                  )}
-                >
-                  <DropdownContent className="ozwell-thinking-menu-content">
-                    {THINKING_MODE_OPTIONS.map((option) => (
-                      <DropdownItem
-                        key={option.value}
-                        searchText={`${option.label} ${option.description}`}
-                        onClick={() => selectThinkingMode(option.value)}
-                        className="ozwell-thinking-menu-item"
-                        aria-current={option.value === String(thinkingMode) ? 'true' : undefined}
-                      >
-                        <Tooltip content={option.description} placement="right" delay={150} maxWidth={220}>
-                          <span className="ozwell-thinking-option">
-                            <span className="ozwell-thinking-option-label">{option.label}</span>
-                            <span className="ozwell-thinking-option-description">{option.description}</span>
-                          </span>
-                        </Tooltip>
-                      </DropdownItem>
-                    ))}
-                  </DropdownContent>
-                </Dropdown>
-              </div>
-            ) : null}
-          </div>
-          <div className="ozwell-reasoning-controls">
-            {showMessagesNav && (
-              <Dropdown
-                open={messagesMenuOpen}
-                onOpenChange={setMessagesMenuOpen}
-                placement="bottom-end"
-                width={260}
-                className="ozwell-messages-menu"
-                trigger={(
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className={messagesButtonFlare ? 'ozwell-messages-trigger ozwell-messages-trigger-flare' : 'ozwell-messages-trigger'}
-                  >
-                    Messages
-                  </Button>
-                )}
-              >
-                <DropdownContent className="ozwell-messages-menu-content">
-                  {userMessageItems.map((item, index) => (
-                    <DropdownItem
-                      key={item.id}
-                      searchText={item.text}
-                      onClick={() => scrollToMessage(item.chatIndex)}
-                      className="ozwell-message-nav-item"
-                    >
-                      <span className="ozwell-message-nav-index">{index + 1}</span>
-                      <span className="ozwell-message-nav-text">{item.text}</span>
-                    </DropdownItem>
-                  ))}
-                </DropdownContent>
-              </Dropdown>
-            )}
-          </div>
-        </div>
-      )}
-
-      {toast && (
-        <div className="ozwell-toast-wrap">
-          <Toast
-            id="ozwell-widget-warning"
-            message={toast}
-            variant="warning"
-            onClose={() => setToast(null)}
-          />
-        </div>
-      )}
-
-      <AIChat
-        messages={chatMessages}
-        isGenerating={sending}
-        title={config.title || DEFAULT_CONFIG.title}
-        inputPlaceholder={inputPlaceholder}
-        showHeader={false}
-        height="100%"
-        variant="embedded"
-        size="full"
-        onSendMessage={(message) => void sendMessage(message)}
-        onClose={() => postToParent({ source: 'ozwell-chat-widget', type: 'closed' })}
-        renderTextContent={renderTextContent}
-        composerProps={{ inputTrailing: composerModelSelector }}
-      />
-
-      <div className="ozwell-footer">Powered by Ozwell</div>
-    </div>
+    <OzwellChat
+      messages={chatMessages}
+      isGenerating={sending}
+      inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
+      onSendMessage={(message) => void sendMessage(message)}
+      renderTextContent={renderTextContent}
+      thinking={{
+        enabled: config.thinkingEnabled,
+        mode: displayThinkingMode,
+        onModeChange: setDisplayThinkingMode,
+      }}
+      models={activeModel ? {
+        options: effectiveModels,
+        value: activeModel,
+        onChange: setActiveModel,
+        providerFilter,
+        onProviderFilterChange: setProviderFilter,
+      } : undefined}
+      warning={toast}
+      onDismissWarning={() => setToast(null)}
+    />
   );
 }

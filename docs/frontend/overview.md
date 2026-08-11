@@ -56,7 +56,7 @@ Here's a page that exposes two tools: one that reads the current email (get) and
     ]
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ### 2. Handle Tool Calls
@@ -160,7 +160,7 @@ Add Ozwell to any website with a single script tag. No build step required. Supp
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ➡️ [Full CDN documentation with tool calling tutorial](./cdn-embed.md)

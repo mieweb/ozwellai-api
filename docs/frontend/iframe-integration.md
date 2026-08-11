@@ -3,7 +3,7 @@
 This guide covers the iframe-based architecture used by all Ozwell frontend integrations, including security considerations, communication patterns, and custom implementation details.
 
 :::note Current Demo Environment
-Production iframe/embed origins such as `embed.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`; the iframe and API both use `https://ozwellapi.os.mieweb.org`.
+The production loader is `https://api.ozwell.ai/widget`. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/widget`; its iframe and API both use `https://ozwellapi.os.mieweb.org`.
 :::
 
 ## How It Works
@@ -18,7 +18,7 @@ graph TB
     end
     
     subgraph "Ozwell Iframe (Isolated)"
-        Iframe[iframe srcdoc loads ozwellapi.os.mieweb.org/embed/ozwell.js]
+        Iframe[iframe src ozwellapi.os.mieweb.org/widget/frame/]
         UI[Chat UI]
         State[Conversation State]
     end
@@ -51,7 +51,7 @@ The host site cannot see, intercept, or log what is said in the chat. This creat
 
 ### Origin Isolation
 
-The loader creates an iframe with inline `srcdoc`; that iframe loads the widget bundle from the loader origin (`https://ozwellapi.os.mieweb.org/embed/ozwell.js` in the current demo environment, future production embed origin later), which means:
+The loader creates an iframe whose page is served from the Ozwell API origin (`https://ozwellapi.os.mieweb.org/widget/frame/` in the current demo environment). Its API calls are therefore same-origin with the Ozwell API, while the host page remains isolated.
 
 - ❌ Cannot access parent page DOM
 - ❌ Cannot read parent page cookies/storage
@@ -65,9 +65,8 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  srcdoc="...loads https://ozwellapi.os.mieweb.org/embed/ozwell.js..."
-  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-  allow="clipboard-write"
+  src="https://api.ozwell.ai/widget/frame/"
+  sandbox="allow-scripts allow-same-origin allow-forms"
 ></iframe>
 ```
 
@@ -76,20 +75,14 @@ The iframe includes restrictive sandbox attributes:
 | `allow-scripts` | Required for chat functionality |
 | `allow-same-origin` | Required for API calls from iframe |
 | `allow-forms` | Enables form submission (file uploads) |
-| `allow-popups` | Allows opening links in new tabs |
 
-### Content Security Policy
+### Embedding Policy
 
-The iframe enforces strict CSP headers:
+The widget response permits embedding from host websites:
 
 ```
 Content-Security-Policy:
-  default-src 'self';
-  script-src 'self';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: https:;
-  connect-src https://ozwellapi.os.mieweb.org;
-  frame-ancestors https://*.your-domain.com;
+  frame-ancestors *;
 ```
 
 ---
@@ -147,7 +140,7 @@ If you need full control, you can implement the iframe integration manually.
   <button id="ozwell-trigger">Chat</button>
   <iframe 
     id="ozwell-iframe"
-    src="https://embed.ozwell.ai/chat"
+    src="https://api.ozwell.ai/widget/frame/"
     style="display: none; width: 400px; height: 600px; border: none;"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     allow="clipboard-write"
@@ -173,7 +166,7 @@ iframe.addEventListener('load', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://embed.ozwell.ai');
+  }, 'https://api.ozwell.ai');
 });
 
 // Toggle visibility
@@ -185,13 +178,13 @@ trigger.addEventListener('click', () => {
     type: isHidden ? 'ozwell:open' : 'ozwell:close',
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://embed.ozwell.ai');
+  }, 'https://api.ozwell.ai');
 });
 
 // Listen for messages from iframe
 window.addEventListener('message', (event) => {
   // Verify origin
-  if (event.origin !== 'https://embed.ozwell.ai') return;
+  if (event.origin !== 'https://api.ozwell.ai') return;
   
   const { type, payload } = event.data;
   
@@ -282,7 +275,7 @@ window.addEventListener('popstate', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://embed.ozwell.ai');
+  }, 'https://api.ozwell.ai');
 });
 ```
 
