@@ -80,12 +80,17 @@ test('loader opens the hosted widget frame instead of an inline document', async
   assert.doesNotMatch(source, /iframe\.srcdoc\s*=/);
 });
 
-test('server publishes the loader and iframe page below /widget', async () => {
+test('server publishes only the widget runtime assets below /widget', async () => {
   const source = await readServerSource();
 
-  assert.match(source, /prefix: '\/widget\/'/);
+  assert.match(source, /serve: false/);
   assert.match(source, /fastify\.get\('\/widget'/);
   assert.match(source, /sendFile\('ozwell-loader\.js'\)/);
+  assert.match(source, /fastify\.get\('\/widget\/ozwell\.js'/);
+  assert.match(source, /sendFile\('ozwell\.js'\)/);
+  assert.match(source, /fastify\.get\('\/widget\/frame\/'/);
+  assert.match(source, /sendFile\('frame\/index\.html'\)/);
+  assert.doesNotMatch(source, /prefix: '\/widget\/'/);
 });
 
 test('loader preserves OpenAI-style function schema while keeping execution in ozwell-tool-call', async () => {

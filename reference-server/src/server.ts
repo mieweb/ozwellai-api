@@ -211,14 +211,22 @@ async function buildServer() {
   await fastify.register(agentsRoute);  // Agent registration CRUD
   await fastify.register(audioRoute);   // Audio transcription
 
-  // Serve the widget under the API origin so its iframe can call this API directly.
+  // Expose only the widget runtime files under the API origin.
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'embed'),
-    prefix: '/widget/',
+    serve: false,
   });
 
   fastify.get('/widget', async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell-loader.js');
+  });
+
+  fastify.get('/widget/ozwell.js', async (_request, reply) => {
+    return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
+  });
+
+  fastify.get('/widget/frame/', async (_request, reply) => {
+    return reply.type('text/html; charset=utf-8').sendFile('frame/index.html');
   });
 
   fastify.get('/embed/ozwell-loader.js', async (_request, reply) => {
