@@ -127,6 +127,15 @@ test('loader forwards the agent default model to the widget before effective mod
   assert.match(loaderSource, /state\.runtimeConfig/);
 });
 
+test('loader discovers agent context for manual mounts before configuring the frame', async () => {
+  const loaderSource = await readLoaderSource();
+
+  assert.match(loaderSource, /function discoverAgentContext\(\)/);
+  assert.match(loaderSource, /function mount\(options = \{\}\) \{\s*discoverAgentContext\(\);/);
+  assert.match(loaderSource, /case 'ready':[\s\S]*discoverAgentContext\(\)\.finally\(/);
+  assert.match(loaderSource, /case 'tools\/list':[\s\S]*discoverAgentContext\(\)\.finally\(/);
+});
+
 test('widget chat payload can include selected provider and model', async () => {
   const appSource = await readWidgetAppSource();
   const typesSource = await readWidgetTypesSource();

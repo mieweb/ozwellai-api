@@ -63,6 +63,7 @@
     chatOpen: false, // Track if chat window is currently open
     agentTools: null, // Tools fetched from server via agent key (MCP discovery)
   };
+  let agentDiscoveryPromise;
 
   const EMPTY_SCHEMA = { type: 'object', properties: {} };
   const PAGE_TOOL_PREFIX = 'postMessage_';
@@ -266,11 +267,11 @@
         break;
 
       case 'tools/list':
-        postJsonRpc({
+        discoverAgentContext().finally(() => postJsonRpc({
           jsonrpc: '2.0',
           id: data.id,
           result: { tools: getMcpTools() },
-        });
+        }));
         break;
 
       case 'tools/call': {
@@ -352,11 +353,13 @@
       case 'ready':
         state.ready = true;
         flushPending();
-        sendConfig();
-        document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        discoverAgentContext().finally(() => {
+          sendConfig();
+          document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        });
         break;
       case 'request-config':
-        sendConfig();
+        discoverAgentContext().finally(sendConfig);
         break;
       case 'closed':
         document.dispatchEvent(new CustomEvent('ozwell-chat-closed'));
@@ -847,6 +850,8 @@
    * @returns {HTMLIFrameElement} The created iframe element
    */
   function mount(options = {}) {
+    discoverAgentContext();
+
     // Inject CSS for default UI (if enabled)
     injectDefaultCSS();
 
@@ -948,17 +953,24 @@
     }
   }
 
+  function discoverAgentContext() {
+    if (!agentDiscoveryPromise) {
+      agentDiscoveryPromise = fetchAgentTools();
+    }
+    return agentDiscoveryPromise;
+  }
+
   // Auto-mount widget unless explicitly disabled
   const config = readGlobalConfig();
   if (config.autoMount !== false) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', async () => {
-        await fetchAgentTools();
+        await discoverAgentContext();
         api.mount();
       });
     } else {
       // DOM already loaded, fetch tools then mount
-      fetchAgentTools().then(() => api.mount());
+      discoverAgentContext().then(() => api.mount());
     }
   }
 })();
