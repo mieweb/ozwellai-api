@@ -120,3 +120,10 @@ test('widget preserves legacy model-only chat config when no provider is resolve
 
   assert.match(appSource, /else if \(configRef\.current\.model\) requestBody\.model = configRef\.current\.model;/);
 });
+
+test('widget displays unavailable configured model errors as a friendly assistant message', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(appSource, /configured_model_unavailable/);
+  assert.match(appSource, /This assistant is temporarily unavailable\. Please try again later\./);
+});
