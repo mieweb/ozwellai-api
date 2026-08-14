@@ -926,22 +926,13 @@ export function WidgetApp() {
   ), []);
 
   const chatMessages = useMemo(() => {
-    const visibleMessages = displayMessages
+    return displayMessages
       .filter((message) => (
         message.status === 'streaming'
         || message.content.length > 0
         || message.role === 'tool'
       ));
-    if (!queuedMessage) return visibleMessages;
-    return [...visibleMessages, {
-      id: 'queued-message',
-      role: 'user' as const,
-      content: [{ type: 'text' as const, text: queuedMessage }],
-      timestamp: new Date(),
-      status: 'pending' as const,
-      metadata: { source: 'queued' },
-    }];
-  }, [displayMessages, queuedMessage]);
+  }, [displayMessages]);
 
   const displayThinkingMode: OzwellThinkingMode = [
     'never',
@@ -967,6 +958,9 @@ export function WidgetApp() {
       isGenerating={sending}
       inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       onSendMessage={(message) => void sendMessage(message)}
+      queuedMessage={queuedMessage}
+      onQueuedMessageChange={setQueuedMessage}
+      onCancelQueuedMessage={() => setQueuedMessage(null)}
       renderTextContent={renderTextContent}
       thinking={{
         enabled: config.thinkingEnabled,

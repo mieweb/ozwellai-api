@@ -156,6 +156,15 @@ test('widget adapter uses OzwellChat for the shared model selector', async () =>
   assert.match(bundleSource, /composer-model-selector-trigger/);
 });
 
+test('widget adapter delegates queued message controls to OzwellChat', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(appSource, /queuedMessage=\{queuedMessage\}/);
+  assert.match(appSource, /onQueuedMessageChange=\{setQueuedMessage\}/);
+  assert.match(appSource, /onCancelQueuedMessage=\{\(\) => setQueuedMessage\(null\)\}/);
+  assert.doesNotMatch(appSource, /id: 'queued-message'/);
+});
+
 test('widget preserves legacy model-only chat config when no provider is resolved', async () => {
   const appSource = await readWidgetAppSource();
 
