@@ -737,6 +737,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
     const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));
     if (!allowedModel) {
+      if (usingAgentDefaultModel) {
+        reply.code(400);
+        return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
       reply.code(403);
       return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
     }
