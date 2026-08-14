@@ -363,8 +363,12 @@ GET /v1/models/effective
 The effective list is:
 
 ```text
-enabled discovered models ∩ parent-key restrictions ∩ agent model policy
+enabled discovered models ∩ server-wide restrictions ∩ parent-key restrictions ∩ agent model policy
 ```
+
+Each level only narrows the level above it, and an empty level is a no-op. Policy is resolved before
+any provider dispatch, so a request for a disallowed pair is rejected with `403 model_not_allowed`
+before it reaches an upstream provider.
 
 ### Retrieve Model
 
@@ -380,7 +384,9 @@ Manager-console routes expose the same provider-aware policy controls:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /v1/manager/models` | List/refresh discovered provider models for the manager console |
+| `GET /v1/manager/models` | List/refresh discovered provider models for the manager console, narrowed by the server-wide policy |
+| `GET /v1/manager/admin/model-restrictions` | Read server-wide restrictions (admin only) |
+| `PUT /v1/manager/admin/model-restrictions` | Save server-wide restrictions with `allowed_models` (admin only) |
 | `GET /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Read parent-key restrictions |
 | `PUT /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Save parent-key restrictions with `allowed_models` |
 | `GET /v1/manager/agents/{agent_id}/model-policy` | Read an agent fallback model and allowed-model policy |
@@ -399,6 +405,30 @@ Restriction bodies use provider-aware entries:
 ```
 
 An empty `allowed_models` array means unrestricted within the higher-level effective policy.
+
+An entry with a `provider` and no `model` allows that whole provider.
+
+#### Server-Wide Restrictions
+
+`GET`/`PUT /v1/manager/admin/model-restrictions` set one allow-list for the entire server. They
+require an admin manager user and return 403 `admin_required` otherwise. The policy applies to every
+key and agent, including requests made with no parent key, and takes effect on the next request with
+no restart.
+
+```json
+{
+  "allowed_models": [{ "provider": "ollama", "model": "gemma3:1b" }],
+  "discovered_models": [],
+  "effective_models": []
+}
+```
+
+`discovered_models` is the unfiltered registry, so an admin UI can still offer every discovered model
+to choose from; `effective_models` is the same list after the server-wide policy is applied.
+
+Server-wide policy is stored in its own table and never touches `provider_models.enabled`, which
+discovery refresh owns. Saving it does not modify or delete any parent-key or agent policy — those
+stay stored exactly as written and simply narrow further.
 
 ---
 

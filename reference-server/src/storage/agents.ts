@@ -419,6 +419,19 @@ export class AgentStore {
       );
       CREATE INDEX IF NOT EXISTS idx_parent_key_model_restrictions_parent_key ON parent_key_model_restrictions(parent_key_id);
 
+      -- Server-wide provider/model allow-list. Narrows the discovered registry for every key and
+      -- agent. Kept separate from provider_models.enabled, which discovery refresh owns.
+      -- An empty table means unrestricted, matching parent_key_model_restrictions.
+      -- ponytail: its own table rather than a scope column shared with the per-key and per-agent
+      -- restriction tables. Those are already separate, so this matches its siblings. Collapse all
+      -- three behind a scope_type/scope_id table (like quota_policies) only if a fourth scope lands.
+      CREATE TABLE IF NOT EXISTS server_model_restrictions (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+
       CREATE TABLE IF NOT EXISTS agent_model_settings (
         agent_id TEXT PRIMARY KEY,
         default_provider TEXT,
@@ -869,6 +882,39 @@ export class AgentStore {
         return Boolean(this.db.prepare('SELECT 1 FROM provider_models LIMIT 1').get());
     }
 
+    getServerModelRestrictions(): ProviderModelSelection[] {
+        return this.db.prepare(`
+          SELECT provider, model
+          FROM server_model_restrictions
+          ORDER BY rowid ASC
+        `).all() as ProviderModelSelection[];
+    }
+
+    // ponytail: no notification or audit trail on change, unlike setParentKeyModelRestrictions.
+    // Notifying would mean diffing effective models for every parent key on every save. Add that
+    // (and a server_model_policy_changed event) if admins need to know who narrowed what, when.
+    setServerModelRestrictions(selections: ProviderModelSelection[]): ProviderModelSelection[] {
+        const normalized = normalizeProviderModelSelections(selections);
+        const save = this.db.transaction(() => {
+            this.db.prepare('DELETE FROM server_model_restrictions').run();
+            const insert = this.db.prepare(`
+              INSERT INTO server_model_restrictions (id, provider, model, created_at)
+              VALUES (@id, @provider, @model, @created_at)
+            `);
+            const created_at = new Date().toISOString();
+            for (const item of normalized) {
+                insert.run({
+                    id: `${item.provider}:${item.model || '*'}`,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at,
+                });
+            }
+        });
+        save();
+        return this.getServerModelRestrictions();
+    }
+
     getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {
         return this.db.prepare(`
           SELECT provider, model
@@ -994,8 +1040,15 @@ export class AgentStore {
         return this.listEffectiveProviderModels(parentKeyId, policy.allowed_models);
     }
 
+    // Narrowing runs discovered -> server-wide -> parent key -> agent. Each level can only remove
+    // choices, and an empty level is a no-op. The server-wide pass applies even when parentKeyId is
+    // null so unkeyed and direct callers cannot escape it.
     listEffectiveProviderModels(parentKeyId: string | null, agentAllowedModels?: ProviderModelSelection[] | null): ProviderModelRecord[] {
-        const models = this.listProviderModels();
+        const discovered = this.listProviderModels();
+        const serverRestrictions = this.getServerModelRestrictions();
+        const models = serverRestrictions.length
+            ? discovered.filter(model => selectionAllows(serverRestrictions, model.provider, model.model))
+            : discovered;
         const parentRestrictions = parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [];
         const parentFiltered = parentRestrictions.length
             ? models.filter(model => selectionAllows(parentRestrictions, model.provider, model.model))

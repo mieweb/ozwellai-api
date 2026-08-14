@@ -590,8 +590,12 @@ See `.env.example` for a complete example configuration.
 Models are provider-aware records such as `{ provider: "openai", model: "gpt-4o-mini" }`. The effective list for a request is:
 
 ```text
-enabled discovered models ∩ parent-key restrictions ∩ agent model policy
+enabled discovered models ∩ server-wide restrictions ∩ parent-key restrictions ∩ agent model policy
 ```
+
+Each level only narrows the level above it, and an empty level is a no-op. Admins set the server-wide
+allow-list through `GET`/`PUT /v1/manager/admin/model-restrictions`; it applies to every key and
+agent, including requests with no parent key, and takes effect without a restart.
 
 Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`. If no request model is provided, the server uses the agent model-policy default, then `LLM_MODEL` if it is allowed by the effective policy.
 

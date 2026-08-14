@@ -159,6 +159,18 @@ Create a new agent with a YAML configuration wrapped in JSON.
 
 Provider/model policy is stored separately from YAML so agent behavior remains provider-agnostic. Existing YAML with `model` still works as legacy fallback, but new saves should use `GET`/`PUT /v1/manager/agents/{agent_id}/model-policy` for fallback provider/model and allowed-model restrictions.
 
+An agent policy narrows what is already allowed above it; it can never widen it. The full order is:
+
+```text
+discovered models → server-wide policy → parent-key policy → agent policy
+```
+
+So an agent can only select models that the owning parent key allows, and the parent key can only
+allow models the server-wide policy permits. If an admin narrows the server-wide policy, an agent
+policy naming an excluded model stays saved but stops resolving, and chat requests for that model are
+rejected with `403 model_not_allowed` before any provider is called. See
+[API Endpoints](./api-endpoints.md) for the server-wide and parent-key endpoints.
+
 #### Example
 
 ```bash

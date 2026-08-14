@@ -94,28 +94,37 @@ export async function refreshProviderModels() {
   return agentStore.replaceProviderModels(discoveredRecords);
 }
 
+// Seeding decisions below read the raw registry, but responses are narrowed by the server-wide
+// policy. Deciding on the filtered list instead would re-seed the fallback model whenever a policy
+// happens to exclude every discovered model.
+function serverAllowedResponse() {
+  return listResponse(agentStore.listEffectiveProviderModels(null));
+}
+
+function seedFallbackModel() {
+  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  agentStore.replaceProviderModels([
+    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
+  ]);
+  return serverAllowedResponse();
+}
+
 export async function getModelsList() {
   const discoveredRecords = await refreshProviderModels();
   if (discoveredRecords.length) {
-    return listResponse(discoveredRecords);
+    return serverAllowedResponse();
   }
   if (agentStore.hasProviderModelRegistry()) return listResponse([]);
 
-  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
-  return listResponse(agentStore.replaceProviderModels([
-    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
-  ]));
+  return seedFallbackModel();
 }
 
 export function getCachedModelsList() {
   const cached = agentStore.listProviderModels();
-  if (cached.length) return listResponse(cached);
+  if (cached.length) return serverAllowedResponse();
   if (agentStore.hasProviderModelRegistry()) return listResponse([]);
 
-  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
-  return listResponse(agentStore.replaceProviderModels([
-    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
-  ]));
+  return seedFallbackModel();
 }
 
 const modelsRoute: FastifyPluginAsync = async (fastify) => {
