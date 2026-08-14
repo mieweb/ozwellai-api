@@ -7,6 +7,7 @@ import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwel
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 import { getCachedModelsList } from './models';
+import { quotaExceededError, resolveRouteUsageContext } from './quota';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -327,6 +328,23 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
+const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
+
+function usesReasoningTokenParam(model: string) {
+  return /(^|\/)(o\d|gpt-5)/.test(model);
+}
+
+function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
+  const effectiveMaxTokens = requestedMaxTokens
+    ?? LLM_MAX_TOKENS
+    ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : undefined);
+
+  if (!effectiveMaxTokens) return {};
+
+  return usesReasoningTokenParam(model)
+    ? { max_completion_tokens: effectiveMaxTokens }
+    : { max_tokens: effectiveMaxTokens };
+}
 
 function createLlmClient(provider: string | null) {
   return new OzwellAI({
@@ -556,6 +574,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     const body = request.body as ChatCompletionRequestWithTools;
     const tokenIsAgentKey = isAgentKey(request.headers.authorization);
+    const resolvedUsageContext = resolveRouteUsageContext(request.headers.authorization);
     let usageContext: UsageContext | null = null;
 
     const invalidMessageIndex = (body.messages as Message[]).findIndex((m) => !isValidMessageContent(m.content));
@@ -572,14 +591,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
 
     if (tokenIsAgentKey) {
-      const agentKey = extractToken(request.headers.authorization);
-      const resolved = agentStore.getByKeyWithActiveParent(agentKey);
-      if (!resolved) {
+      if (!resolvedUsageContext.agent || !resolvedUsageContext.parentKey) {
         reply.code(401);
-        return createError(`Agent key not found: ...${agentKey.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
+        return createError(`Agent key not found: ...${token.slice(-4)}. Verify the key exists and the server has the agent database.`, 'invalid_request_error');
       }
-      const { agent, parentKey } = resolved;
-      usageContext = { authType: 'agent', parentKeyId: parentKey.id, agentId: agent.id };
+      const agent = resolvedUsageContext.agent;
+      usageContext = {
+        authType: resolvedUsageContext.authType,
+        parentKeyId: resolvedUsageContext.parentKeyId,
+        agentId: resolvedUsageContext.agentId,
+      };
 
       // Parse the YAML blob once — the source of truth for agent config
       let parsed: Record<string, unknown> = {};
@@ -624,8 +645,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         type: parsed.type === 'mock' ? 'mock' : null,
       };
     } else {
-      const parentKey = agentStore.lookupApiKey(token);
-      usageContext = { authType: 'parent', parentKeyId: parentKey?.id ?? null, agentId: null };
+      usageContext = {
+        authType: resolvedUsageContext.authType,
+        parentKeyId: resolvedUsageContext.parentKeyId,
+        agentId: null,
+      };
     }
 
     const recordUsage = (model: string | null, statusCode: number, response?: unknown, provider?: string | null) => {
@@ -651,9 +675,23 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     };
 
+    const quotaError = (requestedTokens: number) => {
+      if (!usageContext) return null;
+      return quotaExceededError(reply, usageContext.parentKeyId, usageContext.agentId, requestedTokens);
+    };
+
+    const estimateChatTokens = (items: Message[], maxTokens?: number) => {
+      const outputBudget = maxTokens ?? LLM_MAX_TOKENS;
+      const inputTokens = items.reduce((sum, message) => sum + countTokens(contentToText(message.content)), 0);
+      const outputTokens = typeof outputBudget === 'number' && outputBudget > 0 ? Math.floor(outputBudget) : 0;
+      return inputTokens + outputTokens;
+    };
+
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {
-      const { messages: rawMessages, stream = false } = body as ChatCompletionRequestWithTools;
+      const { messages: rawMessages, stream = false, max_tokens } = body as ChatCompletionRequestWithTools;
+      const quota = quotaError(estimateChatTokens(rawMessages as Message[], max_tokens));
+      if (quota) return quota;
       const mockMessages: NonNullableMessage[] = (rawMessages as Message[]).map((m) => ({
         role: m.role,
         content: m.content ?? '',
@@ -707,20 +745,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const fallbackRetryModel = fallbackModel?.model || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
-    // Client-sent max_tokens wins; otherwise apply the server ceiling (if any); else no cap.
-    const effectiveMaxTokens = max_tokens ?? LLM_MAX_TOKENS;
-    const usesReasoningParams = (m: string) => /(^|\/)(o\d|gpt-5)/.test(m);
     // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
     // Classified per call from the model actually being sent — the fallback retry switches models, so a
     // single precomputed object would send the wrong key on retry. `(^|/)` also matches provider-prefixed
     // ids (e.g. `openai/gpt-5`). Regex self-classifies future gpt-5.x/o models.
-    const tokenParamFor = (m: string): Record<string, number> =>
-      !effectiveMaxTokens ? {}
-        : usesReasoningParams(m)
-          ? { max_completion_tokens: effectiveMaxTokens }
-          : { max_tokens: effectiveMaxTokens };
+    const tokenParamFor = (m: string) => providerTokenParams(provider, m, max_tokens);
     const temperatureParamFor = (m: string): Record<string, number> =>
-      temperature === undefined || usesReasoningParams(m) ? {} : { temperature };
+      temperature === undefined || provider === 'anthropic' || usesReasoningTokenParam(m) ? {} : { temperature };
 
     request.log.info({ backend, llmConfigured, ollamaAvailable, provider, model, requestedProvider, requestedModel, agentProvider: agentConfig?.modelPolicy.default_provider, agentModel: agentConfig?.modelPolicy.default_model, agentTemperature: agentConfig?.temperature }, 'Chat request backend selection');
 
@@ -742,6 +773,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         content: agentConfig.systemPrompt,
       });
     }
+
+    const quota = quotaError(estimateChatTokens(messages as Message[], max_tokens));
+    if (quota) return quota;
 
     // --- Agent: filter tools ---
     // Tools arriving from the widget use two namespaces:
@@ -910,9 +944,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               }
             }
 
+            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
-            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
 
             // Clear heartbeat interval
             if (heartbeatInterval) {

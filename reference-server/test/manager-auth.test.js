@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -34,6 +34,14 @@ const OTHER_MANAGER_HEADERS = {
     'x-groups': 'ldapusers',
 };
 const OTHER_H_YAML = { 'Content-Type': 'application/yaml', ...OTHER_MANAGER_HEADERS };
+const DESTINATION_MANAGER_HEADERS = {
+    'x-user': 'destination-user',
+    'x-preferred-username': 'destinationuser',
+    'x-user-first-name': 'Destination',
+    'x-user-last-name': 'User',
+    'x-email': 'destination@example.test',
+    'x-groups': 'ldapusers',
+};
 
 async function waitForReady(maxMs = 30_000) {
     const start = Date.now();
@@ -50,7 +58,7 @@ async function waitForReady(maxMs = 30_000) {
 function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-manager-auth-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
-    const server = spawn('npm', ['run', 'dev'], {
+    const server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
@@ -110,7 +118,13 @@ async function startStreamingLLMServer() {
 }
 
 function stopServer(server, tmp) {
-    try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try {
+        if (process.platform === 'win32') {
+            spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']);
+        } else {
+            process.kill(-server.pid, 'SIGKILL');
+        }
+    } catch { /* ignore */ }
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
@@ -403,12 +417,35 @@ test('manager auth — users cannot access or mutate agents owned by another man
 });
 
 test('manager auth — claim-key moves auto-key agents to claimed parent key and revokes auto key', async () => {
-    const { server, tmp, dbPath } = startServer();
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
         await waitForReady();
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
-        const { key: autoKey } = getUserAndActiveKey(dbPath);
+        const { user, key: autoKey } = getUserAndActiveKey(dbPath);
         seedClaimableKey(dbPath);
+        const usageDb = new Database(dbPath);
+        try {
+            usageDb.prepare(`
+              INSERT INTO usage_events (
+                id, parent_key_id, agent_id, auth_type, route, model, status_code,
+                prompt_tokens, completion_tokens, total_tokens, created_at
+              )
+              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                'usage-before-claim',
+                autoKey.id,
+                'parent',
+                '/v1/chat/completions',
+                'mock',
+                200,
+                100,
+                100,
+                200,
+                new Date().toISOString(),
+            );
+        } finally {
+            usageDb.close();
+        }
 
         const created = await fetch(`${BASE}/v1/manager/agents`, {
             method: 'POST',
@@ -435,6 +472,10 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
         assert.ok(listBody.data.some(agent => agent.id === 'existing-agent'), 'claimed key existing agent is listed');
         assert.ok(listBody.data.some(agent => agent.id === createdBody.agent_id), 'temporary agent moved to claimed key is listed');
 
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, { headers: MANAGER_HEADERS });
+        assert.equal(quota.status, 200);
+        assert.equal((await quota.json()).used_tokens, 200);
+
         const db = new Database(dbPath);
         try {
             const user = db.prepare('SELECT id FROM users WHERE external_user_id = ?').get('admin-user');
@@ -444,7 +485,7 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
             assert.equal(claimedKey.revoked_at, null);
 
             const oldAutoKey = db.prepare('SELECT user_id, status, revoked_at, revoked_reason, replaced_by_key_id FROM api_keys WHERE id = ?').get(autoKey.id);
-            assert.equal(oldAutoKey.user_id, null);
+            assert.equal(oldAutoKey.user_id, user.id);
             assert.equal(oldAutoKey.status, 'revoked');
             assert.ok(oldAutoKey.revoked_at);
             assert.equal(oldAutoKey.revoked_reason, 'replaced_by_claimed_key');
@@ -598,6 +639,146 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
     }
 });
 
+test('manager admin — transfers an agent to another user parent key', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: DESTINATION_MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: OTHER_H_YAML,
+            body: `name: Transfer Mock\ninstructions: Mock for transfer test\ntype: mock\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+        const adminUser = getUserByExternalId(dbPath, 'admin-user');
+        const sourceUser = getUserByExternalId(dbPath, 'other-user');
+        const sourceParentKey = getActiveKeyForExternalUser(dbPath, 'other-user');
+        const destinationUser = getUserByExternalId(dbPath, 'destination-user');
+        const destinationParentKey = getActiveKeyForExternalUser(dbPath, 'destination-user');
+
+        const transfer = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: destinationUser.id, reason: 'test_handoff' }),
+        });
+        assert.equal(transfer.status, 200);
+        const transferBody = await transfer.json();
+        assert.equal(transferBody.agent_id, created.agent_id);
+        assert.equal(transferBody.destination_user_id, destinationUser.id);
+        assert.equal(transferBody.destination_parent_key_id, destinationParentKey.id);
+
+        const oldOwnerGet = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: OTHER_MANAGER_HEADERS });
+        assert.equal(oldOwnerGet.status, 404);
+
+        const newOwnerGet = await fetch(`${BASE}/v1/manager/agents/${created.agent_id}`, { headers: DESTINATION_MANAGER_HEADERS });
+        assert.equal(newOwnerGet.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${created.agent_key}`,
+            },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'hello transfer' }] }),
+        });
+        assert.equal(chat.status, 200);
+
+        const db = new Database(dbPath);
+        try {
+            const movedAgent = db.prepare('SELECT parent_key FROM agents WHERE id = ?').get(created.agent_id);
+            assert.equal(movedAgent.parent_key, destinationParentKey.id);
+            const event = db.prepare("SELECT user_id, parent_key_id, type, metadata FROM notification_events WHERE type = 'agent_ownership_transferred'").get();
+            assert.equal(event.user_id, destinationUser.id);
+            assert.equal(event.parent_key_id, destinationParentKey.id);
+            assert.deepEqual(JSON.parse(event.metadata), {
+                agent_id: created.agent_id,
+                actor_user_id: adminUser.id,
+                source_user_id: sourceUser.id,
+                source_parent_key_id: sourceParentKey.id,
+                destination_user_id: destinationUser.id,
+                destination_parent_key_id: destinationParentKey.id,
+                reason: 'test_handoff',
+            });
+        } finally {
+            db.close();
+        }
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — transfer rejects non-admins and invalid targets', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Guard Mock\ninstructions: Mock for guard test\ntype: mock\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+        const other = getUserByExternalId(dbPath, 'other-user');
+
+        const denied = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...OTHER_MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: other.id }),
+        });
+        assert.equal(denied.status, 403);
+
+        const missingAgent = await fetch(`${BASE}/v1/manager/admin/agents/missing-agent/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: other.id }),
+        });
+        assert.equal(missingAgent.status, 404);
+        assert.equal((await missingAgent.json()).error.code, 'agent_not_found');
+
+        const missingUser = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: 'missing-user' }),
+        });
+        assert.equal(missingUser.status, 404);
+        assert.equal((await missingUser.json()).error.code, 'destination_user_not_found');
+
+        const sameOwner = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: getUserByExternalId(dbPath, 'admin-user').id }),
+        });
+        assert.equal(sameOwner.status, 400);
+        assert.equal((await sameOwner.json()).error.code, 'agent_already_owned_by_destination');
+
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO users (id, external_user_id, email, status)
+              VALUES (?, ?, ?, ?)
+            `).run('mgr_no-key-user', 'no-key-user', 'no-key@example.test', 'active');
+        } finally {
+            db.close();
+        }
+        const noParentKey = await fetch(`${BASE}/v1/manager/admin/agents/${created.agent_id}/transfer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...MANAGER_HEADERS },
+            body: JSON.stringify({ destination_user_id: 'mgr_no-key-user' }),
+        });
+        assert.equal(noParentKey.status, 409);
+        assert.equal((await noParentKey.json()).error.code, 'destination_parent_key_not_found');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
@@ -688,6 +869,247 @@ test('manager admin — user-first APIs include key history, agents, and usage m
         const ownAgentRow = (await ownAgents.json()).data.find(agent => agent.id === created.agent_id);
         assert.equal(ownAgentRow.metrics.request_count, 1);
         assert.ok(ownAgentRow.metrics.total_tokens > 0);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — user monthly quota blocks chat over the limit', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 1, status: 'active' }),
+        });
+        assert.equal(quota.status, 200);
+        const quotaBody = await quota.json();
+        assert.equal(quotaBody.scope_type, 'user');
+        assert.equal(quotaBody.monthly_token_limit, 1);
+        assert.equal(quotaBody.status, 'active');
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'this request should exceed one token' }],
+            }),
+        });
+        assert.equal(chat.status, 429);
+        const body = await chat.json();
+        assert.equal(body.error.type, 'rate_limit_error');
+        assert.equal(body.error.code, 'quota_exceeded');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — chat quota estimate uses server max tokens when request omits max_tokens', async () => {
+    const { server, tmp, dbPath } = startServer({
+        adminExternalUserIds: 'admin-user',
+        extraEnv: { LLM_MAX_TOKENS: '50' },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 20, status: 'active' }),
+        });
+        assert.equal(quota.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'hi' }],
+            }),
+        });
+        assert.equal(chat.status, 429);
+        const body = await chat.json();
+        assert.equal(body.error.code, 'quota_exceeded');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — disabled user quota allows chat', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 1, status: 'disabled' }),
+        });
+        assert.equal(quota.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'disabled quota should not block this request' }],
+            }),
+        });
+        assert.equal(chat.status, 200);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — agent monthly quota blocks agent chat over the limit', async () => {
+    const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Quota Mock\ninstructions: Mock for quota enforcement\ntype: mock\n`,
+        });
+        assert.equal(create.status, 201);
+        const created = await create.json();
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/agents/${created.agent_id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 1, status: 'active' }),
+        });
+        assert.equal(quota.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${created.agent_key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'this agent request should exceed one token' }],
+            }),
+        });
+        assert.equal(chat.status, 429);
+        const body = await chat.json();
+        assert.equal(body.error.code, 'quota_exceeded');
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — previous-month usage does not count against user quota', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+        const db = new Database(dbPath);
+        try {
+            db.prepare(`
+              INSERT INTO usage_events (
+                id, parent_key_id, agent_id, auth_type, route, model, status_code,
+                prompt_tokens, completion_tokens, total_tokens, created_at
+              )
+              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                'usage-previous-month',
+                key.id,
+                'parent',
+                '/v1/chat/completions',
+                'mock',
+                200,
+                1000,
+                1000,
+                2000,
+                '2000-01-01T00:00:00.000Z',
+            );
+        } finally {
+            db.close();
+        }
+
+        const quota = await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, {
+            method: 'PUT',
+            headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ monthly_token_limit: 20, status: 'active' }),
+        });
+        assert.equal(quota.status, 200);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({
+                messages: [{ role: 'user', content: 'current month should still have quota' }],
+            }),
+        });
+        assert.equal(chat.status, 200);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — embeddings and responses record usage events', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { key } = getUserAndActiveKey(dbPath);
+
+        const embeddings = await fetch(`${BASE}/v1/embeddings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({ model: 'text-embedding-3-small', input: 'hello usage' }),
+        });
+        assert.equal(embeddings.status, 200);
+
+        const responses = await fetch(`${BASE}/v1/responses`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key.key}`,
+            },
+            body: JSON.stringify({ model: 'gpt-4o-mini', input: 'hello response usage' }),
+        });
+        assert.equal(responses.status, 200);
+
+        const db = new Database(dbPath);
+        try {
+            const rows = db.prepare(`
+              SELECT route, auth_type, status_code, total_tokens
+              FROM usage_events
+              WHERE parent_key_id = ?
+              ORDER BY route
+            `).all(key.id);
+            assert.deepEqual(rows.map(row => row.route), ['/v1/embeddings', '/v1/responses']);
+            assert.ok(rows.every(row => row.auth_type === 'parent'));
+            assert.ok(rows.every(row => row.status_code === 200));
+            assert.ok(rows.every(row => row.total_tokens > 0));
+        } finally {
+            db.close();
+        }
     } finally {
         stopServer(server, tmp);
     }

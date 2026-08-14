@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection } from '../storage/agents';
+import { agentStore, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
@@ -192,6 +192,27 @@ type ProviderModelSelectionBody = {
     provider?: unknown;
     model?: unknown;
 };
+
+type QuotaBody = {
+    monthly_token_limit?: unknown;
+    status?: unknown;
+};
+
+function normalizeQuotaBody(body: QuotaBody | undefined): { monthlyTokenLimit: number | null; status: 'active' | 'disabled' } | null {
+    const status = body?.status === 'disabled' ? 'disabled' : 'active';
+    if (status === 'disabled') {
+        return {
+            monthlyTokenLimit: typeof body?.monthly_token_limit === 'number' && body.monthly_token_limit > 0
+                ? Math.floor(body.monthly_token_limit)
+                : null,
+            status,
+        };
+    }
+    if (typeof body?.monthly_token_limit !== 'number' || !Number.isFinite(body.monthly_token_limit) || body.monthly_token_limit <= 0) {
+        return null;
+    }
+    return { monthlyTokenLimit: Math.floor(body.monthly_token_limit), status };
+}
 
 function normalizeRestrictionBody(body: { allowed_models?: ProviderModelSelectionBody[] } | undefined) {
     return (body?.allowed_models || [])
@@ -672,6 +693,99 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         };
     });
 
+    function quotaTargetExists(scopeType: QuotaScopeType, scopeId: string): boolean {
+        return scopeType === 'user'
+            ? Boolean(agentStore.getManagerUserById(scopeId))
+            : Boolean(agentStore.getById(scopeId));
+    }
+
+    async function getQuota(scopeType: QuotaScopeType, scopeId: string, reply: FastifyReply) {
+        if (!quotaTargetExists(scopeType, scopeId)) {
+            reply.code(404);
+            return createError(`${scopeType === 'user' ? 'User' : 'Agent'} not found`, 'invalid_request_error', 'scope_id', 'not_found');
+        }
+        return agentStore.getQuotaStatus(scopeType, scopeId);
+    }
+
+    async function putQuota(scopeType: QuotaScopeType, scopeId: string, body: QuotaBody | undefined, reply: FastifyReply) {
+        if (!quotaTargetExists(scopeType, scopeId)) {
+            reply.code(404);
+            return createError(`${scopeType === 'user' ? 'User' : 'Agent'} not found`, 'invalid_request_error', 'scope_id', 'not_found');
+        }
+        const normalized = normalizeQuotaBody(body);
+        if (!normalized) {
+            reply.code(400);
+            return createError("'monthly_token_limit' must be a positive number for active quotas", 'invalid_request_error', 'monthly_token_limit', 'invalid_quota');
+        }
+        return agentStore.upsertQuotaPolicy(scopeType, scopeId, normalized.monthlyTokenLimit, normalized.status);
+    }
+
+    fastify.get<{ Params: { user_id: string } }>('/v1/manager/admin/quotas/users/:user_id', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get user monthly token quota',
+            params: {
+                type: 'object',
+                properties: { user_id: { type: 'string' } },
+                required: ['user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => getQuota('user', request.params.user_id, reply));
+
+    fastify.put<{ Params: { user_id: string }; Body: QuotaBody }>('/v1/manager/admin/quotas/users/:user_id', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Set user monthly token quota',
+            params: {
+                type: 'object',
+                properties: { user_id: { type: 'string' } },
+                required: ['user_id'],
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    monthly_token_limit: { type: 'number' },
+                    status: { type: 'string', enum: ['active', 'disabled'] },
+                },
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => putQuota('user', request.params.user_id, request.body, reply));
+
+    fastify.get<{ Params: { agent_id: string } }>('/v1/manager/admin/quotas/agents/:agent_id', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get agent monthly token quota',
+            params: {
+                type: 'object',
+                properties: { agent_id: { type: 'string' } },
+                required: ['agent_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => getQuota('agent', request.params.agent_id, reply));
+
+    fastify.put<{ Params: { agent_id: string }; Body: QuotaBody }>('/v1/manager/admin/quotas/agents/:agent_id', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Set agent monthly token quota',
+            params: {
+                type: 'object',
+                properties: { agent_id: { type: 'string' } },
+                required: ['agent_id'],
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    monthly_token_limit: { type: 'number' },
+                    status: { type: 'string', enum: ['active', 'disabled'] },
+                },
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => putQuota('agent', request.params.agent_id, request.body, reply));
+
     fastify.post<{ Params: { user_id: string } }>('/v1/manager/admin/users/:user_id/promote', {
         schema: {
             tags: ['Manager Admin'],
@@ -745,6 +859,69 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             revoked_at: key.revoked_at,
             revoked_reason: key.revoked_reason,
         };
+    });
+
+    fastify.post<{ Params: { agent_id: string }; Body: { destination_user_id?: string; reason?: string } }>('/v1/manager/admin/agents/:agent_id/transfer', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Transfer an agent to another manager user',
+            params: {
+                type: 'object',
+                properties: { agent_id: { type: 'string' } },
+                required: ['agent_id'],
+            },
+            body: {
+                type: 'object',
+                properties: {
+                    destination_user_id: { type: 'string' },
+                    reason: { type: 'string' },
+                },
+                required: ['destination_user_id'],
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        const destinationUserId = request.body?.destination_user_id;
+        if (!destinationUserId) {
+            reply.code(400);
+            return createError('Destination user is required', 'invalid_request_error', 'destination_user_id', 'destination_user_required');
+        }
+        try {
+            const result = agentStore.transferAgentToUser(
+                request.params.agent_id,
+                destinationUserId,
+                request.managerUser!.id,
+                request.body?.reason,
+            );
+            fastify.log.info({
+                agentId: result.agent_id,
+                actorUserId: request.managerUser!.id,
+                sourceParentKeyId: result.source_parent_key_id,
+                destinationParentKeyId: result.destination_parent_key_id,
+            }, 'agent ownership transferred');
+            return result;
+        } catch (error) {
+            const code = error instanceof Error ? error.message : 'agent_transfer_failed';
+            if (code === 'agent_not_found') {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error', 'agent_id', code);
+            }
+            if (code === 'destination_user_not_found') {
+                reply.code(404);
+                return createError('Destination user not found', 'invalid_request_error', 'destination_user_id', code);
+            }
+            if (code === 'destination_parent_key_not_found') {
+                reply.code(409);
+                return createError('Destination user has no active parent key', 'invalid_request_error', 'destination_user_id', code);
+            }
+            if (code === 'agent_already_owned_by_destination') {
+                reply.code(400);
+                return createError('Agent is already owned by destination user', 'invalid_request_error', 'destination_user_id', code);
+            }
+            fastify.log.error(error);
+            reply.code(500);
+            return createError('Agent transfer failed', 'server_error');
+        }
     });
 
     fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {

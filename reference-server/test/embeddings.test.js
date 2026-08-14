@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -42,7 +42,7 @@ function spawnServer({ port, dbPath, allowMock }) {
   };
   if (allowMock) env.ALLOW_MOCK = 'true';
   else delete env.ALLOW_MOCK;
-  return spawn('npm', ['run', 'dev'], {
+  return spawn(process.execPath, ['dist/reference-server/src/server.js'], {
     cwd: process.cwd(),
     stdio: 'pipe',
     detached: true,
@@ -58,7 +58,7 @@ before(async () => {
 });
 
 after(() => {
-  try { process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+  try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
   try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
@@ -139,7 +139,7 @@ test('embeddings — missing input returns 400', async () => {
 
 test('embeddings — 503 when no backend and mock disabled', async () => {
   const localTmp = mkdtempSync(path.join(tmpdir(), 'ozwell-embeddings-nomock-'));
-  const localPort = 3338;
+  const localPort = 3343;
   const localBase = `http://localhost:${localPort}`;
   const localServer = spawnServer({
     port: localPort,
@@ -157,7 +157,7 @@ test('embeddings — 503 when no backend and mock disabled', async () => {
     const json = await r.json();
     assert.equal(json.error.type, 'server_error');
   } finally {
-    try { process.kill(-localServer.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(localServer.pid), '/T', '/F']); else process.kill(-localServer.pid, 'SIGKILL'); } catch { /* ignore */ }
     try { rmSync(localTmp, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 });

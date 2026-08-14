@@ -219,6 +219,15 @@ export interface ClaimParentKeyResult {
     revokedParentKeyId: string | null;
 }
 
+export interface TransferAgentOwnershipResult {
+    agent_id: string;
+    source_user_id: string | null;
+    source_parent_key_id: string;
+    destination_user_id: string;
+    destination_parent_key_id: string;
+    transferred_at: string;
+}
+
 export interface UsageEventInput {
     parent_key_id: string | null;
     agent_id: string | null;
@@ -230,6 +239,21 @@ export interface UsageEventInput {
     prompt_tokens?: number | null;
     completion_tokens?: number | null;
     total_tokens?: number | null;
+}
+
+export type QuotaScopeType = 'user' | 'agent';
+
+export interface QuotaStatus {
+    scope_type: QuotaScopeType;
+    scope_id: string;
+    monthly_token_limit: number | null;
+    status: 'active' | 'disabled';
+    used_tokens: number;
+    remaining_tokens: number | null;
+    requested_tokens: number;
+    window_start: string;
+    window_end: string;
+    allowed: boolean;
 }
 
 export interface ProviderModelRecord {
@@ -432,6 +456,18 @@ export class AgentStore {
         created_at TEXT DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_notification_events_parent_key_id ON notification_events(parent_key_id);
+
+      CREATE TABLE IF NOT EXISTS quota_policies (
+        id TEXT PRIMARY KEY,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        monthly_token_limit INTEGER,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(scope_type, scope_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_quota_policies_scope ON quota_policies(scope_type, scope_id);
     `);
     }
 
@@ -524,6 +560,11 @@ export class AgentStore {
         return row ? toManagerUser(row) : null;
     }
 
+    getManagerUserById(userId: string): ManagerUser | null {
+        const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as DbManagerUserRow | undefined;
+        return row ? toManagerUser(row) : null;
+    }
+
     getActiveApiKeyForUser(userId: string): ParentApiKey | undefined {
         return this.db.prepare(`
           SELECT id, name, key, key_hint, user_id, COALESCE(status, 'active') AS status, source, revoked_at
@@ -613,8 +654,7 @@ export class AgentStore {
                 if (current.source === 'auto') {
                     this.db.prepare(`
                       UPDATE api_keys
-                      SET user_id = NULL,
-                          status = 'revoked',
+                      SET status = 'revoked',
                           revoked_at = @revoked_at,
                           revoked_reason = @revoked_reason,
                           replaced_by_key_id = @replaced_by_key_id
@@ -701,6 +741,89 @@ export class AgentStore {
             total_tokens: input.total_tokens ?? null,
             created_at: new Date().toISOString(),
         });
+    }
+
+    monthWindow(now = new Date()): { start: string; end: string } {
+        const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+        return { start: start.toISOString(), end: end.toISOString() };
+    }
+
+    upsertQuotaPolicy(scopeType: QuotaScopeType, scopeId: string, monthlyTokenLimit: number | null, status: 'active' | 'disabled'): QuotaStatus {
+        this.db.prepare(`
+          INSERT INTO quota_policies (id, scope_type, scope_id, monthly_token_limit, status, created_at, updated_at)
+          VALUES (@id, @scope_type, @scope_id, @monthly_token_limit, @status, @now, @now)
+          ON CONFLICT(scope_type, scope_id) DO UPDATE SET
+            monthly_token_limit = excluded.monthly_token_limit,
+            status = excluded.status,
+            updated_at = excluded.updated_at
+        `).run({
+            id: generateId('quota'),
+            scope_type: scopeType,
+            scope_id: scopeId,
+            monthly_token_limit: monthlyTokenLimit,
+            status,
+            now: new Date().toISOString(),
+        });
+        return this.getQuotaStatus(scopeType, scopeId);
+    }
+
+    getMonthlyTokenUsage(scopeType: QuotaScopeType, scopeId: string, now = new Date()): number {
+        const { start, end } = this.monthWindow(now);
+        if (scopeType === 'agent') {
+            const row = this.db.prepare(`
+              SELECT COALESCE(SUM(total_tokens), 0) AS total
+              FROM usage_events
+              WHERE agent_id = ?
+                AND created_at >= ?
+                AND created_at < ?
+            `).get(scopeId, start, end) as { total: number };
+            return row.total;
+        }
+        const row = this.db.prepare(`
+          SELECT COALESCE(SUM(e.total_tokens), 0) AS total
+          FROM usage_events e
+          JOIN api_keys k ON k.id = e.parent_key_id
+          WHERE k.user_id = ?
+            AND e.created_at >= ?
+            AND e.created_at < ?
+        `).get(scopeId, start, end) as { total: number };
+        return row.total;
+    }
+
+    getQuotaStatus(scopeType: QuotaScopeType, scopeId: string, requestedTokens = 0): QuotaStatus {
+        const policy = this.db.prepare(`
+          SELECT monthly_token_limit, status
+          FROM quota_policies
+          WHERE scope_type = ? AND scope_id = ?
+        `).get(scopeType, scopeId) as { monthly_token_limit: number | null; status: 'active' | 'disabled' } | undefined;
+        const now = new Date();
+        const { start, end } = this.monthWindow(now);
+        const used = this.getMonthlyTokenUsage(scopeType, scopeId, now);
+        const active = policy?.status === 'active' && typeof policy.monthly_token_limit === 'number';
+        const remaining = active ? Math.max((policy.monthly_token_limit as number) - used, 0) : null;
+        return {
+            scope_type: scopeType,
+            scope_id: scopeId,
+            monthly_token_limit: policy?.monthly_token_limit ?? null,
+            status: policy?.status ?? 'disabled',
+            used_tokens: used,
+            remaining_tokens: remaining,
+            requested_tokens: requestedTokens,
+            window_start: start,
+            window_end: end,
+            allowed: !active || used + requestedTokens <= (policy.monthly_token_limit as number),
+        };
+    }
+
+    getQuotaBlocks(parentKeyId: string | null, agentId: string | null, requestedTokens: number): QuotaStatus[] {
+        const checks: QuotaStatus[] = [];
+        if (parentKeyId) {
+            const row = this.db.prepare('SELECT user_id FROM api_keys WHERE id = ?').get(parentKeyId) as { user_id: string | null } | undefined;
+            if (row?.user_id) checks.push(this.getQuotaStatus('user', row.user_id, requestedTokens));
+        }
+        if (agentId) checks.push(this.getQuotaStatus('agent', agentId, requestedTokens));
+        return checks.filter(check => !check.allowed);
     }
 
     upsertProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {
@@ -1112,6 +1235,58 @@ export class AgentStore {
             `).get(keyId) as ParentApiKey;
         });
         return revoke();
+    }
+
+    transferAgentToUser(agentId: string, destinationUserId: string, actorUserId: string, reason?: string): TransferAgentOwnershipResult {
+        const transfer = this.db.transaction(() => {
+            const agent = this.db.prepare(`
+              SELECT a.id, a.parent_key, k.user_id AS source_user_id
+              FROM agents a
+              LEFT JOIN api_keys k ON k.id = a.parent_key
+              WHERE a.id = ?
+            `).get(agentId) as { id: string; parent_key: string; source_user_id: string | null } | undefined;
+            if (!agent) throw new Error('agent_not_found');
+
+            const destinationUser = this.db.prepare('SELECT id FROM users WHERE id = ?').get(destinationUserId) as { id: string } | undefined;
+            if (!destinationUser) throw new Error('destination_user_not_found');
+
+            const destinationParentKey = this.getActiveApiKeyForUser(destinationUserId);
+            if (!destinationParentKey) throw new Error('destination_parent_key_not_found');
+            if (agent.parent_key === destinationParentKey.id) throw new Error('agent_already_owned_by_destination');
+
+            this.db.prepare('UPDATE agents SET parent_key = ? WHERE id = ?').run(destinationParentKey.id, agentId);
+
+            const transferredAt = new Date().toISOString();
+            const result: TransferAgentOwnershipResult = {
+                agent_id: agentId,
+                source_user_id: agent.source_user_id,
+                source_parent_key_id: agent.parent_key,
+                destination_user_id: destinationUserId,
+                destination_parent_key_id: destinationParentKey.id,
+                transferred_at: transferredAt,
+            };
+            this.db.prepare(`
+              INSERT INTO notification_events (id, user_id, parent_key_id, type, metadata, created_at)
+              VALUES (@id, @user_id, @parent_key_id, @type, @metadata, @created_at)
+            `).run({
+                id: generateId('notification-event'),
+                user_id: destinationUserId,
+                parent_key_id: destinationParentKey.id,
+                type: 'agent_ownership_transferred',
+                metadata: JSON.stringify({
+                    agent_id: result.agent_id,
+                    actor_user_id: actorUserId,
+                    source_user_id: result.source_user_id,
+                    source_parent_key_id: result.source_parent_key_id,
+                    destination_user_id: result.destination_user_id,
+                    destination_parent_key_id: result.destination_parent_key_id,
+                    reason: reason || null,
+                }),
+                created_at: transferredAt,
+            });
+            return result;
+        });
+        return transfer();
     }
 
     private migrateAgentModelPoliciesFromYaml(): void {
