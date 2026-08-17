@@ -909,11 +909,13 @@ export class AgentStore {
                     created_at,
                 });
             }
+            // Inside the transaction: the policy and the notices about it commit together, so a
+            // failure cannot leave some keys told and others silently cut off.
+            for (const keyId of affectedKeyIds) {
+                this.recordParentPolicyChange(keyId, before.get(keyId) || [], this.listEffectiveProviderModels(keyId));
+            }
         });
         save();
-        for (const keyId of affectedKeyIds) {
-            this.recordParentPolicyChange(keyId, before.get(keyId) || [], this.listEffectiveProviderModels(keyId));
-        }
         return this.getServerModelRestrictions();
     }
 
