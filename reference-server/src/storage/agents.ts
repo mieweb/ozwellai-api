@@ -419,12 +419,10 @@ export class AgentStore {
       );
       CREATE INDEX IF NOT EXISTS idx_parent_key_model_restrictions_parent_key ON parent_key_model_restrictions(parent_key_id);
 
-      -- Server-wide provider/model allow-list. Narrows the discovered registry for every key and
-      -- agent. Kept separate from provider_models.enabled, which discovery refresh owns.
-      -- An empty table means unrestricted, matching parent_key_model_restrictions.
-      -- ponytail: its own table rather than a scope column shared with the per-key and per-agent
-      -- restriction tables. Those are already separate, so this matches its siblings. Collapse all
-      -- three behind a scope_type/scope_id table (like quota_policies) only if a fourth scope lands.
+      -- Server-wide allow-list. Empty table means unrestricted. Kept off provider_models.enabled,
+      -- which discovery refresh owns and would overwrite.
+      -- ponytail: own table, matching its per-key and per-agent siblings. Collapse all three behind
+      -- a scope_type/scope_id table (like quota_policies) only if a fourth scope lands.
       CREATE TABLE IF NOT EXISTS server_model_restrictions (
         id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
@@ -890,10 +888,8 @@ export class AgentStore {
         `).all() as ProviderModelSelection[];
     }
 
-    // A server-wide change silently removes models from every user at once, so it notifies each
-    // affected key the same way a per-key change does. recordParentPolicyChange no-ops when a key
-    // lost nothing, so keys that were already narrower stay quiet. Admin-initiated and rare, so the
-    // per-key loop is not a hot path.
+    // Notifies each key that loses a model, same as a per-key change. recordParentPolicyChange
+    // no-ops when a key lost nothing. Admin-initiated and rare, so the per-key loop is fine.
     setServerModelRestrictions(selections: ProviderModelSelection[]): ProviderModelSelection[] {
         const normalized = normalizeProviderModelSelections(selections);
         const affectedKeyIds = this.listActiveParentKeyIds();
@@ -1055,23 +1051,20 @@ export class AgentStore {
         return this.listEffectiveProviderModels(parentKeyId, policy.allowed_models);
     }
 
-    // Narrowing runs discovered -> server-wide -> parent key -> agent. Each level can only remove
-    // choices, and an empty level is a no-op. The server-wide pass applies even when parentKeyId is
-    // null so unkeyed and direct callers cannot escape it.
+    // Levels below run in order and can only remove. The server level applies even when parentKeyId
+    // is null, so unkeyed and direct callers cannot escape it.
     listEffectiveProviderModels(parentKeyId: string | null, agentAllowedModels?: ProviderModelSelection[] | null): ProviderModelRecord[] {
-        const discovered = this.listProviderModels();
-        const serverRestrictions = this.getServerModelRestrictions();
-        const models = serverRestrictions.length
-            ? discovered.filter(model => selectionAllows(serverRestrictions, model.provider, model.model))
-            : discovered;
-        const parentRestrictions = parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [];
-        const parentFiltered = parentRestrictions.length
-            ? models.filter(model => selectionAllows(parentRestrictions, model.provider, model.model))
-            : models;
-        const agentSelections = normalizeProviderModelSelections(agentAllowedModels || []);
-        return agentSelections.length
-            ? parentFiltered.filter(model => selectionAllows(agentSelections, model.provider, model.model))
-            : parentFiltered;
+        const levels: ProviderModelSelection[][] = [
+            this.getServerModelRestrictions(),
+            parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [],
+            normalizeProviderModelSelections(agentAllowedModels || []),
+        ];
+        return levels.reduce<ProviderModelRecord[]>(
+            (models, selections) => selections.length
+                ? models.filter(model => selectionAllows(selections, model.provider, model.model))
+                : models,
+            this.listProviderModels(),
+        );
     }
 
     listNotificationsForUser(userId: string): ManagerNotification[] {

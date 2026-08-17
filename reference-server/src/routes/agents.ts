@@ -942,9 +942,15 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         }
     });
 
-    // Server-wide provider/model policy. Narrows every key and agent, so it lives outside the
-    // per-user endpoints above. discovered_models is the unfiltered registry: the admin picker
-    // needs it to choose from, since effective_models is already narrowed by this same policy.
+    // Server-wide policy. Narrows every key and agent, so it sits outside the per-user endpoints
+    // below. discovered_models is unfiltered: the admin picker needs it, since effective_models is
+    // already narrowed by this same policy and could never offer an excluded model back.
+    const serverPolicyResponse = () => ({
+        allowed_models: agentStore.getServerModelRestrictions(),
+        discovered_models: agentStore.listProviderModels(),
+        effective_models: agentStore.listEffectiveProviderModels(null),
+    });
+
     fastify.get('/v1/manager/admin/model-restrictions', {
         schema: {
             tags: ['Manager Admin'],
@@ -953,11 +959,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         preHandler: requireManagerAdmin,
     }, async () => {
         getCachedModelsList();
-        return {
-            allowed_models: agentStore.getServerModelRestrictions(),
-            discovered_models: agentStore.listProviderModels(),
-            effective_models: agentStore.listEffectiveProviderModels(null),
-        };
+        return serverPolicyResponse();
     });
 
     fastify.put<{ Body: { allowed_models?: ProviderModelSelectionBody[] } }>('/v1/manager/admin/model-restrictions', {
@@ -969,11 +971,8 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         preHandler: requireManagerAdmin,
     }, async (request) => {
         getCachedModelsList();
-        return {
-            allowed_models: agentStore.setServerModelRestrictions(normalizeRestrictionBody(request.body)),
-            discovered_models: agentStore.listProviderModels(),
-            effective_models: agentStore.listEffectiveProviderModels(null),
-        };
+        agentStore.setServerModelRestrictions(normalizeRestrictionBody(request.body));
+        return serverPolicyResponse();
     });
 
     fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {
