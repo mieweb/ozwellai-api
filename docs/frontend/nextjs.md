@@ -280,7 +280,7 @@ export function middleware(request: NextRequest) {
   // Allow Ozwell iframe
   response.headers.set(
     'Content-Security-Policy',
-    "frame-src 'self' https://api.ozwell.ai"
+    "frame-src 'self' https://ozwellapi.os.mieweb.org"
   );
   
   return response;
@@ -346,7 +346,7 @@ const securityHeaders = [
     value: `
       default-src 'self';
       script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      frame-src 'self' https://ozwellapi.os.mieweb.org https://api.ozwell.ai;
+      frame-src 'self' https://ozwellapi.os.mieweb.org;
       connect-src 'self' https://ozwellapi.os.mieweb.org;
     `.replace(/\s{2,}/g, ' ').trim()
   }

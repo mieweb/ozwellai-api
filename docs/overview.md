@@ -200,7 +200,7 @@ Backend integrations use **general-purpose API keys** with broader access to Ozw
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 ✅ Result: Ozwell's chat button appears. Users click and chat.
 

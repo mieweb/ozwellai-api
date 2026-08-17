@@ -61,7 +61,7 @@ Configure the loader before loading the script:
     thinkingEnabled: true
   };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ### Available Options
@@ -336,7 +336,7 @@ For the full postMessage protocol details (useful if you're building a custom in
 ## Examples
 
 :::note Widget URLs
-Use `https://api.ozwell.ai/widget` in production. For the current dev environment, use:
+The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://api.ozwell.ai/widget` once production migration completes):
 
 - **Current recommended loader:** `https://ozwellapi.os.mieweb.org/widget`
 - **Hosted iframe page:** `https://ozwellapi.os.mieweb.org/widget/frame/`
@@ -358,7 +358,7 @@ Use `https://api.ozwell.ai/widget` in production. For the current dev environmen
   <script>
     window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
   </script>
-  <script src="https://api.ozwell.ai/widget"></script>
+  <script src="https://ozwellapi.os.mieweb.org/widget"></script>
 </body>
 </html>
 ```
@@ -373,7 +373,7 @@ Use `https://api.ozwell.ai/widget` in production. For the current dev environmen
     welcomeMessage: 'What would you like to know?'
   };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ### Enable Thinking Controls
@@ -386,7 +386,7 @@ Use `https://api.ozwell.ai/widget` in production. For the current dev environmen
     thinkingDefaultMode: 2
   };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ### Triggered by Button Click
@@ -397,7 +397,7 @@ Use `https://api.ozwell.ai/widget` in production. For the current dev environmen
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 ### Complete Page with Tool Calling
@@ -496,7 +496,7 @@ If your site uses CSP headers, add Ozwell's domains:
 ```
 Content-Security-Policy: 
   script-src 'self' https://ozwellapi.os.mieweb.org https://cdn.ozwell.ai;
-  frame-src 'self' https://api.ozwell.ai;
+  frame-src 'self' https://ozwellapi.os.mieweb.org;
   connect-src 'self' https://ozwellapi.os.mieweb.org;
 ```
 

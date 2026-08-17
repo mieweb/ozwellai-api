@@ -65,7 +65,7 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  src="https://api.ozwell.ai/widget/frame/"
+  src="https://ozwellapi.os.mieweb.org/widget/frame/"
   sandbox="allow-scripts allow-same-origin allow-forms"
 ></iframe>
 ```
@@ -140,7 +140,7 @@ If you need full control, you can implement the iframe integration manually.
   <button id="ozwell-trigger">Chat</button>
   <iframe 
     id="ozwell-iframe"
-    src="https://api.ozwell.ai/widget/frame/"
+    src="https://ozwellapi.os.mieweb.org/widget/frame/"
     style="display: none; width: 400px; height: 600px; border: none;"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     allow="clipboard-write"
@@ -166,7 +166,7 @@ iframe.addEventListener('load', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://api.ozwell.ai');
+  }, 'https://ozwellapi.os.mieweb.org');
 });
 
 // Toggle visibility
@@ -178,13 +178,13 @@ trigger.addEventListener('click', () => {
     type: isHidden ? 'ozwell:open' : 'ozwell:close',
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://api.ozwell.ai');
+  }, 'https://ozwellapi.os.mieweb.org');
 });
 
 // Listen for messages from iframe
 window.addEventListener('message', (event) => {
   // Verify origin
-  if (event.origin !== 'https://api.ozwell.ai') return;
+  if (event.origin !== 'https://ozwellapi.os.mieweb.org') return;
   
   const { type, payload } = event.data;
   
@@ -275,7 +275,7 @@ window.addEventListener('popstate', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://api.ozwell.ai');
+  }, 'https://ozwellapi.os.mieweb.org');
 });
 ```
 

@@ -16,7 +16,7 @@ The simplest approach — add a single script tag:
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://api.ozwell.ai/widget"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 See the [CDN documentation](./cdn-embed.md) for full details.
