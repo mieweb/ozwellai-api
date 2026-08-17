@@ -890,11 +890,14 @@ export class AgentStore {
         `).all() as ProviderModelSelection[];
     }
 
-    // ponytail: no notification or audit trail on change, unlike setParentKeyModelRestrictions.
-    // Notifying would mean diffing effective models for every parent key on every save. Add that
-    // (and a server_model_policy_changed event) if admins need to know who narrowed what, when.
+    // A server-wide change silently removes models from every user at once, so it notifies each
+    // affected key the same way a per-key change does. recordParentPolicyChange no-ops when a key
+    // lost nothing, so keys that were already narrower stay quiet. Admin-initiated and rare, so the
+    // per-key loop is not a hot path.
     setServerModelRestrictions(selections: ProviderModelSelection[]): ProviderModelSelection[] {
         const normalized = normalizeProviderModelSelections(selections);
+        const affectedKeyIds = this.listActiveParentKeyIds();
+        const before = new Map(affectedKeyIds.map(id => [id, this.listEffectiveProviderModels(id)]));
         const save = this.db.transaction(() => {
             this.db.prepare('DELETE FROM server_model_restrictions').run();
             const insert = this.db.prepare(`
@@ -912,7 +915,19 @@ export class AgentStore {
             }
         });
         save();
+        for (const keyId of affectedKeyIds) {
+            this.recordParentPolicyChange(keyId, before.get(keyId) || [], this.listEffectiveProviderModels(keyId));
+        }
         return this.getServerModelRestrictions();
+    }
+
+    private listActiveParentKeyIds(): string[] {
+        const rows = this.db.prepare(`
+          SELECT id
+          FROM api_keys
+          WHERE COALESCE(status, 'active') = 'active' AND revoked_at IS NULL
+        `).all() as Array<{ id: string }>;
+        return rows.map(row => row.id);
     }
 
     getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {

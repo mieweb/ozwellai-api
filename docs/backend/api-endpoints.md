@@ -430,6 +430,9 @@ Server-wide policy is stored in its own table and never touches `provider_models
 discovery refresh owns. Saving it does not modify or delete any parent-key or agent policy — those
 stay stored exactly as written and simply narrow further.
 
+If a save takes a model away, every key that loses one gets a `model_policy_changed` notification —
+the same one a per-key change sends. Keys that lose nothing are not notified.
+
 ---
 
 ## Responses (Ozwell Extension)

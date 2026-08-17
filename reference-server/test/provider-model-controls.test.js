@@ -593,6 +593,61 @@ test('provider models — server-wide policy blocks chat before upstream dispatc
     }
 });
 
+test('provider models — narrowing server-wide policy notifies affected keys, and only when they lose access', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_PROVIDER: 'openai',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+
+        const unread = async () => (await (await fetch(`${BASE}/v1/manager/notifications`, { headers: HEADERS })).json()).unread_count;
+        assert.equal(await unread(), 0);
+
+        // Narrowing removes gpt-4o from this key, so it must be told.
+        const narrowed = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(narrowed.status, 200);
+        assert.equal(await unread(), 1);
+
+        const listed = await (await fetch(`${BASE}/v1/manager/notifications`, { headers: HEADERS })).json();
+        assert.equal(listed.data[0].type, 'model_policy_changed');
+        assert.deepEqual(
+            (listed.data[0].metadata.removed_models || []).map(item => `${item.provider}/${item.model}`),
+            ['openai/gpt-4o'],
+        );
+
+        // Saving the same policy again removes nothing, so it must not notify again.
+        await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(await unread(), 1);
+
+        // Widening back gives access, which is not a loss and must stay quiet.
+        await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [] }),
+        });
+        assert.equal(await unread(), 1);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
 test('provider models — server-wide policy endpoints are admin only', async () => {
     const { server, tmp } = startServer({ admin: false });
     try {
