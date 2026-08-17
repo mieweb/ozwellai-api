@@ -421,8 +421,9 @@ export class AgentStore {
 
       -- Server-wide allow-list. Empty table means unrestricted. Kept off provider_models.enabled,
       -- which discovery refresh owns and would overwrite.
-      -- ponytail: own table, matching its per-key and per-agent siblings. Collapse all three behind
-      -- a scope_type/scope_id table (like quota_policies) only if a fourth scope lands.
+      -- Deliberately its own table, matching the per-key and per-agent restriction tables rather
+      -- than sharing one. Worth collapsing all three behind a scope_type/scope_id table, the way
+      -- quota_policies does it, only if a fourth scope is ever added.
       CREATE TABLE IF NOT EXISTS server_model_restrictions (
         id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
