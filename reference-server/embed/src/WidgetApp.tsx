@@ -34,6 +34,7 @@ const MESSAGES_NAV_THRESHOLD = 3;
 const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
+const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
 
 type ProviderModelOption = {
   provider: string;
@@ -376,6 +377,20 @@ function systemDisplayMessage(content: string): WidgetMessage {
   };
 }
 
+class AssistantUnavailableError extends Error {}
+
+function chatRequestError(status: number, errorText: string) {
+  try {
+    const parsed = JSON.parse(errorText);
+    if (parsed?.error?.code === 'configured_model_unavailable') {
+      return new AssistantUnavailableError(ASSISTANT_UNAVAILABLE_MESSAGE);
+    }
+  } catch {
+    // Keep the original response text for unknown non-JSON failures.
+  }
+  return new Error(`Request failed with status ${status}: ${errorText}`);
+}
+
 export function WidgetApp() {
   const [config, setConfig] = useState<OzwellConfig>(() => ({
     ...DEFAULT_CONFIG,
@@ -597,7 +612,7 @@ export function WidgetApp() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Request failed with status ${response.status}: ${errorText}`);
+        throw chatRequestError(response.status, errorText);
       }
       if (!response.body) {
         throw new Error('Response body is null');
@@ -775,7 +790,9 @@ export function WidgetApp() {
       if (assistantMessageId) {
         setDisplayMessages((current) => current.filter((item) => item.id !== assistantMessageId));
       }
-      appendDisplay(systemDisplayMessage(`Error: ${message}`));
+      appendDisplay(error instanceof AssistantUnavailableError
+        ? assistantDisplayMessage(message)
+        : systemDisplayMessage(`Error: ${message}`));
     } finally {
       setSending(false);
       sendingRef.current = false;

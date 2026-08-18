@@ -723,18 +723,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
       : agentStore.listEffectiveProviderModels(usageContext?.parentKeyId ?? null);
     const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
+    const matchingModels = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
+    const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
     const selectedProvider = requestedProvider
       || agentConfig?.modelPolicy.default_provider
-      || (() => {
-        const matches = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
-        return matches.length === 1 ? matches[0].provider : null;
-      })();
+      || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
       reply.code(400);
+      if (usingAgentDefaultModel && matchingModels.length === 0) {
+        return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
     const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));
     if (!allowedModel) {
+      if (usingAgentDefaultModel) {
+        reply.code(400);
+        return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
       reply.code(403);
       return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
     }
