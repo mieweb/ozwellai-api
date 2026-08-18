@@ -3,7 +3,7 @@
 Integrate Ozwell into any website using plain JavaScript, without any framework dependencies.
 
 :::note Current Demo Environment
-Production CDN examples such as `cdn.ozwell.ai` are future production examples. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`.
+Use `https://api.ozwell.ai/widget` in production. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/widget`.
 :::
 
 ## Quick Start
@@ -13,11 +13,10 @@ Production CDN examples such as `cdn.ozwell.ai` are future production examples. 
 The simplest approach — add a single script tag:
 
 ```html
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_xxxxxxxx"
-  data-agent-id="agent_xxxxxxxx"
-></script>
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 See the [CDN documentation](./cdn-embed.md) for full details.

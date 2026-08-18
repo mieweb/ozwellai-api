@@ -90,7 +90,7 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "Reference server: ${YELLOW}http://localhost:$REFERENCE_PORT${NC}"
 echo -e "Landing page:     ${YELLOW}http://localhost:$LANDING_PORT${NC}"
 echo ""
-echo -e "Embed widget:     ${YELLOW}http://localhost:$REFERENCE_PORT/embed/ozwell-loader.js${NC}"
+echo -e "Embed widget:     ${YELLOW}http://localhost:$REFERENCE_PORT/widget${NC}"
 echo ""
 if [ "$OLLAMA_AVAILABLE" = true ]; then
     echo -e "${GREEN}Ollama:           ✓ Connected at $OLLAMA_BASE_URL${NC}"
