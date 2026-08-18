@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, isLLMBackendConfigured, extractToken, isAgentKey } from '../util';
+import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
@@ -62,9 +62,13 @@ async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
 }
 
 async function discoverDirectOllamaModels(): Promise<ProviderModelRecord[]> {
-  if (!process.env.OLLAMA_BASE_URL) return [];
+  // Same resolution as chat/embeddings: if those will route to Ollama, discovery
+  // has to register its models, or a bare request resolves a model the registry
+  // has never heard of and 400s with provider_required.
+  const baseUrl = getOllamaBaseUrl();
+  if (!baseUrl) return [];
   try {
-    const resp = await fetch(`${process.env.OLLAMA_BASE_URL}/api/tags`);
+    const resp = await fetch(`${baseUrl}/api/tags`);
     if (!resp.ok) return [];
     const data = await resp.json() as { models?: { name?: string }[] };
     return (data.models || [])

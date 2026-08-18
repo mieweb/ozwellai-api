@@ -237,6 +237,22 @@ export function extractToken(authorization: string | undefined): string {
 }
 
 /**
+ * Resolve the Ollama base URL, or null when Ollama is explicitly disabled.
+ *
+ * Unset means "try the local default" (zero-config dev). Set-but-empty means
+ * "no Ollama" — tests rely on that to stay hermetic, otherwise a developer's
+ * own Ollama answers on the default host and the suite fails only on their
+ * machine. Every Ollama call site must route through this so the two cases
+ * cannot drift apart.
+ */
+export function getOllamaBaseUrl(): string | null {
+  const configured = process.env.OLLAMA_BASE_URL;
+  if (configured === undefined) return 'http://127.0.0.1:11434';
+  const trimmed = configured.trim();
+  return trimmed || null;
+}
+
+/**
  * Check if Ollama backend is available
  * Caches result to avoid repeated checks
  */
@@ -253,8 +269,14 @@ export async function isOllamaAvailable(): Promise<boolean> {
     return ollamaAvailable;
   }
   
-  const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-  
+  const ollamaUrl = getOllamaBaseUrl();
+  if (!ollamaUrl) {
+    ollamaAvailable = false;
+    ollamaModels = [];
+    lastOllamaCheck = now;
+    return false;
+  }
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);

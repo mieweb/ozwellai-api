@@ -1,5 +1,5 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
+import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
 import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
@@ -359,7 +359,8 @@ function createLlmClient(provider: string | null) {
 
 const ollamaClient = new OzwellAI({
   apiKey: 'ollama',
-  baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
+  // Only used once isOllamaAvailable() returned true, so null is unreachable here.
+  baseURL: getOllamaBaseUrl() || '',
   timeout: 120000,
 });
 
