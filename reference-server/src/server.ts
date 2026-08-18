@@ -16,7 +16,10 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
+import authRoute from './routes/auth';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
+import { validateSession, SESSION_TOKEN_PREFIX } from './storage/sessions';
+import { extractToken } from './util';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -202,7 +205,19 @@ async function buildServer() {
     }
   });
 
+  // Widget sessions: exchange a valid sess_ bearer for the configured backing
+  // key so every existing key-authenticated route works unchanged.
+  fastify.addHook('onRequest', async (request) => {
+    const token = extractToken(request.headers.authorization);
+    if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
+    if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
+    const backingKey = process.env.WIDGET_SESSION_KEY;
+    if (!backingKey || !validateSession(token)) return; // fall through: routes 401 naturally
+    request.headers.authorization = `Bearer ${backingKey}`;
+  });
+
   // Register API routes
+  await fastify.register(authRoute);    // Widget sign-in (email OTP sessions)
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);
