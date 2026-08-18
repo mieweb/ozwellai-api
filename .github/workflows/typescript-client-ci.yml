@@ -5,14 +5,14 @@ name: TypeScript Client CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'clients/typescript/**'
       - 'spec/**'
       - '.github/workflows/typescript-client-ci.yml'
       - '.github/workflows/test-typescript-client.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'clients/typescript/**'
       - 'spec/**'

@@ -8,13 +8,13 @@ name: TypeScript Client CI/CD
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'clients/typescript/**'
       - 'spec/**'
       - '.github/workflows/typescript-client.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'clients/typescript/**'
       - 'spec/**'
