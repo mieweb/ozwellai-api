@@ -357,12 +357,23 @@ function createLlmClient(provider: string | null) {
   });
 }
 
-const ollamaClient = new OzwellAI({
-  apiKey: 'ollama',
-  // Only used once isOllamaAvailable() returned true, so null is unreachable here.
-  baseURL: getOllamaBaseUrl() || '',
-  timeout: 120000,
-});
+// Built on first use rather than at module load: when Ollama is disabled
+// getOllamaBaseUrl() is null, and a client hoisted with an empty baseURL would be
+// reachable by any future caller that forgets the isOllamaAvailable() guard.
+let ollamaClient: OzwellAI | null = null;
+
+function getOllamaClient(): OzwellAI {
+  const baseURL = getOllamaBaseUrl();
+  if (!baseURL) throw new Error('Ollama is disabled (OLLAMA_BASE_URL is empty)');
+  if (!ollamaClient) {
+    ollamaClient = new OzwellAI({
+      apiKey: 'ollama',
+      baseURL,
+      timeout: 120000,
+    });
+  }
+  return ollamaClient;
+}
 
 // Mock dispatch — split into stream / non-stream variants so the call-site
 // contract is enforced by the type system (no more silent `if (stream) return` footgun).
@@ -833,7 +844,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     {
       try {
         // Select pre-constructed client based on backend
-        const client = llmConfigured ? createLlmClient(provider) : ollamaClient;
+        const client = llmConfigured ? createLlmClient(provider) : getOllamaClient();
 
         // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {
