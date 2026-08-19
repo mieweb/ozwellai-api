@@ -512,3 +512,260 @@ model: gpt-oss:latest
         await gateway.close();
     }
 });
+
+const modelIds = payload => payload.data.map(model => `${model.provider}/${model.model}`);
+const selectionIds = selections => selections.map(item => `${item.provider}/${item.model || '*'}`);
+
+test('provider models — server-wide policy narrows listings and stacks with parent and agent policies', async () => {
+    const gateway = await startGateway({
+        openai: ['gpt-4o', 'gpt-4o-mini'],
+        anthropic: ['claude-sonnet-4-6'],
+    });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_PROVIDER: 'openai',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+        const allDiscovered = ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6'];
+
+        // Warm the registry through discovery first; the admin endpoints read the cached registry.
+        assert.deepEqual(
+            modelIds(await (await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS })).json()),
+            allDiscovered,
+        );
+
+        // No global policy yet: everything behaves exactly as before.
+        const initial = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, { headers: HEADERS });
+        assert.equal(initial.status, 200);
+        const initialBody = await initial.json();
+        assert.deepEqual(initialBody.allowed_models, []);
+        assert.deepEqual(selectionIds(initialBody.effective_models), allDiscovered);
+
+        // Global policy drops openai/gpt-4o for the whole server.
+        const saved = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({
+                allowed_models: [
+                    { provider: 'openai', model: 'gpt-4o-mini' },
+                    { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+                ],
+            }),
+        });
+        assert.equal(saved.status, 200);
+        const savedBody = await saved.json();
+        assert.deepEqual(selectionIds(savedBody.allowed_models), ['openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6']);
+        // discovered_models stays unfiltered so the admin picker still has every model to choose from.
+        assert.deepEqual(selectionIds(savedBody.discovered_models), allDiscovered);
+
+        // The raw manager listing — the one the agent picker uses — now narrows too.
+        assert.deepEqual(
+            modelIds(await (await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS })).json()),
+            ['openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6'],
+        );
+
+        // A parent-key policy that still lists gpt-4o cannot widen past the global policy.
+        const parentPolicy = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({
+                allowed_models: [
+                    { provider: 'openai', model: 'gpt-4o' },
+                    { provider: 'openai', model: 'gpt-4o-mini' },
+                    { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+                ],
+            }),
+        });
+        assert.equal(parentPolicy.status, 200);
+        const parentBody = await parentPolicy.json();
+        // The per-user policy is stored verbatim — the global policy narrows, it does not rewrite.
+        assert.deepEqual(
+            selectionIds(parentBody.allowed_models),
+            ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6'],
+        );
+        assert.deepEqual(
+            selectionIds(parentBody.effective_models),
+            ['openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6'],
+        );
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Global Policy Agent
+instructions: Test server-wide restrictions
+`,
+        });
+        assert.equal(create.status, 201);
+        const { agent_id, agent_key } = await create.json();
+
+        const agentPolicy = await fetch(`${BASE}/v1/manager/agents/${agent_id}/model-policy`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({
+                default_model: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+                allowed_models: [{ provider: 'anthropic', model: 'claude-sonnet-4-6' }],
+            }),
+        });
+        assert.equal(agentPolicy.status, 200);
+
+        // Full chain: discovered -> server -> parent key -> agent.
+        const agentEffective = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { Authorization: `Bearer ${agent_key}` },
+        });
+        assert.equal(agentEffective.status, 200);
+        assert.deepEqual(modelIds(await agentEffective.json()), ['anthropic/claude-sonnet-4-6']);
+
+        // Clearing the global policy restores the parent key's own wider choice.
+        const cleared = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [] }),
+        });
+        assert.equal(cleared.status, 200);
+        const parentEffective = await fetch(`${BASE}/v1/models/effective`, {
+            headers: { Authorization: `Bearer ${key.key}` },
+        });
+        assert.deepEqual(modelIds(await parentEffective.json()), allDiscovered);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — server-wide policy blocks chat before upstream dispatch', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        const policy = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(policy.status, 200);
+
+        // No parent-key or agent policy exists — the global policy alone must reject this.
+        const blocked = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: 'blocked' }],
+            }),
+        });
+        assert.equal(blocked.status, 403);
+        assert.equal((await blocked.json()).error.code, 'model_not_allowed');
+        assert.equal(gateway.getChatCount(), 0);
+
+        const allowed = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({
+                provider: 'openai',
+                model: 'gpt-4o',
+                messages: [{ role: 'user', content: 'allowed' }],
+            }),
+        });
+        assert.equal(allowed.status, 200);
+        assert.equal(gateway.getChatCount(), 1);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — narrowing server-wide policy notifies affected keys, and only when they lose access', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_PROVIDER: 'openai',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+
+        const unread = async () => (await (await fetch(`${BASE}/v1/manager/notifications`, { headers: HEADERS })).json()).unread_count;
+        assert.equal(await unread(), 0);
+
+        // Narrowing removes gpt-4o from this key, so it must be told.
+        const narrowed = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(narrowed.status, 200);
+        assert.equal(await unread(), 1);
+
+        const listed = await (await fetch(`${BASE}/v1/manager/notifications`, { headers: HEADERS })).json();
+        assert.equal(listed.data[0].type, 'model_policy_changed');
+        assert.deepEqual(
+            (listed.data[0].metadata.removed_models || []).map(item => `${item.provider}/${item.model}`),
+            ['openai/gpt-4o'],
+        );
+
+        // Saving the same policy again removes nothing, so it must not notify again.
+        await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(await unread(), 1);
+
+        // Widening back gives access, which is not a loss and must stay quiet.
+        await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [] }),
+        });
+        assert.equal(await unread(), 1);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — server-wide policy endpoints are admin only', async () => {
+    const { server, tmp } = startServer({ admin: false });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+
+        const read = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, { headers: HEADERS });
+        assert.equal(read.status, 403);
+        assert.equal((await read.json()).error.code, 'admin_required');
+
+        const write = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(write.status, 403);
+        assert.equal((await write.json()).error.code, 'admin_required');
+    } finally {
+        stopServer(server, tmp);
+    }
+});

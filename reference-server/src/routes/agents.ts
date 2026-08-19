@@ -214,6 +214,24 @@ function normalizeQuotaBody(body: QuotaBody | undefined): { monthlyTokenLimit: n
     return { monthlyTokenLimit: Math.floor(body.monthly_token_limit), status };
 }
 
+// Shared by the server-wide and per-parent-key restriction endpoints, which take the same body.
+const RESTRICTION_BODY_SCHEMA = {
+    type: 'object',
+    properties: {
+        allowed_models: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    provider: { type: 'string' },
+                    model: { type: 'string' },
+                },
+                required: ['provider'],
+            },
+        },
+    },
+} as const;
+
 function normalizeRestrictionBody(body: { allowed_models?: ProviderModelSelectionBody[] } | undefined) {
     return (body?.allowed_models || [])
         .filter(item => item && typeof item.provider === 'string')
@@ -924,6 +942,39 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         }
     });
 
+    // Server-wide policy. Narrows every key and agent, so it sits outside the per-user endpoints
+    // below. discovered_models is unfiltered: the admin picker needs it, since effective_models is
+    // already narrowed by this same policy and could never offer an excluded model back.
+    const serverPolicyResponse = () => ({
+        allowed_models: agentStore.getServerModelRestrictions(),
+        discovered_models: agentStore.listProviderModels(),
+        effective_models: agentStore.listEffectiveProviderModels(null),
+    });
+
+    fastify.get('/v1/manager/admin/model-restrictions', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get server-wide provider/model restrictions',
+        },
+        preHandler: requireManagerAdmin,
+    }, async () => {
+        getCachedModelsList();
+        return serverPolicyResponse();
+    });
+
+    fastify.put<{ Body: { allowed_models?: ProviderModelSelectionBody[] } }>('/v1/manager/admin/model-restrictions', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Update server-wide provider/model restrictions',
+            body: RESTRICTION_BODY_SCHEMA,
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request) => {
+        getCachedModelsList();
+        agentStore.setServerModelRestrictions(normalizeRestrictionBody(request.body));
+        return serverPolicyResponse();
+    });
+
     fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {
         schema: {
             tags: ['Manager Admin'],
@@ -953,22 +1004,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 properties: { key_id: { type: 'string' } },
                 required: ['key_id'],
             },
-            body: {
-                type: 'object',
-                properties: {
-                    allowed_models: {
-                        type: 'array',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                provider: { type: 'string' },
-                                model: { type: 'string' },
-                            },
-                            required: ['provider'],
-                        },
-                    },
-                },
-            },
+            body: RESTRICTION_BODY_SCHEMA,
         },
         preHandler: requireManagerAdmin,
     }, async (request) => {
