@@ -109,7 +109,7 @@ curl -s -X POST "$BASE/v1/agents" \
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-abc123...' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 That's it — 4 steps: set credentials, create agent, copy the key, embed it.

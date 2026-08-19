@@ -218,6 +218,15 @@ instructions: Test model restrictions
         });
         assert.equal(agentPolicy.status, 200);
 
+        const agentConfig = await fetch(`${BASE}/v1/agents/me`, {
+            headers: { Authorization: `Bearer ${agent_key}` },
+        });
+        assert.equal(agentConfig.status, 200);
+        assert.deepEqual((await agentConfig.json()).default_model, {
+            provider: 'openai',
+            model: 'gpt-4o-mini',
+        });
+
         const effective = await fetch(`${BASE}/v1/models/effective`, {
             headers: { Authorization: `Bearer ${agent_key}` },
         });

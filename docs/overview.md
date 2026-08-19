@@ -10,7 +10,7 @@ description: Welcome to the Ozwell API documentation - privacy-first AI integrat
 Welcome to the Ozwell API documentation. This guide will help you integrate Ozwell's AI capabilities into your applications, whether you're embedding a chat interface into your website or building custom backend workflows.
 
 :::note Current Demo Environment
-Production CDN/embed origins such as `cdn.ozwell.ai` and `embed.ozwell.ai` are future production examples. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, console at `https://ozwellconsole.os.mieweb.org`, and loader at `https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js`.
+The production API and widget share `https://api.ozwell.ai`; load the widget from `https://api.ozwell.ai/widget`. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, console at `https://ozwellconsole.os.mieweb.org`, and loader at `https://ozwellapi.os.mieweb.org/widget`.
 :::
 
 ## Privacy First
@@ -197,11 +197,10 @@ Backend integrations use **general-purpose API keys** with broader access to Ozw
 **Option 1: Ozwell Widget (Fastest)**
 ```html
 <!-- Add this to your HTML, and you're done! -->
-<script 
-  src="https://cdn.ozwell.ai/embed.js" 
-  data-api-key="ozw_scoped_..."
-  data-agent-id="agent_123"
-></script>
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 ✅ Result: Ozwell's chat button appears. Users click and chat.
 
