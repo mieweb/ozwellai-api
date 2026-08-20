@@ -5,7 +5,7 @@ name: Reference Server CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'reference-server/**'
       - 'vendor/mieweb-ui'
@@ -13,7 +13,7 @@ on:
       - '.github/workflows/reference-server-ci.yml'
       - '.github/workflows/test-reference-server.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'reference-server/**'
       - 'vendor/mieweb-ui'

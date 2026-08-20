@@ -49,7 +49,7 @@
     defaultUI: true, // Enable floating button/wrapper by default
     // model is optional - server chooses default if not specified by client
     endpoint: autoDetectedBase ? `${autoDetectedBase}/v1/chat/completions` : '/v1/chat/completions',
-    widgetUrl: autoDetectedBase ? `${autoDetectedBase}/embed/ozwell.html` : '/embed/ozwell.html',
+    widgetUrl: autoDetectedBase ? `${autoDetectedBase}/widget/frame/` : '/widget/frame/',
     thinkingEnabled: false, // Display reasoning/thinking tokens from models
     thinkingDefaultMode: 2, // 0=None, 1=Peek, 2=Smart (expand-then-collapse), 3=Expanded
   };
@@ -63,6 +63,7 @@
     chatOpen: false, // Track if chat window is currently open
     agentTools: null, // Tools fetched from server via agent key (MCP discovery)
   };
+  let agentDiscoveryPromise;
 
   const EMPTY_SCHEMA = { type: 'object', properties: {} };
   const PAGE_TOOL_PREFIX = 'postMessage_';
@@ -156,23 +157,8 @@
       document.body;
 
     const iframe = document.createElement('iframe');
-    const widgetSrc = options.src || config.widgetUrl || config.src || '/embed/ozwell.html';
-
-    // Extract base URL for loading ozwell.js (remove /ozwell.html from path)
-    const widgetBaseUrl = widgetSrc.replace(/\/[^/]*$/, '');
-
-    // Use srcdoc instead of src to inline HTML (eliminates ozwell.html file)
-    iframe.srcdoc = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ozwell Chat Widget</title>
-  </head>
-  <body>
-    <script type="module" src="${widgetBaseUrl}/ozwell.js"></script>
-  </body>
-</html>`;
+    const widgetSrc = options.src || config.widgetUrl || config.src || '/widget/frame/';
+    iframe.src = widgetSrc;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
@@ -281,11 +267,11 @@
         break;
 
       case 'tools/list':
-        postJsonRpc({
+        discoverAgentContext().finally(() => postJsonRpc({
           jsonrpc: '2.0',
           id: data.id,
           result: { tools: getMcpTools() },
-        });
+        }));
         break;
 
       case 'tools/call': {
@@ -367,11 +353,13 @@
       case 'ready':
         state.ready = true;
         flushPending();
-        sendConfig();
-        document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        discoverAgentContext().finally(() => {
+          sendConfig();
+          document.dispatchEvent(new CustomEvent('ozwell-chat-ready'));
+        });
         break;
       case 'request-config':
-        sendConfig();
+        discoverAgentContext().finally(sendConfig);
         break;
       case 'closed':
         document.dispatchEvent(new CustomEvent('ozwell-chat-closed'));
@@ -862,6 +850,8 @@
    * @returns {HTMLIFrameElement} The created iframe element
    */
   function mount(options = {}) {
+    discoverAgentContext();
+
     // Inject CSS for default UI (if enabled)
     injectDefaultCSS();
 
@@ -951,9 +941,23 @@
         state.agentTools = data.tools;
         console.log('[OzwellChat] Agent tools discovered from server:', state.agentTools);
       }
+      if (!config.provider && !config.model && data.default_model?.provider && data.default_model?.model) {
+        state.runtimeConfig = {
+          ...state.runtimeConfig,
+          provider: data.default_model.provider,
+          model: data.default_model.model,
+        };
+      }
     } catch (e) {
       // Silent fail — tools will fall back to config.tools if any
     }
+  }
+
+  function discoverAgentContext() {
+    if (!agentDiscoveryPromise) {
+      agentDiscoveryPromise = fetchAgentTools();
+    }
+    return agentDiscoveryPromise;
   }
 
   // Auto-mount widget unless explicitly disabled
@@ -961,12 +965,12 @@
   if (config.autoMount !== false) {
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', async () => {
-        await fetchAgentTools();
+        await discoverAgentContext();
         api.mount();
       });
     } else {
       // DOM already loaded, fetch tools then mount
-      fetchAgentTools().then(() => api.mount());
+      discoverAgentContext().then(() => api.mount());
     }
   }
 })();

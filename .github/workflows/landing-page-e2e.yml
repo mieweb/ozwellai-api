@@ -5,7 +5,7 @@ name: Landing Page E2E Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, dev ]
     paths:
       - 'landing-page/**'
       - 'reference-server/**'
@@ -16,7 +16,7 @@ on:
       - '.github/workflows/landing-page-e2e.yml'
       - 'scripts/test-e2e.sh'
   pull_request:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - 'landing-page/**'
       - 'reference-server/**'

@@ -419,6 +419,18 @@ export class AgentStore {
       );
       CREATE INDEX IF NOT EXISTS idx_parent_key_model_restrictions_parent_key ON parent_key_model_restrictions(parent_key_id);
 
+      -- Server-wide allow-list. Empty table means unrestricted. Kept off provider_models.enabled,
+      -- which discovery refresh owns and would overwrite.
+      -- Deliberately its own table, matching the per-key and per-agent restriction tables rather
+      -- than sharing one. Worth collapsing all three behind a scope_type/scope_id table, the way
+      -- quota_policies does it, only if a fourth scope is ever added.
+      CREATE TABLE IF NOT EXISTS server_model_restrictions (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+
       CREATE TABLE IF NOT EXISTS agent_model_settings (
         agent_id TEXT PRIMARY KEY,
         default_provider TEXT,
@@ -869,6 +881,54 @@ export class AgentStore {
         return Boolean(this.db.prepare('SELECT 1 FROM provider_models LIMIT 1').get());
     }
 
+    getServerModelRestrictions(): ProviderModelSelection[] {
+        return this.db.prepare(`
+          SELECT provider, model
+          FROM server_model_restrictions
+          ORDER BY rowid ASC
+        `).all() as ProviderModelSelection[];
+    }
+
+    // Notifies each key that loses a model, same as a per-key change. recordParentPolicyChange
+    // no-ops when a key lost nothing. Admin-initiated and rare, so the per-key loop is fine.
+    setServerModelRestrictions(selections: ProviderModelSelection[]): ProviderModelSelection[] {
+        const normalized = normalizeProviderModelSelections(selections);
+        const affectedKeyIds = this.listActiveParentKeyIds();
+        const before = new Map(affectedKeyIds.map(id => [id, this.listEffectiveProviderModels(id)]));
+        const save = this.db.transaction(() => {
+            this.db.prepare('DELETE FROM server_model_restrictions').run();
+            const insert = this.db.prepare(`
+              INSERT INTO server_model_restrictions (id, provider, model, created_at)
+              VALUES (@id, @provider, @model, @created_at)
+            `);
+            const created_at = new Date().toISOString();
+            for (const item of normalized) {
+                insert.run({
+                    id: `${item.provider}:${item.model || '*'}`,
+                    provider: item.provider,
+                    model: item.model ?? null,
+                    created_at,
+                });
+            }
+            // Inside the transaction: the policy and the notices about it commit together, so a
+            // failure cannot leave some keys told and others silently cut off.
+            for (const keyId of affectedKeyIds) {
+                this.recordParentPolicyChange(keyId, before.get(keyId) || [], this.listEffectiveProviderModels(keyId));
+            }
+        });
+        save();
+        return this.getServerModelRestrictions();
+    }
+
+    private listActiveParentKeyIds(): string[] {
+        const rows = this.db.prepare(`
+          SELECT id
+          FROM api_keys
+          WHERE COALESCE(status, 'active') = 'active' AND revoked_at IS NULL
+        `).all() as Array<{ id: string }>;
+        return rows.map(row => row.id);
+    }
+
     getParentKeyModelRestrictions(parentKeyId: string): ProviderModelSelection[] {
         return this.db.prepare(`
           SELECT provider, model
@@ -994,16 +1054,20 @@ export class AgentStore {
         return this.listEffectiveProviderModels(parentKeyId, policy.allowed_models);
     }
 
+    // Levels below run in order and can only remove. The server level applies even when parentKeyId
+    // is null, so unkeyed and direct callers cannot escape it.
     listEffectiveProviderModels(parentKeyId: string | null, agentAllowedModels?: ProviderModelSelection[] | null): ProviderModelRecord[] {
-        const models = this.listProviderModels();
-        const parentRestrictions = parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [];
-        const parentFiltered = parentRestrictions.length
-            ? models.filter(model => selectionAllows(parentRestrictions, model.provider, model.model))
-            : models;
-        const agentSelections = normalizeProviderModelSelections(agentAllowedModels || []);
-        return agentSelections.length
-            ? parentFiltered.filter(model => selectionAllows(agentSelections, model.provider, model.model))
-            : parentFiltered;
+        const levels: ProviderModelSelection[][] = [
+            this.getServerModelRestrictions(),
+            parentKeyId ? this.getParentKeyModelRestrictions(parentKeyId) : [],
+            normalizeProviderModelSelections(agentAllowedModels || []),
+        ];
+        return levels.reduce<ProviderModelRecord[]>(
+            (models, selections) => selections.length
+                ? models.filter(model => selectionAllows(selections, model.provider, model.model))
+                : models,
+            this.listProviderModels(),
+        );
     }
 
     listNotificationsForUser(userId: string): ManagerNotification[] {

@@ -197,7 +197,7 @@ async function buildServer() {
 
   // Allow widget to be embedded on any website (CSP frame-ancestors)
   fastify.addHook('onSend', async (request, reply) => {
-    if (request.url.startsWith('/embed/')) {
+    if (request.url === '/widget' || request.url.startsWith('/widget/')) {
       reply.header('Content-Security-Policy', 'frame-ancestors *');
     }
   });
@@ -211,16 +211,32 @@ async function buildServer() {
   await fastify.register(agentsRoute);  // Agent registration CRUD
   await fastify.register(audioRoute);   // Audio transcription
 
-  // Serve public assets (documentation, misc)
+  // Expose only the widget runtime files under the API origin.
+  await fastify.register(fastifyStatic, {
+    root: path.join(rootDir, 'embed'),
+    serve: false,
+  });
+
+  fastify.get('/widget', async (_request, reply) => {
+    return reply.type('application/javascript; charset=utf-8').sendFile('ozwell-loader.js');
+  });
+
+  fastify.get('/widget/ozwell.js', async (_request, reply) => {
+    return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
+  });
+
+  fastify.get('/widget/frame/', async (_request, reply) => {
+    return reply.type('text/html; charset=utf-8').sendFile('frame/index.html');
+  });
+
+  fastify.get('/embed/ozwell-loader.js', async (_request, reply) => {
+    return reply.redirect('/widget');
+  });
+
+  // Serve public assets (documentation, misc).
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'public'),
     prefix: '/',
-  });
-
-  // Serve embed assets from dedicated directory
-  await fastify.register(fastifyStatic, {
-    root: path.join(rootDir, 'embed'),
-    prefix: '/embed/',
     decorateReply: false,
   });
 

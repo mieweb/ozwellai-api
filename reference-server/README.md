@@ -254,7 +254,7 @@ The server will start at `http://localhost:3000`
 **Simple (one line):**
 
 ```html
-<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
+<script src="http://localhost:3000/widget"></script>
 ```
 
 **Advanced (with config):**
@@ -267,13 +267,13 @@ The server will start at `http://localhost:3000`
     debug: false  // Set to true to see tool execution details (developer mode)
   };
 </script>
-<script src="http://localhost:3000/embed/ozwell-loader.js"></script>
+<script src="http://localhost:3000/widget"></script>
 ```
 
 **Current recommended environment:**
 
 ```html
-<script src="https://ozwellapi.os.mieweb.org/embed/ozwell-loader.js"></script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
 
 **Live Demo:** <https://ozwelldemo.os.mieweb.org>
@@ -377,8 +377,9 @@ Restart the server after changing `.env`; these values are read at startup.
 
 ### Embed Widget
 
-- `GET /embed/ozwell-loader.js` - Widget loader script (creates iframe with inline HTML)
-- `GET /embed/ozwell.js` - Self-contained widget code (includes CSS)
+- `GET /widget` - Widget loader script
+- `GET /widget/frame/` - Hosted widget iframe page
+- `GET /widget/ozwell.js` - Self-contained widget code (includes CSS)
 
 ### Files
 
@@ -590,8 +591,12 @@ See `.env.example` for a complete example configuration.
 Models are provider-aware records such as `{ provider: "openai", model: "gpt-4o-mini" }`. The effective list for a request is:
 
 ```text
-enabled discovered models ∩ parent-key restrictions ∩ agent model policy
+enabled discovered models ∩ server-wide restrictions ∩ parent-key restrictions ∩ agent model policy
 ```
+
+Each level only narrows the level above it, and an empty level is a no-op. Admins set the server-wide
+allow-list through `GET`/`PUT /v1/manager/admin/model-restrictions`; it applies to every key and
+agent, including requests with no parent key, and takes effect without a restart.
 
 Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`. If no request model is provided, the server uses the agent model-policy default, then `LLM_MODEL` if it is allowed by the effective policy.
 
@@ -695,7 +700,7 @@ src/
     └── index.ts        # Contains shared utility functions including a deterministic text generator for testing, embedding vector generation, unique ID creation, token counting, error response formatting, and basic authentication validation. Centralizes common functionality used across multiple routes to ensure consistency, reduce code duplication, and provide reusable components for text generation, vector math, and API utilities.
 embed/                  # Embeddable chat widget files
 ├── ozwell-loader.js    # Widget loader script to be embedded in parent pages
-├── ozwell.html         # Widget iframe entry point (minimal HTML loader)
+├── frame/index.html    # Widget iframe entry point
 └── ozwell.js           # Self-contained widget with bundled CSS, HTML, and MCP JSON-RPC messaging
 ```
 

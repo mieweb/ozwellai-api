@@ -17,11 +17,6 @@ body {
   background: transparent;
 }
 
-button,
-textarea {
-  font: inherit;
-}
-
 .ozwell-widget-shell {
   position: relative;
   display: flex;

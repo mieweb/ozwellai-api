@@ -41,7 +41,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'cd ../reference-server && npm run dev',
-      url: 'http://localhost:3000/embed/ozwell-loader.js',
+      url: 'http://localhost:3000/widget',
       reuseExistingServer: true,  // Skip if server is already running (e.g., in CI)
       timeout: 60000,
     },

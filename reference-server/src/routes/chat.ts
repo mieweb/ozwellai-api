@@ -1,5 +1,5 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
+import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
 import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
@@ -357,11 +357,23 @@ function createLlmClient(provider: string | null) {
   });
 }
 
-const ollamaClient = new OzwellAI({
-  apiKey: 'ollama',
-  baseURL: process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434',
-  timeout: 120000,
-});
+// Built on first use rather than at module load: when Ollama is disabled
+// getOllamaBaseUrl() is null, and a client hoisted with an empty baseURL would be
+// reachable by any future caller that forgets the isOllamaAvailable() guard.
+let ollamaClient: OzwellAI | null = null;
+
+function getOllamaClient(): OzwellAI {
+  const baseURL = getOllamaBaseUrl();
+  if (!baseURL) throw new Error('Ollama is disabled (OLLAMA_BASE_URL is empty)');
+  if (!ollamaClient) {
+    ollamaClient = new OzwellAI({
+      apiKey: 'ollama',
+      baseURL,
+      timeout: 120000,
+    });
+  }
+  return ollamaClient;
+}
 
 // Mock dispatch — split into stream / non-stream variants so the call-site
 // contract is enforced by the type system (no more silent `if (stream) return` footgun).
@@ -723,18 +735,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
       : agentStore.listEffectiveProviderModels(usageContext?.parentKeyId ?? null);
     const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
+    const matchingModels = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
+    const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
     const selectedProvider = requestedProvider
       || agentConfig?.modelPolicy.default_provider
-      || (() => {
-        const matches = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
-        return matches.length === 1 ? matches[0].provider : null;
-      })();
+      || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
       reply.code(400);
+      if (usingAgentDefaultModel && matchingModels.length === 0) {
+        return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
     const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));
     if (!allowedModel) {
+      if (usingAgentDefaultModel) {
+        reply.code(400);
+        return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
       reply.code(403);
       return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
     }
@@ -826,7 +844,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     {
       try {
         // Select pre-constructed client based on backend
-        const client = llmConfigured ? createLlmClient(provider) : ollamaClient;
+        const client = llmConfigured ? createLlmClient(provider) : getOllamaClient();
 
         // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {
