@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, extractToken } from '../util';
+import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, getOllamaBaseUrl, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
 import { quotaExceededError, resolveRouteUsageContext } from './quota';
 
@@ -7,7 +7,6 @@ import { quotaExceededError, resolveRouteUsageContext } from './quota';
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 // Embedding model to use when routing to Ollama. Requested OpenAI model names
 // (e.g. text-embedding-3-small) don't exist in Ollama, so map to a real one.
 const OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || 'nomic-embed-text';
@@ -64,7 +63,12 @@ async function fetchLLMEmbeddings(body: {
  * endpoint (supports batch string arrays). Returns one vector per input.
  */
 async function fetchOllamaEmbeddings(inputs: string[]): Promise<number[][]> {
-  const resp = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
+  // Resolved per call, not at module load: when Ollama is disabled this is null,
+  // and a hoisted '' would leave a caller reaching a guard-free empty URL.
+  const baseUrl = getOllamaBaseUrl();
+  if (!baseUrl) throw new Error('Ollama is disabled (OLLAMA_BASE_URL is empty)');
+
+  const resp = await fetch(`${baseUrl}/api/embed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: OLLAMA_EMBED_MODEL, input: inputs }),
