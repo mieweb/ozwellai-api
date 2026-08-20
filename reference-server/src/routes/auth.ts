@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { createOtpChallenge, verifyOtp, validateSession, destroySession } from '../storage/sessions';
+import { createOtpChallenge, verifyOtp, validateSession, destroySession, createSessionForIdentity } from '../storage/sessions';
+import { isGoogleConfigured } from './oidc-google';
 import { createError, extractToken } from '../util';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,14 +54,16 @@ export default async function authRoute(fastify: FastifyInstance) {
     },
   }, async (request, reply) => {
     const { challenge_id, code } = (request.body ?? {}) as { challenge_id?: string; code?: string };
-    const token = challenge_id && code ? verifyOtp(challenge_id, code) : null;
-    if (!token) {
+    const email = challenge_id && code ? verifyOtp(challenge_id, code) : null;
+    if (!email) {
       reply.code(401);
       return createError('Invalid or expired code', 'invalid_request_error');
     }
 
-    const session = validateSession(token);
-    return { session_token: token, email: session?.email ?? null };
+    // A verified email provisions the same user record a manager sign-in would,
+    // so the session is backed by that user's own key.
+    const token = createSessionForIdentity({ email, externalUserId: `email:${email}`, username: email });
+    return { session_token: token, email };
   });
 
   fastify.get('/auth/session', {
@@ -71,7 +74,13 @@ export default async function authRoute(fastify: FastifyInstance) {
       reply.code(401);
       return createError('Invalid or expired session', 'invalid_request_error');
     }
-    return { email: session.email };
+    return { email: session.email, user_id: session.userId };
+  });
+
+  fastify.get('/auth/methods', {
+    schema: { tags: ['Auth'], summary: 'List sign-in methods this server offers' },
+  }, async () => {
+    return { google: isGoogleConfigured(), email_otp: true, user_key: true };
   });
 
   fastify.post('/auth/logout', {

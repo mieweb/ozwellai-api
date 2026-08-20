@@ -168,7 +168,10 @@
     iframe.style.maxWidth = 'calc(100vw - 40px)';
     iframe.style.maxHeight = 'calc(100vh - 80px)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
+    // allow-popups is required for OIDC sign-in: providers refuse to render
+    // their consent screen in an iframe, so it opens in its own window.
+    // allow-popups-to-escape-sandbox keeps that window out of this sandbox.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
 
     container.appendChild(iframe);
     state.iframe = iframe;

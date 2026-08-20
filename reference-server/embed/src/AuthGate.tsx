@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type WidgetCredential = { key: string; source: 'session' | 'user-key' };
 
@@ -20,6 +20,58 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  // Only offer Google when the server has credentials configured.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${apiOrigin}/auth/methods`)
+      .then((response) => response.json())
+      .then((methods) => { if (!cancelled) setGoogleEnabled(!!methods?.google); })
+      .catch(() => { /* leave it hidden */ });
+    return () => { cancelled = true; };
+  }, [apiOrigin]);
+
+  /**
+   * Google refuses to render its consent screen in an iframe, so sign-in runs
+   * in a popup that posts the session token back to this window.
+   */
+  function signInWithGoogle() {
+    setError(null);
+    const popup = window.open(
+      `${apiOrigin}/auth/oidc/google/start`,
+      'ozwell-google-signin',
+      'width=480,height=640,menubar=no,toolbar=no'
+    );
+    if (!popup) {
+      setError('Popup blocked. Allow popups for this site, or use email sign-in.');
+      return;
+    }
+
+    setBusy(true);
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== apiOrigin) return;
+      const data = event.data as { source?: string; session_token?: string; error?: string };
+      if (data?.source !== 'ozwell-auth') return;
+      window.removeEventListener('message', onMessage);
+      clearInterval(closedTimer);
+      setBusy(false);
+      if (data.session_token) {
+        onAuthenticated({ key: data.session_token, source: 'session' });
+      } else {
+        setError(`Google sign-in failed (${data.error || 'unknown'})`);
+      }
+    }
+    window.addEventListener('message', onMessage);
+
+    // If the user closes the popup without finishing, stop waiting.
+    const closedTimer = setInterval(() => {
+      if (!popup.closed) return;
+      clearInterval(closedTimer);
+      window.removeEventListener('message', onMessage);
+      setBusy(false);
+    }, 500);
+  }
 
   async function post(path: string, body: unknown) {
     const response = await fetch(`${apiOrigin}${path}`, {
@@ -77,6 +129,20 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
       <div className="ozwell-auth-card">
         <h2 className="ozwell-auth-title">Sign in to chat</h2>
         <p className="ozwell-auth-subtitle">Use your email, or bring your own Ozwell key.</p>
+
+        {googleEnabled && (
+          <div className="ozwell-auth-google">
+            <button
+              type="button"
+              className="ozwell-auth-google-button"
+              onClick={signInWithGoogle}
+              disabled={busy}
+            >
+              Continue with Google
+            </button>
+            <div className="ozwell-auth-divider"><span>or</span></div>
+          </div>
+        )}
 
         <div className="ozwell-auth-tabs" role="tablist">
           <button

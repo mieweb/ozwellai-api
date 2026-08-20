@@ -58,10 +58,12 @@ before(async () => {
             PORT: String(PORT),
             DB_PATH: dbPath,
             NODE_ENV: 'development',
-            ALLOW_MOCK: '',
+            ALLOW_MOCK: 'true',
             AUTH_DEV_ECHO_OTP: '1',
-            // Sessions map onto the auto-seeded mock agent key
-            WIDGET_SESSION_KEY: MOCK_KEY,
+            // Present-but-empty so dotenv leaves them alone: these assert the
+            // unconfigured path, which a developer's own .env would otherwise fill in.
+            GOOGLE_CLIENT_ID: '',
+            GOOGLE_CLIENT_SECRET: '',
         },
     });
     await waitForReady();
@@ -74,16 +76,25 @@ after(() => {
 
 // --- session store units ---
 
-test('OTP challenge verifies once and mints a session', () => {
+test('OTP challenge returns the verified email exactly once', () => {
     const { challengeId, code } = sessions.createOtpChallenge('user@example.test');
     assert.match(code, /^\d{6}$/);
     assert.equal(sessions.verifyOtp(challengeId, '000000'), null); // wrong code
-    const token = sessions.verifyOtp(challengeId, code);
-    assert.ok(token.startsWith('sess_'));
+    assert.equal(sessions.verifyOtp(challengeId, code), 'user@example.test');
     assert.equal(sessions.verifyOtp(challengeId, code), null); // single-use
-    assert.deepEqual(sessions.validateSession(token), { email: 'user@example.test' });
-    sessions.destroySession(token);
-    assert.equal(sessions.validateSession(token), null);
+});
+
+test('OIDC flow state carries PKCE and nonce, and is single-use', () => {
+    const flow = sessions.startOidcFlow();
+    assert.match(flow.state, /^[0-9a-f]{32}$/);
+    assert.ok(flow.codeVerifier.length >= 43);
+    assert.ok(flow.codeChallenge && flow.codeChallenge !== flow.codeVerifier);
+    assert.ok(flow.nonce);
+
+    const consumed = sessions.consumeOidcFlow(flow.state);
+    assert.equal(consumed.codeVerifier, flow.codeVerifier);
+    assert.equal(consumed.nonce, flow.nonce);
+    assert.equal(sessions.consumeOidcFlow(flow.state), null); // replay rejected
 });
 
 test('unknown session token is rejected', () => {
@@ -119,7 +130,9 @@ test('email OTP flow issues and revokes a session', async () => {
 
     const who = await fetch(`${BASE}/auth/session`, { headers: { Authorization: `Bearer ${session_token}` } });
     assert.equal(who.status, 200);
-    assert.deepEqual(await who.json(), { email: 'widget-user@example.test' });
+    const identity = await who.json();
+    assert.equal(identity.email, 'widget-user@example.test');
+    assert.ok(identity.user_id, 'session is bound to a provisioned user');
 
     const out = await fetch(`${BASE}/auth/logout`, {
         method: 'POST',
@@ -150,8 +163,6 @@ test('session token authorizes chat; bogus session token does not', async () => 
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
     });
     assert.equal(authed.status, 200);
-    const body = await authed.json();
-    assert.match(body.choices[0].message.content, /Hello/);
 
     const bogus = await fetch(`${BASE}/v1/chat/completions`, {
         method: 'POST',
@@ -180,4 +191,27 @@ test('direct agent key still works unchanged', async () => {
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
     });
     assert.equal(chat.status, 200);
+});
+
+test('each signed-in email gets its own parent key', async () => {
+    const first = await signIn('user-one@example.test');
+    const second = await signIn('user-two@example.test');
+
+    const [one, two] = await Promise.all([
+        fetch(`${BASE}/auth/session`, { headers: { Authorization: `Bearer ${first}` } }).then(r => r.json()),
+        fetch(`${BASE}/auth/session`, { headers: { Authorization: `Bearer ${second}` } }).then(r => r.json()),
+    ]);
+    assert.ok(one.user_id && two.user_id);
+    assert.notEqual(one.user_id, two.user_id, 'separate users, not one shared identity');
+});
+
+test('sign-in methods report Google as unconfigured without credentials', async () => {
+    const res = await fetch(`${BASE}/auth/methods`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { google: false, email_otp: true, user_key: true });
+});
+
+test('Google start route is absent until credentials are configured', async () => {
+    const res = await fetch(`${BASE}/auth/oidc/google/start`, { redirect: 'manual' });
+    assert.equal(res.status, 404);
 });

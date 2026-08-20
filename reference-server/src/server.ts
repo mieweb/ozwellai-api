@@ -17,6 +17,7 @@ import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
+import googleOidcRoute from './routes/oidc-google';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 import { validateSession, SESSION_TOKEN_PREFIX } from './storage/sessions';
 import { extractToken } from './util';
@@ -205,19 +206,21 @@ async function buildServer() {
     }
   });
 
-  // Widget sessions: exchange a valid sess_ bearer for the configured backing
-  // key so every existing key-authenticated route works unchanged.
+  // Widget sessions: exchange a valid sess_ bearer for the signed-in user's own
+  // parent key, so every existing key-authenticated route works unchanged and
+  // usage is attributed to that user.
   fastify.addHook('onRequest', async (request) => {
     const token = extractToken(request.headers.authorization);
     if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
     if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
-    const backingKey = process.env.WIDGET_SESSION_KEY;
-    if (!backingKey || !validateSession(token)) return; // fall through: routes 401 naturally
-    request.headers.authorization = `Bearer ${backingKey}`;
+    const session = validateSession(token);
+    if (!session) return; // fall through: routes 401 naturally
+    request.headers.authorization = `Bearer ${session.parentKey}`;
   });
 
   // Register API routes
-  await fastify.register(authRoute);    // Widget sign-in (email OTP sessions)
+  await fastify.register(authRoute);        // Widget sign-in (email OTP sessions)
+  await fastify.register(googleOidcRoute);  // Widget sign-in (Google OIDC)
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);
