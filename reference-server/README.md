@@ -605,8 +605,11 @@ Chat requests may send both `provider` and `model`. Legacy model-only requests s
 When a request names no model, the server resolves one in this order:
 
 ```text
-agent model-policy default → server-wide fallback → LLM_MODEL → gpt-4o-mini
+agent model-policy default → server-wide fallback → environment → gpt-4o-mini
 ```
+
+The environment step depends on the backend in use: `LLM_MODEL` when `LLM_BASE_URL` is set, the first
+Ollama model when it is not and Ollama is reachable, otherwise `DEFAULT_MODEL`.
 
 Admins set the server-wide fallback through `GET`/`PUT /v1/manager/admin/default-model`. It is stored,
 so it beats every environment value and takes effect without a restart; clearing it (`{"provider": null,

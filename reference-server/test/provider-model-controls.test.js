@@ -952,3 +952,40 @@ test('provider models — fallback cannot be set to a model the server allow-lis
         await gateway.close();
     }
 });
+
+// The env fallback carries a provider too. Without using it, a fallback model that exists on two
+// providers returns provider_required for a request that names nothing — a caller cannot fix that
+// by sending anything, and LLM_PROVIDER already says which one the server means.
+test('provider models — env fallback provider resolves an ambiguous default model', async () => {
+    const gateway = await startGateway({
+        openai: ['shared-model'],
+        anthropic: ['shared-model'],
+    });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'shared-model',
+            LLM_PROVIDER: 'anthropic',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'no model named' }] }),
+        });
+        assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+        assert.equal(gateway.getLastBody().model, 'shared-model');
+        assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});

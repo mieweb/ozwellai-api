@@ -455,8 +455,11 @@ and is read per request, so a save takes effect without a restart.
 Sending both fields as `null` clears the fallback and drops the server back to its environment chain:
 
 ```text
-agent model-policy default → server-wide fallback → LLM_MODEL → gpt-4o-mini
+agent model-policy default → server-wide fallback → environment → gpt-4o-mini
 ```
+
+The environment step is the `environment_model` below — `LLM_MODEL` when `LLM_BASE_URL` is set, the
+first Ollama model when it is not and Ollama is reachable, otherwise `DEFAULT_MODEL`.
 
 Both endpoints return the stored value plus `effective_models`, the list an admin picker should offer:
 

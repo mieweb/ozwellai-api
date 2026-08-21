@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey } from '../util';
+import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey, envFallbackModel } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
@@ -106,12 +106,15 @@ function serverAllowedResponse() {
 }
 
 function seedFallbackModel() {
-  // Admin-set fallback first, then the env chain this used to be. Read on every call, not hoisted.
+  // Admin-set fallback first, then the same env chain the chat route resolves, so the seeded model
+  // is the one a request would actually get. Read on every call, not hoisted.
+  // Ollama is passed as unavailable because this is a sync path and the probe is async. Seeding only
+  // runs when discovery returned nothing, and a reachable Ollama would have been discovered, so the
+  // case this skips cannot be the case this function is called in.
   const serverDefault = agentStore.getServerDefaultModel();
-  const fallbackModel = serverDefault?.model || process.env.LLM_MODEL || 'gpt-4o-mini';
-  const fallbackProvider = serverDefault?.provider || process.env.LLM_PROVIDER || 'openai';
+  const fallback = serverDefault ?? envFallbackModel(isLLMBackendConfigured(), false);
   agentStore.replaceProviderModels([
-    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, fallbackProvider)),
+    toModelRecord(fallback.model, 'fallback', providerFromModelId(fallback.model, fallback.provider)),
   ]);
   return serverAllowedResponse();
 }

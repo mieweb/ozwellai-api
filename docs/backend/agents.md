@@ -175,11 +175,13 @@ That order decides which models are *allowed*. Which one is *picked* when a requ
 separate chain, and the agent default still comes first:
 
 ```text
-agent model-policy default → server-wide fallback → LLM_MODEL → gpt-4o-mini
+agent model-policy default → server-wide fallback → environment → gpt-4o-mini
 ```
 
 An agent with no default model therefore falls through to whatever an admin set through
-`PUT /v1/manager/admin/default-model`, and only then to the environment.
+`PUT /v1/manager/admin/default-model`, and only then to the environment. The environment step depends
+on the backend in use: `LLM_MODEL` when `LLM_BASE_URL` is set, the first Ollama model when it is not
+and Ollama is reachable, otherwise `DEFAULT_MODEL`.
 
 #### Example
 

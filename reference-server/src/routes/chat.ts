@@ -729,8 +729,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // Determine default model: an admin-set server fallback beats every env value, then the
     // backend-derived chain. Read per request — the env constants above are hoisted at module load,
     // so a stored value read the same way would need a restart to take effect.
+    // One pair, provider and model together: an admin-set fallback if there is one, otherwise the
+    // environment's. Keeping the provider is what lets an ambiguous fallback model — the same id on
+    // two providers — resolve instead of returning provider_required.
+    // Read per request; the env constants above are hoisted at module load, so a stored value read
+    // the same way would need a restart to take effect.
     const serverDefault = agentStore.getServerDefaultModel();
-    const DEFAULT_MODEL = serverDefault?.model ?? envFallbackModel(llmConfigured, ollamaAvailable).model;
+    const fallbackDefault = serverDefault ?? envFallbackModel(llmConfigured, ollamaAvailable);
+    const DEFAULT_MODEL = fallbackDefault.model;
 
     const { provider: requestedProvider, model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
     getCachedModelsList();
@@ -740,11 +746,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
     const matchingModels = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
     const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
+    // True only when the model came from the fallback chain rather than the request or the agent.
+    // Its provider may then be used; a model the caller named must still resolve on its own, or a
+    // genuinely ambiguous request would be answered by whichever provider the fallback happens to
+    // name instead of returning provider_required.
+    const usingFallbackModel = !requestedModel && !usingAgentDefaultModel;
     const selectedProvider = requestedProvider
       || agentConfig?.modelPolicy.default_provider
-      // The admin stored a provider alongside the fallback model, so an ambiguous fallback model
-      // (same id on two providers) resolves instead of returning provider_required.
-      || (selectedModel === serverDefault?.model ? serverDefault.provider : null)
+      // The fallback carries its own provider, stored or from the environment, so an ambiguous
+      // fallback model resolves instead of returning provider_required.
+      || (usingFallbackModel ? fallbackDefault.provider : null)
       || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
       reply.code(400);
