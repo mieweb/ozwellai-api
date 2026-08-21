@@ -445,9 +445,42 @@ a new address gets an account and key created for it.
 `challenge_id`. `POST /auth/otp/verify` with that id and the six-digit code returns a
 `session_token`. Codes last 10 minutes and allow 5 attempts; sessions last 24 hours.
 
-The server does not send mail yet — it logs the code. Set `AUTH_DEV_ECHO_OTP=1` to also return
-it in the response body for local testing. **Never set that in production**; until a mail
-sender is wired up, treat email sign-in as a development-only method.
+One address may request 3 codes per 15 minutes. Requesting a code makes the server mail an
+address the caller chose, so without a cap the endpoint is a spam relay. The limit is per
+recipient rather than per client IP: this server runs behind a reverse proxy without
+`trustProxy`, so every request reports the proxy's address, and a per-IP bucket would throttle
+all users as one while barely inconveniencing an attacker.
+
+Set `SMTP_URL` to send the code. Without it the server logs the code instead, which is how
+local development works — the MIE relay is only reachable from inside the Phoenix DC, so a
+developer's machine will never reach it:
+
+```bash
+SMTP_URL=smtp://relay.cluster.mieweb.org:25
+SMTP_FROM=no-reply@os.mieweb.org
+```
+
+The relay takes no credentials and offers no TLS, and STARTTLS is explicitly unsupported, so
+the transport disables opportunistic upgrades. The sender must be an `@os.mieweb.org` address.
+
+`AUTH_DEV_ECHO_OTP=1` returns the code in the response body for local testing. It is ignored
+whenever `SMTP_URL` is set, so it cannot bypass real delivery on a server that can send mail.
+When mail is configured the code is also kept out of the logs, since a logged code would let
+anyone with log access sign in as the user who requested it.
+
+**Testing delivery locally.** `relay.cluster.mieweb.org` does not resolve outside the Phoenix
+DC, so no real mail can be sent from a developer machine whatever `SMTP_URL` says. To exercise
+the sending path anyway, run the throwaway SMTP server in `scripts/dev/` and point at that:
+
+```bash
+node scripts/dev/smtp-sink.js 2525
+SMTP_URL=smtp://127.0.0.1:2525 ./scripts/start.sh
+```
+
+It accepts any message and prints it, delivering nothing. Because a sender is configured, the
+server behaves exactly as a deployed one would — no code in the log, no `dev_code` in the
+response — so read the code off the sink's output. The first send against the real relay
+therefore happens on a deployed container, not locally.
 
 **Google.** Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to enable it. Without them the
 Google routes are not registered at all and `GET /auth/methods` reports `google: false`, so a
@@ -647,7 +680,9 @@ Environment variables:
 - `PUBLIC_BASE_URL` - Public origin of this server, used to build the OIDC redirect URI (default: `http://localhost:$PORT`)
 - `GOOGLE_CLIENT_ID` - Google OAuth client ID; Google sign-in is offered only when this and the secret are both set
 - `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
-- `AUTH_DEV_ECHO_OTP` - Set to `1` to return the one-time code in the response body. Local development only
+- `AUTH_DEV_ECHO_OTP` - Set to `1` to return the one-time code in the response body. Local development only; ignored when `SMTP_URL` is set
+- `SMTP_URL` - Relay used to mail sign-in codes, e.g. `smtp://relay.cluster.mieweb.org:25`. Unset means the code is logged instead
+- `SMTP_FROM` - Sender address, must end `@os.mieweb.org` (default: `no-reply@os.mieweb.org`)
 
 See `.env.example` for a complete example configuration.
 

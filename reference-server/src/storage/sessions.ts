@@ -8,6 +8,16 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const OIDC_FLOW_TTL_MS = 10 * 60 * 1000;    // 10 minutes to finish a sign-in
 const MAX_OTP_ATTEMPTS = 5;
 
+// Requesting a code makes the server send mail to an address the caller chose,
+// so the endpoint is a spam relay unless the rate is capped here.
+//
+// The cap is per recipient, deliberately not per client IP: the server runs
+// behind a reverse proxy without `trustProxy`, so every request reports the
+// proxy's address. A per-IP bucket would throttle all users as if they were
+// one, while giving an attacker no trouble at all.
+const OTP_RATE_WINDOW_MS = 15 * 60 * 1000;
+const MAX_OTP_REQUESTS_PER_EMAIL = 3;
+
 export type SessionIdentity = {
   email: string;
   externalUserId: string;
@@ -30,6 +40,56 @@ type PendingOidcFlow = { codeVerifier: string; nonce: string; expiresAt: number 
 const challenges = new Map<string, { email: string; code: string; expiresAt: number; attempts: number }>();
 const sessions = new Map<string, WidgetSession & { expiresAt: number }>();
 const oidcFlows = new Map<string, PendingOidcFlow>();
+const otpRequests = new Map<string, number[]>();
+
+/**
+ * Record one OTP request for an address and say whether it is allowed.
+ * Called before any mail is sent.
+ */
+export function allowOtpRequest(email: string): boolean {
+  const now = Date.now();
+  const recent = (otpRequests.get(email) ?? []).filter((at) => now - at < OTP_RATE_WINDOW_MS);
+  if (recent.length >= MAX_OTP_REQUESTS_PER_EMAIL) {
+    otpRequests.set(email, recent);
+    return false;
+  }
+
+  recent.push(now);
+  otpRequests.set(email, recent);
+  return true;
+}
+
+/**
+ * Drop everything that has aged out of the maps above.
+ *
+ * Entries are otherwise only removed when a caller comes back for that exact
+ * key, so anything abandoned — an unverified code, a sign-in never completed —
+ * would stay for the life of the process. `otpRequests` matters most: its keys
+ * are email addresses chosen by unauthenticated callers, so without this a
+ * script posting distinct addresses grows the map without bound.
+ *
+ * Returns the number of entries removed, so callers can log it.
+ */
+export function sweepExpiredSessionState(now = Date.now()): number {
+  let removed = 0;
+
+  for (const [key, entry] of challenges) {
+    if (now > entry.expiresAt) { challenges.delete(key); removed++; }
+  }
+  for (const [token, session] of sessions) {
+    if (now > session.expiresAt) { sessions.delete(token); removed++; }
+  }
+  for (const [state, flow] of oidcFlows) {
+    if (now > flow.expiresAt) { oidcFlows.delete(state); removed++; }
+  }
+  for (const [email, hits] of otpRequests) {
+    const recent = hits.filter((at) => now - at < OTP_RATE_WINDOW_MS);
+    if (recent.length === 0) { otpRequests.delete(email); removed++; }
+    else if (recent.length !== hits.length) otpRequests.set(email, recent);
+  }
+
+  return removed;
+}
 
 /**
  * Turn a verified identity into a session backed by that user's own key.

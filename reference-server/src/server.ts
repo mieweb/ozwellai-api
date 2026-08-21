@@ -19,7 +19,7 @@ import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
 import googleOidcRoute from './routes/oidc-google';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
-import { validateSession, SESSION_TOKEN_PREFIX } from './storage/sessions';
+import { validateSession, SESSION_TOKEN_PREFIX, sweepExpiredSessionState } from './storage/sessions';
 import { extractToken } from './util';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
@@ -87,6 +87,21 @@ function scheduleModelDiscoveryRefresh(server: FastifyInstance) {
 
   server.addHook('onClose', (_instance, done) => {
     clearTimeout(firstRun);
+    clearInterval(interval);
+    done();
+  });
+}
+
+const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
+function scheduleSessionSweep(server: FastifyInstance) {
+  const interval = setInterval(() => {
+    const removed = sweepExpiredSessionState();
+    if (removed) server.log.debug({ removed }, 'Expired widget sign-in state swept');
+  }, SESSION_SWEEP_INTERVAL_MS);
+  interval.unref?.();
+
+  server.addHook('onClose', (_instance, done) => {
     clearInterval(interval);
     done();
   });
@@ -322,6 +337,7 @@ if (require.main === module) {
       }
 
       scheduleModelDiscoveryRefresh(server);
+      scheduleSessionSweep(server);
       await server.listen({ port, host });
       console.log(`🚀 OzwellAI Reference Server running at http://${displayHost}:${port}`);
       console.log(`📖 API Documentation available at http://${displayHost}:${port}/docs`);

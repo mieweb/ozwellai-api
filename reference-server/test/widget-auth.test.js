@@ -17,11 +17,11 @@ const BASE = `http://localhost:${PORT}`;
 let server;
 let tmp;
 
-async function waitForReady(maxMs = 10_000) {
+async function waitForReady(base = BASE, maxMs = 10_000) {
     const start = Date.now();
     while (Date.now() - start < maxMs) {
         try {
-            if ((await fetch(`${BASE}/health`)).status === 200) return;
+            if ((await fetch(`${base}/health`)).status === 200) return;
         } catch { /* not ready */ }
         await delay(200);
     }
@@ -46,16 +46,15 @@ async function signIn(email) {
     return (await verified.json()).session_token;
 }
 
-before(async () => {
-    tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-test-'));
-    const dbPath = path.join(tmp, 'ozwell.db');
-    server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
+/** Spawn a server on its own port with its own database. */
+function startServer(port, dbPath, extraEnv = {}) {
+    return spawn(process.execPath, ['dist/reference-server/src/server.js'], {
         cwd: process.cwd(),
         stdio: 'pipe',
         detached: true,
         env: {
             ...process.env,
-            PORT: String(PORT),
+            PORT: String(port),
             DB_PATH: dbPath,
             NODE_ENV: 'development',
             ALLOW_MOCK: 'true',
@@ -64,13 +63,27 @@ before(async () => {
             // unconfigured path, which a developer's own .env would otherwise fill in.
             GOOGLE_CLIENT_ID: '',
             GOOGLE_CLIENT_SECRET: '',
+            SMTP_URL: '',
+            ...extraEnv,
         },
     });
+}
+
+function stopServer(child) {
+    try {
+        if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+        else process.kill(-child.pid, 'SIGKILL');
+    } catch { /* already gone */ }
+}
+
+before(async () => {
+    tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-test-'));
+    server = startServer(PORT, path.join(tmp, 'ozwell.db'));
     await waitForReady();
 });
 
 after(() => {
-    try { if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']); else process.kill(-server.pid, 'SIGKILL'); } catch { /* ignore */ }
+    stopServer(server);
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 });
 
@@ -82,6 +95,25 @@ test('OTP challenge returns the verified email exactly once', () => {
     assert.equal(sessions.verifyOtp(challengeId, '000000'), null); // wrong code
     assert.equal(sessions.verifyOtp(challengeId, code), 'user@example.test');
     assert.equal(sessions.verifyOtp(challengeId, code), null); // single-use
+});
+
+test('abandoned sign-in state is swept once it expires', () => {
+    // Nothing removes these on its own: an unverified code and an abandoned
+    // Google flow are never revisited, and rate-limit keys are email addresses
+    // an unauthenticated caller picks. Without the sweep the maps only grow.
+    const { challengeId } = sessions.createOtpChallenge('abandoned@example.test');
+    const flow = sessions.startOidcFlow();
+    sessions.allowOtpRequest('sweep-me@example.test');
+
+    assert.equal(sessions.sweepExpiredSessionState(), 0, 'nothing has expired yet');
+
+    // A day on, every one of them is past its TTL.
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000 + 1;
+    assert.equal(sessions.sweepExpiredSessionState(tomorrow), 3);
+
+    assert.equal(sessions.verifyOtp(challengeId, '000000'), null, 'challenge is gone');
+    assert.equal(sessions.consumeOidcFlow(flow.state), null, 'flow is gone');
+    assert.equal(sessions.sweepExpiredSessionState(tomorrow), 0, 'sweep is idempotent');
 });
 
 test('OIDC flow state carries PKCE and nonce, and is single-use', () => {
@@ -147,6 +179,50 @@ test('email OTP flow issues and revokes a session', async () => {
 test('OTP request rejects a malformed email', async () => {
     const res = await postJson('/auth/otp/request', { email: 'not-an-email' });
     assert.equal(res.status, 400);
+});
+
+test('OTP requests for one address are rate limited', async () => {
+    // Sending a code mails an address the caller chose, so an uncapped
+    // endpoint would let anyone flood any inbox from our relay.
+    const email = 'flooded@example.test';
+    for (let i = 0; i < 3; i++) {
+        const allowed = await postJson('/auth/otp/request', { email });
+        assert.equal(allowed.status, 200, `request ${i + 1} should be allowed`);
+    }
+
+    const blocked = await postJson('/auth/otp/request', { email });
+    assert.equal(blocked.status, 429);
+
+    // Another address is unaffected — the cap is per recipient, not global.
+    const other = await postJson('/auth/otp/request', { email: 'not-flooded@example.test' });
+    assert.equal(other.status, 200);
+});
+
+test('a server that can send mail never echoes the code, and says so when delivery fails', async () => {
+    // Unroutable on purpose: the real relay only answers inside the Phoenix DC,
+    // so this asserts the failure path without depending on a mail server.
+    const mailPort = 3348;
+    const mailBase = `http://localhost:${mailPort}`;
+    const mailTmp = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-mail-'));
+    const mailServer = startServer(mailPort, path.join(mailTmp, 'ozwell.db'), {
+        SMTP_URL: 'smtp://127.0.0.1:1',
+    });
+
+    try {
+        await waitForReady(mailBase);
+        const res = await fetch(`${mailBase}/auth/otp/request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'mailed@example.test' }),
+        });
+
+        assert.equal(res.status, 502, 'delivery failure is reported, not swallowed');
+        const body = await res.json();
+        assert.equal(body.dev_code, undefined, 'AUTH_DEV_ECHO_OTP must not bypass a real sender');
+    } finally {
+        stopServer(mailServer);
+        try { rmSync(mailTmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    }
 });
 
 // --- session-to-key rewrite hook ---

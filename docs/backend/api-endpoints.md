@@ -559,9 +559,13 @@ POST /auth/otp/request
 
 Returns a `challenge_id`. The code is six digits, lasts 10 minutes, and allows 5 attempts.
 
-The server logs the code rather than mailing it; there is no mail sender yet. With
-`AUTH_DEV_ECHO_OTP=1` the response also carries `dev_code`, for local testing only. A malformed
-address returns `400`.
+One address may request 3 codes per 15 minutes; beyond that the route returns `429`. A
+malformed address returns `400`, and `502` means the code could not be delivered.
+
+Where the code goes depends on `SMTP_URL`. With it set, the code is mailed and kept out of the
+logs. Without it — the normal local-development case — the code is logged instead, and
+`AUTH_DEV_ECHO_OTP=1` additionally returns it as `dev_code`. That echo is ignored whenever a
+mail sender is configured, so it cannot bypass delivery.
 
 ### Verify an Email Code
 

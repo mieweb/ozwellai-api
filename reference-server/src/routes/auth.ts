@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
-import { createOtpChallenge, verifyOtp, validateSession, destroySession, createSessionForIdentity } from '../storage/sessions';
+import { createOtpChallenge, verifyOtp, validateSession, destroySession, createSessionForIdentity, allowOtpRequest } from '../storage/sessions';
 import { isGoogleConfigured } from './oidc-google';
 import { createError, extractToken } from '../util';
+import { isMailConfigured, sendOtpEmail } from '../util/mailer';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,13 +30,39 @@ export default async function authRoute(fastify: FastifyInstance) {
       return createError('Valid email required', 'invalid_request_error', 'email');
     }
 
-    const { challengeId, code } = createOtpChallenge(email.toLowerCase());
-    // MVP: no mail sender wired up — the code is logged, and echoed in the
-    // response only when explicitly enabled for local development.
-    request.log.info({ email, code }, 'widget OTP issued');
+    const normalized = email.toLowerCase();
+    if (!allowOtpRequest(normalized)) {
+      reply.code(429);
+      return createError(
+        'Too many sign-in codes requested. Wait a few minutes and try again.',
+        'rate_limit_error',
+        'email',
+      );
+    }
+
+    const { challengeId, code } = createOtpChallenge(normalized);
+
+    if (isMailConfigured()) {
+      try {
+        await sendOtpEmail(normalized, code);
+      } catch (err) {
+        request.log.error({ err, email }, 'sign-in code delivery failed');
+        reply.code(502);
+        return createError('Could not send the sign-in code. Try again shortly.', 'server_error');
+      }
+      // Deliberately not logged: once mail works, a logged code would let
+      // anyone with log access sign in as the user who requested it.
+      request.log.info({ email }, 'widget OTP sent');
+    } else {
+      // No sender configured — the log is the delivery mechanism, which is how
+      // local development works.
+      request.log.info({ email, code }, 'widget OTP issued (no mail sender configured)');
+    }
 
     const body: Record<string, string> = { challenge_id: challengeId };
-    if (process.env.AUTH_DEV_ECHO_OTP === '1') body.dev_code = code;
+    // Echoing the code bypasses delivery entirely, so it is refused whenever
+    // this server can actually send mail, whatever the env says.
+    if (process.env.AUTH_DEV_ECHO_OTP === '1' && !isMailConfigured()) body.dev_code = code;
     return body;
   });
 

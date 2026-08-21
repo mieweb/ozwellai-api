@@ -14,24 +14,36 @@ export function isGoogleConfigured(): boolean {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
+/** This server's own public origin. Never derived from request input. */
+function publicOrigin(): string {
+  return (process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
+}
+
 /**
  * Exact-match redirect URI. Never derived from user input — an attacker-supplied
  * redirect is the classic way to leak an authorization code.
  */
 function redirectUri(): string {
-  const base = (process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
-  return `${base}/auth/oidc/google/callback`;
+  return `${publicOrigin()}/auth/oidc/google/callback`;
 }
 
-/** Popup handshake: hand the token to the opener, then close. */
+/**
+ * Popup handshake: hand the token to the opener, then close.
+ *
+ * The target origin is this server's own, never '*'. The widget frame that
+ * opens this popup is served from here, so it is the only legitimate opener —
+ * and with '*' any page could open the start URL itself and be handed the
+ * session token of whoever signed in, which is account takeover from a link.
+ */
 function popupResultPage(payload: Record<string, unknown>): string {
   const json = JSON.stringify({ source: 'ozwell-auth', ...payload });
+  const target = JSON.stringify(publicOrigin());
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>Signing in…</title></head>
 <body style="font:14px system-ui;padding:24px">
 <p>${payload.error ? 'Sign-in failed. You can close this window.' : 'Signed in. You can close this window.'}</p>
 <script>
-  try { window.opener && window.opener.postMessage(${json}, '*'); } catch (e) {}
+  try { window.opener && window.opener.postMessage(${json}, ${target}); } catch (e) {}
   window.close();
 </script>
 </body></html>`;
