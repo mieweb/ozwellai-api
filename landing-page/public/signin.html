@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widget Sign-In - Ozwell AI Demo</title>
+  <link rel="stylesheet" href="/signin.css" />
+</head>
+
+<body>
+  <div class="main-container">
+    <header class="header">
+      <div class="back-link-container">
+        <a href="/" class="back-link">← Back to Main Demo</a>
+      </div>
+      <h1 class="header-title">Widget Sign-In</h1>
+      <p class="header-subtitle">
+        This page carries no API key. Visitors sign in to Ozwell for themselves
+      </p>
+    </header>
+
+    <div class="demo-content">
+      <!-- Left: how it works -->
+      <div class="demo-left">
+        <div class="card">
+          <h3>How it works</h3>
+          <ol class="steps">
+            <li>
+              <strong>Open the chat.</strong> The bubble is in the corner. Because this page
+              configures no key, the widget opens on a sign-in screen rather than a chat box.
+            </li>
+            <li>
+              <strong>Sign in.</strong> Use Google, request a code by email, or paste an Ozwell
+              key you already have. The screen offers whichever methods this server supports.
+            </li>
+            <li>
+              <strong>Chat, and use the page.</strong> The assistant can read and update the
+              profile fields on the right. Every call shows up in the event log below them.
+            </li>
+            <li>
+              <strong>Sign out</strong> from the control above the chat, then reload. The
+              sign-in screen comes back.
+            </li>
+          </ol>
+          <p class="note">
+            The page never holds a key. Signing in mints a session that stands in for your own
+            Ozwell key, so what you can do here is exactly what your account allows, and the
+            usage is yours rather than the page owner's.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>Try asking</h3>
+          <ol class="steps">
+            <li><strong>&ldquo;What is my name?&rdquo;</strong> — reads the fields on this page.</li>
+            <li><strong>&ldquo;Change my name to Bob and my zip to 90210.&rdquo;</strong> — writes them back.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Right: the page the assistant can act on -->
+      <div class="demo-right">
+        <div class="card">
+          <h3>Your profile</h3>
+          <label for="input-name">Name</label>
+          <input type="text" id="input-name" value="Alex Doe" />
+          <label for="input-address">Address</label>
+          <input type="text" id="input-address" value="123 Main St" />
+          <label for="input-zip">Zip code</label>
+          <input type="text" id="input-zip" value="49423" />
+        </div>
+
+        <div class="card">
+          <h3>Event log</h3>
+          <div id="event-log"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Page tools are declared here rather than discovered from an agent,
+    // because this embed configures no key to look one up with.
+    window.OzwellChatConfig = {
+      title: 'Ozwell Assistant',
+      placeholder: 'Try: "what is my name?"',
+      welcomeMessage: 'Hi! I can read and update the profile on this page. Just ask.',
+      thinkingEnabled: true,
+      thinkingDefaultMode: 2,
+      // No apiKey on purpose — this demo is the keyless, sign-in path.
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'get_form_data',
+            description: 'Read the current name, address and zip code from the page',
+            parameters: { type: 'object', properties: {} }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'update_form_data',
+            description: 'Update the name, address or zip code on the page',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'New name' },
+                address: { type: 'string', description: 'New address' },
+                zipCode: { type: 'string', description: 'New zip code' }
+              },
+              required: []
+            }
+          }
+        }
+      ]
+    };
+
+    const referenceBaseUrl = '__REFERENCE_BASE_URL__';
+    const normalizedBase = referenceBaseUrl.replace(/\/$/, '');
+    const loader = document.createElement('script');
+    loader.src = `${normalizedBase}/widget`;
+    loader.async = true;
+    document.head.appendChild(loader);
+  </script>
+
+  <script>
+    const nameInput = document.getElementById('input-name');
+    const addressInput = document.getElementById('input-address');
+    const zipInput = document.getElementById('input-zip');
+    const eventLog = document.getElementById('event-log');
+
+    function logEvent(message, details) {
+      const entry = document.createElement('div');
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}${details ? ' — ' + details : ''}`;
+      eventLog.prepend(entry);
+    }
+
+    function updateField(label, value, input) {
+      input.value = value;
+      input.classList.add('flash');
+      setTimeout(() => input.classList.remove('flash'), 600);
+      return `${label}=${value}`;
+    }
+
+    document.addEventListener('ozwell-tool-call', (event) => {
+      const { name, arguments: args, respond } = event.detail;
+      logEvent(`tool call: ${name}`, JSON.stringify(args));
+
+      if (name === 'get_form_data') {
+        const data = { name: nameInput.value, address: addressInput.value, zipCode: zipInput.value };
+        logEvent('form data read', JSON.stringify(data));
+        respond({ success: true, data });
+        return;
+      }
+
+      if (name === 'update_form_data') {
+        const updates = [];
+        if (args.name) updates.push(updateField('Name', args.name, nameInput));
+        if (args.address) updates.push(updateField('Address', args.address, addressInput));
+        if (args.zipCode) updates.push(updateField('Zip', args.zipCode, zipInput));
+        if (updates.length) {
+          logEvent('form data updated', updates.join(', '));
+          respond({ success: true, updated: updates });
+        } else {
+          respond({ success: false, error: 'No fields provided to update' });
+        }
+      }
+    });
+
+    logEvent('page ready — open the chat to sign in');
+  </script>
+</body>
+
+</html>

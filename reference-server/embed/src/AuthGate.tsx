@@ -127,7 +127,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
   return (
     <div className="ozwell-auth-gate">
       <div className="ozwell-auth-card">
-        <h2 className="ozwell-auth-title">Sign in to chat</h2>
+        <h2 className="ozwell-auth-title">Sign in to Ozwell</h2>
         <p className="ozwell-auth-subtitle">Use your email, or bring your own Ozwell key.</p>
 
         {googleEnabled && (
