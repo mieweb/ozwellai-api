@@ -769,3 +769,108 @@ test('provider models — server-wide policy endpoints are admin only', async ()
         stopServer(server, tmp);
     }
 });
+
+
+// #261: the agent's default provider was pinned onto a model the caller asked for, producing a pair
+// that never existed (anthropic + an OpenAI model) and failing before the registry could resolve it.
+test('provider models — model-only request resolves past the agent default provider', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o-mini'], anthropic: ['claude-sonnet-5'] });
+    const { server, tmp } = startServer({
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o-mini',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+
+        const create = await fetch(`${BASE}/v1/manager/agents`, {
+            method: 'POST',
+            headers: H_YAML,
+            body: `name: Anthropic Default Agent
+instructions: Test provider inference
+`,
+        });
+        assert.equal(create.status, 201);
+        const { agent_id, agent_key } = await create.json();
+
+        const policy = await fetch(`${BASE}/v1/manager/agents/${agent_id}/model-policy`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({
+                default_model: { provider: 'anthropic', model: 'claude-sonnet-5' },
+                allowed_models: [],
+            }),
+        });
+        assert.equal(policy.status, 200);
+
+        // Model named, provider not. The agent's default provider is anthropic; the model is OpenAI's.
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agent_key}` },
+            body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] }),
+        });
+        assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+        assert.equal(gateway.getLastBody().model, 'gpt-4o-mini');
+        assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'openai');
+
+        // The agent's own default still applies when the caller names nothing.
+        const bare = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agent_key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+        });
+        assert.equal(bare.status, 200);
+        assert.equal(gateway.getLastBody().model, 'claude-sonnet-5');
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+// #261: when the caller names nothing and the fallback is not available to them, the old message
+// said "provider is required", pointing them at their own request. Nothing they send would help.
+test('provider models — unusable fallback names the real cause, not provider_required', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o-mini'], anthropic: ['claude-sonnet-5'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o-mini',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        // Restrict the key away from the fallback model.
+        const policy = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'anthropic' }] }),
+        });
+        assert.equal(policy.status, 200);
+
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'no model named' }] }),
+        });
+        assert.equal(response.status, 400);
+        const error = (await response.json()).error;
+        assert.equal(error.code, 'model_not_allowed');
+        assert.match(error.message, /No default model is available for this key/);
+        assert.equal(gateway.getChatCount(), 0);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});

@@ -738,12 +738,26 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const matchingModels = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
     const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
     const selectedProvider = requestedProvider
-      || agentConfig?.modelPolicy.default_provider
+      // Only when the caller named no model. The agent's default provider goes with the agent's
+      // default model; pinning it onto a model the caller asked for builds a pair that never
+      // existed (anthropic + gpt-4.1) and fails before the registry lookup below can resolve it.
+      || (!requestedModel ? agentConfig?.modelPolicy.default_provider : null)
       || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
       reply.code(400);
       if (usingAgentDefaultModel && matchingModels.length === 0) {
         return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
+      }
+      // No match at all is not an ambiguous request — the caller named nothing and the model we
+      // fell back to is not available to them. Saying "provider is required" sends them to look at
+      // their own request, which is fine; nothing they send would help.
+      if (!requestedModel && matchingModels.length === 0) {
+        return createError(
+          `No default model is available for this key. Name a model in the request, or ask an admin to approve one.`,
+          'invalid_request_error',
+          'model',
+          'model_not_allowed',
+        );
       }
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
