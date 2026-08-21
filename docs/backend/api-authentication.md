@@ -16,6 +16,7 @@ Ozwell provides two types of API keys for different use cases:
 |----------|--------|----------|----------------|
 | **General-Purpose** | `ozw_` | Server-side, full API access | Server-only |
 | **Agent Key** | `agnt_key-` | Per-agent embed key, auto-generated | Client-safe |
+| **Session Token** | `sess_` | Widget sign-in, stands in for one signed-in user's own key | Client-safe |
 | **Scoped** | `ozw_scoped_` | Client-side, limited access *(coming soon)* | Client-safe |
 
 ### General-Purpose Keys
@@ -56,6 +57,35 @@ Agent keys are generated automatically when you create an agent via the [Agent R
 // Safe for frontend use — scoped to one agent
 const apiKey = 'agnt_key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 ```
+
+---
+
+### Session Tokens
+
+Session tokens are what widget sign-in produces. A page can embed the chat widget without
+holding any key at all: the visitor signs in through the widget, and the server hands back a
+`sess_` token scoped to that person.
+
+```javascript
+// Minted by sign-in, held only in the visitor's browser
+const token = 'sess_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+```
+
+Unlike the key types above, a session token is not a credential of its own. The server resolves
+it to the signed-in user's own general-purpose key before routing the request, so a session has
+exactly that user's access — no more — and their usage is attributed to them rather than to a
+key shared by every visitor to the page.
+
+- ✅ Never requires shipping a key to the browser
+- ✅ Attributes usage to the person, not the page
+- ✅ Revocable by the holder through `POST /auth/logout`
+- ⚠️ Expires 24 hours after sign-in, and on server restart
+
+Users are matched to accounts by email address. Signing in with an address that already has an
+account reuses that account and its key; a new address gets one created.
+
+See [API Endpoints](./api-endpoints.md#widget-sign-in) for the routes and
+[the widget README](../../reference-server/embed/README.md) for the embedding side.
 
 ## Key Lifecycle
 

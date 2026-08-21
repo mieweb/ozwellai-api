@@ -526,6 +526,103 @@ curl "https://ozwellapi.os.mieweb.org/v1/files?limit=10&after=file-abc123" \
 
 ---
 
+## Widget Sign-In
+
+Sign-in routes for the embeddable widget. They mint a `sess_` token that stands in for the
+signed-in user's own API key — see [Authentication](./api-authentication.md#session-tokens).
+
+These routes take no API key. Everything else on this page does.
+
+### List Sign-In Methods
+
+Report which methods this server offers, so the widget only shows what will work.
+
+```
+GET /auth/methods
+```
+
+```json
+{ "google": true, "email_otp": true, "user_key": true }
+```
+
+`google` is `false` unless the server has `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set.
+
+### Request an Email Code
+
+```
+POST /auth/otp/request
+```
+
+```json
+{ "email": "user@example.com" }
+```
+
+Returns a `challenge_id`. The code is six digits, lasts 10 minutes, and allows 5 attempts.
+
+The server logs the code rather than mailing it; there is no mail sender yet. With
+`AUTH_DEV_ECHO_OTP=1` the response also carries `dev_code`, for local testing only. A malformed
+address returns `400`.
+
+### Verify an Email Code
+
+```
+POST /auth/otp/verify
+```
+
+```json
+{ "challenge_id": "...", "code": "123456" }
+```
+
+Returns `{ "session_token": "sess_...", "email": "..." }`. A wrong or expired code returns
+`401`. Each challenge verifies once.
+
+### Start Google Sign-In
+
+```
+GET /auth/oidc/google/start
+```
+
+Redirects to Google's consent screen. OAuth 2.0 authorization code with PKCE (S256), plus
+`state` and `nonce`. Returns `404` when Google is not configured, since the routes are only
+registered when it is.
+
+Open this in a popup, not in an iframe — Google refuses to render consent in a frame.
+
+### Google Callback
+
+```
+GET /auth/oidc/google/callback
+```
+
+Google's redirect target. Exchanges the code, verifies the ID token against Google's JWKS
+(issuer, audience, nonce and `email_verified`), then mints a session. Responds with a small page
+that posts `{ source: 'ozwell-auth', session_token, email }` to `window.opener` and closes
+itself.
+
+Register this URL under **Authorized redirect URIs** in Google Cloud Console — not under
+Authorized JavaScript origins, which rejects any URL carrying a path. The server builds it from
+`PUBLIC_BASE_URL`, never from request input.
+
+### Describe the Current Session
+
+```
+GET /auth/session
+```
+
+With `Authorization: Bearer sess_...`, returns `{ "email": "...", "user_id": ... }`. An expired
+or unknown token returns `401`.
+
+### Sign Out
+
+```
+POST /auth/logout
+```
+
+Revokes the token in the `Authorization` header. Sessions otherwise expire 24 hours after
+sign-in, and are lost on server restart.
+
+---
+
 ## Versioning
 
 The API is versioned in the URL path (`/v1/`). Breaking changes will result in a new version.

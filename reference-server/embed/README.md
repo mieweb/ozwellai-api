@@ -230,6 +230,10 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `debug` | boolean | `false` | Show tool execution details (developer mode). Display clickable pills showing tool arguments and results |
 | `autoOpenOnReply` | boolean | `false` | Auto-open chat window when AI responds while chat is closed. When `false`, shows wiggle animation and badge instead |
 
+Leaving both `apiKey` and `openaiApiKey` unset is a supported configuration — the widget shows a
+sign-in gate and the visitor authenticates for themselves. See
+[Sign-In (No Key Required)](#sign-in-no-key-required).
+
 ## API Reference
 
 ### OzwellChat.mount(options)
@@ -397,6 +401,49 @@ Or use custom headers for any authentication scheme:
 </script>
 <script src="https://ozwellapi.os.mieweb.org/widget"></script>
 ```
+
+### Sign-In (No Key Required)
+
+You can embed the widget without giving it a key at all. Leave both `apiKey` and
+`openaiApiKey` unset and the widget opens on a sign-in gate instead of a chat box:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    title: 'Ask us anything'
+    // no apiKey — the visitor signs in for themselves
+  };
+</script>
+<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+```
+
+The visitor signs in and the server hands the widget a session token belonging to them. Your
+page never holds a key, and usage is attributed to the person chatting rather than to a single
+key shared by everyone who visits.
+
+The gate offers whichever methods the server reports from `GET /auth/methods`:
+
+| Method | What the visitor does |
+|--------|----------------------|
+| Google | Signs in through Google in a popup |
+| Email code | Receives a six-digit code and enters it |
+| Own key | Pastes an `agnt_key-` or `ozw_` key they already have |
+
+Google appears only when the server has Google credentials configured. The own-key option
+stores the key in `localStorage` under `ozwell.widget.userKey`, and only when the visitor ticks
+the box to remember it — otherwise it lives for that page view alone.
+
+Setting a key keeps the old behavior exactly: the gate never appears, and the widget uses the
+key you gave it.
+
+**Popups must be allowed to escape the frame.** Google will not render its consent screen
+inside an iframe, so sign-in opens a popup. The loader's iframe therefore carries
+`allow-popups allow-popups-to-escape-sandbox` in its `sandbox` attribute. If you mount the
+widget in your own iframe rather than through the loader, include those two tokens or the
+popup will be blocked silently, with nothing in the console to explain it.
+
+Sessions last 24 hours and are held in the server's memory, so a server restart signs everyone
+out and the gate comes back.
 
 ## MCP Tool Flow
 
