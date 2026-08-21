@@ -765,7 +765,190 @@ test('provider models — server-wide policy endpoints are admin only', async ()
         });
         assert.equal(write.status, 403);
         assert.equal((await write.json()).error.code, 'admin_required');
+
+        const readDefault = await fetch(`${BASE}/v1/manager/admin/default-model`, { headers: HEADERS });
+        assert.equal(readDefault.status, 403);
+        assert.equal((await readDefault.json()).error.code, 'admin_required');
+
+        const writeDefault = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o' }),
+        });
+        assert.equal(writeDefault.status, 403);
+        assert.equal((await writeDefault.json()).error.code, 'admin_required');
     } finally {
         stopServer(server, tmp);
+    }
+});
+
+// The point of storing the fallback is that it beats the env value on a *running* server. Every
+// assertion below happens against one process that is never restarted.
+test('provider models — stored fallback beats the env value, live, and clearing it restores the env value', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o',
+            ALLOW_MOCK: '',
+        },
+    });
+    const chatWithNoModel = async key => {
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'which model answered?' }] }),
+        });
+        assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+        return gateway.getLastBody().model;
+    };
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        const initial = await fetch(`${BASE}/v1/manager/admin/default-model`, { headers: HEADERS });
+        assert.equal(initial.status, 200);
+        assert.equal((await initial.json()).default_model, null);
+
+        // Run discovery so both gateway models are in the registry — a fallback still has to name a
+        // model the server knows about, exactly like any other request.
+        await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
+        assert.equal(await chatWithNoModel(key), 'gpt-4o', 'env value applies while nothing is stored');
+
+        const saved = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o-mini' }),
+        });
+        assert.equal(saved.status, 200);
+        assert.deepEqual((await saved.json()).default_model, { provider: 'openai', model: 'gpt-4o-mini' });
+        assert.equal(await chatWithNoModel(key), 'gpt-4o-mini', 'stored fallback applies without a restart');
+
+        // An explicitly requested model is still the caller's choice — the fallback only fills a gap.
+        const explicit = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o', messages: [{ role: 'user', content: 'explicit' }] }),
+        });
+        assert.equal(explicit.status, 200);
+        assert.equal(gateway.getLastBody().model, 'gpt-4o');
+
+        const cleared = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: null, model: null }),
+        });
+        assert.equal(cleared.status, 200);
+        assert.equal((await cleared.json()).default_model, null);
+        assert.equal(await chatWithNoModel(key), 'gpt-4o', 'clearing drops back to the env value');
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+// The mirror of the test below: the contradiction has to be refused from whichever side it arrives,
+// or narrowing the allow-list past the stored fallback 403s every request that names no model.
+test('provider models — allow-list cannot be narrowed past the stored fallback model', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o-mini',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+        await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
+
+        await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o' }),
+        });
+
+        const blocked = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o-mini' }] }),
+        });
+        assert.equal(blocked.status, 400);
+        assert.equal((await blocked.json()).error.code, 'default_model_not_allowed');
+
+        // The refused save changed nothing, so a request naming no model still works.
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'still working' }] }),
+        });
+        assert.equal(chat.status, 200);
+        assert.equal(gateway.getLastBody().model, 'gpt-4o');
+
+        // Keeping the fallback inside the narrowed list is allowed.
+        const fine = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(fine.status, 200);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+test('provider models — fallback cannot be set to a model the server allow-list blocks', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+
+        // Warm the registry so the allow-list has something to narrow.
+        await fetch(`${BASE}/v1/manager/admin/model-restrictions`, { headers: HEADERS });
+        const policy = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(policy.status, 200);
+
+        const blocked = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o-mini' }),
+        });
+        assert.equal(blocked.status, 400);
+        assert.equal((await blocked.json()).error.code, 'default_model_not_allowed');
+
+        const allowed = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o' }),
+        });
+        assert.equal(allowed.status, 200);
+        assert.deepEqual((await allowed.json()).default_model, { provider: 'openai', model: 'gpt-4o' });
+
+        // effective_models is what the admin picker offers, so it can only ever contain allowed models.
+        const listed = await (await fetch(`${BASE}/v1/manager/admin/default-model`, { headers: HEADERS })).json();
+        assert.deepEqual(listed.effective_models.map(item => item.model), ['gpt-4o']);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
     }
 });

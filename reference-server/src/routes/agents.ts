@@ -1,5 +1,5 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
-import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint } from '../util';
+import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, envFallbackModel, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import * as yaml from 'yaml';
 import { agentStore, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
@@ -969,10 +969,113 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             body: RESTRICTION_BODY_SCHEMA,
         },
         preHandler: requireManagerAdmin,
-    }, async (request) => {
+    }, async (request, reply) => {
         getCachedModelsList();
-        agentStore.setServerModelRestrictions(normalizeRestrictionBody(request.body));
+        const allowedModels = normalizeRestrictionBody(request.body);
+
+        // The stored fallback has to stay usable. Without this, narrowing the allow-list past the
+        // fallback silently 403s every request that names no model — the same contradiction the
+        // default-model endpoint rejects, arriving from the other side.
+        const currentDefault = agentStore.getServerDefaultModel();
+        if (currentDefault && allowedModels.length) {
+            const stillAllowed = allowedModels.some(selection => (
+                selection.provider === currentDefault.provider && (!selection.model || selection.model === currentDefault.model)
+            ));
+            if (!stillAllowed) {
+                reply.code(400);
+                return createError(
+                    `${currentDefault.model} is the default model — it answers every request that does not name one. Unapproving it would make those requests fail. Change the default model first, or keep ${currentDefault.model} approved.`,
+                    'invalid_request_error',
+                    'allowed_models',
+                    'default_model_not_allowed',
+                );
+            }
+        }
+
+        agentStore.setServerModelRestrictions(allowedModels);
         return serverPolicyResponse();
+    });
+
+    // Server-wide fallback model: the one used when a caller names none. Sibling of the allow-list
+    // above rather than a field on it — that decides which models are allowed, this decides which
+    // one is picked. effective_models is the list the admin picker should offer, so the fallback
+    // cannot be set to something the allow-list on this same screen blocks.
+    // environment_model is what the server falls back to with nothing stored. Reported so the admin
+    // console can show the model actually in use instead of an empty control, which reads as "no
+    // fallback at all" when there always is one.
+    const serverDefaultModelResponse = async () => {
+        const llmConfigured = isLLMBackendConfigured();
+        return {
+            default_model: agentStore.getServerDefaultModel(),
+            environment_model: envFallbackModel(llmConfigured, llmConfigured ? false : await isOllamaAvailable()),
+            effective_models: agentStore.listEffectiveProviderModels(null),
+        };
+    };
+
+    fastify.get('/v1/manager/admin/default-model', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Get the server-wide fallback model',
+        },
+        preHandler: requireManagerAdmin,
+    }, async () => {
+        getCachedModelsList();
+        return serverDefaultModelResponse();
+    });
+
+    fastify.put<{ Body: { provider?: string | null; model?: string | null } }>('/v1/manager/admin/default-model', {
+        schema: {
+            tags: ['Manager Admin'],
+            summary: 'Set or clear the server-wide fallback model',
+            body: {
+                type: 'object',
+                properties: {
+                    provider: { type: ['string', 'null'] },
+                    model: { type: ['string', 'null'] },
+                },
+            },
+        },
+        preHandler: requireManagerAdmin,
+    }, async (request, reply) => {
+        getCachedModelsList();
+        const provider = typeof request.body?.provider === 'string' ? request.body.provider.trim() : '';
+        const model = typeof request.body?.model === 'string' ? request.body.model.trim() : '';
+
+        // Both empty clears the setting and drops the server back to its env chain.
+        if (!provider && !model) {
+            agentStore.setServerDefaultModel(null);
+            return serverDefaultModelResponse();
+        }
+        if (!provider || !model) {
+            reply.code(400);
+            return createError(
+                'Choose both a provider and a model, or clear both to go back to the model set in the server environment.',
+                'invalid_request_error',
+                'model',
+                'invalid_default_model',
+            );
+        }
+
+        // Only checked against a policy that actually exists. An unrestricted server accepts any
+        // model, including one discovery has not seen yet — otherwise a fresh server, whose
+        // registry is empty until the fallback seeds it, could never have a fallback set.
+        const restrictions = agentStore.getServerModelRestrictions();
+        if (restrictions.length) {
+            const allowed = agentStore.listEffectiveProviderModels(null)
+                .some(item => item.provider === provider && (item.model === model || item.id === model));
+            if (!allowed) {
+                reply.code(400);
+                return createError(
+                    `${model} is not approved on this server, so it cannot be the default model. Approve it first, or choose a model that is already approved.`,
+                    'invalid_request_error',
+                    'model',
+                    'default_model_not_allowed',
+                );
+            }
+        }
+
+        agentStore.setServerDefaultModel({ provider, model });
+        return serverDefaultModelResponse();
     });
 
     fastify.get<{ Params: { key_id: string } }>('/v1/manager/admin/parent-keys/:key_id/model-restrictions', {

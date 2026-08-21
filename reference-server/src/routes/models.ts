@@ -106,9 +106,12 @@ function serverAllowedResponse() {
 }
 
 function seedFallbackModel() {
-  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  // Admin-set fallback first, then the env chain this used to be. Read on every call, not hoisted.
+  const serverDefault = agentStore.getServerDefaultModel();
+  const fallbackModel = serverDefault?.model || process.env.LLM_MODEL || 'gpt-4o-mini';
+  const fallbackProvider = serverDefault?.provider || process.env.LLM_PROVIDER || 'openai';
   agentStore.replaceProviderModels([
-    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
+    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, fallbackProvider)),
   ]);
   return serverAllowedResponse();
 }

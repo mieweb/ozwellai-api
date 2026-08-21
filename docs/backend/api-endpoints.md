@@ -27,7 +27,7 @@ POST /v1/chat/completions
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `provider` | string | No | Provider ID (e.g., `openai`, `anthropic`, `ollama`). Required when `model` is ambiguous across allowed providers. |
-| `model` | string | No | Model ID (e.g., `gpt-4.1-mini`). If omitted, uses the agent model-policy default, then `LLM_MODEL` if allowed. |
+| `model` | string | No | Model ID (e.g., `gpt-4.1-mini`). If omitted, uses the agent model-policy default, then the server-wide fallback, then `LLM_MODEL` — each still subject to the effective policy. |
 | `messages` | array | Yes | Array of message objects |
 | `temperature` | number | No | Sampling temperature (0-2). Default: 1 |
 | `top_p` | number | No | Nucleus sampling. Default: 1 |
@@ -387,6 +387,8 @@ Manager-console routes expose the same provider-aware policy controls:
 | `GET /v1/manager/models` | List/refresh discovered provider models for the manager console, narrowed by the server-wide policy |
 | `GET /v1/manager/admin/model-restrictions` | Read server-wide restrictions (admin only) |
 | `PUT /v1/manager/admin/model-restrictions` | Save server-wide restrictions with `allowed_models` (admin only) |
+| `GET /v1/manager/admin/default-model` | Read the server-wide fallback model (admin only) |
+| `PUT /v1/manager/admin/default-model` | Set or clear the server-wide fallback model (admin only) |
 | `GET /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Read parent-key restrictions |
 | `PUT /v1/manager/admin/parent-keys/{key_id}/model-restrictions` | Save parent-key restrictions with `allowed_models` |
 | `GET /v1/manager/agents/{agent_id}/model-policy` | Read an agent fallback model and allowed-model policy |
@@ -432,6 +434,51 @@ stay stored exactly as written and simply narrow further.
 
 If a save takes a model away, every key that loses one gets a `model_policy_changed` notification —
 the same one a per-key change sends. Keys that lose nothing are not notified.
+
+A save that would exclude the server-wide fallback model is rejected with 400
+`default_model_not_allowed`, since it would leave every request that names no model with nothing to
+resolve to. Change the fallback first, or keep its model approved.
+
+#### Server-Wide Fallback Model
+
+`GET`/`PUT /v1/manager/admin/default-model` set the model used when a request names none. Admin only,
+403 `admin_required` otherwise. A stored value beats `LLM_MODEL` and every other environment value,
+and is read per request, so a save takes effect without a restart.
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini"
+}
+```
+
+Sending both fields as `null` clears the fallback and drops the server back to its environment chain:
+
+```text
+agent model-policy default → server-wide fallback → LLM_MODEL → gpt-4o-mini
+```
+
+Both endpoints return the stored value plus `effective_models`, the list an admin picker should offer:
+
+```json
+{
+  "default_model": { "provider": "openai", "model": "gpt-4o-mini" },
+  "environment_model": { "provider": "openai", "model": "gpt-4o-mini" },
+  "effective_models": []
+}
+```
+
+`environment_model` is what the server falls back to when `default_model` is `null`, resolved from the
+backend in use — `LLM_MODEL`, the first Ollama model, or `DEFAULT_MODEL`. It is reported so an admin
+console can show the model actually in use rather than an empty control.
+
+A `PUT` naming a model the server-wide allow-list blocks is rejected with 400
+`default_model_not_allowed`, so the fallback cannot contradict the policy set on the same screen. The
+check runs only when an allow-list exists — an unrestricted server accepts any model, including one
+discovery has not seen yet, since the registry is empty until the fallback seeds it.
+
+The same value seeds the model registry when discovery returns nothing, replacing `LLM_MODEL` and
+`LLM_PROVIDER` in that path too.
 
 ---
 

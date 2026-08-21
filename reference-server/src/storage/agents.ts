@@ -271,6 +271,13 @@ export interface ProviderModelSelection {
     model?: string | null;
 }
 
+// The server-wide fallback. Unlike a restriction selection, both halves are required — a provider
+// with no model cannot answer "which model do we use when the caller named none?".
+export interface ProviderModelDefault {
+    provider: string;
+    model: string;
+}
+
 export interface AgentModelPolicy {
     default_provider: string | null;
     default_model: string | null;
@@ -429,6 +436,14 @@ export class AgentStore {
         provider TEXT NOT NULL,
         model TEXT,
         created_at TEXT DEFAULT (datetime('now'))
+      );
+
+      -- Admin-set server settings, one row per setting. Generic on purpose: the only key today is
+      -- 'default_model', and a second setting should add a row here rather than another table.
+      CREATE TABLE IF NOT EXISTS server_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS agent_model_settings (
@@ -879,6 +894,36 @@ export class AgentStore {
 
     hasProviderModelRegistry(): boolean {
         return Boolean(this.db.prepare('SELECT 1 FROM provider_models LIMIT 1').get());
+    }
+
+    // The fallback model an admin set, or null when none is set. Read per request, never hoisted —
+    // an admin save has to take effect without a restart, which is the whole point of storing it.
+    getServerDefaultModel(): ProviderModelDefault | null {
+        const row = this.db.prepare(`
+          SELECT value FROM server_settings WHERE key = 'default_model'
+        `).get() as { value: string } | undefined;
+        if (!row) return null;
+        try {
+            const parsed = JSON.parse(row.value) as ProviderModelDefault;
+            return parsed.provider && parsed.model ? { provider: parsed.provider, model: parsed.model } : null;
+        } catch {
+            return null;
+        }
+    }
+
+    // Passing null clears the setting, which drops the server back to the env chain.
+    setServerDefaultModel(selection: ProviderModelDefault | null): ProviderModelDefault | null {
+        if (!selection) {
+            this.db.prepare(`DELETE FROM server_settings WHERE key = 'default_model'`).run();
+            return null;
+        }
+        const value: ProviderModelDefault = { provider: selection.provider.trim(), model: selection.model.trim() };
+        this.db.prepare(`
+          INSERT INTO server_settings (key, value, updated_at)
+          VALUES ('default_model', @value, @updated_at)
+          ON CONFLICT(key) DO UPDATE SET value = @value, updated_at = @updated_at
+        `).run({ value: JSON.stringify(value), updated_at: new Date().toISOString() });
+        return this.getServerDefaultModel();
     }
 
     getServerModelRestrictions(): ProviderModelSelection[] {

@@ -567,7 +567,7 @@ Environment variables:
 
 - `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
 - `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
-- `LLM_MODEL` - Fallback/default model, still subject to the effective model policy (default: `gpt-4o-mini`)
+- `LLM_MODEL` - Fallback/default model, still subject to the effective model policy (default: `gpt-4o-mini`). An admin-set server-wide fallback overrides this — see [Fallback model](#fallback-model)
 - `LLM_PROVIDER` - Optional default gateway routing provider. Chat requests with `provider` set `x-portkey-provider` dynamically.
 - `MODEL_DISCOVERY_REFRESH_MS` - Provider/model registry refresh interval (default: 10 minutes)
 
@@ -598,7 +598,24 @@ Each level only narrows the level above it, and an empty level is a no-op. Admin
 allow-list through `GET`/`PUT /v1/manager/admin/model-restrictions`; it applies to every key and
 agent, including requests with no parent key, and takes effect without a restart.
 
-Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`. If no request model is provided, the server uses the agent model-policy default, then `LLM_MODEL` if it is allowed by the effective policy.
+Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`.
+
+#### Fallback model
+
+When a request names no model, the server resolves one in this order:
+
+```text
+agent model-policy default → server-wide fallback → LLM_MODEL → gpt-4o-mini
+```
+
+Admins set the server-wide fallback through `GET`/`PUT /v1/manager/admin/default-model`. It is stored,
+so it beats every environment value and takes effect without a restart; clearing it (`{"provider": null,
+"model": null}`) drops the server back to the environment chain. The same value also seeds the model
+registry when discovery returns nothing.
+
+The fallback is still subject to the effective policy above — a fallback the allow-list blocks is
+rejected on save with `default_model_not_allowed`, and one the registry has never discovered fails at
+request time like any other unknown model.
 
 **Output limit:** No completion-token cap by default — the provider's own default applies. Set `LLM_MAX_TOKENS` to impose a server-wide ceiling. A client that sends its own `max_tokens` always overrides the env value.
 

@@ -1,5 +1,5 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, getOllamaDefaultModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
+import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, envFallbackModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
 import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
@@ -319,8 +319,8 @@ function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', mod
 
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
-const LLM_MODEL = process.env.LLM_MODEL || 'gpt-4o-mini';
-const FALLBACK_MODEL = process.env.DEFAULT_MODEL || 'gpt-4o-mini';
+// The fallback env reads used to be hoisted here too. They live in envFallbackModel() now, called
+// per request, so an admin-set fallback and these can never disagree about which chain applies.
 // Mock responses are OFF by default — keep real LLM errors visible in production.
 // Set ALLOW_MOCK=true to return deterministic mock replies (no LLM configured,
 // LLM errored, or an agent declares type: mock).
@@ -726,8 +726,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const ollamaAvailable = llmConfigured ? false : await isOllamaAvailable();
     const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
 
-    // Determine default model based on backend
-    const DEFAULT_MODEL = llmConfigured ? LLM_MODEL : ollamaAvailable ? getOllamaDefaultModel() : FALLBACK_MODEL;
+    // Determine default model: an admin-set server fallback beats every env value, then the
+    // backend-derived chain. Read per request — the env constants above are hoisted at module load,
+    // so a stored value read the same way would need a restart to take effect.
+    const serverDefault = agentStore.getServerDefaultModel();
+    const DEFAULT_MODEL = serverDefault?.model ?? envFallbackModel(llmConfigured, ollamaAvailable).model;
 
     const { provider: requestedProvider, model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
     getCachedModelsList();
@@ -739,6 +742,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
     const selectedProvider = requestedProvider
       || agentConfig?.modelPolicy.default_provider
+      // The admin stored a provider alongside the fallback model, so an ambiguous fallback model
+      // (same id on two providers) resolves instead of returning provider_required.
+      || (selectedModel === serverDefault?.model ? serverDefault.provider : null)
       || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
       reply.code(400);
