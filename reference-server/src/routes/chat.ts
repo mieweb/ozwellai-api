@@ -744,21 +744,27 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       || (!requestedModel ? agentConfig?.modelPolicy.default_provider : null)
       || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
-      reply.code(400);
       if (usingAgentDefaultModel && matchingModels.length === 0) {
+        reply.code(400);
         return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
       }
-      // No match at all is not an ambiguous request — the caller named nothing and the model we
-      // fell back to is not available to them. Saying "provider is required" sends them to look at
-      // their own request, which is fine; nothing they send would help.
-      if (!requestedModel && matchingModels.length === 0) {
+      // No match at all is not an ambiguous request: the model is not available to this caller, so
+      // no provider they could send would help. Same code and status as the !allowedModel branch
+      // below, which is the same conclusion reached one step later. Only the wording differs, by
+      // whether the model came from the request or from the fallback chain.
+      if (matchingModels.length === 0) {
+        reply.code(403);
         return createError(
-          `No default model is available for this key. Name a model in the request, or ask an admin to approve one.`,
+          requestedModel
+            ? 'Requested provider/model is not allowed for this key or agent'
+            : 'No default model is available for this key. Name a model in the request, or ask an admin to approve one.',
           'invalid_request_error',
           'model',
           'model_not_allowed',
         );
       }
+      // Two or more matches: the model really is ambiguous and a provider really would settle it.
+      reply.code(400);
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
     const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));

@@ -864,10 +864,53 @@ test('provider models — unusable fallback names the real cause, not provider_r
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
             body: JSON.stringify({ messages: [{ role: 'user', content: 'no model named' }] }),
         });
-        assert.equal(response.status, 400);
+        // Same status as every other model_not_allowed, so a client switching on status cannot see
+        // one code mean two things.
+        assert.equal(response.status, 403);
         const error = (await response.json()).error;
         assert.equal(error.code, 'model_not_allowed');
         assert.match(error.message, /No default model is available for this key/);
+        assert.equal(gateway.getChatCount(), 0);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
+// A model the caller named that matches nothing is not ambiguous either — no provider they could
+// send would make it available. Same conclusion as the branch below, reached one step earlier.
+test('provider models — a named model that matches nothing is not allowed, not ambiguous', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o-mini'], anthropic: ['claude-sonnet-5'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o-mini',
+            ALLOW_MOCK: '',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        const policy = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'anthropic' }] }),
+        });
+        assert.equal(policy.status, 200);
+
+        // Names a model, sends no provider, and that model is not available to this key.
+        const response = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'blocked' }] }),
+        });
+        assert.equal(response.status, 403);
+        assert.equal((await response.json()).error.code, 'model_not_allowed');
         assert.equal(gateway.getChatCount(), 0);
     } finally {
         stopServer(server, tmp);
