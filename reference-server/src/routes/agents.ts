@@ -237,7 +237,9 @@ function normalizeRestrictionBody(body: { allowed_models?: ProviderModelSelectio
         .filter(item => item && typeof item.provider === 'string')
         .map(item => ({
             provider: item.provider as string,
-            model: typeof item.model === 'string' ? item.model : null,
+            // Empty means "the whole provider", the same as omitting it — matching
+            // normalizeProviderModelSelections, which every stored selection already passes through.
+            model: typeof item.model === 'string' ? (item.model.trim() || null) : null,
         }));
 }
 
@@ -246,14 +248,6 @@ function normalizeDefaultModel(value: unknown) {
     const record = value as Record<string, unknown>;
     if (typeof record.provider !== 'string' || typeof record.model !== 'string') return null;
     return { provider: record.provider, model: record.model };
-}
-
-function defaultAllowedByRestrictions(defaultModel: { provider: string; model: string } | null, restrictions: ProviderModelSelection[]) {
-    if (!defaultModel || restrictions.length === 0) return true;
-    return restrictions.some(item => (
-        item.provider === defaultModel.provider
-        && (item.model === null || item.model === defaultModel.model)
-    ));
 }
 
 /** Parse YAML into a loose object. Throws on invalid YAML. */
@@ -1375,10 +1369,15 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         getCachedModelsList();
         const defaultModel = normalizeDefaultModel(request.body?.default_model);
         const allowedModels = normalizeRestrictionBody(request.body);
-        if (!defaultAllowedByRestrictions(defaultModel, allowedModels)) {
+        // Same rule the effective-model filter uses, so this check and that filter cannot disagree
+        // about whether a pair is allowed.
+        const defaultAllowed = !defaultModel
+            || allowedModels.length === 0
+            || selectionAllows(allowedModels, defaultModel.provider, defaultModel.model);
+        if (!defaultAllowed) {
             reply.code(400);
             return createError(
-                'Default model must be included in allowed_models when allowed_models is not empty',
+                `${defaultModel!.model} on ${defaultModel!.provider} is this agent's default model, so it has to stay on its list of allowed models. Add it back, or choose a default from the models you allowed.`,
                 'invalid_request_error',
                 'default_model',
                 'default_model_not_allowed'
