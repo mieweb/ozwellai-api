@@ -476,7 +476,7 @@ backend in use — `LLM_MODEL`, the first Ollama model, or `DEFAULT_MODEL`. It i
 console can show the model actually in use rather than an empty control.
 
 A `PUT` naming a model the server cannot serve is rejected with 400 `default_model_not_allowed` —
-whether it is missing from the registry or blocked by the server-wide allow-list. Chat resolves the
+whether it is missing from the registry, blocked by the server-wide allow-list, or available only under a different provider. Chat resolves the
 fallback through the same effective list, so a model accepted here but absent there would return 403
 `model_not_allowed` on the next request that names no model.
 

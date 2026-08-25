@@ -982,7 +982,9 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             if (!stillAllowed) {
                 reply.code(400);
                 return createError(
-                    `${currentDefault.model} is the default model — it answers every request that does not name one. Unapproving it would make those requests fail. Change the default model first, or keep ${currentDefault.model} approved.`,
+                    // Named with its provider: the stored default is a pair, and the same model id
+                    // can sit under two providers.
+                    `${currentDefault.model} on ${currentDefault.provider} is the default model — it answers every request that does not name one. Unapproving it would make those requests fail. Change the default model first, or keep it approved.`,
                     'invalid_request_error',
                     'allowed_models',
                     'default_model_not_allowed',
@@ -1061,12 +1063,19 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         // The empty-registry case is skipped deliberately: a fresh server has nothing to check
         // against, and seedFallbackModel() puts the stored pair into the registry itself.
         if (agentStore.hasProviderModelRegistry()) {
-            const allowed = agentStore.listEffectiveProviderModels(null)
-                .some(item => item.provider === provider && (item.model === model || item.id === model));
+            const available = agentStore.listEffectiveProviderModels(null);
+            const matchesModel = (item: { model: string; id: string }) => item.model === model || item.id === model;
+            const allowed = available.some(item => item.provider === provider && matchesModel(item));
             if (!allowed) {
+                // The check is on the pair, so a model that exists under a different provider fails
+                // here too. Saying only "not available" would then be untrue and send an admin
+                // looking for a model that is sitting in the list.
+                const elsewhere = [...new Set(available.filter(matchesModel).map(item => item.provider))];
                 reply.code(400);
                 return createError(
-                    `${model} is not available on this server, so it cannot be the default model. Choose one of the models listed as available, or approve it first if it is restricted.`,
+                    elsewhere.length
+                        ? `${model} is not available on ${provider}, so it cannot be the default model. It is available on ${elsewhere.join(' and ')} — choose it there instead.`
+                        : `${model} is not available on this server, so it cannot be the default model. Choose one of the models listed as available, or approve it first if it is restricted.`,
                     'invalid_request_error',
                     'model',
                     'default_model_not_allowed',

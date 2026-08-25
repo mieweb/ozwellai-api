@@ -936,6 +936,19 @@ test('provider models — fallback cannot be set to a model the server does not 
         assert.equal(missing.status, 400, 'a model the server cannot serve is refused, not stored');
         assert.equal((await missing.json()).error.code, 'default_model_not_allowed');
 
+        // The check is on the pair, so a real model under the wrong provider fails too — and the
+        // message has to say which provider does have it rather than claim it is missing.
+        const wrongProvider = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'anthropic', model: 'gpt-4o' }),
+        });
+        assert.equal(wrongProvider.status, 400);
+        const wrongProviderError = (await wrongProvider.json()).error;
+        assert.equal(wrongProviderError.code, 'default_model_not_allowed');
+        assert.match(wrongProviderError.message, /not available on anthropic/);
+        assert.match(wrongProviderError.message, /available on openai/);
+
         // Nothing was stored, so requests that name no model still work.
         const stored = await (await fetch(`${BASE}/v1/manager/admin/default-model`, { headers: HEADERS })).json();
         assert.equal(stored.default_model, null);
