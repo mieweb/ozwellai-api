@@ -905,6 +905,54 @@ test('provider models — allow-list cannot be narrowed past the stored fallback
     }
 });
 
+// An unrestricted server used to skip validation entirely, so a model the server had never
+// discovered saved fine and then 403'd every request that named no model. Reported by @abroa01 on
+// PR #278.
+test('provider models — fallback cannot be set to a model the server does not have, even unrestricted', async () => {
+    const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
+    const { server, tmp, dbPath } = startServer({
+        admin: true,
+        extraEnv: {
+            LLM_BASE_URL: gateway.baseURL,
+            LLM_API_KEY: 'test-key',
+            LLM_MODEL: 'gpt-4o',
+        },
+    });
+    try {
+        await waitForReady();
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+
+        // Discovery only — no allow-list is ever set, so this is the unrestricted path.
+        await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
+        const policy = await (await fetch(`${BASE}/v1/manager/admin/model-restrictions`, { headers: HEADERS })).json();
+        assert.deepEqual(policy.allowed_models, [], 'no allow-list, so nothing is restricted');
+
+        const missing = await fetch(`${BASE}/v1/manager/admin/default-model`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ provider: 'openai', model: 'gpt-4o-typo' }),
+        });
+        assert.equal(missing.status, 400, 'a model the server cannot serve is refused, not stored');
+        assert.equal((await missing.json()).error.code, 'default_model_not_allowed');
+
+        // Nothing was stored, so requests that name no model still work.
+        const stored = await (await fetch(`${BASE}/v1/manager/admin/default-model`, { headers: HEADERS })).json();
+        assert.equal(stored.default_model, null);
+
+        const chat = await fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+        });
+        assert.equal(chat.status, 200);
+        assert.equal(gateway.getLastBody().model, 'gpt-4o');
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+});
+
 test('provider models — fallback cannot be set to a model the server allow-list blocks', async () => {
     const gateway = await startGateway({ openai: ['gpt-4o', 'gpt-4o-mini'] });
     const { server, tmp } = startServer({

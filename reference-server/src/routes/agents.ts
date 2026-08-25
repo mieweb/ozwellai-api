@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, envFallbackModel, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
+import { agentStore, selectionAllows, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
@@ -978,9 +978,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         // default-model endpoint rejects, arriving from the other side.
         const currentDefault = agentStore.getServerDefaultModel();
         if (currentDefault && allowedModels.length) {
-            const stillAllowed = allowedModels.some(selection => (
-                selection.provider === currentDefault.provider && (!selection.model || selection.model === currentDefault.model)
-            ));
+            const stillAllowed = selectionAllows(allowedModels, currentDefault.provider, currentDefault.model);
             if (!stillAllowed) {
                 reply.code(400);
                 return createError(
@@ -1056,17 +1054,19 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             );
         }
 
-        // Only checked against a policy that actually exists. An unrestricted server accepts any
-        // model, including one discovery has not seen yet — otherwise a fresh server, whose
-        // registry is empty until the fallback seeds it, could never have a fallback set.
-        const restrictions = agentStore.getServerModelRestrictions();
-        if (restrictions.length) {
+        // Checked against the registry whenever there is one, not just when an allow-list exists.
+        // Accepting a model the server cannot serve makes this endpoint report success and then
+        // 403 model_not_allowed on the next request that names no model — chat resolves the
+        // fallback through the same effective list, so anything missing here fails there.
+        // The empty-registry case is skipped deliberately: a fresh server has nothing to check
+        // against, and seedFallbackModel() puts the stored pair into the registry itself.
+        if (agentStore.hasProviderModelRegistry()) {
             const allowed = agentStore.listEffectiveProviderModels(null)
                 .some(item => item.provider === provider && (item.model === model || item.id === model));
             if (!allowed) {
                 reply.code(400);
                 return createError(
-                    `${model} is not approved on this server, so it cannot be the default model. Approve it first, or choose a model that is already approved.`,
+                    `${model} is not available on this server, so it cannot be the default model. Choose one of the models listed as available, or approve it first if it is restricted.`,
                     'invalid_request_error',
                     'model',
                     'default_model_not_allowed',

@@ -107,14 +107,16 @@ function serverAllowedResponse() {
 
 function seedFallbackModel() {
   // Admin-set fallback first, then the same env chain the chat route resolves, so the seeded model
-  // is the one a request would actually get. Read on every call, not hoisted.
-  // Ollama is passed as unavailable because this is a sync path and the probe is async. Seeding only
-  // runs when discovery returned nothing, and a reachable Ollama would have been discovered, so the
-  // case this skips cannot be the case this function is called in.
+  // is the one a request would actually get. Ollama is passed as unavailable because this is a sync
+  // path and the probe is async; seeding only runs when discovery returned nothing, and a reachable
+  // Ollama would have been discovered.
   const serverDefault = agentStore.getServerDefaultModel();
   const fallback = serverDefault ?? envFallbackModel(isLLMBackendConfigured(), false);
+  // An admin picked their provider explicitly, so it wins. Only an env-derived pair, where the
+  // provider is a default rather than a choice, defers to a prefix on the model id.
+  const provider = serverDefault ? serverDefault.provider : providerFromModelId(fallback.model, fallback.provider);
   agentStore.replaceProviderModels([
-    toModelRecord(fallback.model, 'fallback', providerFromModelId(fallback.model, fallback.provider)),
+    toModelRecord(fallback.model, 'fallback', provider),
   ]);
   return serverAllowedResponse();
 }

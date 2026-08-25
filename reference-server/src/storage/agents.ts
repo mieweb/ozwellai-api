@@ -1574,7 +1574,9 @@ export function normalizeProviderModelSelections(selections: ProviderModelSelect
     return normalized;
 }
 
-function selectionAllows(selections: ProviderModelSelection[], provider: string, model: string): boolean {
+// Exported so the routes ask "is this pair allowed?" the same way the filter does. A second copy of
+// this rule is how a policy check and the filter it guards drift apart.
+export function selectionAllows(selections: ProviderModelSelection[], provider: string, model: string): boolean {
     return selections.some(selection => (
         selection.provider === provider && (!selection.model || selection.model === model)
     ));
