@@ -475,10 +475,17 @@ Both endpoints return the stored value plus `effective_models`, the list an admi
 backend in use — `LLM_MODEL`, the first Ollama model, or `DEFAULT_MODEL`. It is reported so an admin
 console can show the model actually in use rather than an empty control.
 
-A `PUT` naming a model the server-wide allow-list blocks is rejected with 400
-`default_model_not_allowed`, so the fallback cannot contradict the policy set on the same screen. The
-check runs only when an allow-list exists — an unrestricted server accepts any model, including one
-discovery has not seen yet, since the registry is empty until the fallback seeds it.
+A `PUT` naming a model the server cannot serve is rejected with 400 `default_model_not_allowed` —
+whether it is missing from the registry or blocked by the server-wide allow-list. Chat resolves the
+fallback through the same effective list, so a model accepted here but absent there would return 403
+`model_not_allowed` on the next request that names no model.
+
+The check runs whenever the registry holds anything. A fresh server whose registry is still empty
+accepts any pair, because there is nothing to check against and the stored value seeds the registry
+itself.
+
+A `PUT` naming only one of `provider` and `model` is rejected with 400 `invalid_default_model`. Send
+both to set a fallback, or both as `null` to clear it.
 
 The same value seeds the model registry when discovery returns nothing, replacing `LLM_MODEL` and
 `LLM_PROVIDER` in that path too.
