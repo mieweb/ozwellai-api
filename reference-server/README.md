@@ -598,7 +598,7 @@ Each level only narrows the level above it, and an empty level is a no-op. Admin
 allow-list through `GET`/`PUT /v1/manager/admin/model-restrictions`; it applies to every key and
 agent, including requests with no parent key, and takes effect without a restart.
 
-Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider; otherwise the server rejects the request with `provider_required`.
+Chat requests may send both `provider` and `model`. Legacy model-only requests still work when the model maps to exactly one allowed provider. A model that maps to none is rejected with `403 model_not_allowed`; one that maps to two or more is rejected with `provider_required`, since only then would a provider settle it.
 
 #### Fallback model
 

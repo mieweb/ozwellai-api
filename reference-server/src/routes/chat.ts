@@ -319,8 +319,6 @@ function buildMockWarning(reason: 'no_backend' | 'llm_error' | 'mock_agent', mod
 
 // Hoist static env reads (these never change at runtime)
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
-// The fallback env reads used to be hoisted here too. They live in envFallbackModel() now, called
-// per request, so an admin-set fallback and these can never disagree about which chain applies.
 // Mock responses are OFF by default — keep real LLM errors visible in production.
 // Set ALLOW_MOCK=true to return deterministic mock replies (no LLM configured,
 // LLM errored, or an agent declares type: mock).
@@ -745,14 +743,26 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // own, or an ambiguous request would silently be answered by the fallback's provider.
     const usingFallbackModel = !requestedModel && !usingAgentDefaultModel;
     const selectedProvider = requestedProvider
-      || agentConfig?.modelPolicy.default_provider
+      // Only when the caller named no model. The agent's default provider goes with the agent's
+      // default model; pinning it onto a model the caller asked for builds a pair that never
+      // existed (anthropic + gpt-4.1) and fails before the registry lookup below can resolve it.
+      || (!requestedModel ? agentConfig?.modelPolicy.default_provider : null)
       || (usingFallbackModel ? fallbackDefault.provider : null)
       || (matchingModels.length === 1 ? matchingModels[0].provider : null);
     if (!selectedProvider) {
-      reply.code(400);
       if (usingAgentDefaultModel && matchingModels.length === 0) {
+        reply.code(400);
         return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
       }
+      // No match at all is not an ambiguous request: the model is not available to this caller, so
+      // no provider they could send would help. Only a caller-named model reaches here — a fallback
+      // always carries its own provider, so it never fails to resolve one and exits further down.
+      if (matchingModels.length === 0) {
+        reply.code(403);
+        return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
+      }
+      // Two or more matches: the model really is ambiguous and a provider really would settle it.
+      reply.code(400);
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
     const allowedModel = findProviderModel(effectiveModels, selectedProvider, selectedModel);
@@ -762,13 +772,21 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return createError("This assistant's configured model is currently unavailable.", 'invalid_request_error', 'model', 'configured_model_unavailable');
       }
       reply.code(403);
-      return createError('Requested provider/model is not allowed for this key or agent', 'invalid_request_error', 'model', 'model_not_allowed');
+      // A model the caller named is theirs to change. One that came from the fallback chain is not,
+      // and telling them to send a provider would not help — the fallback already has one.
+      return createError(
+        usingFallbackModel
+          ? 'No default model is available for this key. Name a model in the request, or ask an admin to approve one.'
+          : 'Requested provider/model is not allowed for this key or agent',
+        'invalid_request_error',
+        'model',
+        'model_not_allowed',
+      );
     }
     const provider = allowedModel.provider;
     const model = allowedModel.model;
-    const fallbackModel = findProviderModel(effectiveModels, provider, DEFAULT_MODEL);
-    const fallbackRetryAllowed = Boolean(fallbackModel);
-    const fallbackRetryModel = fallbackModel?.model || DEFAULT_MODEL;
+    // Retry on the fallback only when this provider actually serves it. Undefined means no retry.
+    const fallbackRetryModel = findProviderModel(effectiveModels, provider, DEFAULT_MODEL)?.model;
     // Agent-configured temperature takes precedence over client request
     const temperature = agentConfig?.temperature ?? requestedTemperature;
     // gpt-5.x + o-series require `max_completion_tokens`; everything else (gpt-4.x, Ollama) uses `max_tokens`.
@@ -992,7 +1010,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             }
 
             // Model not found → retry with fallback model
-            if (isModelNotFoundError(streamError) && model !== fallbackRetryModel && llmConfigured && fallbackRetryAllowed) {
+            if (isModelNotFoundError(streamError) && fallbackRetryModel && model !== fallbackRetryModel && llmConfigured) {
               request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
               const warning = buildFallbackWarning(model, fallbackRetryModel);
               reply.raw.write(`event: warning\ndata: ${JSON.stringify(warning)}\n\n`);
@@ -1069,7 +1087,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         // Model not found → retry with fallback model
-        if (isModelNotFoundError(error) && model !== fallbackRetryModel && llmConfigured && fallbackRetryAllowed) {
+        if (isModelNotFoundError(error) && fallbackRetryModel && model !== fallbackRetryModel && llmConfigured) {
           request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
           try {
             const retryRequest = {

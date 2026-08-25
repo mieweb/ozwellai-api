@@ -911,19 +911,18 @@ export class AgentStore {
         }
     }
 
-    // Passing null clears the setting, which drops the server back to the env chain.
-    setServerDefaultModel(selection: ProviderModelDefault | null): ProviderModelDefault | null {
+    // Passing null clears the setting, which drops the server back to the env chain. The route
+    // trims and validates before calling; this stores exactly what it is given.
+    setServerDefaultModel(selection: ProviderModelDefault | null): void {
         if (!selection) {
             this.db.prepare(`DELETE FROM server_settings WHERE key = 'default_model'`).run();
-            return null;
+            return;
         }
-        const value: ProviderModelDefault = { provider: selection.provider.trim(), model: selection.model.trim() };
         this.db.prepare(`
           INSERT INTO server_settings (key, value, updated_at)
           VALUES ('default_model', @value, @updated_at)
           ON CONFLICT(key) DO UPDATE SET value = @value, updated_at = @updated_at
-        `).run({ value: JSON.stringify(value), updated_at: new Date().toISOString() });
-        return this.getServerDefaultModel();
+        `).run({ value: JSON.stringify(selection), updated_at: new Date().toISOString() });
     }
 
     getServerModelRestrictions(): ProviderModelSelection[] {

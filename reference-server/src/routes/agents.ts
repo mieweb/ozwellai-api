@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, envFallbackModel, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
+import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
