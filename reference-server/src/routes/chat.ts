@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, envFallbackModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
-import { agentStore, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
+import { agentStore, findProviderModel, modelRecordMatches, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
@@ -739,7 +739,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
       : agentStore.listEffectiveProviderModels(usageContext?.parentKeyId ?? null);
     const selectedModel = requestedModel || agentConfig?.modelPolicy.default_model || DEFAULT_MODEL;
-    const matchingModels = effectiveModels.filter(item => item.model === selectedModel || item.id === selectedModel);
+    const matchingModels = effectiveModels.filter(item => modelRecordMatches(item, selectedModel));
     const usingAgentDefaultModel = !requestedModel && Boolean(agentConfig?.modelPolicy.default_model);
     // Only the fallback may lend its provider. A model the caller named must still resolve on its
     // own, or an ambiguous request would silently be answered by the fallback's provider.
@@ -755,7 +755,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
       return createError('Provider is required for ambiguous model selection', 'invalid_request_error', 'provider', 'provider_required');
     }
-    const allowedModel = effectiveModels.find(item => item.provider === selectedProvider && (item.model === selectedModel || item.id === selectedModel));
+    const allowedModel = findProviderModel(effectiveModels, selectedProvider, selectedModel);
     if (!allowedModel) {
       if (usingAgentDefaultModel) {
         reply.code(400);
@@ -766,7 +766,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
     const provider = allowedModel.provider;
     const model = allowedModel.model;
-    const fallbackModel = effectiveModels.find(item => item.provider === provider && (item.model === DEFAULT_MODEL || item.id === DEFAULT_MODEL));
+    const fallbackModel = findProviderModel(effectiveModels, provider, DEFAULT_MODEL);
     const fallbackRetryAllowed = Boolean(fallbackModel);
     const fallbackRetryModel = fallbackModel?.model || DEFAULT_MODEL;
     // Agent-configured temperature takes precedence over client request

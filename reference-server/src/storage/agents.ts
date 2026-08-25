@@ -1574,6 +1574,18 @@ export function normalizeProviderModelSelections(selections: ProviderModelSelect
     return normalized;
 }
 
+// Registry ids can be provider-prefixed (`openai/gpt-4o`) while a caller usually names the bare
+// model, so both forms have to count. Kept next to selectionAllows because the two are easy to
+// confuse: this matches a discovered record, that matches a policy selection, and only this one has
+// the id fallback.
+export function modelRecordMatches(record: ProviderModelRecord, model: string): boolean {
+    return record.model === model || record.id === model;
+}
+
+export function findProviderModel(records: ProviderModelRecord[], provider: string, model: string): ProviderModelRecord | undefined {
+    return records.find(record => record.provider === provider && modelRecordMatches(record, model));
+}
+
 // Exported so the routes ask "is this pair allowed?" the same way the filter does. A second copy of
 // this rule is how a policy check and the filter it guards drift apart.
 export function selectionAllows(selections: ProviderModelSelection[], provider: string, model: string): boolean {

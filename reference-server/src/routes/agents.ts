@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, envFallbackModel, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, selectionAllows, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
+import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, ProviderModelSelection, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 
 // Extend FastifyRequest to include auth data
@@ -1058,13 +1058,12 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         // against, and seedFallbackModel() puts the stored pair into the registry itself.
         if (agentStore.hasProviderModelRegistry()) {
             const available = agentStore.listEffectiveProviderModels(null);
-            const matchesModel = (item: { model: string; id: string }) => item.model === model || item.id === model;
-            const allowed = available.some(item => item.provider === provider && matchesModel(item));
+            const allowed = Boolean(findProviderModel(available, provider, model));
             if (!allowed) {
                 // The check is on the pair, so a model that exists under a different provider fails
                 // here too. Saying only "not available" would then be untrue and send an admin
                 // looking for a model that is sitting in the list.
-                const elsewhere = [...new Set(available.filter(matchesModel).map(item => item.provider))];
+                const elsewhere = [...new Set(available.filter(item => modelRecordMatches(item, model)).map(item => item.provider))];
                 reply.code(400);
                 return createError(
                     elsewhere.length
@@ -1369,15 +1368,13 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         getCachedModelsList();
         const defaultModel = normalizeDefaultModel(request.body?.default_model);
         const allowedModels = normalizeRestrictionBody(request.body);
-        // Same rule the effective-model filter uses, so this check and that filter cannot disagree
-        // about whether a pair is allowed.
-        const defaultAllowed = !defaultModel
-            || allowedModels.length === 0
-            || selectionAllows(allowedModels, defaultModel.provider, defaultModel.model);
-        if (!defaultAllowed) {
+        // Narrowed inside the branch rather than checked alongside it, so the message can read
+        // defaultModel without an assertion. selectionAllows is the same rule the effective-model
+        // filter uses, so this check and that filter cannot disagree about whether a pair is allowed.
+        if (defaultModel && allowedModels.length && !selectionAllows(allowedModels, defaultModel.provider, defaultModel.model)) {
             reply.code(400);
             return createError(
-                `${defaultModel!.model} on ${defaultModel!.provider} is this agent's default model, so it has to stay on its list of allowed models. Add it back, or choose a default from the models you allowed.`,
+                `${defaultModel.model} on ${defaultModel.provider} is this agent's default model, so it has to stay on its list of allowed models. Add it back, or choose a default from the models you allowed.`,
                 'invalid_request_error',
                 'default_model',
                 'default_model_not_allowed'

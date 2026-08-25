@@ -484,6 +484,12 @@ The check runs whenever the registry holds anything. A fresh server whose regist
 accepts any pair, because there is nothing to check against and the stored value seeds the registry
 itself.
 
+Only the server-wide allow-list is guarded this way. A parent-key or agent restriction that excludes
+the fallback is still accepted, and a request from that key naming no model then fails with 403
+`model_not_allowed`. That is deliberate — a key narrowed to one provider should not be forced to keep
+a fallback from another — but it means a narrowed key needs its own default model set through
+`PUT /v1/manager/agents/{agent_id}/model-policy`.
+
 A `PUT` naming only one of `provider` and `model` is rejected with 400 `invalid_default_model`. Send
 both to set a fallback, or both as `null` to clear it.
 
