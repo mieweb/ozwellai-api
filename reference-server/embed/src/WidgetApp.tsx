@@ -6,6 +6,7 @@ import {
   type OzwellThinkingMode,
 } from '@mieweb/ui';
 import { MarkdownContent } from './MarkdownContent';
+import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -131,6 +132,10 @@ function effectiveModelsEndpoint(endpoint?: string) {
   url.search = '';
   url.hash = '';
   return url.toString();
+}
+
+function apiOriginFor(endpoint?: string) {
+  return new URL(effectiveModelsEndpoint(endpoint)).origin;
 }
 
 function normalizeEffectiveModels(payload: unknown): ProviderModelOption[] {
@@ -346,6 +351,9 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
+    () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
+  );
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);
@@ -364,6 +372,16 @@ export function WidgetApp() {
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
+
+  // Keyless embeds only: restore a key the user opted to remember here.
+  useEffect(() => {
+    if (getAuthKey(configRef.current)) return;
+    let stored: string | null = null;
+    try { stored = localStorage.getItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+    if (!stored) return;
+    setCredentialSource('user-key');
+    setConfig((current) => ({ ...current, apiKey: stored }));
+  }, []);
 
   useEffect(() => {
     const authKey = getAuthKey(config);
@@ -761,6 +779,11 @@ export function WidgetApp() {
   }
 
   const applyConfig = useCallback((nextConfig: OzwellConfig) => {
+    // A key arriving from the embedding page owns the session: the sign-in
+    // gate must never prompt over a host-configured credential.
+    if (getAuthKey({ ...configRef.current, ...nextConfig }) && (nextConfig.apiKey || nextConfig.openaiApiKey)) {
+      setCredentialSource('host');
+    }
     setConfig((current) => {
       const merged = { ...current, ...nextConfig };
       configRef.current = merged;
@@ -938,6 +961,34 @@ export function WidgetApp() {
     };
   }, [appendDisplay, appendHistory, applyConfig, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
+  const handleAuthenticated = useCallback((credential: WidgetCredential) => {
+    setCredentialSource(credential.source);
+    setConfig((current) => {
+      const merged = { ...current, apiKey: credential.key };
+      configRef.current = merged;
+      return merged;
+    });
+  }, []);
+
+  const signOut = useCallback(() => {
+    const key = getAuthKey(configRef.current);
+    if (key.startsWith('sess_')) {
+      void fetch(`${apiOriginFor(configRef.current.endpoint)}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}` },
+      }).catch(() => { /* best effort */ });
+    }
+    try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+    setCredentialSource(null);
+    setConfig((current) => {
+      const merged = { ...current, apiKey: '', openaiApiKey: '' };
+      configRef.current = merged;
+      return merged;
+    });
+    setHistoryMessages([]);
+    setDisplayMessages([]);
+  }, []);
+
   const renderTextContent = useCallback((text: string, ctx: { messageId: string; streaming: boolean }) => (
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
@@ -969,7 +1020,24 @@ export function WidgetApp() {
     setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
   }, []);
 
+  if (!getAuthKey(config) && credentialSource !== 'host') {
+    return (
+      <AuthGate
+        apiOrigin={apiOriginFor(config.endpoint)}
+        onAuthenticated={handleAuthenticated}
+      />
+    );
+  }
+
   return (
+    <>
+    {(credentialSource === 'session' || credentialSource === 'user-key') && (
+      <div className="ozwell-auth-bar">
+        <button type="button" className="ozwell-auth-link" onClick={signOut}>
+          {credentialSource === 'session' ? 'Sign out' : 'Forget key'}
+        </button>
+      </div>
+    )}
     <OzwellChat
       messages={chatMessages}
       isGenerating={sending}
@@ -994,5 +1062,6 @@ export function WidgetApp() {
       warning={toast}
       onDismissWarning={() => setToast(null)}
     />
+    </>
   );
 }
