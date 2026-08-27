@@ -316,6 +316,24 @@ export function isLLMBackendConfigured(): boolean {
 }
 
 /**
+ * The provider/model the environment falls back to when a request names no model and no admin has
+ * set a server-wide fallback. Which env value applies depends on the backend, so the two booleans
+ * are passed in by the caller that already computed them.
+ *
+ * One definition on purpose: the chat route picks the model with it, and the admin endpoint reports
+ * it, so the console can never show a fallback the server would not actually use.
+ */
+export function envFallbackModel(llmConfigured: boolean, ollamaAvailable: boolean): { provider: string; model: string } {
+  if (llmConfigured) {
+    return { provider: process.env.LLM_PROVIDER || 'openai', model: process.env.LLM_MODEL || 'gpt-4o-mini' };
+  }
+  if (ollamaAvailable) {
+    return { provider: 'ollama', model: getOllamaDefaultModel() };
+  }
+  return { provider: process.env.LLM_PROVIDER || 'openai', model: process.env.DEFAULT_MODEL || 'gpt-4o-mini' };
+}
+
+/**
  * Get the first available Ollama model, or a fallback
  */
 export function getOllamaDefaultModel(): string {

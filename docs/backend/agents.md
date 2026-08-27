@@ -171,6 +171,18 @@ policy naming an excluded model stays saved but stops resolving, and chat reques
 rejected with `403 model_not_allowed` before any provider is called. See
 [API Endpoints](./api-endpoints.md) for the server-wide and parent-key endpoints.
 
+That order decides which models are *allowed*. Which one is *picked* when a request names none is a
+separate chain, and the agent default still comes first:
+
+```text
+agent model-policy default → server-wide fallback → environment → gpt-4o-mini
+```
+
+An agent with no default model therefore falls through to whatever an admin set through
+`PUT /v1/manager/admin/default-model`, and only then to the environment. The environment step depends
+on the backend in use: `LLM_MODEL` when `LLM_BASE_URL` is set, the first Ollama model when it is not
+and Ollama is reachable, otherwise `DEFAULT_MODEL`.
+
 #### Example
 
 ```bash

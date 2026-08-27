@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey } from '../util';
+import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey, envFallbackModel } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
@@ -106,9 +106,17 @@ function serverAllowedResponse() {
 }
 
 function seedFallbackModel() {
-  const fallbackModel = process.env.LLM_MODEL || 'gpt-4o-mini';
+  // Admin-set fallback first, then the same env chain the chat route resolves, so the seeded model
+  // is the one a request would actually get. Ollama is passed as unavailable because this is a sync
+  // path and the probe is async; seeding only runs when discovery returned nothing, and a reachable
+  // Ollama would have been discovered.
+  const serverDefault = agentStore.getServerDefaultModel();
+  const fallback = serverDefault ?? envFallbackModel(isLLMBackendConfigured(), false);
+  // An admin picked their provider explicitly, so it wins. Only an env-derived pair, where the
+  // provider is a default rather than a choice, defers to a prefix on the model id.
+  const provider = serverDefault ? serverDefault.provider : providerFromModelId(fallback.model, fallback.provider);
   agentStore.replaceProviderModels([
-    toModelRecord(fallbackModel, 'fallback', providerFromModelId(fallbackModel, process.env.LLM_PROVIDER || 'openai')),
+    toModelRecord(fallback.model, 'fallback', provider),
   ]);
   return serverAllowedResponse();
 }
