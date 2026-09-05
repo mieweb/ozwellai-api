@@ -332,6 +332,14 @@ function usesReasoningTokenParam(model: string) {
   return /(^|\/)(o\d|gpt-5)/.test(model);
 }
 
+// The gpt-5.6 family rejects function tools on /v1/chat/completions unless reasoning effort is
+// 'none': "Function tools with reasoning_effort are not supported for gpt-5.6-luna in
+// /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to
+// 'none'." `(^|/)` also matches provider-prefixed ids (e.g. `openai/gpt-5.6-sol`).
+function requiresNoReasoningEffortWithTools(model: string) {
+  return /(^|\/)gpt-5\.6/.test(model);
+}
+
 function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
   const effectiveMaxTokens = requestedMaxTokens
     ?? LLM_MAX_TOKENS
@@ -859,6 +867,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    // Third per-call model parameter, beside tokenParamFor and temperatureParamFor above.
+    // Only sent when the request actually carries tools: effort 'none' turns reasoning off,
+    // and a tool-less request has no reason to pay that.
+    const reasoningParamFor = (m: string): Record<string, string> =>
+      requiresNoReasoningEffortWithTools(m) && filteredTools && filteredTools.length > 0
+        ? { reasoning_effort: 'none' }
+        : {};
+
     // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
       const response = respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin);
@@ -921,6 +937,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               ...requestOptions,
               ...tokenParamFor(model),
               ...temperatureParamFor(model),
+              ...reasoningParamFor(model),
               ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
               stream: true as const,
               stream_options: { include_usage: true },
@@ -1021,6 +1038,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   model: fallbackRetryModel,
                   ...tokenParamFor(fallbackRetryModel),
                   ...temperatureParamFor(fallbackRetryModel),
+                  ...reasoningParamFor(fallbackRetryModel),
                   ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools }),
                   stream: true as const,
                   stream_options: { include_usage: true },
@@ -1049,6 +1067,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             ...requestOptions,
             ...tokenParamFor(model),
             ...temperatureParamFor(model),
+            ...reasoningParamFor(model),
             ...(filteredTools && filteredTools.length > 0 && { tools: requestOptions.tools }),
             stream: false as const,
           };
@@ -1095,6 +1114,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               messages: normalizedMessages as unknown as ChatCompletionRequest['messages'],
               ...tokenParamFor(fallbackRetryModel),
               ...temperatureParamFor(fallbackRetryModel),
+              ...reasoningParamFor(fallbackRetryModel),
               ...(response_format && { response_format }),
               ...(filteredTools && filteredTools.length > 0 && { tools: filteredTools as ToolDef[] }),
               stream: false as const,
