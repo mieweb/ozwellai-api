@@ -177,3 +177,63 @@ test('widget displays unavailable configured model errors as a friendly assistan
   assert.match(appSource, /configured_model_unavailable/);
   assert.match(appSource, /This assistant is temporarily unavailable\. Please try again later\./);
 });
+
+test('widget sends exactly one follow-up completion after all parallel tool results arrive', async () => {
+  const appSource = await readWidgetAppSource();
+
+  // The turn's tool_call ids are tracked as a set when the calls are dispatched.
+  assert.match(appSource, /awaitingToolResultsRef\.current = new Set\(/);
+  // Each result removes its id; the follow-up only fires once the set is empty.
+  assert.match(appSource, /awaitingToolResultsRef\.current\.delete\(String\(toolCallId\)\);/);
+  assert.match(
+    appSource,
+    /if \(wasAwaiting && awaitingToolResultsRef\.current\.size === 0\) \{\s*void sendMessageStreaming\('', toolsForRequest\(\)\);/
+  );
+  // The parent-message handler must not call sendMessageStreaming directly per result.
+  const handlerStart = appSource.indexOf('function handleParentMessage(');
+  const handlerEnd = appSource.indexOf("window.addEventListener('message', handleParentMessage);");
+  assert.notEqual(handlerStart, -1, 'Parent-message handler declaration must exist');
+  assert.notEqual(handlerEnd, -1, 'Parent-message handler registration must exist');
+  assert.ok(handlerEnd > handlerStart, 'Handler registration must follow its declaration');
+  const handlerSource = appSource.slice(handlerStart, handlerEnd);
+  assert.doesNotMatch(handlerSource, /sendMessageStreaming\(/);
+  assert.match(handlerSource, /recordToolResultRef\.current\(toolCallId, result\);/);
+  // A timed-out tool call records a synthetic error result so the history remains valid.
+  assert.match(appSource, /recordToolResultRef\.current\(id, \{ error: 'Tool call timed out' \}\);/);
+});
+
+test('widget refuses overlapping sendMessageStreaming calls and defers the follow-up', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(
+    appSource,
+    /async function sendMessageStreaming\([^)]*\)[^{]*\{\s*if \(sendingRef\.current\) \{\s*followUpPendingRef\.current = true;/
+  );
+  assert.match(
+    appSource,
+    /if \(followUpPendingRef\.current\) \{\s*followUpPendingRef\.current = false;\s*return sendMessageStreaming\('', toolsForRequest\(\)\);/
+  );
+});
+
+test('widget drops empty assistant turns instead of rendering "(no response)"', async () => {
+  const appSource = await readWidgetAppSource();
+  const bundleSource = await readWidgetSource();
+
+  assert.doesNotMatch(appSource, /\(no response\)/);
+  assert.doesNotMatch(bundleSource, /\(no response\)/);
+  assert.match(
+    appSource,
+    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== assistantMessageId\)\);/
+  );
+  assert.match(appSource, /Empty assistant turn[^']*Raw chunks:', rawChunks\)/);
+});
+
+test('widget SSE parsing accepts vendor reasoning fields and tool_calls without an index', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(appSource, /function extractThinkingDelta\(/);
+  assert.match(appSource, /\['thinking', 'reasoning_content', 'reasoning'\]/);
+  assert.match(appSource, /function resolveToolCallIndex\(/);
+  assert.match(appSource, /if \(typeof toolCallDelta\.index === 'number'\) return toolCallDelta\.index;/);
+  assert.match(appSource, /accumulated\.findIndex\(\(tc\) => tc\?\.id === toolCallDelta\.id\)/);
+});
