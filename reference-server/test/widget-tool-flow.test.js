@@ -192,6 +192,9 @@ test('widget sends exactly one follow-up completion after all parallel tool resu
   // The parent-message handler must not call sendMessageStreaming directly per result.
   const handlerStart = appSource.indexOf('function handleParentMessage(');
   const handlerEnd = appSource.indexOf("window.addEventListener('message', handleParentMessage);");
+  assert.notEqual(handlerStart, -1, 'Parent-message handler declaration must exist');
+  assert.notEqual(handlerEnd, -1, 'Parent-message handler registration must exist');
+  assert.ok(handlerEnd > handlerStart, 'Handler registration must follow its declaration');
   const handlerSource = appSource.slice(handlerStart, handlerEnd);
   assert.doesNotMatch(handlerSource, /sendMessageStreaming\(/);
   assert.match(handlerSource, /recordToolResultRef\.current\(toolCallId, result\);/);
