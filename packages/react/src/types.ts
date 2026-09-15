@@ -80,7 +80,7 @@ export interface OzwellConfig {
   /** Custom HTTP headers */
   headers?: Record<string, string>;
 
-  /** Widget URL (auto-detected by default) */
+  /** Widget frame URL (defaults to https://ozwellapi.os.mieweb.org/widget/frame/) */
   widgetUrl?: string;
 
   /** Auto-mount widget on load (default: true) */
@@ -95,10 +95,10 @@ export interface OzwellConfig {
   /** Auto-open chat window when AI replies (default: false) */
   autoOpenOnReply?: boolean;
 
-  // Planned Features (Documented but not yet implemented)
-
-  /** Scoped API key for authentication */
+  /** Agent key (agnt_key-...) for authentication and server-side agent configuration */
   apiKey?: string;
+
+  // Planned Features (Documented but not yet implemented)
 
   /** Agent ID for agent-specific configuration */
   agentId?: string;
