@@ -41,10 +41,10 @@ export function OzwellChat(props: OzwellChatProps) {
     headers,
     widgetUrl,
     autoOpenOnReply,
+    apiKey,
 
     // Future props (not yet implemented in vanilla widget)
     // These are accepted but ignored until backend support is added
-    apiKey,
     agentId,
     theme: _theme, // Prefix with _ to indicate intentionally unused
     position: _position,
@@ -84,11 +84,15 @@ export function OzwellChat(props: OzwellChatProps) {
     const handleError = () => {
       setScriptStatus('error');
       console.error('[OzwellChat] Failed to load ozwell-loader.js');
+      onError?.({
+        code: 'SCRIPT_LOAD_ERROR',
+        message: 'Failed to load Ozwell widget. Check the widget host URL and network access.',
+      });
     };
 
     // Check if script is already being loaded
     const existingScript = document.querySelector(
-      'script[src*="ozwell-loader.js"]'
+      'script[data-ozwell-loader], script[src*="ozwell-loader.js"]'
     ) as HTMLScriptElement | null;
 
     if (existingScript) {
@@ -102,16 +106,23 @@ export function OzwellChat(props: OzwellChatProps) {
       };
     }
 
+    window.OzwellChatConfig = {
+      ...window.OzwellChatConfig,
+      autoMount: false,
+    };
+
     // Load script
     setScriptStatus('loading');
 
-    // Auto-detect base URL from current script location
-    // In production, users will host ozwell-loader.js on their server
-    const scriptSrc = widgetUrl
-      ? widgetUrl.replace(/\/[^/]*$/, '/ozwell-loader.js')
-      : '/embed/ozwell-loader.js';
+    const scriptSrc = new URL(
+      '/widget',
+      widgetUrl
+        ? new URL(widgetUrl, window.location.href)
+        : 'https://ozwellapi.os.mieweb.org'
+    ).href;
 
     const script = document.createElement('script');
+    script.dataset.ozwellLoader = 'true';
     script.src = scriptSrc;
     script.async = true;
 
@@ -147,15 +158,13 @@ export function OzwellChat(props: OzwellChatProps) {
       openaiApiKey,
       headers,
       widgetUrl,
+      apiKey,
 
       // Layout config
       defaultUI,
       autoMount: false, // Prevent auto-mount, we'll mount manually
       autoOpenOnReply,
 
-      // Future props - passed to widget for forward compatibility
-      // When scoped API keys land (PR #53), these will work without React package changes
-      apiKey,
       agentId,
     };
 
@@ -194,7 +203,11 @@ export function OzwellChat(props: OzwellChatProps) {
         mountOptions.height = typeof height === 'string' ? parseInt(height) : height;
       }
 
-      window.OzwellChat.mount(mountOptions);
+      if (window.OzwellChat.iframe) {
+        window.OzwellChat.configure(cleanConfig);
+      } else {
+        window.OzwellChat.mount(mountOptions);
+      }
 
       // Wait for widget to be ready
       window.OzwellChat.ready().then(() => {
@@ -243,7 +256,8 @@ export function OzwellChat(props: OzwellChatProps) {
     const handleMessage = (event: MessageEvent) => {
       // Validate message comes from our widget iframe
       const iframe = window.OzwellChat?.iframe;
-      if (iframe && event.source !== iframe.contentWindow) {
+        if (!iframe || event.source !== iframe.contentWindow ||
+          event.origin !== new URL(iframe.src, window.location.href).origin) {
         return;
       }
 
@@ -307,6 +321,31 @@ export function OzwellChat(props: OzwellChatProps) {
       window.removeEventListener('message', handleMessage);
     };
   }, [isWidgetReady, onClose, onOpen, onUserShare, onError, onToolCall]);
+
+  useEffect(() => {
+    const handleToolCall = (event: Event) => {
+      const { name, arguments: args, respond, error } = (event as CustomEvent<{
+        name: string;
+        arguments: Record<string, unknown>;
+        respond: (result: unknown) => void;
+        error: (message: string) => void;
+      }>).detail;
+
+      if (!onToolCall) {
+        error(`No handler configured for tool "${name}".`);
+        return;
+      }
+
+      try {
+        onToolCall(name, args || {}, respond);
+      } catch {
+        error(`Tool "${name}" failed.`);
+      }
+    };
+
+    document.addEventListener('ozwell-tool-call', handleToolCall);
+    return () => document.removeEventListener('ozwell-tool-call', handleToolCall);
+  }, [onToolCall]);
 
   // Render container div (only if not using default UI)
   if (defaultUI) {

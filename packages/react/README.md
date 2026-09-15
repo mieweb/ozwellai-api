@@ -20,7 +20,7 @@ import { OzwellChat } from '@ozwell/react';
 function App() {
   return (
     <OzwellChat
-      endpoint="/v1/chat/completions"
+      apiKey="agnt_key-your-agent-key"
       tools={[
         {
           type: 'function',
@@ -40,26 +40,29 @@ function App() {
 }
 ```
 
-> **Note:** This package wraps the existing Ozwell widget. API key authentication and agent configuration are coming soon. Currently uses local endpoint configuration.
+This package loads the hosted iframe widget and authenticates with an agent key.
+Sign in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) to create an agent.
+For another deployment, set `widgetUrl` to its `/widget/frame/` URL.
+See the [React integration guide](https://docs.ozwell.ai/frontend/react) for credential
+safety, a complete Vite + MIE UI Hello World example, and troubleshooting.
 
 ## Feature Support
 
 ### Currently Available
+- Agent-key authentication (`apiKey` prop)
 - Custom endpoints (`endpoint` prop)
 - Model selection (`model` prop)
 - MCP tool/function calling (`tools` prop, `onToolCall` callback)
-- Context updates (`context` prop)
 - System prompts (`system` prop)
 - Welcome messages (`welcomeMessage` prop)
 - Debug mode (`debug` prop)
 - OpenAI API compatibility (`openaiApiKey` prop)
 - Custom headers (`headers` prop)
 - Auto-open on AI reply (`autoOpenOnReply` prop)
-- Lifecycle callbacks (`onReady`, `onOpen`, `onClose`, `onInsert`)
-- Error callback for mount errors (`onError` - partial)
+- Lifecycle callbacks (`onReady`, `onOpen`, `onClose`)
+- Error callback for loader and mount errors (`onError` - partial)
 
 ### Coming Soon
-- Scoped API keys (`apiKey` prop)
 - Agent management (`agentId` prop)
 - Theme customization (`theme`, `primaryColor` props)
 - Position control (`position` prop)
