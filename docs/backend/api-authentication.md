@@ -81,11 +81,12 @@ key shared by every visitor to the page.
 - ✅ Revocable by the holder through `POST /auth/logout`
 - ⚠️ Expires 24 hours after sign-in, and on server restart
 
-Users are matched to accounts by email address. Signing in with an address that already has an
-account reuses that account and its key; a new address gets one created.
+Users are matched to accounts by verified email address. The default admission policy permits
+only existing active accounts. New accounts require an explicitly configured domain allowlist
+or open-signup policy; inactive accounts cannot sign in.
 
 See [API Endpoints](./api-endpoints.md#widget-sign-in) for the routes and
-[the widget README](../../reference-server/embed/README.md) for the embedding side.
+[the widget authentication guide](widget-authentication.md) for deployment and embedding details.
 
 ## Key Lifecycle
 

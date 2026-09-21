@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { startOidcFlow, consumeOidcFlow, createSessionForIdentity } from '../storage/sessions';
+import { publicOrigin, popupResultPage } from '../util/oidc';
 
 const GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -12,11 +13,6 @@ const googleJwks = createRemoteJWKSet(new URL(GOOGLE_JWKS_URI));
 
 export function isGoogleConfigured(): boolean {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-}
-
-/** This server's own public origin. Never derived from request input. */
-function publicOrigin(): string {
-  return (process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
 }
 
 /**
@@ -35,20 +31,6 @@ function redirectUri(): string {
  * and with '*' any page could open the start URL itself and be handed the
  * session token of whoever signed in, which is account takeover from a link.
  */
-function popupResultPage(payload: Record<string, unknown>): string {
-  const json = JSON.stringify({ source: 'ozwell-auth', ...payload });
-  const target = JSON.stringify(publicOrigin());
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Signing in…</title></head>
-<body style="font:14px system-ui;padding:24px">
-<p>${payload.error ? 'Sign-in failed. You can close this window.' : 'Signed in. You can close this window.'}</p>
-<script>
-  try { window.opener && window.opener.postMessage(${json}, ${target}); } catch (e) {}
-  window.close();
-</script>
-</body></html>`;
-}
-
 export default async function googleOidcRoute(fastify: FastifyInstance) {
   /** Step 1 — send the browser to Google with PKCE, state and nonce. */
   fastify.get('/auth/oidc/google/start', async (_request, reply) => {
@@ -76,13 +58,15 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
   fastify.get('/auth/oidc/google/callback', async (request, reply) => {
     const { code, state, error } = request.query as { code?: string; state?: string; error?: string };
     reply.type('text/html; charset=utf-8');
+    reply.header('Cache-Control', 'no-store');
 
-    if (error) return popupResultPage({ error });
-    if (!code || !state) return popupResultPage({ error: 'missing_code_or_state' });
+    if (typeof state !== 'string') return popupResultPage({ error: 'missing_code_or_state' });
 
     // Single-use state: proves this callback belongs to a sign-in we started.
     const flow = consumeOidcFlow(state);
     if (!flow) return popupResultPage({ error: 'invalid_or_expired_state' });
+    if (error) return popupResultPage({ error: 'authorization_denied' });
+    if (typeof code !== 'string') return popupResultPage({ error: 'missing_code_or_state' });
 
     let idToken: string;
     try {
@@ -97,6 +81,7 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
           grant_type: 'authorization_code',
           code_verifier: flow.codeVerifier,
         }),
+        signal: AbortSignal.timeout(10000),
       });
       const payload = await tokenResponse.json() as { id_token?: string; error?: string };
       if (!tokenResponse.ok || !payload.id_token) {
@@ -131,13 +116,18 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
     if (!email || !sub) return popupResultPage({ error: 'missing_identity_claims' });
     if (claims.email_verified !== true) return popupResultPage({ error: 'email_not_verified' });
 
-    const sessionToken = createSessionForIdentity({
+    let sessionToken: string;
+    try {
+      sessionToken = createSessionForIdentity({
       email,
       externalUserId: `google:${sub}`,
       username: typeof claims.name === 'string' ? claims.name : email,
       firstName: typeof claims.given_name === 'string' ? claims.given_name : null,
       lastName: typeof claims.family_name === 'string' ? claims.family_name : null,
-    });
+      });
+    } catch {
+      return popupResultPage({ error: 'account_not_permitted' });
+    }
 
     request.log.info({ email }, 'widget Google sign-in');
     return popupResultPage({ session_token: sessionToken, email });

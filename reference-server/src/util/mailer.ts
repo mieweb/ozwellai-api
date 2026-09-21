@@ -26,6 +26,9 @@ function getTransport(): Transporter {
     // opportunistic upgrades have to be off or every send fails.
     secure: false,
     ignoreTLS: true,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
   return transport;
 }

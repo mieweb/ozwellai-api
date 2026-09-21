@@ -1,10 +1,15 @@
 import { FastifyInstance } from 'fastify';
 import { createOtpChallenge, verifyOtp, validateSession, destroySession, createSessionForIdentity, allowOtpRequest } from '../storage/sessions';
 import { isGoogleConfigured } from './oidc-google';
+import { isAppleConfigured } from './oidc-apple';
 import { createError, extractToken } from '../util';
 import { isMailConfigured, sendOtpEmail } from '../util/mailer';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function emailSignInAvailable(): boolean {
+  return isMailConfigured() || process.env.NODE_ENV !== 'production';
+}
 
 /**
  * Widget sign-in routes.
@@ -24,6 +29,10 @@ export default async function authRoute(fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
+    if (!emailSignInAvailable()) {
+      reply.code(503);
+      return createError('Email sign-in is not configured', 'server_error');
+    }
     const { email } = (request.body ?? {}) as { email?: string };
     if (!email || !EMAIL_RE.test(email)) {
       reply.code(400);
@@ -107,7 +116,7 @@ export default async function authRoute(fastify: FastifyInstance) {
   fastify.get('/auth/methods', {
     schema: { tags: ['Auth'], summary: 'List sign-in methods this server offers' },
   }, async () => {
-    return { google: isGoogleConfigured(), email_otp: true, user_key: true };
+    return { google: isGoogleConfigured(), apple: isAppleConfigured(), email_otp: emailSignInAvailable(), user_key: true };
   });
 
   fastify.post('/auth/logout', {

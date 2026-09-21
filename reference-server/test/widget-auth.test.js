@@ -5,9 +5,17 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
+import Fastify from 'fastify';
+import { generateKeyPair, exportPKCS8, exportJWK, createLocalJWKSet, SignJWT, jwtVerify } from 'jose';
+import oidcModule from '../dist/reference-server/src/util/oidc.js';
 
 // Store unit tests import the compiled module (npm pretest runs the build)
+const storeDirectory = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-store-'));
+process.env.DB_PATH = path.join(storeDirectory, 'auth.db');
 const sessions = await import('../dist/reference-server/src/storage/sessions.js');
+const { agentStore } = await import('../dist/reference-server/src/storage/agents.js');
+const { default: appleRouteModule } = await import('../dist/reference-server/src/routes/oidc-apple.js');
 
 // Keep MOCK_KEY in sync with MOCK_AGENT_KEY in src/storage/agents.ts.
 const MOCK_KEY = 'agnt_key-mock-test';
@@ -59,10 +67,12 @@ function startServer(port, dbPath, extraEnv = {}) {
             NODE_ENV: 'development',
             ALLOW_MOCK: 'true',
             AUTH_DEV_ECHO_OTP: '1',
+            WIDGET_SIGNUP_POLICY: 'open',
             // Present-but-empty so dotenv leaves them alone: these assert the
             // unconfigured path, which a developer's own .env would otherwise fill in.
             GOOGLE_CLIENT_ID: '',
             GOOGLE_CLIENT_SECRET: '',
+            APPLE_CLIENT_ID: '',
             SMTP_URL: '',
             ...extraEnv,
         },
@@ -85,6 +95,7 @@ before(async () => {
 after(() => {
     stopServer(server);
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    rmSync(storeDirectory, { recursive: true, force: true });
 });
 
 // --- session store units ---
@@ -131,6 +142,112 @@ test('OIDC flow state carries PKCE and nonce, and is single-use', () => {
 
 test('unknown session token is rejected', () => {
     assert.equal(sessions.validateSession('sess_bogus'), null);
+});
+
+test('OIDC state cannot cross providers', () => {
+    const flow = sessions.startOidcFlow('apple');
+    assert.equal(sessions.consumeOidcFlow(flow.state, 'google'), null);
+    assert.equal(sessions.consumeOidcFlow(flow.state, 'apple'), null);
+});
+
+test('popup response escapes script content and targets only the API origin', () => {
+    const html = oidcModule.popupResultPage({ email: '</script><script>bad()</script>' });
+    assert.ok(!html.includes('</script><script>'));
+    assert.ok(html.includes('\\u003c/script>'));
+    assert.ok(!html.includes('postMessage(*'));
+});
+
+test('Apple signs short-lived client secrets and validates form-post identities', async (context) => {
+    const names = ['APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY', 'PUBLIC_BASE_URL', 'WIDGET_SIGNUP_POLICY'];
+    const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+    const clientKeys = await generateKeyPair('ES256', { extractable: true });
+    const signingKeys = await generateKeyPair('RS256');
+    Object.assign(process.env, {
+        APPLE_CLIENT_ID: 'test.service', APPLE_TEAM_ID: 'test-team', APPLE_KEY_ID: 'test-key',
+        APPLE_PRIVATE_KEY: await exportPKCS8(clientKeys.privateKey),
+        PUBLIC_BASE_URL: 'https://widget.example', WIDGET_SIGNUP_POLICY: 'open',
+    });
+    const app = Fastify();
+    try {
+        const secret = await appleRouteModule.appleClientSecret();
+        const { payload, protectedHeader } = await jwtVerify(secret, clientKeys.publicKey, {
+            issuer: 'test-team', audience: 'https://appleid.apple.com', subject: 'test.service',
+        });
+        assert.equal(protectedHeader.kid, 'test-key');
+        assert.equal(payload.exp - payload.iat, 300);
+        await app.register(appleRouteModule.default, {
+            jwks: createLocalJWKSet({ keys: [{ ...await exportJWK(signingKeys.publicKey), kid: 'apple-test', alg: 'RS256' }] }),
+        });
+        let token;
+        const fetchMock = context.mock.method(globalThis, 'fetch', async (url, request) => {
+            assert.equal(url, 'https://appleid.apple.com/auth/token');
+            assert.equal(request.body.get('redirect_uri'), 'https://widget.example/auth/oidc/apple/callback');
+            return new Response(JSON.stringify({ id_token: token }), { status: 200 });
+        });
+        for (const scenario of ['valid', 'repeat-login', 'wrong-nonce', 'unverified', 'wrong-audience', 'expired', 'denied-policy']) {
+            const start = await app.inject('/auth/oidc/apple/start');
+            const location = new URL(start.headers.location);
+            assert.equal(location.searchParams.get('response_mode'), 'form_post');
+            const state = location.searchParams.get('state');
+            token = await new SignJWT({
+                nonce: scenario === 'wrong-nonce' ? 'wrong' : location.searchParams.get('nonce'),
+                email: 'apple-auth@example.test', email_verified: scenario === 'unverified' ? 'false' : 'true',
+            }).setProtectedHeader({ alg: 'RS256', kid: 'apple-test' })
+                .setIssuer('https://appleid.apple.com').setSubject('apple-user')
+                .setAudience(scenario === 'wrong-audience' ? 'other' : 'test.service')
+                .setIssuedAt().setExpirationTime(scenario === 'expired' ? '0s' : '5m').sign(signingKeys.privateKey);
+            process.env.WIDGET_SIGNUP_POLICY = scenario === 'denied-policy' ? 'allowlist' : 'open';
+            const response = await app.inject({ method: 'POST', url: '/auth/oidc/apple/callback',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                payload: new URLSearchParams({ state, code: 'test-code' }).toString(),
+            });
+            assert.equal(response.headers['cache-control'], 'no-store');
+            assert.equal(response.body.includes('session_token'), ['valid', 'repeat-login'].includes(scenario), scenario);
+            const replay = await app.inject({ method: 'POST', url: '/auth/oidc/apple/callback',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                payload: new URLSearchParams({ state, code: 'test-code' }).toString(),
+            });
+            assert.match(replay.body, /invalid_or_expired_state/);
+        }
+        assert.equal(fetchMock.mock.callCount(), 7);
+    } finally {
+        await app.close();
+        for (const name of names) {
+            if (saved[name] === undefined) delete process.env[name];
+            else process.env[name] = saved[name];
+        }
+    }
+});
+
+test('widget signup defaults to existing accounts and rejects unapproved domains', () => {
+    const previousPolicy = process.env.WIDGET_SIGNUP_POLICY;
+    const previousDomains = process.env.WIDGET_SIGNUP_DOMAINS;
+    const identity = { email: 'new-user@unapproved.test', externalUserId: 'email:new-user@unapproved.test' };
+    try {
+        delete process.env.WIDGET_SIGNUP_POLICY;
+        assert.throws(() => sessions.createSessionForIdentity(identity), { statusCode: 403 });
+        assert.equal(agentStore.getManagerUserByEmail(identity.email), null);
+        process.env.WIDGET_SIGNUP_POLICY = 'allowlist';
+        process.env.WIDGET_SIGNUP_DOMAINS = 'approved.test';
+        assert.throws(() => sessions.createSessionForIdentity(identity), { statusCode: 403 });
+        assert.throws(() => sessions.createSessionForIdentity({ ...identity, email: 'user@sub.approved.test' }), { statusCode: 403 });
+        const approved = { email: 'user@approved.test', externalUserId: 'email:user@approved.test' };
+        const token = sessions.createSessionForIdentity(approved);
+        const first = sessions.validateSession(token);
+        assert.equal(first.email, approved.email);
+        delete process.env.WIDGET_SIGNUP_POLICY;
+        const repeated = sessions.createSessionForIdentity(approved);
+        assert.equal(sessions.validateSession(repeated).parentKey, first.parentKey);
+        sessions.destroySession(token);
+        sessions.destroySession(repeated);
+        process.env.WIDGET_SIGNUP_POLICY = 'invalid';
+        assert.throws(() => sessions.createSessionForIdentity(identity), { statusCode: 403 });
+    } finally {
+        if (previousPolicy === undefined) delete process.env.WIDGET_SIGNUP_POLICY;
+        else process.env.WIDGET_SIGNUP_POLICY = previousPolicy;
+        if (previousDomains === undefined) delete process.env.WIDGET_SIGNUP_DOMAINS;
+        else process.env.WIDGET_SIGNUP_DOMAINS = previousDomains;
+    }
 });
 
 test('OTP challenge locks out after too many wrong attempts', () => {
@@ -225,6 +342,76 @@ test('a server that can send mail never echoes the code, and says so when delive
     }
 });
 
+test('production disables email login without SMTP even when dev echo is enabled', async () => {
+    const port = 3349;
+    const child = startServer(port, path.join(tmp, 'production.db'), { NODE_ENV: 'production' });
+    try {
+        await waitForReady(`http://localhost:${port}`);
+        const methods = await (await fetch(`http://localhost:${port}/auth/methods`)).json();
+        assert.equal(methods.email_otp, false);
+        const response = await fetch(`http://localhost:${port}/auth/otp/request`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'user@example.test' }),
+        });
+        assert.equal(response.status, 503);
+        assert.equal((await response.json()).dev_code, undefined);
+    } finally { stopServer(child); }
+});
+
+test('SMTP delivery sends a usable code without exposing it in the API or logs', async () => {
+    let message = '';
+    const smtp = net.createServer(socket => {
+        let buffer = '';
+        let inData = false;
+        socket.write('220 test SMTP ready\r\n');
+        socket.on('data', chunk => {
+            buffer += chunk.toString();
+            let boundary;
+            while ((boundary = buffer.indexOf('\r\n')) !== -1) {
+                const line = buffer.slice(0, boundary);
+                buffer = buffer.slice(boundary + 2);
+                if (inData) {
+                    if (line === '.') { inData = false; socket.write('250 accepted\r\n'); }
+                    else message += `${line}\n`;
+                } else if (line.startsWith('DATA')) {
+                    inData = true; socket.write('354 send data\r\n');
+                } else if (line.startsWith('QUIT')) socket.end('221 goodbye\r\n');
+                else socket.write('250 OK\r\n');
+            }
+        });
+        socket.on('error', () => {});
+    });
+    await new Promise(resolve => smtp.listen(0, '127.0.0.1', resolve));
+    const port = 3350;
+    const base = `http://localhost:${port}`;
+    const child = startServer(port, path.join(tmp, 'smtp.db'), {
+        SMTP_URL: `smtp://127.0.0.1:${smtp.address().port}`, NODE_ENV: 'production',
+    });
+    let logs = '';
+    child.stdout.on('data', chunk => { logs += chunk.toString(); });
+    child.stderr.on('data', chunk => { logs += chunk.toString(); });
+    try {
+        await waitForReady(base);
+        const requested = await fetch(`${base}/auth/otp/request`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'delivered@example.test' }),
+        });
+        assert.equal(requested.status, 200);
+        const body = await requested.json();
+        assert.equal(body.dev_code, undefined);
+        const code = message.match(/Your Ozwell sign-in code is (\d{6})/)[1];
+        assert.ok(!logs.includes(code));
+        const verified = await fetch(`${base}/auth/otp/verify`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ challenge_id: body.challenge_id, code }),
+        });
+        assert.equal(verified.status, 200);
+    } finally {
+        stopServer(child);
+        await new Promise(resolve => smtp.close(resolve));
+    }
+});
+
 // --- session-to-key rewrite hook ---
 
 test('session token authorizes chat; bogus session token does not', async () => {
@@ -284,7 +471,7 @@ test('each signed-in email gets its own parent key', async () => {
 test('sign-in methods report Google as unconfigured without credentials', async () => {
     const res = await fetch(`${BASE}/auth/methods`);
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { google: false, email_otp: true, user_key: true });
+    assert.deepEqual(await res.json(), { google: false, apple: false, email_otp: true, user_key: true });
 });
 
 test('Google start route is absent until credentials are configured', async () => {

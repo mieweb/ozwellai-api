@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type WidgetCredential = { key: string; source: 'session' | 'user-key' };
 
@@ -21,13 +21,25 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [appleEnabled, setAppleEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const popupCleanup = useRef<() => void>(() => {});
+
+  useEffect(() => () => popupCleanup.current(), []);
 
   // Only offer Google when the server has credentials configured.
   useEffect(() => {
     let cancelled = false;
     fetch(`${apiOrigin}/auth/methods`)
       .then((response) => response.json())
-      .then((methods) => { if (!cancelled) setGoogleEnabled(!!methods?.google); })
+      .then((methods) => {
+        if (!cancelled) {
+          setGoogleEnabled(!!methods?.google);
+          setAppleEnabled(!!methods?.apple);
+          setEmailEnabled(!!methods?.email_otp);
+          if (!methods?.email_otp) setMode('key');
+        }
+      })
       .catch(() => { /* leave it hidden */ });
     return () => { cancelled = true; };
   }, [apiOrigin]);
@@ -36,11 +48,12 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
    * Google refuses to render its consent screen in an iframe, so sign-in runs
    * in a popup that posts the session token back to this window.
    */
-  function signInWithGoogle() {
+  function signInWithProvider(provider: 'google' | 'apple') {
+    popupCleanup.current();
     setError(null);
     const popup = window.open(
-      `${apiOrigin}/auth/oidc/google/start`,
-      'ozwell-google-signin',
+      `${apiOrigin}/auth/oidc/${provider}/start`,
+      `ozwell-${provider}-signin`,
       'width=480,height=640,menubar=no,toolbar=no'
     );
     if (!popup) {
@@ -50,7 +63,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
 
     setBusy(true);
     function onMessage(event: MessageEvent) {
-      if (event.origin !== apiOrigin) return;
+      if (event.origin !== new URL(apiOrigin).origin || event.source !== popup) return;
       const data = event.data as { source?: string; session_token?: string; error?: string };
       if (data?.source !== 'ozwell-auth') return;
       window.removeEventListener('message', onMessage);
@@ -59,7 +72,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
       if (data.session_token) {
         onAuthenticated({ key: data.session_token, source: 'session' });
       } else {
-        setError(`Google sign-in failed (${data.error || 'unknown'})`);
+        setError(`Sign-in failed (${data.error || 'unknown'})`);
       }
     }
     window.addEventListener('message', onMessage);
@@ -71,6 +84,11 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
       window.removeEventListener('message', onMessage);
       setBusy(false);
     }, 500);
+    popupCleanup.current = () => {
+      clearInterval(closedTimer);
+      window.removeEventListener('message', onMessage);
+      popup.close();
+    };
   }
 
   async function post(path: string, body: unknown) {
@@ -135,7 +153,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
             <button
               type="button"
               className="ozwell-auth-google-button"
-              onClick={signInWithGoogle}
+              onClick={() => signInWithProvider('google')}
               disabled={busy}
             >
               Continue with Google
@@ -144,7 +162,17 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           </div>
         )}
 
+        {appleEnabled && (
+          <div className="ozwell-auth-google">
+            <button type="button" className="ozwell-auth-google-button"
+              onClick={() => signInWithProvider('apple')} disabled={busy}>
+              Continue with Apple
+            </button>
+          </div>
+        )}
+
         <div className="ozwell-auth-tabs" role="tablist">
+          {emailEnabled && (
           <button
             type="button"
             role="tab"
@@ -154,6 +182,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           >
             Email sign-in
           </button>
+          )}
           <button
             type="button"
             role="tab"
@@ -165,7 +194,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           </button>
         </div>
 
-        {mode === 'email' && (challengeId === null ? (
+        {mode === 'email' && emailEnabled && (challengeId === null ? (
           <div className="ozwell-auth-fields">
             <input
               className="ozwell-auth-input"

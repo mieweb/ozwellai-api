@@ -18,6 +18,7 @@ import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
 import googleOidcRoute from './routes/oidc-google';
+import appleOidcRoute from './routes/oidc-apple';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 import { validateSession, SESSION_TOKEN_PREFIX, sweepExpiredSessionState } from './storage/sessions';
 import { extractToken } from './util';
@@ -236,6 +237,7 @@ async function buildServer() {
   // Register API routes
   await fastify.register(authRoute);        // Widget sign-in (email OTP sessions)
   await fastify.register(googleOidcRoute);  // Widget sign-in (Google OIDC)
+  await fastify.register(appleOidcRoute);
   await fastify.register(modelsRoute);
   await fastify.register(chatRoute);
   await fastify.register(responsesRoute);

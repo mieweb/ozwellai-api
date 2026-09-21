@@ -34,7 +34,7 @@ export type WidgetSession = {
 };
 
 /** A Google sign-in in flight: state -> PKCE verifier + nonce. */
-type PendingOidcFlow = { codeVerifier: string; nonce: string; expiresAt: number };
+type PendingOidcFlow = { codeVerifier: string; nonce: string; expiresAt: number; provider: string };
 
 // ponytail: in-memory maps; move to sqlite if multi-process or restart-survival matters
 const challenges = new Map<string, { email: string; code: string; expiresAt: number; attempts: number }>();
@@ -99,12 +99,22 @@ export function sweepExpiredSessionState(now = Date.now()): number {
  * sign-in, and re-linked to an existing row when the email already exists.
  */
 export function createSessionForIdentity(identity: SessionIdentity): string {
+  const email = identity.email.trim().toLowerCase();
+  const existing = agentStore.getManagerUserByEmail(email);
+  const policy = process.env.WIDGET_SIGNUP_POLICY || 'existing';
+  const domains = (process.env.WIDGET_SIGNUP_DOMAINS || '').split(',').map(domain => domain.trim().toLowerCase()).filter(Boolean);
+  const permitted = policy === 'open' ||
+    (policy === 'existing' && !!existing) ||
+    (policy === 'allowlist' && domains.includes(email.split('@')[1]));
+  if (!permitted || (existing && existing.status !== 'active')) {
+    throw Object.assign(new Error('This account is not permitted to use widget sign-in.'), { statusCode: 403 });
+  }
   const { user, parentKey } = agentStore.ensureManagerUserProvisioned({
     external_user_id: identity.externalUserId,
     username: identity.username ?? undefined,
     first_name: identity.firstName ?? undefined,
     last_name: identity.lastName ?? undefined,
-    email: identity.email,
+    email,
   });
 
   const token = `${SESSION_TOKEN_PREFIX}${randomBytes(24).toString('hex')}`;
@@ -162,20 +172,20 @@ export function verifyOtp(challengeId: string, code: string): string | null {
 
 // --- OIDC flow state (PKCE verifier + nonce, keyed by state) ---
 
-export function startOidcFlow(): { state: string; codeVerifier: string; codeChallenge: string; nonce: string } {
+export function startOidcFlow(provider = 'google'): { state: string; codeVerifier: string; codeChallenge: string; nonce: string } {
   const state = randomBytes(16).toString('hex');
   const codeVerifier = randomBytes(32).toString('base64url');
   const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
   const nonce = randomBytes(16).toString('hex');
-  oidcFlows.set(state, { codeVerifier, nonce, expiresAt: Date.now() + OIDC_FLOW_TTL_MS });
+  oidcFlows.set(state, { codeVerifier, nonce, expiresAt: Date.now() + OIDC_FLOW_TTL_MS, provider });
   return { state, codeVerifier, codeChallenge, nonce };
 }
 
 /** Single-use: consuming a state prevents replay of a completed callback. */
-export function consumeOidcFlow(state: string): { codeVerifier: string; nonce: string } | null {
+export function consumeOidcFlow(state: string, provider = 'google'): { codeVerifier: string; nonce: string } | null {
   const flow = oidcFlows.get(state);
   if (!flow) return null;
   oidcFlows.delete(state);
-  if (Date.now() > flow.expiresAt) return null;
+  if (Date.now() > flow.expiresAt || flow.provider !== provider) return null;
   return { codeVerifier: flow.codeVerifier, nonce: flow.nonce };
 }
