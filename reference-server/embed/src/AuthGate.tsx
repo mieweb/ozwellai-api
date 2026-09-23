@@ -130,16 +130,34 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
     }
   }
 
-  function useOwnKey() {
+  async function useOwnKey() {
+    if (busy) return;
     const trimmed = ownKey.trim();
     if (!trimmed.startsWith('agnt_key-') && !trimmed.startsWith('ozw_')) {
       setError('Enter an agent key (agnt_key-...) or parent key (ozw_...)');
       return;
     }
-    if (remember) {
-      try { localStorage.setItem(REMEMBERED_KEY_STORAGE, trimmed); } catch { /* storage blocked */ }
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`${apiOrigin}/v1/models/effective`, {
+        headers: { Authorization: `Bearer ${trimmed}` },
+      });
+      if (response.status === 401 || response.status === 403) {
+        throw new Error('This key is not accepted by this Ozwell server. Use a key created on the same deployment.');
+      }
+      if (!response.ok) throw new Error('Could not verify the key. Please try again shortly.');
+      if (remember) {
+        try { localStorage.setItem(REMEMBERED_KEY_STORAGE, trimmed); } catch { /* storage blocked */ }
+      } else {
+        try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+      }
+      onAuthenticated({ key: trimmed, source: 'user-key' });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
     }
-    onAuthenticated({ key: trimmed, source: 'user-key' });
   }
 
   return (
@@ -270,9 +288,9 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
               type="button"
               className="ozwell-auth-primary"
               onClick={useOwnKey}
-              disabled={!ownKey.trim()}
+              disabled={busy || !ownKey.trim()}
             >
-              Use key
+              {busy ? 'Verifying...' : 'Use key'}
             </button>
           </div>
         )}

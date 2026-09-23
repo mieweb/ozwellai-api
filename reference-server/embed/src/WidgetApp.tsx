@@ -401,6 +401,22 @@ export function WidgetApp() {
           headers: requestHeaders(config),
           signal: controller.signal,
         });
+        if (controller.signal.aborted) return;
+        if (response.status === 401 && (credentialSource === 'session' || credentialSource === 'user-key')) {
+          if (getAuthKey(configRef.current) !== authKey) return;
+          try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+          setCredentialSource(null);
+          setConfig((current) => {
+            const next = { ...current, apiKey: '', openaiApiKey: '' };
+            configRef.current = next;
+            return next;
+          });
+          setHistoryMessages([]);
+          setDisplayMessages([]);
+          setEffectiveModels([]);
+          setActiveModel(null);
+          return;
+        }
         if (!response.ok) {
           setEffectiveModels([]);
           return;
@@ -418,7 +434,7 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, credentialSource]);
 
   useEffect(() => {
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
