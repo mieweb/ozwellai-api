@@ -1030,10 +1030,13 @@ export function WidgetApp() {
   }
 
   return (
-    <>
+    <div className="ozwell-session-layout">
     {(credentialSource === 'session' || credentialSource === 'user-key') && (
       <div className="ozwell-auth-bar">
-        <button type="button" className="ozwell-auth-link" onClick={signOut}>
+        <span className="ozwell-account-status">
+          {credentialSource === 'session' ? 'Signed in' : 'Personal key'}
+        </span>
+        <button type="button" className="ozwell-account-action" onClick={signOut}>
           {credentialSource === 'session' ? 'Sign out' : 'Forget key'}
         </button>
       </div>
@@ -1062,6 +1065,6 @@ export function WidgetApp() {
       warning={toast}
       onDismissWarning={() => setToast(null)}
     />
-    </>
+    </div>
   );
 }

@@ -148,27 +148,28 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
         <h2 className="ozwell-auth-title">Sign in to Ozwell</h2>
         <p className="ozwell-auth-subtitle">Use your email, or bring your own Ozwell key.</p>
 
-        {googleEnabled && (
-          <div className="ozwell-auth-google">
-            <button
-              type="button"
-              className="ozwell-auth-google-button"
-              onClick={() => signInWithProvider('google')}
-              disabled={busy}
-            >
-              Continue with Google
-            </button>
+        {(googleEnabled || appleEnabled) && (
+          <>
+            <div className="ozwell-auth-providers">
+              {googleEnabled && (
+                <button
+                  type="button"
+                  className="ozwell-auth-google-button"
+                  onClick={() => signInWithProvider('google')}
+                  disabled={busy}
+                >
+                  Continue with Google
+                </button>
+              )}
+              {appleEnabled && (
+                <button type="button" className="ozwell-auth-google-button"
+                  onClick={() => signInWithProvider('apple')} disabled={busy}>
+                  Continue with Apple
+                </button>
+              )}
+            </div>
             <div className="ozwell-auth-divider"><span>or</span></div>
-          </div>
-        )}
-
-        {appleEnabled && (
-          <div className="ozwell-auth-google">
-            <button type="button" className="ozwell-auth-google-button"
-              onClick={() => signInWithProvider('apple')} disabled={busy}>
-              Continue with Apple
-            </button>
-          </div>
+          </>
         )}
 
         <div className="ozwell-auth-tabs" role="tablist">

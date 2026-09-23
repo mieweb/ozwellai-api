@@ -552,10 +552,73 @@ body {
 
 .ozwell-auth-bar {
   display: flex;
-  justify-content: flex-end;
-  padding: 4px 10px;
-  border-bottom: 1px solid #d8e0ec;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e5e9ed;
+  background: #f8fafb;
+}
+
+.ozwell-session-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ozwell-session-layout > [data-slot="ozwell-chat"] {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+}
+
+.ozwell-account-status {
+  color: #63717b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ozwell-account-action {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #435560;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ozwell-account-action:hover {
+  background: #eaf0f3;
+  color: #0f7495;
+}
+
+.ozwell-account-action:focus-visible {
+  outline: 2px solid #0f7495;
+  outline-offset: 2px;
+}
+
+.ozwell-session-layout button[aria-label^="Show thinking:"] {
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid #e2e8ed;
+  border-radius: 6px;
   background: #ffffff;
+  color: #52616c;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.ozwell-auth-providers {
+  display: grid;
+  gap: 10px;
 }
 
 .ozwell-auth-google-button {
