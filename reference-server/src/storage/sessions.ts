@@ -17,6 +17,8 @@ const MAX_OTP_ATTEMPTS = 5;
 // one, while giving an attacker no trouble at all.
 const OTP_RATE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_OTP_REQUESTS_PER_EMAIL = 3;
+const MAX_OTP_REQUESTS_TOTAL = 100;
+let otpRequestTimes: number[] = [];
 
 export type SessionIdentity = {
   email: string;
@@ -48,6 +50,8 @@ const otpRequests = new Map<string, number[]>();
  */
 export function allowOtpRequest(email: string): boolean {
   const now = Date.now();
+  otpRequestTimes = otpRequestTimes.filter(at => now - at < OTP_RATE_WINDOW_MS);
+  if (otpRequestTimes.length >= MAX_OTP_REQUESTS_TOTAL) return false;
   const recent = (otpRequests.get(email) ?? []).filter((at) => now - at < OTP_RATE_WINDOW_MS);
   if (recent.length >= MAX_OTP_REQUESTS_PER_EMAIL) {
     otpRequests.set(email, recent);
@@ -55,6 +59,7 @@ export function allowOtpRequest(email: string): boolean {
   }
 
   recent.push(now);
+  otpRequestTimes.push(now);
   otpRequests.set(email, recent);
   return true;
 }
@@ -72,6 +77,7 @@ export function allowOtpRequest(email: string): boolean {
  */
 export function sweepExpiredSessionState(now = Date.now()): number {
   let removed = 0;
+  otpRequestTimes = otpRequestTimes.filter(at => now - at < OTP_RATE_WINDOW_MS);
 
   for (const [key, entry] of challenges) {
     if (now > entry.expiresAt) { challenges.delete(key); removed++; }

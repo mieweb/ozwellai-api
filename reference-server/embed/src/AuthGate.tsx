@@ -99,7 +99,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      throw new Error(payload?.error?.message || `Request failed (${response.status})`);
+      throw new Error(payload?.error?.message || payload?.message || `Request failed (${response.status})`);
     }
     return payload;
   }
@@ -140,7 +140,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`${apiOrigin}/v1/models/effective`, {
+      const response = await fetch(`${apiOrigin}/v1/keys/validate`, {
         headers: { Authorization: `Bearer ${trimmed}` },
       });
       if (response.status === 401 || response.status === 403) {

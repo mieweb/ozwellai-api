@@ -100,6 +100,26 @@ after(() => {
 
 // --- session store units ---
 
+test('OTP delivery cap applies across recipients and expires after fifteen minutes', (context) => {
+    let now = Date.now();
+    context.mock.method(Date, 'now', () => now);
+    try {
+        assert.equal(sessions.allowOtpRequest('repeat@limit.test'), true);
+        assert.equal(sessions.allowOtpRequest('repeat@limit.test'), true);
+        assert.equal(sessions.allowOtpRequest('repeat@limit.test'), true);
+        assert.equal(sessions.allowOtpRequest('repeat@limit.test'), false);
+        for (let index = 0; index < 97; index++) {
+            assert.equal(sessions.allowOtpRequest(`recipient-${index}@limit.test`), true);
+        }
+        assert.equal(sessions.allowOtpRequest('overflow@limit.test'), false);
+        now += 15 * 60 * 1000;
+        assert.equal(sessions.allowOtpRequest('overflow@limit.test'), true);
+        assert.equal(sessions.allowOtpRequest('repeat@limit.test'), true);
+    } finally {
+        sessions.sweepExpiredSessionState(now + 15 * 60 * 1000);
+    }
+});
+
 test('OTP challenge returns the verified email exactly once', () => {
     const { challengeId, code } = sessions.createOtpChallenge('user@example.test');
     assert.match(code, /^\d{6}$/);

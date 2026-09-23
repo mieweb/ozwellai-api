@@ -78,6 +78,12 @@ Production without SMTP disables email sign-in. In local development only, missi
 SMTP logs the code; `AUTH_DEV_ECHO_OTP=1` may also return it in the response. Neither
 mechanism bypasses delivery in production or when SMTP is configured.
 
+OTP delivery attempts are limited to three per email and 100 total per server
+process in a rolling fifteen-minute window. Failed deliveries also count. These
+in-memory limits reset on restart; use shared ingress rate limiting across replicas.
+The total cap bounds mail volume, but can temporarily block legitimate sign-ins
+when exhausted, so monitor throttling in production.
+
 ### Real Relay Acceptance Check
 
 Perform this inside the deployed environment with an approved test mailbox:
@@ -102,6 +108,15 @@ From `reference-server`, run:
 npm run build
 node --test test/widget-auth.test.js
 ```
+
+For isolated browser auth regression tests, run from `landing-page` after building
+the widget:
+
+```bash
+npx playwright test tests/widget-auth.spec.ts
+```
+
+These tests mock auth responses and do not require OAuth credentials or SMTP.
 
 Verify configured agent and parent keys bypass the modal. For keyless embeds,
 exercise Google, Apple (first and repeat login), email OTP, and user-entered keys.
