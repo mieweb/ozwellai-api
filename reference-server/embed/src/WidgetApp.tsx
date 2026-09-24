@@ -980,7 +980,7 @@ export function WidgetApp() {
       onCancelQueuedMessage={() => setQueuedMessage(null)}
       renderTextContent={renderTextContent}
       thinking={{
-        enabled: config.thinkingEnabled,
+        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
         mode: displayThinkingMode,
         onModeChange: setDisplayThinkingMode,
       }}
