@@ -31,7 +31,10 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
   useEffect(() => {
     let cancelled = false;
     fetch(`${apiOrigin}/auth/methods`)
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) throw new Error('Sign-in methods unavailable');
+        return response.json();
+      })
       .then((methods) => {
         if (!cancelled) {
           setGoogleEnabled(!!methods?.google);
@@ -40,7 +43,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           if (!methods?.email_otp) setMode('key');
         }
       })
-      .catch(() => { /* leave it hidden */ });
+      .catch(() => { if (!cancelled) setMode('key'); });
     return () => { cancelled = true; };
   }, [apiOrigin]);
 
@@ -218,6 +221,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
             <input
               className="ozwell-auth-input"
               type="email"
+              aria-label="Email address"
               autoComplete="email"
               placeholder="you@example.com"
               value={email}
@@ -239,6 +243,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
             <input
               className="ozwell-auth-input"
               inputMode="numeric"
+              aria-label="One-time code"
               autoComplete="one-time-code"
               placeholder="123456"
               value={code}
@@ -268,6 +273,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
             <input
               className="ozwell-auth-input"
               type="password"
+              aria-label="Ozwell API key"
               placeholder="agnt_key-... or ozw_..."
               value={ownKey}
               onChange={(event) => setOwnKey(event.target.value)}

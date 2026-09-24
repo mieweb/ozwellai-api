@@ -27,11 +27,17 @@ net
   .createServer((socket) => {
     let inData = false;
     let message = [];
+    let buffer = '';
+    socket.setEncoding('utf8');
 
     socket.write('220 smtp-sink ready\r\n');
 
     socket.on('data', (chunk) => {
-      for (const line of chunk.toString('utf8').split('\r\n')) {
+      buffer += chunk;
+      let lineEnd;
+      while ((lineEnd = buffer.indexOf('\r\n')) !== -1) {
+        const line = buffer.slice(0, lineEnd);
+        buffer = buffer.slice(lineEnd + 2);
         if (inData) {
           if (line === '.') {
             inData = false;

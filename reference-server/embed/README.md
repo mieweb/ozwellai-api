@@ -426,10 +426,12 @@ The gate offers whichever methods the server reports from `GET /auth/methods`:
 | Method | What the visitor does |
 |--------|----------------------|
 | Google | Signs in through Google in a popup |
+| Apple | Signs in through Apple in a popup |
 | Email code | Receives a six-digit code and enters it |
 | Own key | Pastes an `agnt_key-` or `ozw_` key they already have |
 
-Google appears only when the server has Google credentials configured. The own-key option
+Google and Apple appear only when their server credentials are configured. See the
+[deployment guide](../../docs/backend/widget-authentication.md) for setup. The own-key option
 stores the key in `localStorage` under `ozwell.widget.userKey`, and only when the visitor ticks
 the box to remember it — otherwise it lives for that page view alone.
 
@@ -444,6 +446,10 @@ popup will be blocked silently, with nothing in the console to explain it.
 
 Sessions last 24 hours and are held in the server's memory, so a server restart signs everyone
 out and the gate comes back.
+
+Use the hosted widget on a separate origin from the embedding site to enforce browser
+isolation. Same-origin pages can access each other's DOM and storage; debug redaction
+does not make a same-origin embed a security boundary.
 
 ## MCP Tool Flow
 

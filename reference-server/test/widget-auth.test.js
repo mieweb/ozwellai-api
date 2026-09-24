@@ -16,6 +16,7 @@ process.env.DB_PATH = path.join(storeDirectory, 'auth.db');
 const sessions = await import('../dist/reference-server/src/storage/sessions.js');
 const { agentStore } = await import('../dist/reference-server/src/storage/agents.js');
 const { default: appleRouteModule } = await import('../dist/reference-server/src/routes/oidc-apple.js');
+const { default: authRouteModule } = await import('../dist/reference-server/src/routes/auth.js');
 
 // Keep MOCK_KEY in sync with MOCK_AGENT_KEY in src/storage/agents.ts.
 const MOCK_KEY = 'agnt_key-mock-test';
@@ -100,6 +101,52 @@ after(() => {
 
 // --- session store units ---
 
+test('local SMTP sink preserves fragmented commands and message lines', async () => {
+    const child = spawn(process.execPath, ['../scripts/dev/smtp-sink.js', '3359'], { stdio: 'pipe' });
+    let output = '';
+    let socket;
+    try {
+        await new Promise((resolve, reject) => {
+            child.once('error', reject);
+            child.once('exit', () => reject(new Error('SMTP sink exited before startup')));
+            child.stdout.on('data', chunk => {
+                output += chunk.toString();
+                if (output.includes('smtp-sink listening')) resolve();
+            });
+        });
+        socket = net.createConnection(3359, '127.0.0.1');
+        const response = () => new Promise((resolve, reject) => {
+            socket.once('data', chunk => resolve(chunk.toString()));
+            socket.once('error', reject);
+        });
+        assert.match(await response(), /^220/);
+        let pending = response();
+        socket.write('EH');
+        await delay(20);
+        socket.write('LO localhost\r\n');
+        assert.match(await pending, /^250/);
+        pending = response();
+        socket.write('DA');
+        await delay(20);
+        socket.write('TA\r\n');
+        assert.match(await pending, /^354/);
+        pending = response();
+        socket.write('Subject: fragment');
+        await delay(20);
+        socket.write('ed\r\n\r\nTest body\r\n.\r');
+        await delay(20);
+        socket.write('\n');
+        assert.match(await pending, /^250/);
+        pending = response();
+        socket.write('QUIT\r\n');
+        assert.match(await pending, /^221/);
+        assert.match(output, /Subject: fragmented\n\nTest body/);
+    } finally {
+        socket?.destroy();
+        child.kill();
+    }
+});
+
 test('OTP delivery cap applies across recipients and expires after fifteen minutes', (context) => {
     let now = Date.now();
     context.mock.method(Date, 'now', () => now);
@@ -162,6 +209,40 @@ test('OIDC flow state carries PKCE and nonce, and is single-use', () => {
 
 test('unknown session token is rejected', () => {
     assert.equal(sessions.validateSession('sess_bogus'), null);
+});
+
+test('Fastify supplies plugin options and returns OTP policy rejection as 403', async () => {
+    const previousPolicy = process.env.WIDGET_SIGNUP_POLICY;
+    const app = Fastify();
+    try {
+        process.env.WIDGET_SIGNUP_POLICY = 'existing';
+        await app.register(async (instance, options) => {
+            assert.ok(options && typeof options === 'object');
+            await appleRouteModule.default(instance, options);
+        });
+        await app.register(authRouteModule.default);
+        const { challengeId, code } = sessions.createOtpChallenge('denied-route@example.test');
+        const response = await app.inject({ method: 'POST', url: '/auth/otp/verify', payload: { challenge_id: challengeId, code } });
+        assert.equal(response.statusCode, 403);
+        assert.match(response.json().message, /not permitted/);
+    } finally {
+        await app.close();
+        if (previousPolicy === undefined) delete process.env.WIDGET_SIGNUP_POLICY;
+        else process.env.WIDGET_SIGNUP_POLICY = previousPolicy;
+    }
+});
+
+test('pending OIDC flows are bounded across providers and expire', (context) => {
+    let now = Date.now();
+    context.mock.method(Date, 'now', () => now);
+    try {
+        for (let index = 0; index < 1000; index++) sessions.startOidcFlow(index % 2 ? 'apple' : 'google');
+        assert.throws(() => sessions.startOidcFlow(), { statusCode: 429 });
+        now += 10 * 60 * 1000 + 1;
+        assert.ok(sessions.startOidcFlow('apple').state);
+    } finally {
+        sessions.sweepExpiredSessionState(now + 10 * 60 * 1000 + 1);
+    }
 });
 
 test('OIDC state cannot cross providers', () => {

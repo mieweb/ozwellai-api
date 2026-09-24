@@ -388,6 +388,8 @@ Restart the server after changing `.env`; these values are read at startup.
 - `POST /auth/otp/verify` - Exchange a code for a session token
 - `GET /auth/oidc/google/start` - Begin Google sign-in (only when Google is configured)
 - `GET /auth/oidc/google/callback` - Google redirect target
+- `GET /auth/oidc/apple/start` - Begin Apple sign-in when configured
+- `POST /auth/oidc/apple/callback` - Apple form-post return URL (public HTTPS)
 - `GET /auth/session` - Describe the current session
 - `POST /auth/logout` - Revoke the current session token
 

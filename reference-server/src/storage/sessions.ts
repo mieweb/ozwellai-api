@@ -7,6 +7,7 @@ const OTP_TTL_MS = 10 * 60 * 1000;          // 10 minutes
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const OIDC_FLOW_TTL_MS = 10 * 60 * 1000;    // 10 minutes to finish a sign-in
 const MAX_OTP_ATTEMPTS = 5;
+const MAX_PENDING_OIDC_FLOWS = 1000;
 
 // Requesting a code makes the server send mail to an address the caller chose,
 // so the endpoint is a spam relay unless the rate is capped here.
@@ -179,6 +180,12 @@ export function verifyOtp(challengeId: string, code: string): string | null {
 // --- OIDC flow state (PKCE verifier + nonce, keyed by state) ---
 
 export function startOidcFlow(provider = 'google'): { state: string; codeVerifier: string; codeChallenge: string; nonce: string } {
+  if (oidcFlows.size >= MAX_PENDING_OIDC_FLOWS) {
+    sweepExpiredSessionState();
+    if (oidcFlows.size >= MAX_PENDING_OIDC_FLOWS) {
+      throw Object.assign(new Error('Too many sign-in attempts. Please try again shortly.'), { statusCode: 429 });
+    }
+  }
   const state = randomBytes(16).toString('hex');
   const codeVerifier = randomBytes(32).toString('base64url');
   const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');

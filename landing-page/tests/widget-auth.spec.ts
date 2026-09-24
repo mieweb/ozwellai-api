@@ -10,6 +10,12 @@ async function enterKey(page: Page) {
 }
 
 test.describe('Widget authentication', () => {
+  test('offers accessible key entry when sign-in discovery fails', async ({ page }) => {
+    await page.route('**/auth/methods', route => route.abort());
+    await page.goto(widgetUrl);
+    await expect(page.getByLabel('Ozwell API key')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Use my key' })).toHaveAttribute('aria-selected', 'true');
+  });
   test.beforeEach(async ({ page }) => {
     await page.route('**/auth/methods', route => route.fulfill({
       json: { google: false, apple: false, email_otp: true, user_key: true },
@@ -43,6 +49,7 @@ test.describe('Widget authentication', () => {
       await page.getByRole('button', { name: 'Use key', exact: true }).click();
       expect((await validation).headers().authorization).toBe(`Bearer ${testKey}`);
       await expect(page.getByText('Personal key', { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => JSON.stringify((window as any).OzwellDebug.getState()))).not.toContain(testKey);
       expect(await page.evaluate(key => localStorage.getItem(key), storageKey)).toBe(remember ? testKey : null);
       await page.getByRole('button', { name: 'Forget key' }).click();
       await expect(page.getByRole('heading', { name: 'Sign in to Ozwell' })).toBeVisible();
@@ -67,9 +74,9 @@ test.describe('Widget authentication', () => {
       status: 403, json: { message: 'This account is not permitted to use widget sign-in.' },
     }));
     await page.goto(widgetUrl);
-    await page.getByPlaceholder('you@example.com').fill('browser@example.test');
+    await page.getByLabel('Email address').fill('browser@example.test');
     await page.getByRole('button', { name: 'Send code' }).click();
-    await page.getByPlaceholder('123456').fill('123456');
+    await page.getByLabel('One-time code').fill('123456');
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByText('This account is not permitted to use widget sign-in.')).toBeVisible();
   });
@@ -84,10 +91,46 @@ test.describe('Widget authentication', () => {
     await page.getByPlaceholder('123456').fill('123456');
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByText('Signed in', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => JSON.stringify((window as any).OzwellDebug.getState()))).not.toContain('sess_browser_test');
     expect(await page.evaluate(key => localStorage.getItem(key), storageKey)).toBeNull();
     const logout = page.waitForRequest('**/auth/logout');
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     expect((await logout).headers().authorization).toBe('Bearer sess_browser_test');
     await expect(page.getByRole('heading', { name: 'Sign in to Ozwell' })).toBeVisible();
+  });
+
+  test('returns to sign-in when chat rejects a user credential', async ({ page }) => {
+    await page.route('**/v1/chat/completions', route => route.fulfill({ status: 401, json: { error: { message: 'Expired' } } }));
+    await page.goto(widgetUrl);
+    await enterKey(page);
+    await page.getByRole('button', { name: 'Use key', exact: true }).click();
+    await expect(page.getByText('Personal key', { exact: true })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Hello');
+    await page.getByRole('textbox', { name: 'Message', exact: true }).press('Enter');
+    await expect(page.getByRole('heading', { name: 'Sign in to Ozwell' })).toBeVisible();
+  });
+
+  test('waits for host config without prompting and retains host keys on chat 401', async ({ page }) => {
+    let discoveryRequests = 0;
+    page.on('request', request => { if (request.url().endsWith('/auth/methods')) discoveryRequests++; });
+    await page.route('**/auth-host-test', route => route.fulfill({
+      contentType: 'text/html', body: '<iframe src="/widget/frame/"></iframe>',
+    }));
+    await page.route('**/v1/chat/completions', route => route.fulfill({ status: 401, json: { error: { message: 'Host key rejected' } } }));
+    await page.goto('http://localhost:3000/auth-host-test');
+    const frame = page.frameLocator('iframe');
+    await expect(frame.getByRole('heading', { name: 'Sign in to Ozwell' })).toHaveCount(0);
+    await expect.poll(() => page.frames().find(candidate => candidate.url() === widgetUrl)?.evaluate(() => !!(window as any).OzwellDebug)).toBe(true);
+    await page.evaluate(() => {
+      document.querySelector('iframe')!.contentWindow!.postMessage({
+        source: 'ozwell-chat-parent', type: 'config', payload: { config: { apiKey: 'ozw_host_test' } },
+      }, location.origin);
+    });
+    const input = frame.getByRole('textbox', { name: 'Message', exact: true });
+    await input.fill('Hello');
+    await input.press('Enter');
+    await expect(frame.getByText('Host key rejected', { exact: false })).toBeVisible();
+    await expect(frame.getByRole('heading', { name: 'Sign in to Ozwell' })).toHaveCount(0);
+    expect(discoveryRequests).toBe(0);
   });
 });

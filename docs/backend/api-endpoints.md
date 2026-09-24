@@ -542,10 +542,11 @@ GET /auth/methods
 ```
 
 ```json
-{ "google": true, "email_otp": true, "user_key": true }
+{ "google": true, "apple": true, "email_otp": true, "user_key": true }
 ```
 
 `google` is `false` unless the server has `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` set.
+`apple` requires all four Apple settings described in [Widget Authentication](./widget-authentication.md).
 
 ### Request an Email Code
 
@@ -587,8 +588,9 @@ GET /auth/oidc/google/start
 ```
 
 Redirects to Google's consent screen. OAuth 2.0 authorization code with PKCE (S256), plus
-`state` and `nonce`. Returns `404` when Google is not configured, since the routes are only
-registered when it is.
+`state` and `nonce`. Returns `404` when Google is not configured.
+Both providers share a limit of 1,000 pending sign-in flows per process; new starts
+return `429` at capacity until flows complete or expire after ten minutes.
 
 Open this in a popup, not in an iframe — Google refuses to render consent in a frame.
 
@@ -606,6 +608,28 @@ itself.
 Register this URL under **Authorized redirect URIs** in Google Cloud Console — not under
 Authorized JavaScript origins, which rejects any URL carrying a path. The server builds it from
 `PUBLIC_BASE_URL`, never from request input.
+
+### Start Apple Sign-In
+
+```http
+GET /auth/oidc/apple/start
+```
+
+Opens Apple consent in a popup using authorization code flow, `state`, `nonce`,
+and `response_mode=form_post`. Returns `404` when Apple is not configured.
+
+### Apple Callback
+
+```http
+POST /auth/oidc/apple/callback
+Content-Type: application/x-www-form-urlencoded
+```
+
+Accepts Apple's `code` and `state` (or provider error), exchanges the code using an
+ES256 client secret, and verifies the signed identity token and verified email.
+Returns the same origin-restricted popup response as Google. Register the exact
+public HTTPS return URL built from `PUBLIC_BASE_URL`; localhost is not supported.
+See [Widget Authentication](./widget-authentication.md) for Apple configuration.
 
 ### Describe the Current Session
 

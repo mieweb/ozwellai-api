@@ -354,6 +354,9 @@ export function WidgetApp() {
   const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
     () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
   );
+  const [userCredential, setUserCredential] = useState<WidgetCredential | null>(null);
+  const userCredentialRef = useRef<WidgetCredential | null>(null);
+  const [initialConfigReady, setInitialConfigReady] = useState(() => window.parent === window || !!window.OZWELL_CONFIG);
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);
@@ -373,18 +376,40 @@ export function WidgetApp() {
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
 
+  const resetUserCredential = useCallback((rejectedKey?: string) => {
+    if (!userCredentialRef.current || (rejectedKey && userCredentialRef.current.key !== rejectedKey)) return false;
+    userCredentialRef.current = null;
+    setUserCredential(null);
+    setCredentialSource(null);
+    try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+    historyRef.current = [];
+    queuedRef.current = null;
+    setQueuedMessage(null);
+    setHistoryMessages([]);
+    setDisplayMessages([]);
+    setEffectiveModels([]);
+    setActiveModel(null);
+    return true;
+  }, []);
+
+  const requestConfig = useCallback(() => userCredentialRef.current
+    ? { ...configRef.current, apiKey: userCredentialRef.current.key }
+    : configRef.current, []);
+
   // Keyless embeds only: restore a key the user opted to remember here.
   useEffect(() => {
-    if (getAuthKey(configRef.current)) return;
+    if (!initialConfigReady || getAuthKey(configRef.current)) return;
     let stored: string | null = null;
     try { stored = localStorage.getItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
     if (!stored) return;
     setCredentialSource('user-key');
-    setConfig((current) => ({ ...current, apiKey: stored }));
-  }, []);
+    const credential: WidgetCredential = { key: stored, source: 'user-key' };
+    userCredentialRef.current = credential;
+    setUserCredential(credential);
+  }, [initialConfigReady]);
 
   useEffect(() => {
-    const authKey = getAuthKey(config);
+    const authKey = getAuthKey(requestConfig());
     if (!authKey) {
       setEffectiveModels([]);
       setActiveModel(null);
@@ -398,25 +423,11 @@ export function WidgetApp() {
       try {
         const response = await fetch(endpoint, {
           method: 'GET',
-          headers: requestHeaders(config),
+          headers: requestHeaders(requestConfig()),
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
-        if (response.status === 401 && (credentialSource === 'session' || credentialSource === 'user-key')) {
-          if (getAuthKey(configRef.current) !== authKey) return;
-          try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
-          setCredentialSource(null);
-          setConfig((current) => {
-            const next = { ...current, apiKey: '', openaiApiKey: '' };
-            configRef.current = next;
-            return next;
-          });
-          setHistoryMessages([]);
-          setDisplayMessages([]);
-          setEffectiveModels([]);
-          setActiveModel(null);
-          return;
-        }
+        if (response.status === 401 && resetUserCredential(authKey)) return;
         if (!response.ok) {
           setEffectiveModels([]);
           return;
@@ -434,7 +445,7 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, credentialSource]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential]);
 
   useEffect(() => {
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
@@ -553,7 +564,8 @@ export function WidgetApp() {
     let assistantMessageId: string | null = null;
 
     try {
-      const systemPrompt = buildSystemPrompt(configRef.current);
+      const authConfig = requestConfig();
+      const systemPrompt = buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -575,12 +587,13 @@ export function WidgetApp() {
 
       const response = await fetch(configRef.current.endpoint || '/v1/chat/completions', {
         method: 'POST',
-        headers: requestHeaders(configRef.current),
+        headers: requestHeaders(authConfig),
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(120000),
       });
 
       if (!response.ok) {
+        if (response.status === 401 && resetUserCredential(getAuthKey(authConfig))) return;
         const errorText = await response.text();
         throw chatRequestError(response.status, errorText);
       }
@@ -786,7 +799,7 @@ export function WidgetApp() {
     appendHistory(userMessage);
     appendDisplay(userDisplayMessage(trimmed));
 
-    if (!getAuthKey(configRef.current)) {
+    if (!getAuthKey(requestConfig())) {
       appendDisplay(systemDisplayMessage('Error: No API key configured. Please provide an agent key (agnt_key-...) or parent API key (ozw_...) in your OzwellChatConfig.'));
       return;
     }
@@ -795,10 +808,13 @@ export function WidgetApp() {
   }
 
   const applyConfig = useCallback((nextConfig: OzwellConfig) => {
+    setInitialConfigReady(true);
     // A key arriving from the embedding page owns the session: the sign-in
     // gate must never prompt over a host-configured credential.
     if (getAuthKey({ ...configRef.current, ...nextConfig }) && (nextConfig.apiKey || nextConfig.openaiApiKey)) {
       setCredentialSource('host');
+      userCredentialRef.current = null;
+      setUserCredential(null);
     }
     setConfig((current) => {
       const merged = { ...current, ...nextConfig };
@@ -856,7 +872,7 @@ export function WidgetApp() {
         console.log('OzwellDebug.disableTools, verbose, getState(), getMessages(), getTools(), clearMessages(), reset()');
       },
       getState: () => ({
-        config: configRef.current,
+        config: { ...configRef.current, apiKey: undefined, openaiApiKey: undefined, headers: undefined },
         messages: historyRef.current,
         displayMessages,
         sending: sendingRef.current,
@@ -979,31 +995,20 @@ export function WidgetApp() {
 
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
-    setConfig((current) => {
-      const merged = { ...current, apiKey: credential.key };
-      configRef.current = merged;
-      return merged;
-    });
+    userCredentialRef.current = credential;
+    setUserCredential(credential);
   }, []);
 
   const signOut = useCallback(() => {
-    const key = getAuthKey(configRef.current);
+    const key = userCredentialRef.current?.key || '';
     if (key.startsWith('sess_')) {
       void fetch(`${apiOriginFor(configRef.current.endpoint)}/auth/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}` },
       }).catch(() => { /* best effort */ });
     }
-    try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
-    setCredentialSource(null);
-    setConfig((current) => {
-      const merged = { ...current, apiKey: '', openaiApiKey: '' };
-      configRef.current = merged;
-      return merged;
-    });
-    setHistoryMessages([]);
-    setDisplayMessages([]);
-  }, []);
+    resetUserCredential(key);
+  }, [resetUserCredential]);
 
   const renderTextContent = useCallback((text: string, ctx: { messageId: string; streaming: boolean }) => (
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
@@ -1036,7 +1041,9 @@ export function WidgetApp() {
     setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
   }, []);
 
-  if (!getAuthKey(config) && credentialSource !== 'host') {
+  if (!initialConfigReady) return null;
+
+  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
     return (
       <AuthGate
         apiOrigin={apiOriginFor(config.endpoint)}
