@@ -7,7 +7,6 @@ const projectRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(projectRoot, '..');
 const entryPoint = path.join(projectRoot, 'embed/src/main.tsx');
 const outfile = path.join(projectRoot, 'embed/ozwell.js');
-const localMiewebUiRoot = path.join(repoRoot, 'vendor/mieweb-ui');
 const localMiewebUiDist = path.join(repoRoot, 'vendor/mieweb-ui/dist');
 const rootRequire = require('node:module').createRequire(path.join(repoRoot, 'package.json'));
 
@@ -54,21 +53,16 @@ function resolveMiewebUiSubpath(subpath) {
 }
 
 function localMiewebUiPlugin() {
-  const hasLocalSource = fs.existsSync(path.join(localMiewebUiRoot, 'package.json'));
   const hasLocalBuild = fs.existsSync(path.join(localMiewebUiDist, 'index.js'));
 
   return {
     name: 'local-mieweb-ui',
     setup(build) {
       if (!hasLocalBuild) {
-        if (hasLocalSource) {
-          console.warn(
-            '[build-widget] Local mieweb/ui submodule is present but not built; using installed @mieweb/ui package.'
-          );
-        } else {
-          console.warn('[build-widget] Local mieweb/ui submodule not found; using installed @mieweb/ui package.');
-        }
-        return;
+        throw new Error(
+          '[build-widget] Build the pinned UI first: git submodule update --init --recursive && ' +
+          'pnpm --dir vendor/mieweb-ui install --frozen-lockfile && pnpm --dir vendor/mieweb-ui build'
+        );
       }
 
       build.onResolve({ filter: /^@mieweb\/ui(?:\/.*)?$/ }, (args) => {

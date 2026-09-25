@@ -302,7 +302,7 @@ test.describe('Tic-Tac-Toe Demo', () => {
 
     const iframe = page.frameLocator('#ozwell-chat-container iframe');
     const chatInput = widgetInput(iframe);
-    await expect(chatInput).toBeVisible({ timeout: 10000 });
+    await page.waitForFunction(() => typeof (window as any).OzwellChat?.configure === 'function');
 
     await page.evaluate(() => {
       (window as any).OzwellChat.configure({
@@ -326,6 +326,7 @@ test.describe('Tic-Tac-Toe Demo', () => {
       });
     });
 
+    await expect(chatInput).toBeVisible({ timeout: 10000 });
     await chatInput.fill('play center');
     await chatInput.press('Enter');
 
