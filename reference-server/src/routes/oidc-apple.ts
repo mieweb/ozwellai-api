@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT, type JWTVerifyGetKey } from 'jose';
-import { startOidcFlow, consumeOidcFlow, createSessionForIdentity } from '../storage/sessions';
+import { startOidcFlow, consumeOidcFlow, createSessionForIdentity, allowOidcStart } from '../storage/sessions';
 import { popupResultPage, publicOrigin } from '../util/oidc';
 
 const APPLE_ISSUER = 'https://appleid.apple.com';
@@ -27,8 +27,9 @@ export default async function appleOidcRoute(fastify: FastifyInstance, options: 
   fastify.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 16384 },
     (_request, body, done) => done(null, Object.fromEntries(new URLSearchParams(body as string))));
 
-  fastify.get('/auth/oidc/apple/start', async (_request, reply) => {
+  fastify.get('/auth/oidc/apple/start', async (request, reply) => {
     if (!isAppleConfigured()) return reply.code(404).send({ error: { message: 'Apple sign-in is not configured' } });
+    if (!allowOidcStart(request.ip)) return reply.code(429).send({ error: { message: 'Too many sign-in attempts. Please try again later.' } });
     const { state, nonce } = startOidcFlow('apple');
     const params = new URLSearchParams({
       client_id: process.env.APPLE_CLIENT_ID!,

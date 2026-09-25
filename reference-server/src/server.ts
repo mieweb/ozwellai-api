@@ -59,6 +59,7 @@ function getCommitHash(): string {
 const fastify = Fastify({
   logger: process.env.NODE_ENV !== 'production',
   bodyLimit: getBodyLimitBytes(),
+  trustProxy: process.env.TRUSTED_PROXY_CIDRS?.split(',').map(value => value.trim()).filter(Boolean) || false,
 });
 
 const commitHash = getCommitHash();
@@ -223,12 +224,15 @@ async function buildServer() {
   });
 
   // Widget sessions: exchange a valid sess_ bearer for the signed-in user's own
-  // parent key, so every existing key-authenticated route works unchanged and
-  // usage is attributed to that user.
+  // parent key only for widget chat and model discovery.
   fastify.addHook('onRequest', async (request) => {
     const token = extractToken(request.headers.authorization);
     if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
     if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
+    const pathname = request.url.split('?')[0];
+    const allowed = (request.method === 'POST' && pathname === '/v1/chat/completions') ||
+      (request.method === 'GET' && pathname === '/v1/models/effective');
+    if (!allowed) return;
     const session = validateSession(token);
     if (!session) return; // fall through: routes 401 naturally
     request.headers.authorization = `Bearer ${session.parentKey}`;

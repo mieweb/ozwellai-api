@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { startOidcFlow, consumeOidcFlow, createSessionForIdentity } from '../storage/sessions';
+import { startOidcFlow, consumeOidcFlow, createSessionForIdentity, allowOidcStart } from '../storage/sessions';
 import { publicOrigin, popupResultPage } from '../util/oidc';
 
 const GOOGLE_ISSUERS = ['https://accounts.google.com', 'accounts.google.com'];
@@ -15,30 +15,19 @@ export function isGoogleConfigured(): boolean {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-/**
- * Exact-match redirect URI. Never derived from user input — an attacker-supplied
- * redirect is the classic way to leak an authorization code.
- */
+/** Use configured origin, never request input, to prevent authorization-code leaks. */
 function redirectUri(): string {
   return `${publicOrigin()}/auth/oidc/google/callback`;
 }
 
-/**
- * Popup handshake: hand the token to the opener, then close.
- *
- * The target origin is this server's own, never '*'. The widget frame that
- * opens this popup is served from here, so it is the only legitimate opener —
- * and with '*' any page could open the start URL itself and be handed the
- * session token of whoever signed in, which is account takeover from a link.
- */
 export default async function googleOidcRoute(fastify: FastifyInstance) {
-  /** Step 1 — send the browser to Google with PKCE, state and nonce. */
-  fastify.get('/auth/oidc/google/start', async (_request, reply) => {
+  fastify.get('/auth/oidc/google/start', async (request, reply) => {
     if (!isGoogleConfigured()) {
       reply.code(404);
       return { error: { message: 'Google sign-in is not configured', type: 'invalid_request_error' } };
     }
 
+    if (!allowOidcStart(request.ip)) return reply.code(429).send({ error: { message: 'Too many sign-in attempts. Please try again later.' } });
     const { state, codeChallenge, nonce } = startOidcFlow();
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -54,7 +43,6 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
     return reply.redirect(`${GOOGLE_AUTH_ENDPOINT}?${params.toString()}`);
   });
 
-  /** Step 2 — Google redirects back here with a one-time code. */
   fastify.get('/auth/oidc/google/callback', async (request, reply) => {
     const { code, state, error } = request.query as { code?: string; state?: string; error?: string };
     reply.type('text/html; charset=utf-8');

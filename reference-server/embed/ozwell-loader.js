@@ -158,7 +158,9 @@
 
     const iframe = document.createElement('iframe');
     const widgetSrc = options.src || config.widgetUrl || config.src || '/widget/frame/';
-    iframe.src = widgetSrc;
+    const frameUrl = new URL(widgetSrc, document.baseURI);
+    frameUrl.searchParams.set('ozwellLoader', '1');
+    iframe.src = frameUrl.href;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);

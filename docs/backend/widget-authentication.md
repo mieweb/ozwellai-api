@@ -101,6 +101,18 @@ through the real Phoenix relay. For manual local delivery testing, run
 That sink prints local test mail; never use it with production credentials or data.
 
 ## Verification Before Rollout
+Widget sessions authorize only `POST /v1/chat/completions` and
+`GET /v1/models/effective`, plus the session inspection/logout auth routes.
+They do not grant agent-management or key-management access.
+
+Google and Apple starts share a limit of ten requests per client IP per
+fifteen-minute window. Forwarded IP headers are ignored by default. Behind a
+reverse proxy, set `TRUSTED_PROXY_CIDRS` to a comma-separated list of that proxy's
+addresses or CIDRs, and ensure the proxy sanitizes forwarded headers. Do not trust
+arbitrary public proxies. Shared networks share a client limit. Multi-replica
+deployments also need shared ingress rate limiting; process-local caps alone do
+not prevent distributed denial of service.
+
 
 From `reference-server`, run:
 

@@ -17,6 +17,7 @@ const sessions = await import('../dist/reference-server/src/storage/sessions.js'
 const { agentStore } = await import('../dist/reference-server/src/storage/agents.js');
 const { default: appleRouteModule } = await import('../dist/reference-server/src/routes/oidc-apple.js');
 const { default: authRouteModule } = await import('../dist/reference-server/src/routes/auth.js');
+const { default: googleRouteModule } = await import('../dist/reference-server/src/routes/oidc-google.js');
 
 // Keep MOCK_KEY in sync with MOCK_AGENT_KEY in src/storage/agents.ts.
 const MOCK_KEY = 'agnt_key-mock-test';
@@ -209,6 +210,53 @@ test('OIDC flow state carries PKCE and nonce, and is single-use', () => {
 
 test('unknown session token is rejected', () => {
     assert.equal(sessions.validateSession('sess_bogus'), null);
+});
+
+test('provider starts share client limits and ignore spoofed forwarding headers', async () => {
+    const names = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'];
+    const saved = Object.fromEntries(names.map(name => [name, process.env[name]]));
+    const app = Fastify();
+    try {
+        for (const name of names) process.env[name] = 'configured-for-start-test';
+        await app.register(googleRouteModule.default);
+        await app.register(appleRouteModule.default);
+        for (let index = 0; index < 11; index++) {
+            const provider = index % 2 ? 'apple' : 'google';
+            const response = await app.inject({ url: `/auth/oidc/${provider}/start`, remoteAddress: '192.0.2.30',
+                headers: { 'x-forwarded-for': `198.51.100.${index}` } });
+            assert.equal(response.statusCode, index < 10 ? 302 : 429);
+            if (index < 10) sessions.consumeOidcFlow(new URL(response.headers.location).searchParams.get('state'), provider);
+        }
+        const other = await app.inject({ url: '/auth/oidc/google/start', remoteAddress: '192.0.2.31' });
+        assert.equal(other.statusCode, 302);
+        sessions.consumeOidcFlow(new URL(other.headers.location).searchParams.get('state'));
+    } finally {
+        await app.close();
+        for (const name of names) {
+            if (saved[name] === undefined) delete process.env[name];
+            else process.env[name] = saved[name];
+        }
+    }
+});
+
+test('OIDC starts are limited per client without blocking other clients', (context) => {
+    let now = Date.now();
+    context.mock.method(Date, 'now', () => now);
+    for (let index = 0; index < 10; index++) assert.equal(sessions.allowOidcStart('192.0.2.1'), true);
+    assert.equal(sessions.allowOidcStart('192.0.2.1'), false);
+    assert.equal(sessions.allowOidcStart('192.0.2.2'), true);
+    now += 15 * 60 * 1000;
+    assert.equal(sessions.allowOidcStart('192.0.2.1'), true);
+});
+
+test('widget sessions cannot access agent management or key validation', async () => {
+    const token = await signIn('scoped-session@example.test');
+    for (const route of ['/v1/agents', '/v1/keys/validate']) {
+        const response = await fetch(`${BASE}${route}`, { headers: { Authorization: `Bearer ${token}` } });
+        assert.equal(response.status, 401, route);
+    }
+    const models = await fetch(`${BASE}/v1/models/effective`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(models.status, 200);
 });
 
 test('Fastify supplies plugin options and returns OTP policy rejection as 403', async () => {

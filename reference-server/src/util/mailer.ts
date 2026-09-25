@@ -2,13 +2,6 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 const DEFAULT_FROM = 'no-reply@os.mieweb.org';
 
-/**
- * Whether this server can send mail.
- *
- * The relay is only reachable from inside the Phoenix DC, so a developer's
- * machine will never have this set. Callers fall back to logging the code,
- * which is how local sign-in works and will keep working.
- */
 export function isMailConfigured(): boolean {
   return !!process.env.SMTP_URL;
 }
@@ -33,11 +26,7 @@ function getTransport(): Transporter {
   return transport;
 }
 
-/**
- * Mail one sign-in code. Throws if the relay refuses or is unreachable, so the
- * caller can tell the user delivery failed rather than leaving them waiting
- * for a message that is never coming.
- */
+/** Propagate delivery failures so callers do not report a code as sent. */
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
   await getTransport().sendMail({
     from: process.env.SMTP_FROM || DEFAULT_FROM,

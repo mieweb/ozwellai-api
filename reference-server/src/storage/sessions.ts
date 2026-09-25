@@ -8,14 +8,25 @@ const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const OIDC_FLOW_TTL_MS = 10 * 60 * 1000;    // 10 minutes to finish a sign-in
 const MAX_OTP_ATTEMPTS = 5;
 const MAX_PENDING_OIDC_FLOWS = 1000;
+const oidcClients = new Map<string, { count: number; expiresAt: number }>();
 
-// Requesting a code makes the server send mail to an address the caller chose,
-// so the endpoint is a spam relay unless the rate is capped here.
-//
-// The cap is per recipient, deliberately not per client IP: the server runs
-// behind a reverse proxy without `trustProxy`, so every request reports the
-// proxy's address. A per-IP bucket would throttle all users as if they were
-// one, while giving an attacker no trouble at all.
+export function allowOidcStart(clientIp: string): boolean {
+  const now = Date.now();
+  for (const [client, bucket] of oidcClients) {
+    if (now >= bucket.expiresAt) oidcClients.delete(client);
+  }
+  const bucket = oidcClients.get(clientIp);
+  if (bucket) {
+    if (bucket.count >= 10) return false;
+    bucket.count++;
+    return true;
+  }
+  if (oidcClients.size >= 1000) return false;
+  oidcClients.set(clientIp, { count: 1, expiresAt: now + 15 * 60 * 1000 });
+  return true;
+}
+
+// Recipient and process-wide caps bound unauthenticated email delivery.
 const OTP_RATE_WINDOW_MS = 15 * 60 * 1000;
 const MAX_OTP_REQUESTS_PER_EMAIL = 3;
 const MAX_OTP_REQUESTS_TOTAL = 100;
@@ -36,19 +47,15 @@ export type WidgetSession = {
   parentKey: string;
 };
 
-/** A Google sign-in in flight: state -> PKCE verifier + nonce. */
 type PendingOidcFlow = { codeVerifier: string; nonce: string; expiresAt: number; provider: string };
 
-// ponytail: in-memory maps; move to sqlite if multi-process or restart-survival matters
+// Process-local state: replicas and restart survival require shared storage.
 const challenges = new Map<string, { email: string; code: string; expiresAt: number; attempts: number }>();
 const sessions = new Map<string, WidgetSession & { expiresAt: number }>();
 const oidcFlows = new Map<string, PendingOidcFlow>();
 const otpRequests = new Map<string, number[]>();
 
-/**
- * Record one OTP request for an address and say whether it is allowed.
- * Called before any mail is sent.
- */
+/** Reserve a delivery attempt before sending mail, including failed deliveries. */
 export function allowOtpRequest(email: string): boolean {
   const now = Date.now();
   otpRequestTimes = otpRequestTimes.filter(at => now - at < OTP_RATE_WINDOW_MS);
@@ -65,17 +72,7 @@ export function allowOtpRequest(email: string): boolean {
   return true;
 }
 
-/**
- * Drop everything that has aged out of the maps above.
- *
- * Entries are otherwise only removed when a caller comes back for that exact
- * key, so anything abandoned — an unverified code, a sign-in never completed —
- * would stay for the life of the process. `otpRequests` matters most: its keys
- * are email addresses chosen by unauthenticated callers, so without this a
- * script posting distinct addresses grows the map without bound.
- *
- * Returns the number of entries removed, so callers can log it.
- */
+/** Reclaim abandoned authentication state; return the number of removed map entries. */
 export function sweepExpiredSessionState(now = Date.now()): number {
   let removed = 0;
   otpRequestTimes = otpRequestTimes.filter(at => now - at < OTP_RATE_WINDOW_MS);
@@ -98,13 +95,7 @@ export function sweepExpiredSessionState(now = Date.now()): number {
   return removed;
 }
 
-/**
- * Turn a verified identity into a session backed by that user's own key.
- *
- * Reuses the manager's provisioning path, so a widget user and a manager user
- * are the same record: matched on email, given their own parent key on first
- * sign-in, and re-linked to an existing row when the email already exists.
- */
+/** Reuse manager provisioning to link a verified email to its own account and key. */
 export function createSessionForIdentity(identity: SessionIdentity): string {
   const email = identity.email.trim().toLowerCase();
   const existing = agentStore.getManagerUserByEmail(email);

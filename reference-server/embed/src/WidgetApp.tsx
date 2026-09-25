@@ -356,7 +356,8 @@ export function WidgetApp() {
   );
   const [userCredential, setUserCredential] = useState<WidgetCredential | null>(null);
   const userCredentialRef = useRef<WidgetCredential | null>(null);
-  const [initialConfigReady, setInitialConfigReady] = useState(() => window.parent === window || !!window.OZWELL_CONFIG);
+  const [initialConfigReady, setInitialConfigReady] = useState(() => window.parent === window ||
+    !!window.OZWELL_CONFIG || new URLSearchParams(window.location.search).get('ozwellLoader') !== '1');
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);

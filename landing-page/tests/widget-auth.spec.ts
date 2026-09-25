@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const widgetUrl = 'http://localhost:3000/widget/frame/';
+const apiOrigin = process.env.WIDGET_TEST_ORIGIN || 'http://localhost:3000';
+const widgetUrl = `${apiOrigin}/widget/frame/`;
 const storageKey = 'ozwell.widget.userKey';
 const testKey = 'agnt_key-browser-test';
 
@@ -10,6 +11,13 @@ async function enterKey(page: Page) {
 }
 
 test.describe('Widget authentication', () => {
+  test('a custom iframe initializes without a loader config message', async ({ page }) => {
+    await page.route('**/custom-frame-test', route => route.fulfill({
+      contentType: 'text/html', body: '<iframe src="/widget/frame/"></iframe>',
+    }));
+    await page.goto(`${apiOrigin}/custom-frame-test`);
+    await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Sign in to Ozwell' })).toBeVisible();
+  });
   test('offers accessible key entry when sign-in discovery fails', async ({ page }) => {
     await page.route('**/auth/methods', route => route.abort());
     await page.goto(widgetUrl);
@@ -114,13 +122,13 @@ test.describe('Widget authentication', () => {
     let discoveryRequests = 0;
     page.on('request', request => { if (request.url().endsWith('/auth/methods')) discoveryRequests++; });
     await page.route('**/auth-host-test', route => route.fulfill({
-      contentType: 'text/html', body: '<iframe src="/widget/frame/"></iframe>',
+      contentType: 'text/html', body: '<iframe src="/widget/frame/?ozwellLoader=1"></iframe>',
     }));
     await page.route('**/v1/chat/completions', route => route.fulfill({ status: 401, json: { error: { message: 'Host key rejected' } } }));
-    await page.goto('http://localhost:3000/auth-host-test');
+    await page.goto(`${apiOrigin}/auth-host-test`);
     const frame = page.frameLocator('iframe');
     await expect(frame.getByRole('heading', { name: 'Sign in to Ozwell' })).toHaveCount(0);
-    await expect.poll(() => page.frames().find(candidate => candidate.url() === widgetUrl)?.evaluate(() => !!(window as any).OzwellDebug)).toBe(true);
+    await expect.poll(() => page.frames().find(candidate => candidate.url() === `${widgetUrl}?ozwellLoader=1`)?.evaluate(() => !!(window as any).OzwellDebug)).toBe(true);
     await page.evaluate(() => {
       document.querySelector('iframe')!.contentWindow!.postMessage({
         source: 'ozwell-chat-parent', type: 'config', payload: { config: { apiKey: 'ozw_host_test' } },
