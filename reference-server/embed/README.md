@@ -2,6 +2,25 @@
 
 Add an AI chatbot to any website with one script tag.
 
+## Building and Validating
+
+The widget uses the pinned MIE Web UI submodule, not the older npm fallback.
+From the repository root, using the pnpm version declared by the submodule:
+
+```bash
+git submodule update --init --recursive
+pnpm --dir vendor/mieweb-ui install --frozen-lockfile
+pnpm --dir vendor/mieweb-ui build
+npm ci
+npm run build -w reference-server
+npm --prefix landing-page test -- tests/widget-auth.spec.ts --reporter=line
+```
+
+The build type-checks the widget against the pinned UI declarations before
+generating `embed/ozwell.js`. Run `npm run type-check:widget -w reference-server`
+for the focused type check. Browser tests require the landing-page dependencies
+and Playwright Chromium to be installed.
+
 ## Basic Usage
 
 Add this to your HTML:
