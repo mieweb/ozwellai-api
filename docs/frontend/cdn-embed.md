@@ -23,6 +23,33 @@ Add this snippet to your HTML, just before the closing `</body>` tag:
 
 That's it! A chat widget will appear in the bottom-right corner of your page.
 
+### Alternative: Let Visitors Sign In
+
+On a deployment with widget authentication enabled, omit the host key:
+
+```html
+<script src="https://your-ozwell-host/widget"></script>
+```
+
+Opening chat offers the methods configured by that deployment: Google, Apple,
+email one-time code, or the visitor's own agent/parent key. Google and Apple use
+a popup; allow popups for the widget origin. Host-configured agent or parent keys
+continue to work directly and never trigger this sign-in gate.
+
+Sign-in authorizes the current session; it does not add persistent chat history
+or memory. User-entered keys are session-only by default. Remembering a key is
+explicit opt-in with a trusted-personal-device warning. Use the widget's
+forget-key/sign-out control to clear it. Browser storage may be blocked in
+third-party iframes; sign-in does not require remembering a key.
+
+Conversations remain private to the user and Ozwell, which builds user trust.
+The host receives lifecycle signals and explicitly configured tool calls, not
+conversation content. Sharing conversation content is always opt-in.
+
+Operators must configure credentials, email delivery, and account admission before
+enabling this mode. See the [widget authentication deployment guide](../backend/widget-authentication.md).
+The hosted environment may not offer these methods until that rollout is complete.
+
 ---
 
 ## Getting Your Credentials

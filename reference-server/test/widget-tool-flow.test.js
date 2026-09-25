@@ -76,7 +76,8 @@ test('loader opens the hosted widget frame instead of an inline document', async
   const source = await readLoaderSource();
 
   assert.match(source, /widgetUrl: autoDetectedBase \? `\$\{autoDetectedBase\}\/widget\/frame\/`/);
-  assert.match(source, /iframe\.src = widgetSrc;/);
+  assert.match(source, /frameUrl\.searchParams\.set\('ozwellLoader', '1'\)/);
+  assert.match(source, /iframe\.src = frameUrl\.href;/);
   assert.doesNotMatch(source, /iframe\.srcdoc\s*=/);
 });
 

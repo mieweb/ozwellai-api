@@ -381,6 +381,18 @@ Restart the server after changing `.env`; these values are read at startup.
 - `GET /widget/frame/` - Hosted widget iframe page
 - `GET /widget/ozwell.js` - Self-contained widget code (includes CSS)
 
+### Widget Sign-In
+
+- `GET /auth/methods` - Which sign-in methods this server offers
+- `POST /auth/otp/request` - Request an email one-time code
+- `POST /auth/otp/verify` - Exchange a code for a session token
+- `GET /auth/oidc/google/start` - Begin Google sign-in (only when Google is configured)
+- `GET /auth/oidc/google/callback` - Google redirect target
+- `GET /auth/oidc/apple/start` - Begin Apple sign-in when configured
+- `POST /auth/oidc/apple/callback` - Apple form-post return URL (public HTTPS)
+- `GET /auth/session` - Describe the current session
+- `POST /auth/logout` - Revoke the current session token
+
 ### Files
 
 - `POST /v1/files` - Upload file
@@ -397,10 +409,11 @@ Restart the server after changing `.env`; these values are read at startup.
 
 ## Authentication
 
-The server requires a valid API key. Two key types are accepted:
+The server requires a valid credential. Three kinds are accepted:
 
 - **Agent keys** (`agnt_key-...`) — scoped to a specific agent, used for chat
 - **Parent API keys** (`ozw_...`) — full access, used for managing agents and keys
+- **Session tokens** (`sess_...`) — minted by widget sign-in, standing in for the signed-in user's own parent key
 
 ```bash
 # Using an agent key
@@ -408,9 +421,24 @@ Authorization: Bearer agnt_key-your-agent-key
 
 # Using a parent key
 Authorization: Bearer ozw_your-parent-key
+
+# Using a widget session token
+Authorization: Bearer sess_your-session-token
 ```
 
 A demo parent key (`ozw_demo_localhost_key_for_testing`) is seeded on startup for local development.
+
+### Widget Sign-In Sessions
+
+Keyless embeds offer Google, Apple, email OTP, or a user-owned API key. Host-provided
+keys bypass sign-in. Verified identities receive a `sess_` token backed by their own
+account, subject to the configured signup policy. Sessions authorize widget chat and
+model discovery, not agent management; they expire after 24 hours or a server restart.
+
+- [Deployment guide](../docs/backend/widget-authentication.md): account policies, OAuth,
+  SMTP, rate limits, local mail testing, and production verification.
+- [API reference](../docs/backend/api-endpoints.md): request and response contracts.
+- [Embed guide](embed/README.md#sign-in-no-key-required): keyless integration and privacy.
 
 ## Example Usage
 
@@ -583,6 +611,15 @@ Environment variables:
 - `NODE_ENV` - Environment (development/production)
 - `STREAMING_HEARTBEAT_ENABLED` - Enable SSE heartbeat during streaming (default: true)
 - `STREAMING_HEARTBEAT_MS` - Heartbeat interval in milliseconds (default: 25000)
+
+**Widget sign-in:**
+
+- `PUBLIC_BASE_URL` - Public origin of this server, used to build the OIDC redirect URI (default: `http://localhost:$PORT`)
+- `GOOGLE_CLIENT_ID` - Google OAuth client ID; Google sign-in is offered only when this and the secret are both set
+- `GOOGLE_CLIENT_SECRET` - Google OAuth client secret
+- `AUTH_DEV_ECHO_OTP` - Set to `1` to return the one-time code in the response body. Local development only; ignored when `SMTP_URL` is set
+- `SMTP_URL` - Relay used to mail sign-in codes, e.g. `smtp://relay.cluster.mieweb.org:25`. Unset means the code is logged instead
+- `SMTP_FROM` - Sender address, must end `@os.mieweb.org` (default: `no-reply@os.mieweb.org`)
 
 See `.env.example` for a complete example configuration.
 
