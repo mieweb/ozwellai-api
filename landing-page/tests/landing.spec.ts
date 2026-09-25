@@ -175,7 +175,7 @@ test.describe('Ozwell Embed Widget', () => {
 
   test('should navigate to tic-tac-toe demo', async ({ page }) => {
     // Click the tic-tac-toe link
-    await page.getByRole('link', { name: 'Play Tic-Tac-Toe Demo →' }).click();
+    await page.getByRole('link', { name: /tic-tac-toe demo/i }).click();
     
     // Verify navigation
     await expect(page).toHaveURL('/tictactoe.html');

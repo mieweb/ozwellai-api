@@ -158,7 +158,9 @@
 
     const iframe = document.createElement('iframe');
     const widgetSrc = options.src || config.widgetUrl || config.src || '/widget/frame/';
-    iframe.src = widgetSrc;
+    const frameUrl = new URL(widgetSrc, document.baseURI);
+    frameUrl.searchParams.set('ozwellLoader', '1');
+    iframe.src = frameUrl.href;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
@@ -168,7 +170,10 @@
     iframe.style.maxWidth = 'calc(100vw - 40px)';
     iframe.style.maxHeight = 'calc(100vh - 80px)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
+    // allow-popups is required for OIDC sign-in: providers refuse to render
+    // their consent screen in an iframe, so it opens in its own window.
+    // allow-popups-to-escape-sandbox keeps that window out of this sandbox.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
 
     container.appendChild(iframe);
     state.iframe = iframe;
