@@ -161,9 +161,11 @@ test('widget adapter delegates queued message controls to OzwellChat', async () 
   const appSource = await readWidgetAppSource();
 
   assert.match(appSource, /queuedMessage=\{queuedMessage\}/);
-  assert.match(appSource, /onQueuedMessageChange=\{setQueuedMessage\}/);
-  assert.match(appSource, /onCancelQueuedMessage=\{\(\) => setQueuedMessage\(null\)\}/);
+  assert.match(appSource, /onQueuedMessageChange=\{\(message\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(message\); \}\}/);
+  assert.match(appSource, /onCancelQueuedMessage=\{\(\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(null\); \}\}/);
   assert.doesNotMatch(appSource, /id: 'queued-message'/);
+  // Host-composed drafts must never be auto-sent by the completion follow-up.
+  assert.match(appSource, /if \(!next \|\| queuedIsDraftRef\.current\) return;/);
 });
 
 test('widget preserves legacy model-only chat config when no provider is resolved', async () => {

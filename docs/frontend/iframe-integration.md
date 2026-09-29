@@ -123,7 +123,7 @@ interface OzwellMessage {
 | `ozwell:ready` | — | Widget initialized |
 | `ozwell:opened` | — | Chat window opened |
 | `ozwell:closed` | — | Chat window closed |
-| `composed` | `{ length }` | Host-selected content was placed into the composer draft |
+| `composed` | `length` (top-level number) | Host-selected content was placed into the composer draft |
 | `ozwell:user-share` | `{ data }` | User explicitly shared data |
 | `ozwell:error` | `{ code, message }` | Error occurred |
 
@@ -158,12 +158,17 @@ const PAGE_TOOLS = [
   { name: 'page.click',        description: 'Click an element by id', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
 ];
 
+// Only trust and reply to the exact widget origin, so a cross-origin document
+// that later reuses this iframe's contentWindow can neither issue tool calls
+// nor receive results.
+const widgetOrigin = new URL(iframe.src).origin;
+
 window.addEventListener('message', (event) => {
-  if (event.source !== iframe.contentWindow) return;
+  if (event.source !== iframe.contentWindow || event.origin !== widgetOrigin) return;
   const msg = event.data;
   if (msg?.jsonrpc !== '2.0') return;
 
-  const reply = (result) => iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, result }, '*');
+  const reply = (result) => iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, result }, widgetOrigin);
 
   switch (msg.method) {
     case 'initialize':
@@ -175,7 +180,7 @@ window.addEventListener('message', (event) => {
       if (name === 'page.getContent')   return reply({ content: [{ type: 'text', text: readEChart(args?.section) }] });
       if (name === 'page.getSelection') return reply({ content: [{ type: 'text', text: String(window.getSelection()) }] });
       if (name === 'page.click')        { document.getElementById(args.id)?.click(); return reply({ content: [{ type: 'text', text: 'clicked' }] }); }
-      return iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Unknown tool' } }, '*');
+      return iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Unknown tool' } }, widgetOrigin);
     }
   }
 });
@@ -190,11 +195,13 @@ Beyond assistant-driven tool calls, the user can push a selection straight into 
 function sendSelectionToOzwell() {
   const content = String(window.getSelection()).trim();
   if (!content) return;
+  // Target the exact widget origin so the selected text is never disclosed to
+  // another document that may have replaced the iframe.
   iframe.contentWindow.postMessage({
     source: 'ozwell-chat-parent',
     type: 'ozwell:compose',
     payload: { content },   // add `replace: true` to overwrite the current draft
-  }, '*');
+  }, new URL(iframe.src).origin);
 }
 
 // Confirm the widget received it.

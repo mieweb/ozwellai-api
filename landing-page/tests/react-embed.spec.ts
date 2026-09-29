@@ -68,7 +68,7 @@ for (const widgetUrl of [undefined, 'https://custom.example/widget/frame/', '/wi
         discoveries.push(route.request().headers().authorization);
         return route.fulfill({ json: { tools: [] } });
       }
-      if (url.href === `${host}/widget/frame/`) {
+      if (`${url.origin}${url.pathname}` === `${host}/widget/frame/`) {
         return route.fulfill({ contentType: 'text/html', body: `<script>
           window.received = [];
           addEventListener('message', event => received.push(event.data));
@@ -80,9 +80,9 @@ for (const widgetUrl of [undefined, 'https://custom.example/widget/frame/', '/wi
     await page.goto('https://app.example/');
     await page.addScriptTag({ content: bundle });
     await expect(page.locator('iframe')).toHaveCount(1);
-    await expect(page.locator('iframe')).toHaveJSProperty('src', `${host}/widget/frame/`);
+    await expect(page.locator('iframe')).toHaveJSProperty('src', `${host}/widget/frame/?ozwellLoader=1`);
     const frame = (await (await page.locator('iframe').elementHandle())!.contentFrame())!;
-    await frame.waitForURL(`${host}/widget/frame/`);
+    await frame.waitForURL(`${host}/widget/frame/?ozwellLoader=1`);
     await expect.poll(() => frame.evaluate(() => (window as any).received.find((message: any) => message.type === 'config')?.payload.config.apiKey)).toBe('agnt_key-test');
     expect(discoveries).toEqual(['Bearer agnt_key-test']);
     await frame.evaluate(() => parent.postMessage({

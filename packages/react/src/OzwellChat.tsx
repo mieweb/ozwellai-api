@@ -337,7 +337,10 @@ export function OzwellChat(props: OzwellChatProps) {
       }
 
       try {
-        onToolCall(name, args || {}, respond);
+        // A consumer may hand us an async callback; a rejection would otherwise
+        // go unhandled and the tool call would hang until its timeout.
+        const outcome = onToolCall(name, args || {}, respond) as unknown;
+        Promise.resolve(outcome).catch(() => error(`Tool "${name}" failed.`));
       } catch {
         error(`Tool "${name}" failed.`);
       }

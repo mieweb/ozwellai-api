@@ -395,6 +395,9 @@ export function WidgetApp() {
   const activeToolCallsRef = useRef<Record<string, string | number>>({});
   const toolExecutionsRef = useRef<PendingToolExecution[]>([]);
   const queuedRef = useRef<string | null>(null);
+  // True while `queuedMessage` holds host-composed content the user has not yet
+  // confirmed, so the completion follow-up never auto-sends it.
+  const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
 
@@ -412,6 +415,7 @@ export function WidgetApp() {
     try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
     historyRef.current = [];
     queuedRef.current = null;
+    queuedIsDraftRef.current = false;
     setQueuedMessage(null);
     setHistoryMessages([]);
     setDisplayMessages([]);
@@ -485,11 +489,13 @@ export function WidgetApp() {
   }, []);
 
   // Bring host-selected content (e.g. an E-Chart selection) into the composer
-  // draft. Appends by default so several selections accumulate; the user
-  // reviews and sends explicitly, so conversation privacy is preserved.
+  // as a draft. Appends by default so several selections accumulate. It is
+  // marked draft-only so it is never auto-sent: the user must edit or send it,
+  // which preserves conversation privacy.
   const insertIntoComposer = useCallback((content: string, replace = false) => {
     const trimmed = content.trim();
     if (!trimmed) return;
+    queuedIsDraftRef.current = true;
     setQueuedMessage((current) => (
       replace || !current ? trimmed : `${current}\n\n${trimmed}`
     ));
@@ -552,7 +558,8 @@ export function WidgetApp() {
 
   const sendQueuedMessage = useCallback(() => {
     const next = queuedRef.current;
-    if (!next) return;
+    // A draft (host-composed, unconfirmed) is never auto-sent.
+    if (!next || queuedIsDraftRef.current) return;
     setQueuedMessage(null);
     void sendMessage(next);
   }, []);
@@ -876,7 +883,11 @@ export function WidgetApp() {
   recordToolResultRef.current = recordToolResult;
 
   async function sendMessage(text: string) {
-    if (sendingRef.current) {
+    // Outstanding tool results must land before any new user turn, otherwise a
+    // user/assistant turn would sit between an assistant `tool_calls` message
+    // and its required tool results. Queue until the follow-up completes.
+    if (sendingRef.current || awaitingToolResultsRef.current.size > 0) {
+      queuedIsDraftRef.current = false;
       setQueuedMessage(text);
       return;
     }
@@ -1158,8 +1169,8 @@ export function WidgetApp() {
       inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       onSendMessage={(message) => void sendMessage(message)}
       queuedMessage={queuedMessage}
-      onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => setQueuedMessage(null)}
+      onQueuedMessageChange={(message) => { queuedIsDraftRef.current = false; setQueuedMessage(message); }}
+      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
       renderTextContent={renderTextContent}
       thinking={{
         enabled: config.thinkingEnabled,
