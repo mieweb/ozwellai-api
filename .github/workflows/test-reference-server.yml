@@ -27,13 +27,14 @@ jobs:
 
       - name: Install and build pinned mieweb UI
         working-directory: ./vendor/mieweb-ui
-        # `corepack enable` puts a `pnpm` shim on PATH so the vendored
-        # build:esheet script (which shells out to bare `pnpm`) resolves.
-        # NODE_OPTIONS raises the heap for tsup's dts worker threads, which
-        # otherwise keep Node's default (~2GB) limit and OOM.
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
-        run: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm run build
+        run: |
+          # corepack enable puts a `pnpm` shim on PATH so the vendored
+          # build:esheet script (which shells out to bare `pnpm`) resolves.
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          # Give tsup's dts worker an explicit heap so it doesn't OOM on CI.
+          node ../../scripts/ci/raise-tsup-dts-memory.mjs .
+          corepack pnpm run build
 
       - name: Upload pinned mieweb UI
         uses: actions/upload-artifact@v4
