@@ -7,8 +7,10 @@
 # needs well over a GitHub runner's 16 GB and OOMs the dts worker
 # (ERR_WORKER_OUT_OF_MEMORY). The widget only imports `@mieweb/ui`,
 # `@mieweb/ui/styles.css` and `@mieweb/ui/brands/ozwell.css`, so building just
-# the index entry keeps the build under ~2 GB. Skipping the full build also
-# skips its esheet/datavis prebuild, which the index entry does not need.
+# the index entry keeps the build under ~2 GB. Skipping the full build skips its
+# `prebuild` (the memory-heavy `build:esheet`). Note the package's `prepare`
+# hook still runs `build:datavis` and the CSS steps during `pnpm install`; the
+# index entry does not use DataVis, but that build is unavoidable on install.
 #
 # Run from anywhere; safe to run repeatedly.
 set -euo pipefail

@@ -61,7 +61,7 @@ function localMiewebUiPlugin() {
       if (!hasLocalBuild) {
         throw new Error(
           '[build-widget] Build the pinned UI first: git submodule update --init --recursive && ' +
-          'pnpm --dir vendor/mieweb-ui install --frozen-lockfile && pnpm --dir vendor/mieweb-ui build'
+          './scripts/ci/build-pinned-ui.sh'
         );
       }
 

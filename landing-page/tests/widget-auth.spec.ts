@@ -38,6 +38,14 @@ test.describe('Widget authentication', () => {
       await page.addInitScript(() => {
         (window as any).OZWELL_CONFIG = { thinkingEnabled: true, thinkingDefaultMode: 3 };
       });
+      // Two models so the composer's model selector (moved into the composer
+      // row by this migration) actually renders.
+      await page.route('**/v1/models/effective', route => route.fulfill({
+        json: { data: [
+          { provider: 'openai', model: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+          { provider: 'openai', model: 'gpt-4o', label: 'gpt-4o' },
+        ] },
+      }));
       await page.route('**/v1/chat/completions', route => route.fulfill({
         contentType: 'text/event-stream',
         body: [
@@ -54,6 +62,12 @@ test.describe('Widget authentication', () => {
       await expect(page.getByText('Here is the private reply.', { exact: true })).toBeVisible();
       await expect(page.getByText('Checking the requested details.', { exact: true })).toBeVisible();
       await expect(input).toBeEnabled();
+      // The model selector renders in the composer and stays within the viewport.
+      const modelSelector = page.getByRole('button', { name: /gpt-4o/ });
+      await expect(modelSelector).toBeVisible();
+      const selectorBounds = await modelSelector.boundingBox();
+      expect(selectorBounds).not.toBeNull();
+      expect(selectorBounds!.x + selectorBounds!.width).toBeLessThanOrEqual(viewport.width);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
       const inputBounds = await input.boundingBox();
       expect(inputBounds).not.toBeNull();
