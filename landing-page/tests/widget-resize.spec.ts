@@ -93,13 +93,19 @@ test.describe('Widget resize', () => {
   test('keyboard arrows resize and Home resets', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await openWidget(page);
+    const handle = page.locator('#ozwell-chat-wrapper .ozwell-resize-handle');
+    await expect(handle).toHaveAttribute('role', 'button');
     const before = await wrapperSize(page);
-    await page.locator('#ozwell-chat-wrapper .ozwell-resize-handle').focus();
+    await handle.focus();
     await page.keyboard.press('ArrowLeft'); // wider by 16
     await page.keyboard.press('ArrowUp');   // taller by 16
     const after = await wrapperSize(page);
     expect(after.width).toBe(before.width + 16);
     expect(after.height).toBe(before.height + 16);
+    // Both dimensions are announced via the live region.
+    await expect(page.locator('#ozwell-resize-status')).toHaveText(
+      new RegExp(`Chat window ${after.width} by ${after.height} pixels`)
+    );
     await page.keyboard.press('Home');
     expect(await wrapperSize(page)).toEqual(before);
     expect(await page.evaluate((key) => localStorage.getItem(key), SIZE_KEY)).toBeNull();

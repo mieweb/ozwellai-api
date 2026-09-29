@@ -659,6 +659,18 @@
         outline-offset: -2px;
       }
 
+      .ozwell-sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
       /* Parallel diagonal lines, clipped to the corner triangle */
       .ozwell-resize-handle::before {
         content: '';
@@ -814,40 +826,36 @@
     } catch { /* storage blocked or malformed */ }
   }
 
-  // Reflect the current window size on the handle for assistive tech.
-  function updateResizeAria(wrapper, handle) {
-    if (!handle) return;
-    handle.setAttribute('aria-valuemin', String(MIN_WIDTH));
-    handle.setAttribute('aria-valuemax', String(Math.max(MIN_WIDTH, window.innerWidth - 40)));
-    handle.setAttribute('aria-valuenow', String(wrapper.offsetWidth));
-    handle.setAttribute('aria-valuetext', wrapper.offsetWidth + ' by ' + wrapper.offsetHeight + ' pixels');
+  // Announce the current window size to assistive tech via a live region.
+  function announceSize(wrapper) {
+    const status = document.getElementById('ozwell-resize-status');
+    if (status) status.textContent = 'Chat window ' + wrapper.offsetWidth + ' by ' + wrapper.offsetHeight + ' pixels';
   }
 
-  function setWindowSize(wrapper, handle, width, height, persist) {
+  function setWindowSize(wrapper, width, height, persist) {
     const clamped = clampSize(width, height);
     wrapper.style.width = clamped.width + 'px';
     wrapper.style.height = clamped.height + 'px';
-    updateResizeAria(wrapper, handle);
     if (persist) {
       try { localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(clamped)); } catch { /* storage blocked */ }
     }
   }
 
-  function resetWindowSize(wrapper, handle) {
+  function resetWindowSize(wrapper) {
     wrapper.style.width = '';
     wrapper.style.height = '';
-    updateResizeAria(wrapper, handle);
     try { localStorage.removeItem(SIZE_STORAGE_KEY); } catch { /* storage blocked */ }
+    announceSize(wrapper);
   }
 
   // Drag the top-left handle to resize; the window is anchored bottom-right.
   // Also supports keyboard resizing (arrow keys, Home to reset).
   function enableResize(wrapper, handle) {
-    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false, lastDownAt = 0;
+    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false, lastDownAt = 0, activePointerId = null;
 
     const onMove = (event) => {
       if (!resizing) return;
-      setWindowSize(wrapper, handle, startWidth + (startX - event.clientX), startHeight + (startY - event.clientY), false);
+      setWindowSize(wrapper, startWidth + (startX - event.clientX), startHeight + (startY - event.clientY), false);
     };
 
     const endDrag = () => {
@@ -856,12 +864,18 @@
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', endDrag);
       document.removeEventListener('pointercancel', endDrag);
+      handle.removeEventListener('lostpointercapture', endDrag);
+      if (activePointerId !== null) {
+        try { handle.releasePointerCapture(activePointerId); } catch { /* already released */ }
+        activePointerId = null;
+      }
       // Restore iframe interaction once the drag ends.
       const iframe = wrapper.querySelector('iframe');
       if (iframe) iframe.style.pointerEvents = '';
       try {
         localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify({ width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
       } catch { /* storage blocked */ }
+      announceSize(wrapper);
     };
 
     handle.addEventListener('pointerdown', (event) => {
@@ -871,7 +885,7 @@
       const now = Date.now();
       if (now - lastDownAt < 300) {
         lastDownAt = 0;
-        resetWindowSize(wrapper, handle);
+        resetWindowSize(wrapper);
         return;
       }
       lastDownAt = now;
@@ -880,19 +894,23 @@
       startY = event.clientY;
       startWidth = wrapper.offsetWidth;
       startHeight = wrapper.offsetHeight;
-      // The iframe would otherwise swallow pointermove events mid-drag.
+      // Capturing the pointer guarantees a release outside the viewport still
+      // ends the drag (pointerup or lostpointercapture), so the iframe never
+      // stays stuck at pointer-events: none.
+      activePointerId = event.pointerId;
+      try { handle.setPointerCapture(activePointerId); } catch { /* capture unsupported */ }
       const iframe = wrapper.querySelector('iframe');
       if (iframe) iframe.style.pointerEvents = 'none';
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', endDrag);
-      // Clean up if the pointer is interrupted (e.g. touch cancelled).
       document.addEventListener('pointercancel', endDrag);
+      handle.addEventListener('lostpointercapture', endDrag);
     });
 
     handle.addEventListener('keydown', (event) => {
       if (event.key === 'Home') {
         event.preventDefault();
-        resetWindowSize(wrapper, handle);
+        resetWindowSize(wrapper);
         return;
       }
       const step = event.shiftKey ? 48 : 16;
@@ -905,7 +923,8 @@
         default: return;
       }
       event.preventDefault();
-      setWindowSize(wrapper, handle, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
+      setWindowSize(wrapper, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
+      announceSize(wrapper);
     });
 
     // Re-clamp an explicit size when the viewport shrinks so the window and its
@@ -913,10 +932,8 @@
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 767) return;
       if (!wrapper.style.width && !wrapper.style.height) return;
-      setWindowSize(wrapper, handle, wrapper.offsetWidth, wrapper.offsetHeight, false);
+      setWindowSize(wrapper, wrapper.offsetWidth, wrapper.offsetHeight, false);
     });
-
-    updateResizeAria(wrapper, handle);
   }
 
   /**
@@ -988,16 +1005,25 @@
     container.className = 'ozwell-chat-content';
 
     // Top-left drag handle (the window is anchored bottom-right, so dragging
-    // up/left grows it).
+    // up/left grows it). A button, not a 1-D separator, since it changes both
+    // width and height; size changes are announced via the live region below.
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'ozwell-resize-handle';
-    resizeHandle.setAttribute('role', 'separator');
+    resizeHandle.setAttribute('role', 'button');
     resizeHandle.setAttribute('tabindex', '0');
-    resizeHandle.setAttribute('aria-label', 'Resize chat window. Use arrow keys to resize, Home to reset.');
+    resizeHandle.setAttribute('aria-label', 'Resize chat window. Use arrow keys to change width and height, Home to reset.');
     resizeHandle.title = 'Drag to resize · double-click to reset';
+
+    // Visually-hidden live region announcing the current size to assistive tech.
+    const resizeStatus = document.createElement('div');
+    resizeStatus.id = 'ozwell-resize-status';
+    resizeStatus.className = 'ozwell-sr-only';
+    resizeStatus.setAttribute('role', 'status');
+    resizeStatus.setAttribute('aria-live', 'polite');
 
     // Assemble wrapper
     wrapper.appendChild(resizeHandle);
+    wrapper.appendChild(resizeStatus);
     wrapper.appendChild(header);
     wrapper.appendChild(container);
 
