@@ -59,12 +59,14 @@ jobs:
       - name: Install and build pinned mieweb UI
         working-directory: ./vendor/mieweb-ui
         run: |
+          # Diagnostic: runner memory/CPU to size the dts worker heap.
+          echo "MEM:"; free -h || true; echo "CPU: $(nproc || true)"
           # corepack enable puts a `pnpm` shim on PATH so the vendored
           # build:esheet script (which shells out to bare `pnpm`) resolves.
           corepack enable
           corepack pnpm install --frozen-lockfile
           # Give tsup's dts worker an explicit heap so it doesn't OOM on CI.
-          node ../../scripts/ci/raise-tsup-dts-memory.mjs .
+          TSUP_DTS_HEAP_MB=13312 node ../../scripts/ci/raise-tsup-dts-memory.mjs .
           corepack pnpm run build
 
       - name: Install landing-page dependencies
