@@ -47,7 +47,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 20's V8 balloons past 8GB building the rollup-dts graph and
+          # OOMs the worker; 22 keeps it within the heap set below.
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
