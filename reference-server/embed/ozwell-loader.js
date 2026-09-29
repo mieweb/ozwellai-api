@@ -626,6 +626,30 @@
         transform: scale(1) translateY(0);
       }
 
+      /* Top-left drag-resize handle */
+      .ozwell-resize-handle {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 20px;
+        height: 20px;
+        cursor: nwse-resize;
+        z-index: 2;
+        touch-action: none;
+      }
+
+      .ozwell-resize-handle::before {
+        content: '';
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: 8px;
+        height: 8px;
+        border-top: 2px solid rgba(255, 255, 255, 0.85);
+        border-left: 2px solid rgba(255, 255, 255, 0.85);
+        border-radius: 3px 0 0 0;
+      }
+
       /* Chat header */
       .ozwell-chat-header {
         display: flex;
@@ -702,11 +726,15 @@
           left: 0;
           right: 0;
           bottom: 0;
-          width: 100%;
-          height: 100%;
+          width: 100% !important;
+          height: 100% !important;
           border-radius: 0;
           border: none;
           box-shadow: none;
+        }
+
+        .ozwell-resize-handle {
+          display: none;
         }
 
         .ozwell-chat-wrapper.hidden {
@@ -733,6 +761,74 @@
     `;
     document.head.appendChild(style);
     console.log('[OzwellChat] Default UI styles injected');
+  }
+
+  const SIZE_STORAGE_KEY = 'ozwell.widget.size';
+  const MIN_WIDTH = 320;
+  const MIN_HEIGHT = 360;
+
+  // Keep the window within the viewport (24px right/bottom offset + margin).
+  function clampSize(width, height) {
+    const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - 40);
+    const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - 48);
+    return {
+      width: Math.min(Math.max(width, MIN_WIDTH), maxWidth),
+      height: Math.min(Math.max(height, MIN_HEIGHT), maxHeight),
+    };
+  }
+
+  function applySavedSize(wrapper) {
+    // Mobile uses a fullscreen window; keep its size out of localStorage's reach.
+    if (window.innerWidth <= 767) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(SIZE_STORAGE_KEY) || 'null');
+      if (!saved || typeof saved.width !== 'number' || typeof saved.height !== 'number') return;
+      const { width, height } = clampSize(saved.width, saved.height);
+      wrapper.style.width = width + 'px';
+      wrapper.style.height = height + 'px';
+    } catch { /* storage blocked or malformed */ }
+  }
+
+  // Drag the top-left handle to resize; the window is anchored bottom-right.
+  function enableResize(wrapper, handle) {
+    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false;
+
+    const onMove = (event) => {
+      if (!resizing) return;
+      const { width, height } = clampSize(
+        startWidth + (startX - event.clientX),
+        startHeight + (startY - event.clientY)
+      );
+      wrapper.style.width = width + 'px';
+      wrapper.style.height = height + 'px';
+    };
+
+    const onUp = () => {
+      if (!resizing) return;
+      resizing = false;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      // Restore iframe interaction once the drag ends.
+      const iframe = wrapper.querySelector('iframe');
+      if (iframe) iframe.style.pointerEvents = '';
+      try {
+        localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify({ width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
+      } catch { /* storage blocked */ }
+    };
+
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      resizing = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      startWidth = wrapper.offsetWidth;
+      startHeight = wrapper.offsetHeight;
+      // The iframe would otherwise swallow pointermove events mid-drag.
+      const iframe = wrapper.querySelector('iframe');
+      if (iframe) iframe.style.pointerEvents = 'none';
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    });
   }
 
   /**
@@ -803,9 +899,19 @@
     container.id = 'ozwell-chat-container';
     container.className = 'ozwell-chat-content';
 
+    // Top-left drag handle (the window is anchored bottom-right, so dragging
+    // up/left grows it).
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'ozwell-resize-handle';
+    resizeHandle.setAttribute('aria-label', 'Resize chat');
+    resizeHandle.setAttribute('role', 'separator');
+
     // Assemble wrapper
+    wrapper.appendChild(resizeHandle);
     wrapper.appendChild(header);
     wrapper.appendChild(container);
+
+    applySavedSize(wrapper);
 
     // Add to page
     document.body.appendChild(button);
@@ -826,6 +932,9 @@
     if (!ui) return;
 
     const { button, wrapper } = ui;
+
+    const resizeHandle = wrapper.querySelector('.ozwell-resize-handle');
+    if (resizeHandle) enableResize(wrapper, resizeHandle);
 
     // Open chat when button clicked - use openChat() to track state and clear notifications
     button.addEventListener('click', () => {
