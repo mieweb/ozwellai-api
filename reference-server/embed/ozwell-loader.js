@@ -56,6 +56,7 @@
 
   const state = {
     iframe: null,
+    frameOrigin: null, // Expected origin of the widget iframe, for message validation
     ready: false,
     pendingMessages: [],
     runtimeConfig: {},
@@ -161,6 +162,7 @@
     const frameUrl = new URL(widgetSrc, document.baseURI);
     frameUrl.searchParams.set('ozwellLoader', '1');
     iframe.src = frameUrl.href;
+    state.frameOrigin = frameUrl.origin;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
@@ -342,6 +344,9 @@
 
   function handleWidgetMessage(event) {
     if (!state.iframe || event.source !== state.iframe.contentWindow) return;
+    // A document that navigated the iframe to another origin keeps the same
+    // WindowProxy; reject it so it cannot forge tool calls or widget events.
+    if (state.frameOrigin && event.origin !== state.frameOrigin) return;
     const data = event.data;
     if (!data || typeof data !== 'object') return;
 

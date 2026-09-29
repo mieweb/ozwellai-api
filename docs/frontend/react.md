@@ -14,6 +14,11 @@ pnpm add @ozwell/react
 
 ## Quick Start
 
+Sign in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your MIE account,
+create an agent, and copy its `agnt_key-` key. See [credential setup](cdn-embed.md#getting-your-credentials).
+OIDC is used for Manager sign-in; do not pass an OIDC client secret, login token, or parent
+`ozw_` key to the widget. The agent key selects the agent, so a separate `agentId` is not needed.
+
 ```tsx
 import { OzwellChat } from '@ozwell/react';
 
@@ -21,16 +26,97 @@ function App() {
   return (
     <div>
       <h1>My App</h1>
-      {/* apiKey and agentId are coming soon - use endpoint for now */}
       <OzwellChat
-        endpoint="/v1/chat/completions"
-        // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-        // agentId="agent_xxxxxxxx"      // Coming soon
+        apiKey="agnt_key-your-agent-key"
       />
     </div>
   );
 }
 ```
+
+The component loads the current hosted widget from `https://ozwellapi.os.mieweb.org`.
+Your Vite app does not need to serve `/widget` or `/v1/chat/completions` itself.
+For a different deployment, set `widgetUrl="https://your-ozwell-host/widget/frame/"`;
+the loader and default API endpoint use that host. For local development, use
+`widgetUrl="http://localhost:3000/widget/frame/"` with the reference server running.
+An `endpoint` override changes chat requests only, not where the widget is loaded.
+
+### Vite + MIE UI: Click Hello World
+
+In a Vite React TypeScript app, install `@mieweb/ui` and `@ozwell/react`. Follow the
+[MIE UI setup instructions](https://ui.mieweb.com) for its styles and theme.
+Use the iframe-based `OzwellChat` below for an Ozwell integration; a visual chat
+component or a canned Storybook reply alone does not connect to an Ozwell agent.
+
+Set `VITE_OZWELL_AGENT_KEY` to your agent key in your local environment. Vite exposes
+`VITE_*` values to the browser: this is not secret storage. Use only an agent key
+approved for that site, never a parent/admin or model-provider key. Confirm its
+permissions and deployment policy before publishing; use a server-side integration
+when credentials must remain private.
+
+```tsx
+import { useRef, useState } from 'react';
+import { Button } from '@mieweb/ui';
+import { OzwellChat, type OzwellTool } from '@ozwell/react';
+
+const tools: OzwellTool[] = [{
+  type: 'function',
+  function: {
+    name: 'click_hello_world',
+    description: 'Click the Hello World button when the user asks.',
+    parameters: { type: 'object', properties: {}, required: [] },
+  },
+}];
+
+export default function App() {
+  const button = useRef<HTMLButtonElement>(null);
+  const [clicks, setClicks] = useState(0);
+
+  return (
+    <>
+      <Button ref={button} onClick={() => setClicks(value => value + 1)}>
+        Hello World
+      </Button>
+      <output aria-live="polite">Clicks: {clicks}</output>
+      <OzwellChat
+        apiKey={import.meta.env.VITE_OZWELL_AGENT_KEY}
+        tools={tools}
+        onToolCall={(name, _args, respond) => {
+          if (name !== 'click_hello_world' || !button.current) {
+            respond({ isError: true, content: [{ type: 'text', text: 'Tool unavailable' }] });
+            return;
+          }
+          button.current.click();
+          respond({ content: [{ type: 'text', text: 'Clicked Hello World' }] });
+        }}
+      />
+    </>
+  );
+}
+```
+
+Open chat and ask "Click the Hello World button." The click count should increase,
+and the tool result should return to the assistant. Always return a result for every
+tool call, including unsupported names. Expose specific actions, not arbitrary
+JavaScript execution or unrestricted DOM selectors.
+
+Conversation privacy builds user trust: the host receives tool calls and lifecycle
+events, never the private conversation. Sharing conversation content is always opt-in.
+
+### Troubleshooting Existing Apps (Including eCase)
+
+- Loader 404: confirm the script comes from the Ozwell host's `/widget` route, not the Vite app's origin.
+- Sign-in fails: verify the Manager OIDC deployment and registered redirect URL with the operator. Embedding does not register an OIDC client for your app.
+- Agent authentication fails: confirm the key starts with `agnt_key-`, belongs to the same Ozwell deployment, and has not been revoked. Do not work around authentication by disabling it.
+- Chat cannot click: pass both `tools` and `onToolCall`, return a result, and ensure the agent uses a tool-capable model.
+- Network or CSP errors: allow the chosen widget host in `script-src` and `frame-src`, and its agent-discovery API in `connect-src`. Cross-origin API requests also require deployment-side CORS approval.
+
+For AI-assisted app creation, reference this guide at
+[docs.ozwell.ai/frontend/react](https://docs.ozwell.ai/frontend/react) alongside MIE UI's
+instructions. Ask for the iframe embed, agent-key setup, and an explicit page-tool
+handler, not a mock chat interface. The UI site's generated instructions must link
+to this guide in the `mieweb/ui` repository; updating this API repository does not
+publish changes to `ui.mieweb.com` or deploy eCase.
 
 ---
 
@@ -44,15 +130,14 @@ The main chat widget component.
 import { OzwellChat } from '@ozwell/react';
 
 <OzwellChat
-  apiKey="ozw_scoped_xxxxxxxx"
-  agentId="agent_xxxxxxxx"
+  apiKey="agnt_key-your-agent-key"
   theme="auto"
   position="bottom-right"
   primaryColor="#4f46e5"
   width="400px"
   height="600px"
   autoOpen={false}
-  greeting="Hello! How can I help?"
+  welcomeMessage="Hello! How can I help?"
   placeholder="Type a message..."
   onReady={() => console.log('Ready')}
   onOpen={() => console.log('Opened')}
@@ -65,8 +150,8 @@ import { OzwellChat } from '@ozwell/react';
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `apiKey` | `string` | — | Scoped API key (coming soon, will be required) |
-| `agentId` | `string` | — | Agent ID (coming soon, will be required) |
+| `apiKey` | `string` | — | Agent key (`agnt_key-...`) for authentication and agent configuration |
+| `agentId` | `string` | — | Reserved; not implemented. Use an agent key instead. |
 | `endpoint` | `string` | — | API endpoint URL |
 | `model` | `string` | — | Model name (optional, auto-selected if not specified) |
 | `system` | `string` | — | System prompt for the assistant |
@@ -78,22 +163,19 @@ import { OzwellChat } from '@ozwell/react';
 | `width` | `string \| number` | `360` | Chat window width |
 | `height` | `string \| number` | `420` | Chat window height |
 | `autoOpen` | `boolean` | `false` | Open on mount (coming soon) |
-| `greeting` | `string` | Agent default | Initial message |
 | `placeholder` | `string` | `'Type a message...'` | Input placeholder |
-| `context` | `Record<string, unknown>` | `{}` | Context data for agent |
 | `tools` | `OzwellTool[]` | `[]` | MCP tools available to the AI |
 | `debug` | `boolean` | `false` | Enable debug mode |
 | `openaiApiKey` | `string` | — | OpenAI API key (for direct OpenAI endpoint) |
 | `headers` | `Record<string, string>` | — | Custom HTTP headers |
-| `widgetUrl` | `string` | — | Widget URL (auto-detected by default) |
+| `widgetUrl` | `string` | `https://ozwellapi.os.mieweb.org/widget/frame/` | Widget frame URL; also selects the loader host |
 | `defaultUI` | `boolean` | `true` | Enable default floating button UI |
 | `onReady` | `() => void` | — | Widget ready callback |
 | `onOpen` | `() => void` | — | Chat opened callback |
 | `onClose` | `() => void` | — | Chat closed callback |
-| `onInsert` | `(data: { text: string; close: boolean }) => void` | — | User inserts text to parent page |
 | `onToolCall` | `(tool, args, sendResult) => void` | — | Tool call handler (see below) |
 | `onUserShare` | `(data: unknown) => void` | — | User shared data callback (requires widget support - coming soon) |
-| `onError` | `(error: OzwellError) => void` | — | Error callback (works for mount errors, more error types coming soon) |
+| `onError` | `(error: OzwellError) => void` | — | Reports loader and mount errors |
 
 > **Privacy Note:** There is no `onMessage` callback. Conversation content is private between the user and Ozwell. The `onUserShare` callback only fires when the user explicitly chooses to share data with your site.
 
@@ -141,7 +223,6 @@ interface UseOzwellReturn {
   close: () => void;
   toggle: () => void;
   sendMessage: (content: string) => void;  // Not yet implemented
-  setContext: (context: Record<string, unknown>) => void;
   iframe: HTMLIFrameElement | null;
 }
 ```
@@ -152,34 +233,11 @@ interface UseOzwellReturn {
 
 ## Examples
 
-### With Context Data
+### With Page Context
 
-Pass user information and page context to the agent:
-
-```tsx
-import { OzwellChat } from '@ozwell/react';
-import { useUser } from './auth';
-import { useLocation } from 'react-router-dom';
-
-function App() {
-  const user = useUser();
-  const location = useLocation();
-  
-  return (
-    <OzwellChat
-      endpoint="/v1/chat/completions"
-      // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-      // agentId="agent_xxxxxxxx"      // Coming soon
-      context={{
-        userId: user?.id,
-        email: user?.email,
-        page: location.pathname,
-        timestamp: Date.now()
-      }}
-    />
-  );
-}
-```
+The React wrapper does not implement a `context` prop. Expose a specific read-only
+page tool through `tools` and `onToolCall` when the assistant needs page data.
+Return only the information needed for that action.
 
 ### Custom Trigger Button
 
@@ -207,8 +265,8 @@ function App() {
   return (
     <>
       <OzwellChat
-        endpoint="/v1/chat/completions"
-        defaultUI={false}  {/* Hide default floating button */}
+        apiKey="agnt_key-your-agent-key"
+        defaultUI={false}
       />
       <CustomTrigger />
     </>
@@ -227,9 +285,7 @@ import { analytics } from './analytics';
 function App() {
   return (
     <OzwellChat
-      endpoint="/v1/chat/completions"
-      // apiKey="ozw_scoped_xxxxxxxx"  // Coming soon
-      // agentId="agent_xxxxxxxx"      // Coming soon
+      apiKey="agnt_key-your-agent-key"
       onOpen={() => {
         analytics.track('Chat Opened');
       }}
@@ -358,9 +414,7 @@ The package includes full TypeScript definitions:
 import type { OzwellChatProps, OzwellError } from '@ozwell/react';
 
 const config: OzwellChatProps = {
-  endpoint: '/v1/chat/completions',
-  // apiKey: 'ozw_scoped_xxxxxxxx',  // Coming soon
-  // agentId: 'agent_xxxxxxxx',      // Coming soon
+  apiKey: 'agnt_key-your-agent-key',
   // theme: 'dark',                  // Coming soon
   onUserShare: (data: unknown) => {
     // Only fires when user explicitly shares (coming soon)
@@ -382,23 +436,8 @@ const config: OzwellChatProps = {
 ### Widget Not Appearing
 
 1. Ensure the component is mounted in the DOM
-2. Check that the `endpoint` prop is correct (or `apiKey`/`agentId` once available)
+2. Check the widget host and agent key using the setup checklist above
 3. Look for console errors
-
-### Context Not Updating
-
-The `context` prop is not deeply compared. To trigger updates:
-
-```tsx
-// ❌ Won't trigger update (same object reference)
-const context = { page: location.pathname };
-
-// ✅ Will trigger update (new object)
-const context = useMemo(
-  () => ({ page: location.pathname }),
-  [location.pathname]
-);
-```
 
 ### Multiple Instances
 
