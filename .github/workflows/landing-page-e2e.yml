@@ -58,6 +58,10 @@ jobs:
         working-directory: ./vendor/mieweb-ui
         # `corepack enable` puts a `pnpm` shim on PATH so the vendored
         # build:esheet script (which shells out to bare `pnpm`) resolves.
+        # NODE_OPTIONS raises the heap for tsup's dts worker threads, which
+        # otherwise keep Node's default (~2GB) limit and OOM.
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm run build
 
       - name: Install landing-page dependencies
