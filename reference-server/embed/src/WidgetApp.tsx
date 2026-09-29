@@ -1169,7 +1169,7 @@ export function WidgetApp() {
       inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       onSendMessage={(message) => void sendMessage(message)}
       queuedMessage={queuedMessage}
-      onQueuedMessageChange={(message) => { queuedIsDraftRef.current = false; setQueuedMessage(message); }}
+      onQueuedMessageChange={setQueuedMessage}
       onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
       renderTextContent={renderTextContent}
       thinking={{
