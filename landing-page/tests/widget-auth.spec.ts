@@ -32,6 +32,49 @@ test.describe('Widget authentication', () => {
     await page.route('**/v1/keys/validate', route => route.fulfill({ json: { valid: true } }));
   });
 
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 375, height: 667 }]) {
+    test(`renders shared chat and reasoning at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await page.addInitScript(() => {
+        (window as any).OZWELL_CONFIG = { thinkingEnabled: true, thinkingDefaultMode: 3 };
+      });
+      // Two models so the composer's model selector (moved into the composer
+      // row by this migration) actually renders.
+      await page.route('**/v1/models/effective', route => route.fulfill({
+        json: { data: [
+          { provider: 'openai', model: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+          { provider: 'openai', model: 'gpt-4o', label: 'gpt-4o' },
+        ] },
+      }));
+      await page.route('**/v1/chat/completions', route => route.fulfill({
+        contentType: 'text/event-stream',
+        body: [
+          { choices: [{ delta: { thinking: 'Checking the requested details.' } }] },
+          { choices: [{ delta: { content: 'Here is the private reply.' } }] },
+        ].map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join('') + 'data: [DONE]\n\n',
+      }));
+      await page.goto(widgetUrl);
+      await enterKey(page);
+      await page.getByRole('button', { name: 'Use key', exact: true }).click();
+      const input = page.getByRole('textbox', { name: 'Message', exact: true });
+      await input.fill('A private question');
+      await input.press('Enter');
+      await expect(page.getByText('Here is the private reply.', { exact: true })).toBeVisible();
+      await expect(page.getByText('Checking the requested details.', { exact: true })).toBeVisible();
+      await expect(input).toBeEnabled();
+      // The model selector renders in the composer and stays within the viewport.
+      const modelSelector = page.getByRole('button', { name: /gpt-4o/ });
+      await expect(modelSelector).toBeVisible();
+      const selectorBounds = await modelSelector.boundingBox();
+      expect(selectorBounds).not.toBeNull();
+      expect(selectorBounds!.x + selectorBounds!.width).toBeLessThanOrEqual(viewport.width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
+      const inputBounds = await input.boundingBox();
+      expect(inputBounds).not.toBeNull();
+      expect(inputBounds!.y + inputBounds!.height).toBeLessThanOrEqual(viewport.height);
+    });
+  }
+
   test('rejects an invalid key without opening chat or saving it', async ({ page }) => {
     let modelRequests = 0;
     page.on('request', request => {

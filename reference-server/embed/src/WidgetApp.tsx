@@ -262,6 +262,29 @@ function parseToolCallsFromContent(content: string) {
   }
 }
 
+// Portkey/Anthropic and other vendors may emit reasoning under different keys or as content blocks.
+function extractThinkingDelta(delta: Record<string, unknown>): string {
+  for (const key of ['thinking', 'reasoning_content', 'reasoning']) {
+    const value = delta[key];
+    if (typeof value === 'string' && value) return value;
+    if (value && typeof value === 'object' && typeof (value as { text?: unknown }).text === 'string') {
+      return (value as { text: string }).text;
+    }
+  }
+  return '';
+}
+
+function resolveToolCallIndex(toolCallDelta: { index?: unknown; id?: unknown }, accumulated: OpenAIToolCall[]): number {
+  if (typeof toolCallDelta.index === 'number') return toolCallDelta.index;
+  if (toolCallDelta.id) {
+    const existing = accumulated.findIndex((tc) => tc?.id === toolCallDelta.id);
+    if (existing !== -1) return existing;
+    return accumulated.length;
+  }
+  // No index or id: continue the most recent tool call (argument fragments).
+  return Math.max(accumulated.length - 1, 0);
+}
+
 function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status']): MCPToolCall {
   return {
     id: String(toolCall.id || createMessageId('tool')),
@@ -364,10 +387,17 @@ export function WidgetApp() {
   const historyRef = useRef(historyMessages);
   const parentOriginRef = useRef<string | null>(null);
   const pendingToolCallsRef = useRef<Record<string, true>>({});
+  // Tool call ids from the current assistant turn that still need a result before the follow-up completion.
+  const awaitingToolResultsRef = useRef<Set<string>>(new Set());
+  const followUpPendingRef = useRef(false);
+  const recordToolResultRef = useRef<(toolCallId: string | number, result: unknown) => void>(() => {});
   const mcpRequestIdRef = useRef(0);
   const activeToolCallsRef = useRef<Record<string, string | number>>({});
   const toolExecutionsRef = useRef<PendingToolExecution[]>([]);
   const queuedRef = useRef<string | null>(null);
+  // True while `queuedMessage` holds host-composed content the user has not yet
+  // confirmed, so the completion follow-up never auto-sends it.
+  const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
 
@@ -385,6 +415,7 @@ export function WidgetApp() {
     try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
     historyRef.current = [];
     queuedRef.current = null;
+    queuedIsDraftRef.current = false;
     setQueuedMessage(null);
     setHistoryMessages([]);
     setDisplayMessages([]);
@@ -457,6 +488,20 @@ export function WidgetApp() {
     window.parent.postMessage(message, parentOriginRef.current || '*');
   }, []);
 
+  // Bring host-selected content (e.g. an E-Chart selection) into the composer
+  // as a draft. Appends by default so several selections accumulate. It is
+  // marked draft-only so it is never auto-sent: the user must edit or send it,
+  // which preserves conversation privacy.
+  const insertIntoComposer = useCallback((content: string, replace = false) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    queuedIsDraftRef.current = true;
+    setQueuedMessage((current) => (
+      replace || !current ? trimmed : `${current}\n\n${trimmed}`
+    ));
+    postToParent({ source: 'ozwell-chat-widget', type: 'composed', length: trimmed.length });
+  }, [postToParent]);
+
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
     window.parent.postMessage({
@@ -513,7 +558,8 @@ export function WidgetApp() {
 
   const sendQueuedMessage = useCallback(() => {
     const next = queuedRef.current;
-    if (!next) return;
+    // A draft (host-composed, unconfirmed) is never auto-sent.
+    if (!next || queuedIsDraftRef.current) return;
     setQueuedMessage(null);
     void sendMessage(next);
   }, []);
@@ -521,11 +567,19 @@ export function WidgetApp() {
   const trackPendingToolCall = useCallback((id: string | number) => {
     pendingToolCallsRef.current[String(id)] = true;
     window.setTimeout(() => {
-      delete pendingToolCallsRef.current[String(id)];
+      if (!pendingToolCallsRef.current[String(id)]) return;
+      // Keep the history valid so the follow-up completion is not blocked by a missing tool message.
+      recordToolResultRef.current(id, { error: 'Tool call timed out' });
     }, MCP_TOOL_TIMEOUT_MS);
   }, []);
 
   const executeToolCalls = useCallback((toolCalls: OpenAIToolCall[]) => {
+    awaitingToolResultsRef.current = new Set(
+      toolCalls
+        .filter((tc) => tc.function?.name)
+        .map((tc) => String(ensureToolCallId(tc, () => ++mcpRequestIdRef.current)))
+    );
+
     for (const toolCall of toolCalls) {
       const toolName = toolCall.function?.name;
       if (!toolName) continue;
@@ -559,10 +613,18 @@ export function WidgetApp() {
   }, [appendDisplay, mcpSend, trackPendingToolCall]);
 
   async function sendMessageStreaming(text: string, tools: OpenAITool[], thinkingRetryCount = 0): Promise<void> {
+    if (sendingRef.current) {
+      followUpPendingRef.current = true;
+      if (configRef.current.debug) {
+        console.debug('[Ozwell] Completion already in flight; deferring follow-up request');
+      }
+      return;
+    }
     setSending(true);
     sendingRef.current = true;
     let needsThinkingRetry = false;
     let assistantMessageId: string | null = null;
+    const rawChunks: string[] = [];
 
     try {
       const authConfig = requestConfig();
@@ -607,6 +669,7 @@ export function WidgetApp() {
       let buffer = '';
       let fullContent = '';
       let fullThinking = '';
+      let sawThinking = false;
       const accumulatedToolCalls: OpenAIToolCall[] = [];
       const modeAtStart = (configRef.current.thinkingDefaultMode ?? thinkingMode) as ThinkingMode;
 
@@ -659,20 +722,26 @@ export function WidgetApp() {
           }
           currentEventType = null;
 
+          if (configRef.current.debug) rawChunks.push(data);
+
           try {
             const chunk = JSON.parse(data);
             const delta = chunk.choices?.[0]?.delta;
             if (!delta) continue;
 
-            if (delta.thinking && configRef.current.thinkingEnabled && modeAtStart !== THINKING.NONE) {
-              fullThinking += delta.thinking;
+            const thinkingDelta = extractThinkingDelta(delta);
+            if (thinkingDelta) {
+              sawThinking = true;
+              if (configRef.current.thinkingEnabled && modeAtStart !== THINKING.NONE) {
+                fullThinking += thinkingDelta;
+              }
             }
-            if (delta.content) {
+            if (typeof delta.content === 'string' && delta.content) {
               fullContent += delta.content;
             }
-            if (delta.tool_calls) {
+            if (Array.isArray(delta.tool_calls)) {
               for (const toolCallDelta of delta.tool_calls) {
-                const index = toolCallDelta.index;
+                const index = resolveToolCallIndex(toolCallDelta, accumulatedToolCalls);
                 if (!accumulatedToolCalls[index]) {
                   accumulatedToolCalls[index] = {
                     id: toolCallDelta.id || '',
@@ -702,7 +771,7 @@ export function WidgetApp() {
         }
       }
 
-      const hasToolCalls = accumulatedToolCalls.length > 0 && accumulatedToolCalls.some((tc) => tc.function?.name);
+      const hasToolCalls = accumulatedToolCalls.some((tc) => tc?.function?.name);
       const parsedResult = !hasToolCalls && fullContent.trim()
         ? parseToolCallsFromContent(fullContent)
         : null;
@@ -734,7 +803,7 @@ export function WidgetApp() {
         const trimmedContent = fullContent.trim();
         const trimmedThinking = fullThinking.trim();
 
-        if (!trimmedContent && trimmedThinking) {
+        if (!trimmedContent && (trimmedThinking || sawThinking)) {
           const MAX_THINKING_RETRIES = 3;
           if (thinkingRetryCount < MAX_THINKING_RETRIES) {
             needsThinkingRetry = true;
@@ -744,7 +813,11 @@ export function WidgetApp() {
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
-          updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage('(no response)'));
+          // Empty turn: drop the streaming bubble rather than rendering a placeholder.
+          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          if (configRef.current.debug) {
+            console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
+          }
         } else {
           appendHistory({
             role: 'assistant',
@@ -785,10 +858,36 @@ export function WidgetApp() {
     if (needsThinkingRetry) {
       return sendMessageStreaming('', tools, thinkingRetryCount + 1);
     }
+    if (followUpPendingRef.current) {
+      followUpPendingRef.current = false;
+      return sendMessageStreaming('', toolsForRequest());
+    }
   }
 
+  function recordToolResult(toolCallId: string | number, result: unknown) {
+    delete pendingToolCallsRef.current[String(toolCallId)];
+    const wasAwaiting = awaitingToolResultsRef.current.has(String(toolCallId));
+    updateToolExecutionResult(toolCallId, result);
+    appendHistory({
+      role: 'tool',
+      tool_call_id: toolCallId,
+      content: serializeToolResult(result),
+    });
+    awaitingToolResultsRef.current.delete(String(toolCallId));
+    // Only continue the turn once every parallel tool call has a result.
+    if (wasAwaiting && awaitingToolResultsRef.current.size === 0) {
+      void sendMessageStreaming('', toolsForRequest());
+    }
+  }
+
+  recordToolResultRef.current = recordToolResult;
+
   async function sendMessage(text: string) {
-    if (sendingRef.current) {
+    // Outstanding tool results must land before any new user turn, otherwise a
+    // user/assistant turn would sit between an assistant `tool_calls` message
+    // and its required tool results. Queue until the follow-up completes.
+    if (sendingRef.current || awaitingToolResultsRef.current.size > 0) {
+      queuedIsDraftRef.current = false;
       setQueuedMessage(text);
       return;
     }
@@ -904,7 +1003,6 @@ export function WidgetApp() {
       if (!data || typeof data !== 'object') return;
 
       if (data.jsonrpc === '2.0' && data.id != null && pendingToolCallsRef.current[String(data.id)]) {
-        delete pendingToolCallsRef.current[String(data.id)];
         const result = data.error ? { error: data.error.message } : data.result;
         const toolCallId = data.id;
 
@@ -913,13 +1011,7 @@ export function WidgetApp() {
           return;
         }
 
-        updateToolExecutionResult(toolCallId, result);
-        appendHistory({
-          role: 'tool',
-          tool_call_id: toolCallId,
-          content: serializeToolResult(result),
-        });
-        void sendMessageStreaming('', toolsForRequest());
+        recordToolResultRef.current(toolCallId, result);
         return;
       }
 
@@ -929,6 +1021,12 @@ export function WidgetApp() {
       }
       if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:send-message' && data.payload?.content) {
         void sendMessage(data.payload.content);
+        return;
+      }
+      // Host pushes selected page content into the composer as an editable
+      // draft. Privacy-preserving: nothing is sent until the user confirms.
+      if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:compose' && typeof data.payload?.content === 'string') {
+        insertIntoComposer(data.payload.content, data.payload.replace === true);
         return;
       }
 
@@ -992,7 +1090,7 @@ export function WidgetApp() {
       window.removeEventListener('message', handleParentMessage);
       window.removeEventListener('message', onInitResponse);
     };
-  }, [appendDisplay, appendHistory, applyConfig, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
+  }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
@@ -1072,10 +1170,10 @@ export function WidgetApp() {
       onSendMessage={(message) => void sendMessage(message)}
       queuedMessage={queuedMessage}
       onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => setQueuedMessage(null)}
+      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
       renderTextContent={renderTextContent}
       thinking={{
-        enabled: config.thinkingEnabled,
+        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
         mode: displayThinkingMode,
         onModeChange: setDisplayThinkingMode,
       }}

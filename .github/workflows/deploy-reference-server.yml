@@ -42,9 +42,8 @@ jobs:
             clients/typescript/package-lock.json
             reference-server/package-lock.json
 
-      - name: Install and build pinned mieweb UI
-        working-directory: ./vendor/mieweb-ui
-        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
+      - name: Build pinned mieweb UI (index entry only)
+        run: ./scripts/ci/build-pinned-ui.sh
 
       - name: Install and build spec
         working-directory: ./spec
