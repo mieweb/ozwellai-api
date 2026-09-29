@@ -626,28 +626,38 @@
         transform: scale(1) translateY(0);
       }
 
-      /* Top-left drag-resize handle */
+      /* Top-left drag-resize handle: a diagonal grip (macOS / textarea style) */
       .ozwell-resize-handle {
         position: absolute;
         top: 0;
         left: 0;
-        width: 20px;
-        height: 20px;
+        width: 22px;
+        height: 22px;
         cursor: nwse-resize;
-        z-index: 2;
+        z-index: 3;
         touch-action: none;
+        border-top-left-radius: 16px;
+        opacity: 0.65;
+        transition: opacity 0.15s ease;
       }
 
+      .ozwell-resize-handle:hover,
+      .ozwell-resize-handle:active {
+        opacity: 1;
+      }
+
+      /* Parallel diagonal lines, clipped to the corner triangle */
       .ozwell-resize-handle::before {
         content: '';
         position: absolute;
-        top: 6px;
-        left: 6px;
-        width: 8px;
-        height: 8px;
-        border-top: 2px solid rgba(255, 255, 255, 0.85);
-        border-left: 2px solid rgba(255, 255, 255, 0.85);
-        border-radius: 3px 0 0 0;
+        inset: 4px;
+        background: repeating-linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.9) 0 1.5px,
+          transparent 1.5px 4px
+        );
+        -webkit-mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
+        mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
       }
 
       /* Chat header */
