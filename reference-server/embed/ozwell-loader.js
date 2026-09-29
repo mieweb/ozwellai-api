@@ -606,8 +606,10 @@
         position: fixed;
         bottom: 24px;
         right: 24px;
+        box-sizing: border-box;
         width: 380px;
         height: 520px;
+        max-width: calc(100vw - 40px);
         max-height: calc(100vh - 48px);
         background: #ffffff;
         border-radius: 16px;
@@ -647,8 +649,14 @@
       }
 
       .ozwell-resize-handle:hover,
-      .ozwell-resize-handle:active {
+      .ozwell-resize-handle:active,
+      .ozwell-resize-handle:focus-visible {
         opacity: 1;
+      }
+
+      .ozwell-resize-handle:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: -2px;
       }
 
       /* Parallel diagonal lines, clipped to the corner triangle */
@@ -743,6 +751,8 @@
           bottom: 0;
           width: 100% !important;
           height: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
           border-radius: 0;
           border: none;
           box-shadow: none;
@@ -804,25 +814,48 @@
     } catch { /* storage blocked or malformed */ }
   }
 
+  // Reflect the current window size on the handle for assistive tech.
+  function updateResizeAria(wrapper, handle) {
+    if (!handle) return;
+    handle.setAttribute('aria-valuemin', String(MIN_WIDTH));
+    handle.setAttribute('aria-valuemax', String(Math.max(MIN_WIDTH, window.innerWidth - 40)));
+    handle.setAttribute('aria-valuenow', String(wrapper.offsetWidth));
+    handle.setAttribute('aria-valuetext', wrapper.offsetWidth + ' by ' + wrapper.offsetHeight + ' pixels');
+  }
+
+  function setWindowSize(wrapper, handle, width, height, persist) {
+    const clamped = clampSize(width, height);
+    wrapper.style.width = clamped.width + 'px';
+    wrapper.style.height = clamped.height + 'px';
+    updateResizeAria(wrapper, handle);
+    if (persist) {
+      try { localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(clamped)); } catch { /* storage blocked */ }
+    }
+  }
+
+  function resetWindowSize(wrapper, handle) {
+    wrapper.style.width = '';
+    wrapper.style.height = '';
+    updateResizeAria(wrapper, handle);
+    try { localStorage.removeItem(SIZE_STORAGE_KEY); } catch { /* storage blocked */ }
+  }
+
   // Drag the top-left handle to resize; the window is anchored bottom-right.
+  // Also supports keyboard resizing (arrow keys, Home to reset).
   function enableResize(wrapper, handle) {
-    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false;
+    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false, lastDownAt = 0;
 
     const onMove = (event) => {
       if (!resizing) return;
-      const { width, height } = clampSize(
-        startWidth + (startX - event.clientX),
-        startHeight + (startY - event.clientY)
-      );
-      wrapper.style.width = width + 'px';
-      wrapper.style.height = height + 'px';
+      setWindowSize(wrapper, handle, startWidth + (startX - event.clientX), startHeight + (startY - event.clientY), false);
     };
 
-    const onUp = () => {
+    const endDrag = () => {
       if (!resizing) return;
       resizing = false;
       document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointerup', endDrag);
+      document.removeEventListener('pointercancel', endDrag);
       // Restore iframe interaction once the drag ends.
       const iframe = wrapper.querySelector('iframe');
       if (iframe) iframe.style.pointerEvents = '';
@@ -831,7 +864,6 @@
       } catch { /* storage blocked */ }
     };
 
-    let lastDownAt = 0;
     handle.addEventListener('pointerdown', (event) => {
       event.preventDefault();
       // Manual double-tap: preventDefault above suppresses the native dblclick,
@@ -839,9 +871,7 @@
       const now = Date.now();
       if (now - lastDownAt < 300) {
         lastDownAt = 0;
-        wrapper.style.width = '';
-        wrapper.style.height = '';
-        try { localStorage.removeItem(SIZE_STORAGE_KEY); } catch { /* storage blocked */ }
+        resetWindowSize(wrapper, handle);
         return;
       }
       lastDownAt = now;
@@ -854,8 +884,39 @@
       const iframe = wrapper.querySelector('iframe');
       if (iframe) iframe.style.pointerEvents = 'none';
       document.addEventListener('pointermove', onMove);
-      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointerup', endDrag);
+      // Clean up if the pointer is interrupted (e.g. touch cancelled).
+      document.addEventListener('pointercancel', endDrag);
     });
+
+    handle.addEventListener('keydown', (event) => {
+      if (event.key === 'Home') {
+        event.preventDefault();
+        resetWindowSize(wrapper, handle);
+        return;
+      }
+      const step = event.shiftKey ? 48 : 16;
+      let dw = 0, dh = 0;
+      switch (event.key) {
+        case 'ArrowLeft': dw = step; break;   // wider
+        case 'ArrowRight': dw = -step; break;  // narrower
+        case 'ArrowUp': dh = step; break;      // taller
+        case 'ArrowDown': dh = -step; break;   // shorter
+        default: return;
+      }
+      event.preventDefault();
+      setWindowSize(wrapper, handle, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
+    });
+
+    // Re-clamp an explicit size when the viewport shrinks so the window and its
+    // handle can't end up off-screen.
+    window.addEventListener('resize', () => {
+      if (window.innerWidth <= 767) return;
+      if (!wrapper.style.width && !wrapper.style.height) return;
+      setWindowSize(wrapper, handle, wrapper.offsetWidth, wrapper.offsetHeight, false);
+    });
+
+    updateResizeAria(wrapper, handle);
   }
 
   /**
@@ -930,8 +991,9 @@
     // up/left grows it).
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'ozwell-resize-handle';
-    resizeHandle.setAttribute('aria-label', 'Resize chat');
     resizeHandle.setAttribute('role', 'separator');
+    resizeHandle.setAttribute('tabindex', '0');
+    resizeHandle.setAttribute('aria-label', 'Resize chat window. Use arrow keys to resize, Home to reset.');
     resizeHandle.title = 'Drag to resize · double-click to reset';
 
     // Assemble wrapper
