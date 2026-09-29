@@ -39,6 +39,10 @@ app.get('/assets/tictactoe.css', (req, res) => {
   res.type('text/css').sendFile(path.join(publicDir, 'tictactoe.css'));
 });
 
+app.get('/assets/signin.css', (req, res) => {
+  res.type('text/css').sendFile(path.join(publicDir, 'signin.css'));
+});
+
 app.get('/assets/tictactoe-app.js', (req, res) => {
   res.type('application/javascript').sendFile(path.join(publicDir, 'tictactoe-app.js'));
 });
@@ -63,6 +67,10 @@ app.get('/landing.html', (req, res) => {
 
 app.get('/tictactoe.html', (req, res) => {
   res.type('html').send(renderHtml('tictactoe.html'));
+});
+
+app.get('/signin.html', (req, res) => {
+  res.type('html').send(renderHtml('signin.html'));
 });
 
 // register.html was retired; agent management moved to Ozwell Manager.

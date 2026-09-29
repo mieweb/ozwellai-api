@@ -67,6 +67,7 @@ const sidebars: SidebarsConfig = {
             'backend/openai-compatible-clients',
             'backend/agents',
             'backend/api-authentication',
+            'backend/widget-authentication',
             'backend/api-examples',
           ],
         },
