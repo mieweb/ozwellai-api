@@ -23,22 +23,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          # Node 20's V8 balloons past 8GB building the rollup-dts graph and
-          # OOMs the worker; 22 keeps it within the heap set below.
           node-version: '22'
 
-      - name: Install and build pinned mieweb UI
-        working-directory: ./vendor/mieweb-ui
-        run: |
-          # Diagnostic: runner memory/CPU to size the dts worker heap.
-          echo "MEM:"; free -h || true; echo "CPU: $(nproc || true)"
-          # corepack enable puts a `pnpm` shim on PATH so the vendored
-          # build:esheet script (which shells out to bare `pnpm`) resolves.
-          corepack enable
-          corepack pnpm install --frozen-lockfile
-          # Give tsup's dts worker an explicit heap so it doesn't OOM on CI.
-          TSUP_DTS_HEAP_MB=13312 node ../../scripts/ci/raise-tsup-dts-memory.mjs .
-          corepack pnpm run build
+      - name: Build pinned mieweb UI (index entry only)
+        run: ./scripts/ci/build-pinned-ui.sh
 
       - name: Upload pinned mieweb UI
         uses: actions/upload-artifact@v4
