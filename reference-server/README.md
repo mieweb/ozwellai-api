@@ -123,7 +123,7 @@ sequenceDiagram
 
     rect rgb(240, 248, 255)
     Note over Admin,DB: 🔧 Setup Phase
-    Note over Admin,DB: Managed flow: log in to Ozwell Manager; server provisions or links ozw_ key
+    Note over Admin,DB: Managed flow: log in to Ozwell Manager,<br/>server provisions or links ozw_ key
     end
 
     rect rgb(255, 248, 240)
