@@ -826,8 +826,20 @@
       } catch { /* storage blocked */ }
     };
 
+    let lastDownAt = 0;
     handle.addEventListener('pointerdown', (event) => {
       event.preventDefault();
+      // Manual double-tap: preventDefault above suppresses the native dblclick,
+      // so detect two quick presses and reset to the default size instead.
+      const now = Date.now();
+      if (now - lastDownAt < 300) {
+        lastDownAt = 0;
+        wrapper.style.width = '';
+        wrapper.style.height = '';
+        try { localStorage.removeItem(SIZE_STORAGE_KEY); } catch { /* storage blocked */ }
+        return;
+      }
+      lastDownAt = now;
       resizing = true;
       startX = event.clientX;
       startY = event.clientY;
@@ -915,6 +927,7 @@
     resizeHandle.className = 'ozwell-resize-handle';
     resizeHandle.setAttribute('aria-label', 'Resize chat');
     resizeHandle.setAttribute('role', 'separator');
+    resizeHandle.title = 'Drag to resize · double-click to reset';
 
     // Assemble wrapper
     wrapper.appendChild(resizeHandle);
