@@ -484,6 +484,18 @@ export function WidgetApp() {
     window.parent.postMessage(message, parentOriginRef.current || '*');
   }, []);
 
+  // Bring host-selected content (e.g. an E-Chart selection) into the composer
+  // draft. Appends by default so several selections accumulate; the user
+  // reviews and sends explicitly, so conversation privacy is preserved.
+  const insertIntoComposer = useCallback((content: string, replace = false) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    setQueuedMessage((current) => (
+      replace || !current ? trimmed : `${current}\n\n${trimmed}`
+    ));
+    postToParent({ source: 'ozwell-chat-widget', type: 'composed', length: trimmed.length });
+  }, [postToParent]);
+
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
     window.parent.postMessage({
@@ -1000,6 +1012,12 @@ export function WidgetApp() {
         void sendMessage(data.payload.content);
         return;
       }
+      // Host pushes selected page content into the composer as an editable
+      // draft. Privacy-preserving: nothing is sent until the user confirms.
+      if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:compose' && typeof data.payload?.content === 'string') {
+        insertIntoComposer(data.payload.content, data.payload.replace === true);
+        return;
+      }
 
       if (data.source !== 'ozwell-chat-parent') return;
 
@@ -1061,7 +1079,7 @@ export function WidgetApp() {
       window.removeEventListener('message', handleParentMessage);
       window.removeEventListener('message', onInitResponse);
     };
-  }, [appendDisplay, appendHistory, applyConfig, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
+  }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
