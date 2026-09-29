@@ -70,6 +70,9 @@ function directProviderKeysPresent() {
 
 // Native catalogs from providers configured with keys. Ollama has its own discovery below.
 async function discoverDirectProviderModels(): Promise<ProviderModelRecord[]> {
+  // Under a forced gateway these models would be advertised but dispatched to a gateway
+  // that may not serve them.
+  if (process.env.LLM_TRANSPORT === 'gateway' && isLLMBackendConfigured()) return [];
   const records: ProviderModelRecord[] = [];
 
   const openai = getOpenAIClient();

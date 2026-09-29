@@ -51,8 +51,10 @@ export function defaultDirectProvider(): DirectProvider {
 }
 
 /**
- * Which transport a chat request should take. Ollama reachability is probed only
- * when it can change the answer, so gateway/direct-key deployments never wait on it.
+ * Which transport a chat request should take. Ollama is probed only when it can
+ * change the answer: with provider keys present the transport is already direct,
+ * and Ollama's models reach the registry through discovery, so keyed traffic never
+ * waits on the probe.
  */
 export async function resolveChatTransport(): Promise<{ transport: ChatTransport; ollamaAvailable: boolean }> {
   const forced = env('LLM_TRANSPORT');
@@ -60,8 +62,7 @@ export async function resolveChatTransport(): Promise<{ transport: ChatTransport
     return { transport: 'gateway', ollamaAvailable: false };
   }
   if (directProviderKeysConfigured()) {
-    // Ollama is optional alongside keyed providers; probe so its models stay routable.
-    return { transport: 'direct', ollamaAvailable: await isOllamaAvailable() };
+    return { transport: 'direct', ollamaAvailable: Boolean(getOllamaBaseUrl()) };
   }
   if (isLLMBackendConfigured()) {
     return { transport: 'gateway', ollamaAvailable: false };

@@ -843,7 +843,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const quota = quotaError(estimateChatTokens(messages as Message[], max_tokens));
+    // Direct providers always send an output cap, so the quota estimate must reserve the same number
+    // the request will actually carry. Gateway requests keep the request/env value (possibly none).
+    const directMaxOutputTokens = max_tokens
+      ?? LLM_MAX_TOKENS
+      ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : DEFAULT_DIRECT_MAX_TOKENS);
+    const quota = quotaError(estimateChatTokens(messages as Message[], backend === 'direct' ? directMaxOutputTokens : max_tokens));
     if (quota) return quota;
 
     // --- Agent: filter tools ---
@@ -899,11 +904,21 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
       ensureProvidersConfigured();
 
+      // Legacy function-role messages carry no call id, so they cannot become a
+      // function_call_output; refuse rather than silently re-role them as a user turn.
+      const legacyFunctionIndex = normalizedMessages.findIndex((m) => m.role === 'function');
+      if (legacyFunctionIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${legacyFunctionIndex}].role 'function' is not supported for direct providers; send a 'tool' message with tool_call_id.`,
+          'invalid_request_error',
+          `messages[${legacyFunctionIndex}].role`,
+        );
+      }
+
       const { instructions, input } = toResponsesInput(normalizedMessages as ChatInputMessage[]);
       const harnessTools = toResponsesTools(filteredTools as ChatToolDef[] | undefined);
-      const maxOutputTokens = max_tokens
-        ?? LLM_MAX_TOKENS
-        ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : DEFAULT_DIRECT_MAX_TOKENS);
+      const maxOutputTokens = directMaxOutputTokens;
       const buildParams = (m: string): CompletionParams => ({
         model: m,
         provider,

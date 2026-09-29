@@ -92,6 +92,14 @@ jobs:
         if: runner.os == 'Windows'
         run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
 
+      # @mieweb/harness-core is a private git dependency. GITHUB_TOKEN only reads this
+      # repository, so a read-scoped token for mieweb/harness-core must be provided.
+      - name: Authenticate git for private npm dependencies
+        shell: bash
+        env:
+          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: ./scripts/ci/git-auth-harness-core.sh
+
       - name: Install reference server dependencies
         working-directory: ${{ inputs.working-directory }}
         run: npm ci

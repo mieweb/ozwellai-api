@@ -51,6 +51,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      # @mieweb/harness-core is a private git dependency (see test-reference-server.yml).
+      - name: Authenticate git for private npm dependencies
+        env:
+          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: ./scripts/ci/git-auth-harness-core.sh
+
       - name: Install all dependencies
         run: npm ci
 
