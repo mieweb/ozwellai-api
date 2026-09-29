@@ -235,7 +235,7 @@ Agent mode follows Ozwell's core privacy principles:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22.12+ (`@mieweb/harness-core` is ESM-only and loaded via `require(esm)`)
 - npm or yarn
 
 ### Installation

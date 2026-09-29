@@ -148,7 +148,7 @@ async function listen(handler) {
 
 // --- Fake providers -------------------------------------------------------
 
-function fakeOpenAI({ models = ['gpt-4o-mini', 'gpt-5-mini'], toolCall = null, text = 'Hello from OpenAI' } = {}) {
+function fakeOpenAI({ models = ['gpt-4o-mini', 'gpt-5-mini'], toolCall = null, text = 'Hello from OpenAI', fail = false } = {}) {
     return listen((req, res, body) => {
         if (req.method === 'GET' && req.url === '/v1/models') {
             return json(res, 200, { object: 'list', data: models.map(id => ({ id, object: 'model', owned_by: 'openai' })) });
@@ -159,6 +159,11 @@ function fakeOpenAI({ models = ['gpt-4o-mini', 'gpt-5-mini'], toolCall = null, t
             }
             const response = { id: 'resp_1', object: 'response', model: body.model, output: [] };
             const events = [{ type: 'response.created', response }];
+            if (fail) {
+                events.push({ type: 'response.output_text.delta', item_id: 'msg_1', output_index: 0, content_index: 0, delta: 'partial' });
+                events.push({ type: 'response.failed', response: { ...response, error: { message: 'upstream exploded' }, usage: { input_tokens: 2, output_tokens: 1 } } });
+                return sse(res, events);
+            }
             if (toolCall) {
                 events.push({ type: 'response.output_item.added', output_index: 0, item: { id: 'fc_1', type: 'function_call', call_id: 'call_1', name: toolCall.name, arguments: '' } });
                 events.push({ type: 'response.function_call_arguments.delta', item_id: 'fc_1', output_index: 0, delta: toolCall.arguments });
@@ -479,6 +484,55 @@ test('direct providers — a 404 from the provider retries on the fallback model
     } finally {
         await stopServer(server, tmp);
         await Promise.all([openai.close(), catalogOnly.close()]);
+    }
+});
+
+test('direct providers — a provider-reported failure becomes an SSE error, not a truncated success', async () => {
+    const openai = await fakeOpenAI({ fail: true });
+    const { server, tmp, dbPath } = startServer({
+        OPENAI_API_KEY: 'sk-test',
+        OPENAI_BASE_URL: `${openai.baseURL}/v1`,
+        LLM_MODEL: 'gpt-4o-mini',
+    });
+    try {
+        const key = await readyKey(dbPath);
+        const res = await chat(key, { stream: true, messages: [{ role: 'user', content: 'hi' }] });
+        assert.equal(res.status, 200);
+        const events = parseSse(await res.text());
+        const errorEvent = events.find(e => e.event === 'error');
+        assert.equal(errorEvent.data.error.message, 'upstream exploded');
+        assert.equal(events.some(e => e.data?.choices?.[0]?.finish_reason), false, 'no finish_reason after a failure');
+        assert.equal(events.at(-1).data, '[DONE]');
+
+        const nonStream = await chat(key, { messages: [{ role: 'user', content: 'hi' }] });
+        assert.equal(nonStream.status, 503);
+    } finally {
+        await stopServer(server, tmp);
+        await openai.close();
+    }
+});
+
+test('direct providers — tool messages without tool_call_id are rejected before dispatch', async () => {
+    const openai = await fakeOpenAI();
+    const { server, tmp, dbPath } = startServer({
+        OPENAI_API_KEY: 'sk-test',
+        OPENAI_BASE_URL: `${openai.baseURL}/v1`,
+        LLM_MODEL: 'gpt-4o-mini',
+    });
+    try {
+        const key = await readyKey(dbPath);
+        const res = await chat(key, {
+            messages: [
+                { role: 'user', content: 'weather?' },
+                { role: 'tool', content: '{"temp":72}' },
+            ],
+        });
+        assert.equal(res.status, 400);
+        assert.equal((await res.json()).error.param, 'messages[1].tool_call_id');
+        assert.equal(openai.requests.filter(r => r.url === '/v1/responses').length, 0);
+    } finally {
+        await stopServer(server, tmp);
+        await openai.close();
     }
 });
 

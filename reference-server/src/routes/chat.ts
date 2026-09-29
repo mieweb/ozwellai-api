@@ -915,6 +915,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           `messages[${legacyFunctionIndex}].role`,
         );
       }
+      const orphanToolIndex = normalizedMessages.findIndex((m) => m.role === 'tool' && !m.tool_call_id);
+      if (orphanToolIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${orphanToolIndex}].tool_call_id is required for tool messages`,
+          'invalid_request_error',
+          `messages[${orphanToolIndex}].tool_call_id`,
+        );
+      }
 
       const { instructions, input } = toResponsesInput(normalizedMessages as ChatInputMessage[]);
       const harnessTools = toResponsesTools(filteredTools as ChatToolDef[] | undefined);
@@ -940,12 +949,23 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         // so a fallback retry can still start a clean stream.
         const streamOnce = async (m: string) => {
           const source = await createAICompletion(buildParams(m));
-          const translator = createChunkTranslator({ id: generateId('chatcmpl'), model: m, created: Math.floor(Date.now() / 1000) });
+          const id = generateId('chatcmpl');
+          const created = Math.floor(Date.now() / 1000);
+          const translator = createChunkTranslator({ id, model: m, created });
           const thinkBuffer = { partial: '' };
           for await (const chunk of source) {
             for (const ccChunk of translator.translate(chunk)) {
               sse.writeData(normalizeChunkThinking(ccChunk as unknown as Record<string, unknown>, thinkBuffer));
             }
+          }
+          const terminal = translator.terminal;
+          const usage = toChatUsage(terminal?.usage);
+          // A provider-reported failure is not a truncated success: report it as an error
+          // event instead of a finish_reason so clients do not treat partial output as final.
+          if (terminal && (terminal.status === 'failed' || terminal.status === 'error')) {
+            request.log.error({ reason: terminal.reason, provider, model: m }, 'Provider stream ended in failure');
+            sse.writeEvent('error', { error: { message: terminal.reason || `Provider returned ${terminal.status}`, type: 'server_error' } });
+            return { usage, statusCode: 502 };
           }
           let hasToolCalls = translator.toolCallCount > 0;
           if (!hasToolCalls) {
@@ -953,31 +973,29 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             if (extracted && extracted.length > 0) {
               hasToolCalls = true;
               sse.writeData({
-                id: generateId('chatcmpl'),
+                id,
                 object: 'chat.completion.chunk',
-                created: Math.floor(Date.now() / 1000),
+                created,
                 model: m,
                 choices: [{ index: 0, delta: { tool_calls: extracted.map((tc, idx) => ({ index: idx, ...tc })) }, finish_reason: null }],
               });
             }
           }
           for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
-          const terminal = translator.terminal;
-          if (terminal && (terminal.status === 'failed' || terminal.status === 'error')) {
-            request.log.error({ reason: terminal.reason, provider, model: m }, 'Provider stream ended in failure');
-          }
-          return { usage: toChatUsage(terminal?.usage) };
+          return { usage, statusCode: 200 };
         };
 
         try {
-          recordUsage(model, 200, await streamOnce(model), provider);
+          const result = await streamOnce(model);
+          recordUsage(model, result.statusCode, result, provider);
         } catch (streamError: unknown) {
           request.log.error({ err: streamError, backend, provider }, 'Direct LLM streaming failed');
           if (canRetryWithFallback(streamError, model)) {
             request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
             sse.writeEvent('warning', buildFallbackWarning(model, fallbackRetryModel!));
             try {
-              recordUsage(fallbackRetryModel!, 200, await streamOnce(fallbackRetryModel!), provider);
+              const result = await streamOnce(fallbackRetryModel!);
+              recordUsage(fallbackRetryModel!, result.statusCode, result, provider);
             } catch (retryError) {
               request.log.error({ err: retryError }, 'Fallback model also failed');
             }
