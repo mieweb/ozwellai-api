@@ -1,8 +1,11 @@
 # Multi-stage build for OzwellAI Reference Server
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
+
+# @mieweb/harness-core is a github: dependency; npm needs git (and read access to the repo) to fetch it
+RUN apk add --no-cache git
 
 # Copy package files for better caching
 COPY spec/package*.json ./spec/
@@ -23,11 +26,13 @@ RUN cd spec && npm run build
 RUN cd reference-server && npm run build
 
 # Production stage
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S ozwell -u 1001
+
+RUN apk add --no-cache git
 
 # Set working directory
 WORKDIR /app

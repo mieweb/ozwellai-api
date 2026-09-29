@@ -5,7 +5,7 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 ## Features
 
 - **Full OpenAI API Compatibility**: Wire-compatible with OpenAI's API specification
-- **Multi-Backend LLM Support**: Connects to OpenAI, Portkey Gateway, Ollama, or opt-in deterministic mock responses
+- **Multi-Backend LLM Support**: Connects directly to OpenAI, Anthropic, and Ollama (normalized by [`@mieweb/harness-core`](https://github.com/mieweb/harness-core)), to an OpenAI-compatible gateway, or serves opt-in deterministic mock responses
 - **MCP Host**: Built-in WebSocket endpoint (`/mcp/ws`) and embeddable chat widget
 - **Streaming Support**: Server-Sent Events (SSE) for both `/v1/responses` and `/v1/chat/completions`
 - **File Management**: Complete file upload, download, and management system
@@ -23,11 +23,12 @@ An OpenAI-compatible Fastify server that provides a reference implementation of 
 
 The server doesn't require any particular LLM provider. Chat requests route through the configured backend, while provider/model availability is discovered into SQLite and narrowed by manager policy:
 
-1. **LLM Backend** — `LLM_BASE_URL` is set in `.env`. Works with any OpenAI-compatible API: OpenAI, Portkey Gateway, etc.
-2. **Ollama (fallback)** — No `LLM_BASE_URL` configured, but Ollama is reachable on the network.
-3. **Mock** — Nothing else is available. Returns canned responses for demos.
+1. **Direct providers** — `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY` is set. The server connects to each provider itself and uses `@mieweb/harness-core` to normalize requests and responses. A reachable Ollama at `OLLAMA_BASE_URL` is served alongside.
+2. **Gateway** — `LLM_BASE_URL` is set and no direct provider key is (or `LLM_TRANSPORT=gateway` forces it). Works with any OpenAI-compatible API: OpenAI, Portkey Gateway, etc.
+3. **Ollama (fallback)** — Nothing else configured, but Ollama is reachable on the network.
+4. **Mock** — Nothing else is available. Returns canned responses for demos.
 
-Set the gateway environment variables for connectivity; use the manager APIs/UI for model availability and restrictions. See `.env.example` for all options.
+Set the provider environment variables for connectivity; use the manager APIs/UI for model availability and restrictions. See `.env.example` for all options.
 
 ### Streaming Architecture
 
@@ -81,7 +82,7 @@ sequenceDiagram
 **Key Components:**
 
 - **Reference Server**: Proxy layer handling API compatibility and SSE heartbeat
-- **LLM Backend**: Any OpenAI-compatible API (OpenAI, Portkey Gateway, etc.) or a direct Ollama instance
+- **LLM Backend**: OpenAI / Anthropic / Ollama directly (via `@mieweb/harness-core`), or any OpenAI-compatible gateway
 - **Widget**: Embeddable chat UI with iframe isolation
 - **SSE Heartbeat**: Keepalive comments every 25s to prevent 60s nginx timeout
 - **Tool Calls**: Extracted from streamed responses and sent to parent page via MCP JSON-RPC 2.0 over postMessage
@@ -282,8 +283,9 @@ The server will start at `http://localhost:3000`
 
 To get real AI responses, configure a backend in your `.env` file:
 
-- **Any provider:** Set `LLM_BASE_URL` and `LLM_API_KEY` to point at OpenAI, Portkey Gateway, or any OpenAI-compatible API.
+- **OpenAI / Anthropic:** Set `OPENAI_API_KEY` and/or `ANTHROPIC_API_KEY`.
 - **Ollama:** Set `OLLAMA_BASE_URL` to a local or remote Ollama instance.
+- **Gateway:** Set `LLM_BASE_URL` and `LLM_API_KEY` to point at any OpenAI-compatible API (e.g. a Portkey Gateway).
 
 No code changes needed — just set the environment variables and restart.
 
@@ -591,11 +593,19 @@ The server generates OpenAPI 3.1 compliant documentation based on the current [O
 
 Environment variables:
 
-**LLM Backend:**
+**Direct providers:**
+
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` - Enables that provider. Models are discovered from the provider's native catalog.
+- `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` - Optional endpoint overrides (proxies, test doubles). The OpenAI one must include `/v1`.
+- `LLM_PROVIDER` - Provider a keyless request lands on when several are configured.
+- `LLM_MODEL` - Fallback/default model for that provider, still subject to the effective model policy. An admin-set server-wide fallback overrides this — see [Fallback model](#fallback-model)
+- `LLM_TRANSPORT` - Set to `gateway` to force the gateway below even when provider keys are present (rollback switch).
+
+**Gateway (`LLM_BASE_URL`):**
 
 - `LLM_BASE_URL` - Base URL for any OpenAI-compatible API (e.g. `https://api.openai.com`)
 - `LLM_API_KEY` - API key sent as `Authorization: Bearer` header
-- `LLM_MODEL` - Fallback/default model, still subject to the effective model policy (default: `gpt-4o-mini`). An admin-set server-wide fallback overrides this — see [Fallback model](#fallback-model)
+- `LLM_MODEL` - Fallback/default model, still subject to the effective model policy (default: `gpt-4o-mini`)
 - `LLM_PROVIDER` - Optional default gateway routing provider. Chat requests with `provider` set `x-portkey-provider` dynamically.
 - `MODEL_DISCOVERY_REFRESH_MS` - Provider/model registry refresh interval (default: 10 minutes)
 
@@ -657,15 +667,18 @@ The fallback is still subject to the effective policy above — a fallback the a
 rejected on save with `default_model_not_allowed`, and one the registry has never discovered fails at
 request time like any other unknown model.
 
-**Output limit:** No completion-token cap by default — the provider's own default applies. Set `LLM_MAX_TOKENS` to impose a server-wide ceiling. A client that sends its own `max_tokens` always overrides the env value.
+**Output limit:** Set `LLM_MAX_TOKENS` to impose a server-wide ceiling on completion length. A client that sends its own `max_tokens` always overrides the env value. Direct providers default to 4096 (Anthropic: 1024) when neither is set; the gateway path leaves the cap to the provider.
 
 ### Backend Selection
 
 The server auto-detects which backend to use:
 
-1. **LLM Backend** — if `LLM_BASE_URL` is set, all requests go through it (OpenAI, Portkey Gateway, etc.)
-2. **Ollama** — if `LLM_BASE_URL` is not set and Ollama is reachable at `OLLAMA_BASE_URL`
-3. **Mock responses** — only if `ALLOW_MOCK=true` (see below); otherwise the request returns a 503
+1. **Direct providers** — if `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set, chat goes straight to the provider through `@mieweb/harness-core`. Ollama at `OLLAMA_BASE_URL` is served directly alongside.
+2. **Gateway** — if `LLM_BASE_URL` is set and no provider key is (or `LLM_TRANSPORT=gateway`), all requests go through it (OpenAI, Portkey Gateway, etc.)
+3. **Ollama** — if nothing above applies and Ollama is reachable at `OLLAMA_BASE_URL`
+4. **Mock responses** — only if `ALLOW_MOCK=true` (see below); otherwise the request returns a 503
+
+In direct mode the server owns provider selection, credentials, base URLs, and timeouts; `harness-core` translates the OpenAI-compatible request into each provider's native API (OpenAI Responses, Anthropic Messages, Ollama's `/v1` chat completions) and normalizes streams back, including tool calls, `thinking` output, and usage.
 
 Setting both `LLM_BASE_URL` and `OLLAMA_BASE_URL` is fine — the gateway handles chat routing when `LLM_BASE_URL` is set, and direct Ollama can still contribute discovered model records when configured.
 

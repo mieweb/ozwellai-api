@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey, envFallbackModel } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
+import { getAnthropicClient, getOpenAIClient } from '../llm/providers';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
 
@@ -32,7 +33,9 @@ function toModelRecord(id: string, source: string, provider = providerFromModelI
 }
 
 async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
-  if (!isLLMBackendConfigured()) return [];
+  // Direct provider keys supersede the gateway for chat, so its catalog would only advertise
+  // models no request can reach.
+  if (!isLLMBackendConfigured() || (directProviderKeysPresent() && process.env.LLM_TRANSPORT !== 'gateway')) return [];
 
   const records: ProviderModelRecord[] = [];
   const providers = uniqueProviders([process.env.LLM_PROVIDER, ...GATEWAY_DISCOVERY_PROVIDERS]);
@@ -55,6 +58,39 @@ async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
       }
     } catch {
       // A single provider discovery failure should not block other providers.
+    }
+  }
+
+  return records;
+}
+
+function directProviderKeysPresent() {
+  return Boolean(process.env.OPENAI_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+// Native catalogs from providers configured with keys. Ollama has its own discovery below.
+async function discoverDirectProviderModels(): Promise<ProviderModelRecord[]> {
+  const records: ProviderModelRecord[] = [];
+
+  const openai = getOpenAIClient();
+  if (openai) {
+    try {
+      for await (const model of openai.models.list()) {
+        if (model?.id) records.push(toModelRecord(model.id, 'openai', 'openai'));
+      }
+    } catch {
+      // One provider's discovery failure should not block the others.
+    }
+  }
+
+  const anthropic = getAnthropicClient();
+  if (anthropic) {
+    try {
+      for await (const model of anthropic.models.list({ limit: 1000 })) {
+        if (model?.id) records.push(toModelRecord(model.id, 'anthropic', 'anthropic'));
+      }
+    } catch {
+      // See above.
     }
   }
 
@@ -93,8 +129,9 @@ function listResponse(records: ProviderModelRecord[]) {
 
 export async function refreshProviderModels() {
   const gatewayRecords = await discoverGatewayModels();
+  const directRecords = await discoverDirectProviderModels();
   const ollamaRecords = await discoverDirectOllamaModels();
-  const discoveredRecords = [...gatewayRecords, ...ollamaRecords];
+  const discoveredRecords = [...gatewayRecords, ...directRecords, ...ollamaRecords];
   return agentStore.replaceProviderModels(discoveredRecords);
 }
 

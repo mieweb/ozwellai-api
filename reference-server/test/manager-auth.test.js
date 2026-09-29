@@ -72,6 +72,8 @@ function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv 
             LLM_BASE_URL: '',
             LLM_API_KEY: '',
             LLM_PROVIDER: '',
+            OPENAI_API_KEY: '',
+            ANTHROPIC_API_KEY: '',
             OLLAMA_BASE_URL: '',
             MODEL_DISCOVERY_REFRESH_MS: '0',
             NODE_ENV: 'development',

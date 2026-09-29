@@ -324,6 +324,18 @@ export function isLLMBackendConfigured(): boolean {
  * it, so the console can never show a fallback the server would not actually use.
  */
 export function envFallbackModel(llmConfigured: boolean, ollamaAvailable: boolean): { provider: string; model: string } {
+  // Direct provider keys take precedence over the gateway (see llm/providers.ts). Duplicated here
+  // rather than imported because that module depends on this one.
+  const hasOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  if ((hasOpenAI || hasAnthropic) && process.env.LLM_TRANSPORT !== 'gateway') {
+    const preferred = process.env.LLM_PROVIDER;
+    const provider = (preferred === 'openai' && hasOpenAI) || (preferred === 'anthropic' && hasAnthropic)
+      ? preferred
+      : hasOpenAI ? 'openai' : 'anthropic';
+    const defaultModel = provider === 'anthropic' ? 'claude-sonnet-4-5' : 'gpt-4o-mini';
+    return { provider, model: process.env.LLM_MODEL || defaultModel };
+  }
   if (llmConfigured) {
     return { provider: process.env.LLM_PROVIDER || 'openai', model: process.env.LLM_MODEL || 'gpt-4o-mini' };
   }

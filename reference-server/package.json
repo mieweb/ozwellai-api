@@ -17,12 +17,14 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
     "@fastify/cors": "^8.4.2",
     "@fastify/multipart": "^8.0.0",
     "@fastify/static": "^6.12.0",
     "@fastify/swagger": "^8.12.0",
     "@fastify/swagger-ui": "^2.1.0",
     "@fastify/websocket": "^8.3.0",
+    "@mieweb/harness-core": "github:mieweb/harness-core#82300856071336918e25d42569e659986c7801ee",
     "@mieweb/ui": "0.7.3-dev.1",
     "@modelcontextprotocol/sdk": "^1.24.0",
     "@types/nodemailer": "^8.0.1",
