@@ -1,0 +1,108 @@
+name: Release React Package
+
+# Publishes @ozwell/react to npm via scripts/release-react.mjs.
+# - Merged PR into main that changes packages/react → prerelease on the `next` tag.
+# - Manual dispatch → dry run, or a full release with the chosen bump.
+# npm auth uses trusted publishing (OIDC); no npm token secret is needed.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Release mode'
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - full-release
+      bump:
+        description: 'Semver bump level'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - prerelease
+
+concurrency:
+  group: release-react
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  package_scope:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.scope.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether the PR changed packages/react
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$MERGE_SHA" -- packages/react; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "packages/react unchanged — no prerelease."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "packages/react changed — releasing a prerelease."
+          fi
+
+  release:
+    needs: [package_scope]
+    if: >-
+      always() && (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'pull_request' &&
+          needs.package_scope.result == 'success' &&
+          needs.package_scope.outputs.changed == 'true'
+        )
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure git identity
+        if: github.event_name == 'pull_request' || inputs.mode == 'full-release'
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - name: Prerelease (merged PR)
+        if: github.event_name == 'pull_request'
+        run: node scripts/release-react.mjs --bump=prerelease
+
+      - name: Dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run'
+        run: node scripts/release-react.mjs --dry-run --bump=${{ inputs.bump }}
+
+      - name: Full release
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'full-release'
+        run: node scripts/release-react.mjs --bump=${{ inputs.bump }}
