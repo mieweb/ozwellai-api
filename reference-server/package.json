@@ -24,7 +24,7 @@
     "@fastify/swagger": "^8.12.0",
     "@fastify/swagger-ui": "^2.1.0",
     "@fastify/websocket": "^8.3.0",
-    "@mieweb/ui": "0.9.0",
+    "@mieweb/ui": "0.10.0-dev.18",
     "@modelcontextprotocol/sdk": "^1.24.0",
     "@types/nodemailer": "^8.0.1",
     "better-sqlite3": "^12.5.0",
