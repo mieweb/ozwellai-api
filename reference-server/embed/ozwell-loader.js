@@ -981,8 +981,15 @@
       img.className = 'ozwell-chat-icon';
       button.appendChild(img);
     } else {
-      // Inline SVG: no extra request, and never resolves against the host origin
-      button.innerHTML = '<svg class="ozwell-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+      // Built via DOM APIs (no innerHTML) so hosts enforcing Trusted Types still work
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      const attrs = { class: 'ozwell-chat-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' };
+      for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z');
+      svg.appendChild(path);
+      button.appendChild(svg);
     }
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
