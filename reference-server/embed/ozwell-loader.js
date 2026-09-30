@@ -542,6 +542,7 @@
         height: 60px;
         border-radius: 50%;
         background: var(--mieweb-primary-800, #0f749c);
+        color: #fff;
         border: none;
         cursor: pointer;
         box-shadow: 0 4px 16px rgba(15, 116, 156, 0.3);
@@ -973,7 +974,16 @@
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    if (typeof config.buttonIcon === 'string' && config.buttonIcon.trim()) {
+      const img = document.createElement('img');
+      img.src = config.buttonIcon;
+      img.alt = '';
+      img.className = 'ozwell-chat-icon';
+      button.appendChild(img);
+    } else {
+      // Inline SVG: no extra request, and never resolves against the host origin
+      button.innerHTML = '<svg class="ozwell-chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    }
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 
