@@ -23,11 +23,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Install and build pinned mieweb UI
-        working-directory: ./vendor/mieweb-ui
-        run: corepack pnpm install --frozen-lockfile && corepack pnpm run build
+      - name: Build pinned mieweb UI (index entry only)
+        run: ./scripts/ci/build-pinned-ui.sh
 
       - name: Upload pinned mieweb UI
         uses: actions/upload-artifact@v4

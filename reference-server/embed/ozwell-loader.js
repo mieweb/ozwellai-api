@@ -56,6 +56,7 @@
 
   const state = {
     iframe: null,
+    frameOrigin: null, // Expected origin of the widget iframe, for message validation
     ready: false,
     pendingMessages: [],
     runtimeConfig: {},
@@ -158,7 +159,10 @@
 
     const iframe = document.createElement('iframe');
     const widgetSrc = options.src || config.widgetUrl || config.src || '/widget/frame/';
-    iframe.src = widgetSrc;
+    const frameUrl = new URL(widgetSrc, document.baseURI);
+    frameUrl.searchParams.set('ozwellLoader', '1');
+    iframe.src = frameUrl.href;
+    state.frameOrigin = frameUrl.origin;
 
     iframe.width = String(options.width || DEFAULT_DIMENSIONS.width);
     iframe.height = String(options.height || DEFAULT_DIMENSIONS.height);
@@ -168,7 +172,10 @@
     iframe.style.maxWidth = 'calc(100vw - 40px)';
     iframe.style.maxHeight = 'calc(100vh - 80px)';
     iframe.setAttribute('title', config.title || 'Ozwell Chat');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin');
+    // allow-popups is required for OIDC sign-in: providers refuse to render
+    // their consent screen in an iframe, so it opens in its own window.
+    // allow-popups-to-escape-sandbox keeps that window out of this sandbox.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
 
     container.appendChild(iframe);
     state.iframe = iframe;
@@ -337,6 +344,9 @@
 
   function handleWidgetMessage(event) {
     if (!state.iframe || event.source !== state.iframe.contentWindow) return;
+    // A document that navigated the iframe to another origin keeps the same
+    // WindowProxy; reject it so it cannot forge tool calls or widget events.
+    if (state.frameOrigin && event.origin !== state.frameOrigin) return;
     const data = event.data;
     if (!data || typeof data !== 'object') return;
 
@@ -596,8 +606,10 @@
         position: fixed;
         bottom: 24px;
         right: 24px;
+        box-sizing: border-box;
         width: 380px;
         height: 520px;
+        max-width: calc(100vw - 40px);
         max-height: calc(100vh - 48px);
         background: #ffffff;
         border-radius: 16px;
@@ -619,6 +631,58 @@
       .ozwell-chat-wrapper.visible {
         opacity: 1;
         transform: scale(1) translateY(0);
+      }
+
+      /* Top-left drag-resize handle: a diagonal grip (macOS / textarea style) */
+      .ozwell-resize-handle {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 22px;
+        height: 22px;
+        cursor: nwse-resize;
+        z-index: 3;
+        touch-action: none;
+        border-top-left-radius: 16px;
+        opacity: 0.65;
+        transition: opacity 0.15s ease;
+      }
+
+      .ozwell-resize-handle:hover,
+      .ozwell-resize-handle:active,
+      .ozwell-resize-handle:focus-visible {
+        opacity: 1;
+      }
+
+      .ozwell-resize-handle:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: -2px;
+      }
+
+      .ozwell-sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* Parallel diagonal lines, clipped to the corner triangle */
+      .ozwell-resize-handle::before {
+        content: '';
+        position: absolute;
+        inset: 4px;
+        background: repeating-linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.9) 0 1.5px,
+          transparent 1.5px 4px
+        );
+        -webkit-mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
+        mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
       }
 
       /* Chat header */
@@ -697,11 +761,17 @@
           left: 0;
           right: 0;
           bottom: 0;
-          width: 100%;
-          height: 100%;
+          width: 100% !important;
+          height: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
           border-radius: 0;
           border: none;
           box-shadow: none;
+        }
+
+        .ozwell-resize-handle {
+          display: none;
         }
 
         .ozwell-chat-wrapper.hidden {
@@ -728,6 +798,142 @@
     `;
     document.head.appendChild(style);
     console.log('[OzwellChat] Default UI styles injected');
+  }
+
+  const SIZE_STORAGE_KEY = 'ozwell.widget.size';
+  const MIN_WIDTH = 320;
+  const MIN_HEIGHT = 360;
+
+  // Keep the window within the viewport (24px right/bottom offset + margin).
+  function clampSize(width, height) {
+    const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - 40);
+    const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - 48);
+    return {
+      width: Math.min(Math.max(width, MIN_WIDTH), maxWidth),
+      height: Math.min(Math.max(height, MIN_HEIGHT), maxHeight),
+    };
+  }
+
+  function applySavedSize(wrapper) {
+    // Mobile uses a fullscreen window; keep its size out of localStorage's reach.
+    if (window.innerWidth <= 767) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(SIZE_STORAGE_KEY) || 'null');
+      if (!saved || typeof saved.width !== 'number' || typeof saved.height !== 'number') return;
+      const { width, height } = clampSize(saved.width, saved.height);
+      wrapper.style.width = width + 'px';
+      wrapper.style.height = height + 'px';
+    } catch { /* storage blocked or malformed */ }
+  }
+
+  // Announce the current window size to assistive tech via a live region.
+  function announceSize(wrapper) {
+    const status = document.getElementById('ozwell-resize-status');
+    if (status) status.textContent = 'Chat window ' + wrapper.offsetWidth + ' by ' + wrapper.offsetHeight + ' pixels';
+  }
+
+  function setWindowSize(wrapper, width, height, persist) {
+    const clamped = clampSize(width, height);
+    wrapper.style.width = clamped.width + 'px';
+    wrapper.style.height = clamped.height + 'px';
+    if (persist) {
+      try { localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify(clamped)); } catch { /* storage blocked */ }
+    }
+  }
+
+  function resetWindowSize(wrapper) {
+    wrapper.style.width = '';
+    wrapper.style.height = '';
+    try { localStorage.removeItem(SIZE_STORAGE_KEY); } catch { /* storage blocked */ }
+    announceSize(wrapper);
+  }
+
+  // Drag the top-left handle to resize; the window is anchored bottom-right.
+  // Also supports keyboard resizing (arrow keys, Home to reset).
+  function enableResize(wrapper, handle) {
+    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false, lastDownAt = 0, activePointerId = null;
+
+    const onMove = (event) => {
+      if (!resizing) return;
+      setWindowSize(wrapper, startWidth + (startX - event.clientX), startHeight + (startY - event.clientY), false);
+    };
+
+    const endDrag = () => {
+      if (!resizing) return;
+      resizing = false;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', endDrag);
+      document.removeEventListener('pointercancel', endDrag);
+      handle.removeEventListener('lostpointercapture', endDrag);
+      if (activePointerId !== null) {
+        try { handle.releasePointerCapture(activePointerId); } catch { /* already released */ }
+        activePointerId = null;
+      }
+      // Restore iframe interaction once the drag ends.
+      const iframe = wrapper.querySelector('iframe');
+      if (iframe) iframe.style.pointerEvents = '';
+      try {
+        localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify({ width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
+      } catch { /* storage blocked */ }
+      announceSize(wrapper);
+    };
+
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      // Manual double-tap: preventDefault above suppresses the native dblclick,
+      // so detect two quick presses and reset to the default size instead.
+      const now = Date.now();
+      if (now - lastDownAt < 300) {
+        lastDownAt = 0;
+        resetWindowSize(wrapper);
+        return;
+      }
+      lastDownAt = now;
+      resizing = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      startWidth = wrapper.offsetWidth;
+      startHeight = wrapper.offsetHeight;
+      // Capturing the pointer guarantees a release outside the viewport still
+      // ends the drag (pointerup or lostpointercapture), so the iframe never
+      // stays stuck at pointer-events: none.
+      activePointerId = event.pointerId;
+      try { handle.setPointerCapture(activePointerId); } catch { /* capture unsupported */ }
+      const iframe = wrapper.querySelector('iframe');
+      if (iframe) iframe.style.pointerEvents = 'none';
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', endDrag);
+      document.addEventListener('pointercancel', endDrag);
+      handle.addEventListener('lostpointercapture', endDrag);
+    });
+
+    handle.addEventListener('keydown', (event) => {
+      if (event.key === 'Home') {
+        event.preventDefault();
+        resetWindowSize(wrapper);
+        return;
+      }
+      const step = event.shiftKey ? 48 : 16;
+      let dw = 0, dh = 0;
+      switch (event.key) {
+        case 'ArrowLeft': dw = step; break;   // wider
+        case 'ArrowRight': dw = -step; break;  // narrower
+        case 'ArrowUp': dh = step; break;      // taller
+        case 'ArrowDown': dh = -step; break;   // shorter
+        default: return;
+      }
+      event.preventDefault();
+      setWindowSize(wrapper, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
+      announceSize(wrapper);
+    });
+
+    // Re-clamp an explicit size when the viewport shrinks so the window and its
+    // handle can't end up off-screen.
+    window.addEventListener('resize', () => {
+      if (window.innerWidth <= 767) return;
+      if (!wrapper.style.width && !wrapper.style.height) return;
+      setWindowSize(wrapper, wrapper.offsetWidth, wrapper.offsetHeight, false);
+    });
   }
 
   /**
@@ -798,9 +1004,30 @@
     container.id = 'ozwell-chat-container';
     container.className = 'ozwell-chat-content';
 
+    // Top-left drag handle (the window is anchored bottom-right, so dragging
+    // up/left grows it). A button, not a 1-D separator, since it changes both
+    // width and height; size changes are announced via the live region below.
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'ozwell-resize-handle';
+    resizeHandle.setAttribute('role', 'button');
+    resizeHandle.setAttribute('tabindex', '0');
+    resizeHandle.setAttribute('aria-label', 'Resize chat window. Use arrow keys to change width and height, Home to reset.');
+    resizeHandle.title = 'Drag to resize · double-click to reset';
+
+    // Visually-hidden live region announcing the current size to assistive tech.
+    const resizeStatus = document.createElement('div');
+    resizeStatus.id = 'ozwell-resize-status';
+    resizeStatus.className = 'ozwell-sr-only';
+    resizeStatus.setAttribute('role', 'status');
+    resizeStatus.setAttribute('aria-live', 'polite');
+
     // Assemble wrapper
+    wrapper.appendChild(resizeHandle);
+    wrapper.appendChild(resizeStatus);
     wrapper.appendChild(header);
     wrapper.appendChild(container);
+
+    applySavedSize(wrapper);
 
     // Add to page
     document.body.appendChild(button);
@@ -821,6 +1048,9 @@
     if (!ui) return;
 
     const { button, wrapper } = ui;
+
+    const resizeHandle = wrapper.querySelector('.ozwell-resize-handle');
+    if (resizeHandle) enableResize(wrapper, resizeHandle);
 
     // Open chat when button clicked - use openChat() to track state and clear notifications
     button.addEventListener('click', () => {

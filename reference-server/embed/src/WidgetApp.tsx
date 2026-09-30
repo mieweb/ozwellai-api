@@ -6,6 +6,7 @@ import {
   type OzwellThinkingMode,
 } from '@mieweb/ui';
 import { MarkdownContent } from './MarkdownContent';
+import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -131,6 +132,10 @@ function effectiveModelsEndpoint(endpoint?: string) {
   url.search = '';
   url.hash = '';
   return url.toString();
+}
+
+function apiOriginFor(endpoint?: string) {
+  return new URL(effectiveModelsEndpoint(endpoint)).origin;
 }
 
 function normalizeEffectiveModels(payload: unknown): ProviderModelOption[] {
@@ -369,6 +374,13 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
+    () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
+  );
+  const [userCredential, setUserCredential] = useState<WidgetCredential | null>(null);
+  const userCredentialRef = useRef<WidgetCredential | null>(null);
+  const [initialConfigReady, setInitialConfigReady] = useState(() => window.parent === window ||
+    !!window.OZWELL_CONFIG || new URLSearchParams(window.location.search).get('ozwellLoader') !== '1');
 
   const configRef = useRef(config);
   const activeModelRef = useRef(activeModel);
@@ -383,6 +395,9 @@ export function WidgetApp() {
   const activeToolCallsRef = useRef<Record<string, string | number>>({});
   const toolExecutionsRef = useRef<PendingToolExecution[]>([]);
   const queuedRef = useRef<string | null>(null);
+  // True while `queuedMessage` holds host-composed content the user has not yet
+  // confirmed, so the completion follow-up never auto-sends it.
+  const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
 
@@ -392,8 +407,41 @@ export function WidgetApp() {
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
 
+  const resetUserCredential = useCallback((rejectedKey?: string) => {
+    if (!userCredentialRef.current || (rejectedKey && userCredentialRef.current.key !== rejectedKey)) return false;
+    userCredentialRef.current = null;
+    setUserCredential(null);
+    setCredentialSource(null);
+    try { localStorage.removeItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+    historyRef.current = [];
+    queuedRef.current = null;
+    queuedIsDraftRef.current = false;
+    setQueuedMessage(null);
+    setHistoryMessages([]);
+    setDisplayMessages([]);
+    setEffectiveModels([]);
+    setActiveModel(null);
+    return true;
+  }, []);
+
+  const requestConfig = useCallback(() => userCredentialRef.current
+    ? { ...configRef.current, apiKey: userCredentialRef.current.key }
+    : configRef.current, []);
+
+  // Keyless embeds only: restore a key the user opted to remember here.
   useEffect(() => {
-    const authKey = getAuthKey(config);
+    if (!initialConfigReady || getAuthKey(configRef.current)) return;
+    let stored: string | null = null;
+    try { stored = localStorage.getItem(REMEMBERED_KEY_STORAGE); } catch { /* storage blocked */ }
+    if (!stored) return;
+    setCredentialSource('user-key');
+    const credential: WidgetCredential = { key: stored, source: 'user-key' };
+    userCredentialRef.current = credential;
+    setUserCredential(credential);
+  }, [initialConfigReady]);
+
+  useEffect(() => {
+    const authKey = getAuthKey(requestConfig());
     if (!authKey) {
       setEffectiveModels([]);
       setActiveModel(null);
@@ -407,9 +455,11 @@ export function WidgetApp() {
       try {
         const response = await fetch(endpoint, {
           method: 'GET',
-          headers: requestHeaders(config),
+          headers: requestHeaders(requestConfig()),
           signal: controller.signal,
         });
+        if (controller.signal.aborted) return;
+        if (response.status === 401 && resetUserCredential(authKey)) return;
         if (!response.ok) {
           setEffectiveModels([]);
           return;
@@ -427,7 +477,7 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential]);
 
   useEffect(() => {
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
@@ -437,6 +487,20 @@ export function WidgetApp() {
   const postToParent = useCallback((message: Record<string, unknown>) => {
     window.parent.postMessage(message, parentOriginRef.current || '*');
   }, []);
+
+  // Bring host-selected content (e.g. an E-Chart selection) into the composer
+  // as a draft. Appends by default so several selections accumulate. It is
+  // marked draft-only so it is never auto-sent: the user must edit or send it,
+  // which preserves conversation privacy.
+  const insertIntoComposer = useCallback((content: string, replace = false) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    queuedIsDraftRef.current = true;
+    setQueuedMessage((current) => (
+      replace || !current ? trimmed : `${current}\n\n${trimmed}`
+    ));
+    postToParent({ source: 'ozwell-chat-widget', type: 'composed', length: trimmed.length });
+  }, [postToParent]);
 
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
@@ -494,7 +558,8 @@ export function WidgetApp() {
 
   const sendQueuedMessage = useCallback(() => {
     const next = queuedRef.current;
-    if (!next) return;
+    // A draft (host-composed, unconfirmed) is never auto-sent.
+    if (!next || queuedIsDraftRef.current) return;
     setQueuedMessage(null);
     void sendMessage(next);
   }, []);
@@ -562,7 +627,8 @@ export function WidgetApp() {
     const rawChunks: string[] = [];
 
     try {
-      const systemPrompt = buildSystemPrompt(configRef.current);
+      const authConfig = requestConfig();
+      const systemPrompt = buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -584,12 +650,13 @@ export function WidgetApp() {
 
       const response = await fetch(configRef.current.endpoint || '/v1/chat/completions', {
         method: 'POST',
-        headers: requestHeaders(configRef.current),
+        headers: requestHeaders(authConfig),
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(120000),
       });
 
       if (!response.ok) {
+        if (response.status === 401 && resetUserCredential(getAuthKey(authConfig))) return;
         const errorText = await response.text();
         throw chatRequestError(response.status, errorText);
       }
@@ -816,7 +883,11 @@ export function WidgetApp() {
   recordToolResultRef.current = recordToolResult;
 
   async function sendMessage(text: string) {
-    if (sendingRef.current) {
+    // Outstanding tool results must land before any new user turn, otherwise a
+    // user/assistant turn would sit between an assistant `tool_calls` message
+    // and its required tool results. Queue until the follow-up completes.
+    if (sendingRef.current || awaitingToolResultsRef.current.size > 0) {
+      queuedIsDraftRef.current = false;
       setQueuedMessage(text);
       return;
     }
@@ -828,7 +899,7 @@ export function WidgetApp() {
     appendHistory(userMessage);
     appendDisplay(userDisplayMessage(trimmed));
 
-    if (!getAuthKey(configRef.current)) {
+    if (!getAuthKey(requestConfig())) {
       appendDisplay(systemDisplayMessage('Error: No API key configured. Please provide an agent key (agnt_key-...) or parent API key (ozw_...) in your OzwellChatConfig.'));
       return;
     }
@@ -837,6 +908,14 @@ export function WidgetApp() {
   }
 
   const applyConfig = useCallback((nextConfig: OzwellConfig) => {
+    setInitialConfigReady(true);
+    // A key arriving from the embedding page owns the session: the sign-in
+    // gate must never prompt over a host-configured credential.
+    if (getAuthKey({ ...configRef.current, ...nextConfig }) && (nextConfig.apiKey || nextConfig.openaiApiKey)) {
+      setCredentialSource('host');
+      userCredentialRef.current = null;
+      setUserCredential(null);
+    }
     setConfig((current) => {
       const merged = { ...current, ...nextConfig };
       configRef.current = merged;
@@ -893,7 +972,7 @@ export function WidgetApp() {
         console.log('OzwellDebug.disableTools, verbose, getState(), getMessages(), getTools(), clearMessages(), reset()');
       },
       getState: () => ({
-        config: configRef.current,
+        config: { ...configRef.current, apiKey: undefined, openaiApiKey: undefined, headers: undefined },
         messages: historyRef.current,
         displayMessages,
         sending: sendingRef.current,
@@ -942,6 +1021,12 @@ export function WidgetApp() {
       }
       if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:send-message' && data.payload?.content) {
         void sendMessage(data.payload.content);
+        return;
+      }
+      // Host pushes selected page content into the composer as an editable
+      // draft. Privacy-preserving: nothing is sent until the user confirms.
+      if (data.source === 'ozwell-chat-parent' && data.type === 'ozwell:compose' && typeof data.payload?.content === 'string') {
+        insertIntoComposer(data.payload.content, data.payload.replace === true);
         return;
       }
 
@@ -1005,7 +1090,24 @@ export function WidgetApp() {
       window.removeEventListener('message', handleParentMessage);
       window.removeEventListener('message', onInitResponse);
     };
-  }, [appendDisplay, appendHistory, applyConfig, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
+  }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
+
+  const handleAuthenticated = useCallback((credential: WidgetCredential) => {
+    setCredentialSource(credential.source);
+    userCredentialRef.current = credential;
+    setUserCredential(credential);
+  }, []);
+
+  const signOut = useCallback(() => {
+    const key = userCredentialRef.current?.key || '';
+    if (key.startsWith('sess_')) {
+      void fetch(`${apiOriginFor(configRef.current.endpoint)}/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}` },
+      }).catch(() => { /* best effort */ });
+    }
+    resetUserCredential(key);
+  }, [resetUserCredential]);
 
   const renderTextContent = useCallback((text: string, ctx: { messageId: string; streaming: boolean }) => (
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
@@ -1038,7 +1140,29 @@ export function WidgetApp() {
     setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
   }, []);
 
+  if (!initialConfigReady) return null;
+
+  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
+    return (
+      <AuthGate
+        apiOrigin={apiOriginFor(config.endpoint)}
+        onAuthenticated={handleAuthenticated}
+      />
+    );
+  }
+
   return (
+    <div className="ozwell-session-layout">
+    {(credentialSource === 'session' || credentialSource === 'user-key') && (
+      <div className="ozwell-auth-bar">
+        <span className="ozwell-account-status">
+          {credentialSource === 'session' ? 'Signed in' : 'Personal key'}
+        </span>
+        <button type="button" className="ozwell-account-action" onClick={signOut}>
+          {credentialSource === 'session' ? 'Sign out' : 'Forget key'}
+        </button>
+      </div>
+    )}
     <OzwellChat
       messages={chatMessages}
       isGenerating={sending}
@@ -1046,10 +1170,10 @@ export function WidgetApp() {
       onSendMessage={(message) => void sendMessage(message)}
       queuedMessage={queuedMessage}
       onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => setQueuedMessage(null)}
+      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
       renderTextContent={renderTextContent}
       thinking={{
-        enabled: config.thinkingEnabled,
+        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
         mode: displayThinkingMode,
         onModeChange: setDisplayThinkingMode,
       }}
@@ -1063,5 +1187,6 @@ export function WidgetApp() {
       warning={toast}
       onDismissWarning={() => setToast(null)}
     />
+    </div>
   );
 }

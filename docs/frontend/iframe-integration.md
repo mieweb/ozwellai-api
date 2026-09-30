@@ -111,7 +111,8 @@ interface OzwellMessage {
 | `ozwell:init` | `{ apiKey, agentId, config }` | Initialize the widget |
 | `ozwell:open` | — | Open the chat window |
 | `ozwell:close` | — | Close the chat window |
-| `ozwell:send-message` | `{ content }` | Send a message |
+| `ozwell:send-message` | `{ content }` | Send a message immediately |
+| `ozwell:compose` | `{ content, replace? }` | Bring host-selected content into the composer as an editable draft (nothing is sent until the user confirms) |
 | `ozwell:set-context` | `{ context }` | Update context data |
 | `ozwell:set-theme` | `{ theme }` | Change theme |
 
@@ -122,12 +123,97 @@ interface OzwellMessage {
 | `ozwell:ready` | — | Widget initialized |
 | `ozwell:opened` | — | Chat window opened |
 | `ozwell:closed` | — | Chat window closed |
+| `composed` | `length` (top-level number) | Host-selected content was placed into the composer draft |
 | `ozwell:user-share` | `{ data }` | User explicitly shared data |
 | `ozwell:error` | `{ code, message }` | Error occurred |
 
-⚠️ **Privacy Note:** There is no `ozwell:message` event. Conversation content is never relayed to the host site—this is by design to protect user privacy.
+⚠️ **Privacy Note:** There is no `ozwell:message` event. Conversation content is never relayed to the host site—this is by design to protect user privacy. `ozwell:compose` only *prefills* the composer; the user reviews and sends the draft explicitly, so nothing leaves the host page without user consent.
 
 ---
+
+## Treating the Embed Like a Browser: Page Inspection & Interaction
+
+When Ozwell is embedded inside a host application such as an Enterprise Health E‑Chart, the assistant can treat the surrounding page like a browser tab—**inspecting its content and interacting with it**—by exposing the page's capabilities as MCP tools over the same postMessage transport.
+
+The widget already runs the client half of an MCP handshake against the host:
+
+1. On load the widget sends `initialize`, then `notifications/initialized`, then `tools/list`.
+2. The host responds to `tools/list` with the tools it wants the assistant to use.
+3. When the assistant decides to call a tool, the widget sends `tools/call`; the host executes it against the page and returns the result.
+
+To let the assistant read and act on the E‑Chart, the host registers page tools—no widget changes are required. Suggested tool shapes:
+
+| Tool | Purpose |
+|------|---------|
+| `page.getContent` | Return the visible/relevant page content (or a section) as text the assistant can read |
+| `page.getSelection` | Return the user's current selection on the page |
+| `page.click` | Click an explicitly identified element (e.g. a "Hello World" button) |
+| `page.fill` | Set a value on an identified field |
+
+```javascript
+// Host: answer the widget's MCP handshake with page tools.
+const PAGE_TOOLS = [
+  { name: 'page.getContent',   description: 'Read the current E-Chart content', inputSchema: { type: 'object', properties: { section: { type: 'string' } } } },
+  { name: 'page.getSelection', description: 'Read the user\'s current selection', inputSchema: { type: 'object', properties: {} } },
+  { name: 'page.click',        description: 'Click an element by id', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+];
+
+// Only trust and reply to the exact widget origin, so a cross-origin document
+// that later reuses this iframe's contentWindow can neither issue tool calls
+// nor receive results.
+const widgetOrigin = new URL(iframe.src).origin;
+
+window.addEventListener('message', (event) => {
+  if (event.source !== iframe.contentWindow || event.origin !== widgetOrigin) return;
+  const msg = event.data;
+  if (msg?.jsonrpc !== '2.0') return;
+
+  const reply = (result) => iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, result }, widgetOrigin);
+
+  switch (msg.method) {
+    case 'initialize':
+      return reply({ protocolVersion: '2025-11-25', capabilities: {}, serverInfo: { name: 'echart-host', version: '1.0.0' } });
+    case 'tools/list':
+      return reply({ tools: PAGE_TOOLS });
+    case 'tools/call': {
+      const { name, arguments: args } = msg.params;
+      if (name === 'page.getContent')   return reply({ content: [{ type: 'text', text: readEChart(args?.section) }] });
+      if (name === 'page.getSelection') return reply({ content: [{ type: 'text', text: String(window.getSelection()) }] });
+      if (name === 'page.click')        { document.getElementById(args.id)?.click(); return reply({ content: [{ type: 'text', text: 'clicked' }] }); }
+      return iframe.contentWindow.postMessage({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Unknown tool' } }, widgetOrigin);
+    }
+  }
+});
+```
+
+### Select Content in E‑Chart → Send to the Composer
+
+Beyond assistant-driven tool calls, the user can push a selection straight into the composer. This keeps the conversation private (the draft only becomes a message when the user sends it) while making the embed feel integrated with Enterprise Health.
+
+```javascript
+// Host: "Ask Ozwell about this" on an E-Chart selection.
+function sendSelectionToOzwell() {
+  const content = String(window.getSelection()).trim();
+  if (!content) return;
+  // Target the exact widget origin so the selected text is never disclosed to
+  // another document that may have replaced the iframe.
+  iframe.contentWindow.postMessage({
+    source: 'ozwell-chat-parent',
+    type: 'ozwell:compose',
+    payload: { content },   // add `replace: true` to overwrite the current draft
+  }, new URL(iframe.src).origin);
+}
+
+// Confirm the widget received it.
+window.addEventListener('message', (event) => {
+  if (event.data?.source === 'ozwell-chat-widget' && event.data.type === 'composed') {
+    console.log(`Added ${event.data.length} chars to the Ozwell composer`);
+  }
+});
+```
+
+---
+
 
 ## Custom Implementation
 
