@@ -9,8 +9,9 @@
 // `latest` tag and are tagged react-v<version>; prereleases (x.y.z-N) go to
 // the `next` tag and are not git-tagged.
 //
-// Order is all-or-nothing: checks → build → preflight publish → publish →
-// commit/tag/push, so a failed publish never lands a version bump on main.
+// Order: checks → build → preflight publish → publish → commit/tag/push, so a
+// failed publish never lands a version bump on main. Not atomic: if a git step
+// fails after npm accepts the package, the next run resumes from the npm version.
 //
 // No GitHub Release is created: this repo's other publish workflows trigger on
 // any published release and would republish unrelated packages.
@@ -137,7 +138,7 @@ const commits = rawLog
       subject,
       type: match ? match[1] : 'other',
       description: match ? match[3] : subject,
-      breaking: Boolean(match?.[2]) || /BREAKING CHANGE/.test(body),
+      breaking: Boolean(match?.[2]) || /BREAKING[ -]CHANGE/.test(body),
     };
   })
   .filter((c) => !/^chore\(react\): release /.test(c.subject));
