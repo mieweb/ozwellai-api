@@ -986,9 +986,12 @@
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    if (typeof config.buttonIcon === 'string' && config.buttonIcon.trim()) {
+    const customIcon = typeof config.buttonIcon === 'string' && config.buttonIcon.trim();
+    // Absolute URL on the Ozwell origin; a root-relative path would hit the host site
+    const iconSrc = customIcon || (autoDetectedBase ? `${autoDetectedBase}/widget/ozwell-icon.png` : '');
+    if (iconSrc) {
       const img = document.createElement('img');
-      img.src = config.buttonIcon;
+      img.src = iconSrc;
       img.alt = '';
       img.className = 'ozwell-chat-icon';
       button.classList.add('ozwell-chat-button--image');
