@@ -960,11 +960,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
           const terminal = translator.terminal;
           const usage = toChatUsage(terminal?.usage);
-          // A provider-reported failure is not a truncated success: report it as an error
-          // event instead of a finish_reason so clients do not treat partial output as final.
-          if (terminal && (terminal.status === 'failed' || terminal.status === 'error')) {
-            request.log.error({ reason: terminal.reason, provider, model: m }, 'Provider stream ended in failure');
-            sse.writeEvent('error', { error: { message: terminal.reason || `Provider returned ${terminal.status}`, type: 'server_error' } });
+          // A provider failure or a stream that closed without any terminal chunk is not a
+          // truncated success: report an error event so clients do not treat partial output as final.
+          if (!terminal || terminal.status === 'failed' || terminal.status === 'error') {
+            const reason = terminal?.reason || (terminal ? `Provider returned ${terminal.status}` : 'Provider stream ended without completing');
+            request.log.error({ reason, provider, model: m }, 'Provider stream ended in failure');
+            sse.writeEvent('error', { error: { message: reason, type: 'server_error' } });
             return { usage, statusCode: 502 };
           }
           let hasToolCalls = translator.toolCallCount > 0;
@@ -985,6 +986,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           return { usage, statusCode: 200 };
         };
 
+        const failStream = (m: string, err: unknown) => {
+          const status = err && typeof err === 'object' && typeof (err as { status?: unknown }).status === 'number'
+            ? (err as { status: number }).status
+            : 502;
+          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          recordUsage(m, status >= 400 ? status : 502, undefined, provider);
+        };
+
         try {
           const result = await streamOnce(model);
           recordUsage(model, result.statusCode, result, provider);
@@ -998,7 +1007,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               recordUsage(fallbackRetryModel!, result.statusCode, result, provider);
             } catch (retryError) {
               request.log.error({ err: retryError }, 'Fallback model also failed');
+              failStream(fallbackRetryModel!, retryError);
             }
+          } else {
+            failStream(model, streamError);
           }
         }
         sse.end();

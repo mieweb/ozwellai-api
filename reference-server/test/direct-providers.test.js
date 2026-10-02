@@ -157,8 +157,15 @@ function fakeOpenAI({ models = ['gpt-4o-mini', 'gpt-5-mini'], toolCall = null, t
             if (!models.includes(body.model)) {
                 return json(res, 404, { error: { message: `The model '${body.model}' does not exist`, type: 'invalid_request_error', code: 'model_not_found' } });
             }
+            if (fail === 'http') {
+                return json(res, 429, { error: { message: 'rate limited', type: 'rate_limit_error' } });
+            }
             const response = { id: 'resp_1', object: 'response', model: body.model, output: [] };
             const events = [{ type: 'response.created', response }];
+            if (fail === 'silent') {
+                events.push({ type: 'response.output_text.delta', item_id: 'msg_1', output_index: 0, content_index: 0, delta: 'partial' });
+                return sse(res, events);
+            }
             if (fail) {
                 events.push({ type: 'response.output_text.delta', item_id: 'msg_1', output_index: 0, content_index: 0, delta: 'partial' });
                 events.push({ type: 'response.failed', response: { ...response, error: { message: 'upstream exploded' }, usage: { input_tokens: 2, output_tokens: 1 } } });
@@ -509,6 +516,27 @@ test('direct providers — a provider-reported failure becomes an SSE error, not
     } finally {
         await stopServer(server, tmp);
         await openai.close();
+    }
+});
+
+test('direct providers — silent close and HTTP errors stream an error event, not a success', async () => {
+    for (const fail of ['silent', 'http']) {
+        const openai = await fakeOpenAI({ fail });
+        const { server, tmp, dbPath } = startServer({
+            OPENAI_API_KEY: 'sk-test',
+            OPENAI_BASE_URL: `${openai.baseURL}/v1`,
+            LLM_MODEL: 'gpt-4o-mini',
+        });
+        try {
+            const key = await readyKey(dbPath);
+            const res = await chat(key, { stream: true, messages: [{ role: 'user', content: 'hi' }] });
+            const events = parseSse(await res.text());
+            assert.ok(events.some(e => e.event === 'error'), `${fail}: expected an SSE error event`);
+            assert.equal(events.some(e => e.data?.choices?.[0]?.finish_reason), false, `${fail}: no finish_reason`);
+        } finally {
+            await stopServer(server, tmp);
+            await openai.close();
+        }
     }
 });
 
