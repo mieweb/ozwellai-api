@@ -1,13 +1,16 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, envFallbackModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
+import { validateAuth, createError, generateId, countTokens, envFallbackModel, isAgentKey, extractToken, parsePositiveEnvNumber } from '../util';
 import { agentStore, findProviderModel, modelRecordMatches, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
+import { createAICompletion, collectCompletionStream, type CompletionParams } from '@mieweb/harness-core';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 import { getCachedModelsList } from './models';
 import { quotaExceededError, resolveRouteUsageContext } from './quota';
+import { ensureProvidersConfigured, isDirectProviderConfigured, resolveChatTransport } from '../llm/providers';
+import { capabilitiesFor, createChunkTranslator, toChatCompletion, toChatUsage, toResponsesInput, toResponsesTools, usesReasoningTokenParam, type ChatInputMessage, type ChatToolDef } from '../llm/harness-adapter';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -283,8 +286,9 @@ function normalizeMessageThinking(message: Record<string, unknown>): void {
   }
 }
 
-// Detect model-not-found errors from gateway (404, model_not_found, etc.)
+// Detect model-not-found errors: provider SDKs carry `status: 404`; the gateway path surfaces it in the message.
 function isModelNotFoundError(error: unknown): boolean {
+  if (error && typeof error === 'object' && (error as { status?: unknown }).status === 404) return true;
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     return msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist');
@@ -327,10 +331,9 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
-
-function usesReasoningTokenParam(model: string) {
-  return /(^|\/)(o\d|gpt-5)/.test(model);
-}
+// harness-core always sends an output cap; this is the direct-provider default when neither the
+// request nor LLM_MAX_TOKENS names one.
+const DEFAULT_DIRECT_MAX_TOKENS = 4096;
 
 function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
   const effectiveMaxTokens = requestedMaxTokens
@@ -355,22 +358,44 @@ function createLlmClient(provider: string | null) {
   });
 }
 
-// Built on first use rather than at module load: when Ollama is disabled
-// getOllamaBaseUrl() is null, and a client hoisted with an empty baseURL would be
-// reachable by any future caller that forgets the isOllamaAvailable() guard.
-let ollamaClient: OzwellAI | null = null;
+// Opens the SSE response and keeps it alive with heartbeats until `end()`.
+function startSse(reply: FastifyReply, origin: string | undefined) {
+  reply.raw.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    'connection': 'keep-alive',
+    'access-control-allow-origin': origin || '*',
+    'access-control-allow-credentials': 'true',
+  });
 
-function getOllamaClient(): OzwellAI {
-  const baseURL = getOllamaBaseUrl();
-  if (!baseURL) throw new Error('Ollama is disabled (OLLAMA_BASE_URL is empty)');
-  if (!ollamaClient) {
-    ollamaClient = new OzwellAI({
-      apiKey: 'ollama',
-      baseURL,
-      timeout: 120000,
-    });
+  let heartbeat: NodeJS.Timeout | null = null;
+  const stopHeartbeat = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
+  if (STREAMING_HEARTBEAT_ENABLED) {
+    // Initial warming comment so proxies see bytes before the model loads
+    reply.raw.write(': heartbeat\n\n');
+    heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(': heartbeat\n\n');
+      } catch {
+        stopHeartbeat();
+      }
+    }, STREAMING_HEARTBEAT_MS);
   }
-  return ollamaClient;
+
+  return {
+    writeData: (payload: unknown) => { reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`); },
+    writeEvent: (event: string, payload: unknown) => { reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`); },
+    end: () => {
+      stopHeartbeat();
+      reply.raw.write('data: [DONE]\n\n');
+      reply.raw.end();
+    },
+  };
 }
 
 // Mock dispatch — split into stream / non-stream variants so the call-site
@@ -716,13 +741,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return response;
     }
 
-    // Backend selection priority:
-    // 1. LLM_BASE_URL configured → use it (OpenAI, Portkey Gateway, etc.)
-    // 2. Ollama reachable → use Ollama
-    // 3. Mock/simple generator
-    const llmConfigured = isLLMBackendConfigured();
-    const ollamaAvailable = llmConfigured ? false : await isOllamaAvailable();
-    const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
+    // Transport selection (see llm/providers.ts):
+    // direct   → OpenAI / Anthropic / Ollama through harness-core
+    // gateway  → LLM_BASE_URL (OpenAI-compatible gateway; rollback path)
+    // fallback → mock/simple generator
+    const { transport, ollamaAvailable } = await resolveChatTransport();
+    const llmConfigured = transport === 'gateway';
+    const backend = transport === 'gateway' ? 'llm' : transport;
 
     // Provider and model together, so an ambiguous fallback model resolves instead of returning
     // provider_required. Read per request: the env constants above are hoisted at module load, and
@@ -818,7 +843,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const quota = quotaError(estimateChatTokens(messages as Message[], max_tokens));
+    // Direct providers always send an output cap, so the quota estimate must reserve the same number
+    // the request will actually carry. Gateway requests keep the request/env value (possibly none).
+    const directMaxOutputTokens = max_tokens
+      ?? LLM_MAX_TOKENS
+      ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : DEFAULT_DIRECT_MAX_TOKENS);
+    const quota = quotaError(estimateChatTokens(messages as Message[], backend === 'direct' ? directMaxOutputTokens : max_tokens));
     if (quota) return quota;
 
     // --- Agent: filter tools ---
@@ -866,11 +896,168 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return response;
     }
 
-    // Use a real LLM backend
-    {
+    // --- Direct providers via harness-core ---
+    if (backend === 'direct') {
+      if (!isDirectProviderConfigured(provider)) {
+        reply.code(503);
+        return createError(`Provider '${provider}' is not configured on this server.`, 'server_error', 'provider', 'provider_not_configured');
+      }
+      ensureProvidersConfigured();
+
+      // Legacy function-role messages carry no call id, so they cannot become a
+      // function_call_output; refuse rather than silently re-role them as a user turn.
+      const legacyFunctionIndex = normalizedMessages.findIndex((m) => m.role === 'function');
+      if (legacyFunctionIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${legacyFunctionIndex}].role 'function' is not supported for direct providers; send a 'tool' message with tool_call_id.`,
+          'invalid_request_error',
+          `messages[${legacyFunctionIndex}].role`,
+        );
+      }
+      const orphanToolIndex = normalizedMessages.findIndex((m) => m.role === 'tool' && !m.tool_call_id);
+      if (orphanToolIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${orphanToolIndex}].tool_call_id is required for tool messages`,
+          'invalid_request_error',
+          `messages[${orphanToolIndex}].tool_call_id`,
+        );
+      }
+
+      const { instructions, input } = toResponsesInput(normalizedMessages as ChatInputMessage[]);
+      const harnessTools = toResponsesTools(filteredTools as ChatToolDef[] | undefined);
+      const maxOutputTokens = directMaxOutputTokens;
+      const buildParams = (m: string): CompletionParams => ({
+        model: m,
+        provider,
+        instructions,
+        input,
+        temperature,
+        maxOutputTokens,
+        ...(harnessTools && { tools: harnessTools }),
+        capabilities: capabilitiesFor(provider, m, maxOutputTokens),
+        ...(response_format && { responseFormat: response_format as CompletionParams['responseFormat'] }),
+      });
+      const canRetryWithFallback = (error: unknown, m: string) =>
+        isModelNotFoundError(error) && Boolean(fallbackRetryModel) && m !== fallbackRetryModel;
+
+      if (stream) {
+        const sse = startSse(reply, request.headers.origin);
+
+        // Throws before any body write when the provider rejects the request (e.g. 404),
+        // so a fallback retry can still start a clean stream.
+        const streamOnce = async (m: string) => {
+          const source = await createAICompletion(buildParams(m));
+          const id = generateId('chatcmpl');
+          const created = Math.floor(Date.now() / 1000);
+          const translator = createChunkTranslator({ id, model: m, created });
+          const thinkBuffer = { partial: '' };
+          for await (const chunk of source) {
+            for (const ccChunk of translator.translate(chunk)) {
+              sse.writeData(normalizeChunkThinking(ccChunk as unknown as Record<string, unknown>, thinkBuffer));
+            }
+          }
+          const terminal = translator.terminal;
+          const usage = toChatUsage(terminal?.usage);
+          // A provider failure or a stream that closed without any terminal chunk is not a
+          // truncated success: report an error event so clients do not treat partial output as final.
+          if (!terminal || terminal.status === 'failed' || terminal.status === 'error') {
+            const reason = terminal?.reason || (terminal ? `Provider returned ${terminal.status}` : 'Provider stream ended without completing');
+            request.log.error({ reason, provider, model: m }, 'Provider stream ended in failure');
+            sse.writeEvent('error', { error: { message: reason, type: 'server_error' } });
+            return { usage, statusCode: 502 };
+          }
+          let hasToolCalls = translator.toolCallCount > 0;
+          if (!hasToolCalls) {
+            const extracted = tryExtractToolCallsFromContent(translator.text, filteredTools as ToolDef[] | undefined);
+            if (extracted && extracted.length > 0) {
+              hasToolCalls = true;
+              sse.writeData({
+                id,
+                object: 'chat.completion.chunk',
+                created,
+                model: m,
+                choices: [{ index: 0, delta: { tool_calls: extracted.map((tc, idx) => ({ index: idx, ...tc })) }, finish_reason: null }],
+              });
+            }
+          }
+          for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
+          return { usage, statusCode: 200 };
+        };
+
+        const failStream = (m: string, err: unknown) => {
+          const status = err && typeof err === 'object' && typeof (err as { status?: unknown }).status === 'number'
+            ? (err as { status: number }).status
+            : 502;
+          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          recordUsage(m, status >= 400 ? status : 502, undefined, provider);
+        };
+
+        try {
+          const result = await streamOnce(model);
+          recordUsage(model, result.statusCode, result, provider);
+        } catch (streamError: unknown) {
+          request.log.error({ err: streamError, backend, provider }, 'Direct LLM streaming failed');
+          if (canRetryWithFallback(streamError, model)) {
+            request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+            sse.writeEvent('warning', buildFallbackWarning(model, fallbackRetryModel!));
+            try {
+              const result = await streamOnce(fallbackRetryModel!);
+              recordUsage(fallbackRetryModel!, result.statusCode, result, provider);
+            } catch (retryError) {
+              request.log.error({ err: retryError }, 'Fallback model also failed');
+              failStream(fallbackRetryModel!, retryError);
+            }
+          } else {
+            failStream(model, streamError);
+          }
+        }
+        sse.end();
+        return;
+      }
+
+      const completeOnce = async (m: string) => {
+        const source = await createAICompletion(buildParams(m));
+        const collected = await collectCompletionStream(source);
+        if (collected.status === 'failed' || collected.status === 'error') {
+          throw new Error(collected.reason || `Provider returned ${collected.status}`);
+        }
+        const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model: m, created: Math.floor(Date.now() / 1000) });
+        const msg = response.choices[0].message as ChatMessage;
+        normalizeMessageThinking(msg as Record<string, unknown>);
+        if (!msg.tool_calls && typeof msg.content === 'string') {
+          const extracted = tryExtractToolCallsFromContent(msg.content, filteredTools as ToolDef[] | undefined);
+          if (extracted && extracted.length > 0) {
+            msg.tool_calls = extracted;
+            response.choices[0].finish_reason = 'tool_calls';
+          }
+        }
+        return response;
+      };
+
       try {
-        // Select pre-constructed client based on backend
-        const client = llmConfigured ? createLlmClient(provider) : getOllamaClient();
+        const response = await completeOnce(model);
+        recordUsage(model, 200, response, provider);
+        return response;
+      } catch (error: unknown) {
+        request.log.error({ err: error, backend, provider }, 'Direct LLM request failed');
+        if (canRetryWithFallback(error, model)) {
+          request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+          try {
+            const retryResponse = await completeOnce(fallbackRetryModel!);
+            recordUsage(fallbackRetryModel!, 200, retryResponse, provider);
+            return { ...retryResponse, warning: buildFallbackWarning(model, fallbackRetryModel!) };
+          } catch (retryError) {
+            request.log.error({ err: retryError }, 'Fallback model also failed');
+          }
+        }
+      }
+      // Fall through to the llm_error mock/503 below.
+    } else {
+    // --- Gateway (LLM_BASE_URL) ---
+      try {
+        const client = createLlmClient(provider);
 
         // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {

@@ -41,7 +41,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: ['20', '22']
+        node-version: ['22', '24']
 
     steps:
       - name: Checkout code
@@ -91,6 +91,19 @@ jobs:
       - name: Use bash for npm package scripts on Windows
         if: runner.os == 'Windows'
         run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+
+      # @mieweb/harness-core is a private git dependency that npm fetches over SSH.
+      # Same model as Ozwell-workspace: an SSH key with read access to mieweb/harness-core
+      # (HARNESS_CORE_SSH_KEY, or the shared SSH_PRIVATE_KEY if it has that access).
+      # HARNESS_CORE_READ_TOKEN (fine-grained PAT, Contents: read) is an alternative.
+      # GITHUB_TOKEN cannot read a second repository. Fork PRs receive no secrets.
+      - name: Authenticate git for private npm dependencies
+        shell: bash
+        env:
+          HARNESS_CORE_SSH_KEY: ${{ secrets.HARNESS_CORE_SSH_KEY }}
+          FALLBACK_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN }}
+        run: ./scripts/ci/git-auth-harness-core.sh
 
       - name: Install reference server dependencies
         working-directory: ${{ inputs.working-directory }}
