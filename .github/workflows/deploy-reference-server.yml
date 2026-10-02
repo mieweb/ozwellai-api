@@ -49,7 +49,8 @@ jobs:
       # The deploy host runs its own `npm ci` and needs equivalent git credentials.
       - name: Authenticate git for private npm dependencies
         env:
-          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN || secrets.GITHUB_TOKEN }}
+          HARNESS_CORE_SSH_KEY: ${{ secrets.HARNESS_CORE_SSH_KEY || secrets.SSH_PRIVATE_KEY }}
+          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN }}
         run: ./scripts/ci/git-auth-harness-core.sh
 
       - name: Install and build spec

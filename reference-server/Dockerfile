@@ -4,10 +4,11 @@ FROM node:22-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# @mieweb/harness-core is a private git dependency; npm needs git plus a token that can read
-# mieweb/harness-core. Build with:
-#   docker build --secret id=github_token,src=<file-with-token> ...
-RUN apk add --no-cache git
+# @mieweb/harness-core is a private git dependency; npm fetches it over SSH, so the build
+# needs git + openssh and a credential that can read mieweb/harness-core. Build with one of:
+#   docker build --secret id=harness_core_ssh_key,src=<private-key-file> ...
+#   docker build --secret id=github_token,src=<file-with-fine-grained-PAT> ...
+RUN apk add --no-cache git openssh-client
 
 # Copy package files for better caching
 COPY spec/package*.json ./spec/
@@ -16,10 +17,11 @@ COPY scripts/ci/git-auth-harness-core.sh ./scripts/ci/
 
 # Install dependencies
 RUN cd spec && npm ci --only=production
-RUN --mount=type=secret,id=github_token \
-    HARNESS_CORE_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" sh ./scripts/ci/git-auth-harness-core.sh && \
-    cd reference-server && npm ci --only=production && \
-    rm -f /root/.gitconfig
+RUN --mount=type=secret,id=harness_core_ssh_key --mount=type=secret,id=github_token \
+    HARNESS_CORE_SSH_KEY="$(cat /run/secrets/harness_core_ssh_key 2>/dev/null || true)" \
+    HARNESS_CORE_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    sh -c '. ./scripts/ci/git-auth-harness-core.sh; cd reference-server && npm ci --only=production' && \
+    rm -rf /root/.gitconfig /root/.ssh
 
 # Copy source code
 COPY spec/ ./spec/
@@ -38,7 +40,7 @@ FROM node:22-alpine AS production
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S ozwell -u 1001
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git openssh-client
 
 # Set working directory
 WORKDIR /app
@@ -53,10 +55,11 @@ COPY --from=builder --chown=ozwell:nodejs /app/reference-server/data ./reference
 # Install only production dependencies
 RUN cd spec && npm ci --only=production && npm cache clean --force
 COPY --from=builder /app/scripts/ci/git-auth-harness-core.sh ./scripts/ci/
-RUN --mount=type=secret,id=github_token \
-    HARNESS_CORE_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" sh ./scripts/ci/git-auth-harness-core.sh && \
-    cd reference-server && npm ci --only=production && npm cache clean --force && \
-    rm -f /root/.gitconfig ./scripts/ci/git-auth-harness-core.sh
+RUN --mount=type=secret,id=harness_core_ssh_key --mount=type=secret,id=github_token \
+    HARNESS_CORE_SSH_KEY="$(cat /run/secrets/harness_core_ssh_key 2>/dev/null || true)" \
+    HARNESS_CORE_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    sh -c '. ./scripts/ci/git-auth-harness-core.sh; cd reference-server && npm ci --only=production && npm cache clean --force' && \
+    rm -rf /root/.gitconfig /root/.ssh ./scripts/ci
 
 # Switch to non-root user
 USER ozwell
