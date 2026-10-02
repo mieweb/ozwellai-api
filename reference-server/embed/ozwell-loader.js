@@ -542,6 +542,7 @@
         height: 60px;
         border-radius: 50%;
         background: var(--mieweb-primary-800, #0f749c);
+        color: #fff;
         border: none;
         cursor: pointer;
         box-shadow: 0 4px 16px rgba(15, 116, 156, 0.3);
@@ -599,6 +600,18 @@
         width: 32px;
         height: 32px;
         object-fit: contain;
+      }
+
+      /* Custom image icons fill the circle on a white plate */
+      .ozwell-chat-button.ozwell-chat-button--image {
+        padding: 0;
+        background: #fff;
+      }
+
+      .ozwell-chat-button--image .ozwell-chat-icon {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
       }
 
       /* Chat wrapper window */
@@ -973,7 +986,24 @@
     const button = document.createElement('button');
     button.id = 'ozwell-chat-button';
     button.className = 'ozwell-chat-button';
-    button.innerHTML = '<img src="/favicon.ico" alt="Chat" class="ozwell-chat-icon" />';
+    if (typeof config.buttonIcon === 'string' && config.buttonIcon.trim()) {
+      const img = document.createElement('img');
+      img.src = config.buttonIcon;
+      img.alt = '';
+      img.className = 'ozwell-chat-icon';
+      button.classList.add('ozwell-chat-button--image');
+      button.appendChild(img);
+    } else {
+      // Built via DOM APIs (no innerHTML) so hosts enforcing Trusted Types still work
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      const attrs = { class: 'ozwell-chat-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false' };
+      for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
+      const path = document.createElementNS(svgNS, 'path');
+      path.setAttribute('d', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z');
+      svg.appendChild(path);
+      button.appendChild(svg);
+    }
     button.setAttribute('aria-label', 'Open chat');
     button.setAttribute('type', 'button');
 

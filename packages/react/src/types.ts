@@ -89,6 +89,9 @@ export interface OzwellConfig {
   /** Enable default floating button UI (default: true) */
   defaultUI?: boolean;
 
+  /** Image URL for the default launcher button icon (default: built-in chat icon) */
+  buttonIcon?: string;
+
   /** Container element ID for custom mounting */
   containerId?: string;
 
