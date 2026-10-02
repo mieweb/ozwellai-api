@@ -74,7 +74,7 @@ Use your own button and layout by disabling the default floating button:
 
 ### Custom Launcher Icon
 
-The default floating button uses a built-in chat icon. Override it with an absolute image URL:
+The default floating button shows the Ozwell icon, served from the widget's own origin (`/widget/ozwell-icon.png`). Override it with an absolute image URL:
 
 ```html
 <script>
