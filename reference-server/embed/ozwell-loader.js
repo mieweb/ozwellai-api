@@ -602,6 +602,18 @@
         object-fit: contain;
       }
 
+      /* Custom image icons fill the circle on a white plate */
+      .ozwell-chat-button.ozwell-chat-button--image {
+        padding: 0;
+        background: #fff;
+      }
+
+      .ozwell-chat-button--image .ozwell-chat-icon {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+      }
+
       /* Chat wrapper window */
       .ozwell-chat-wrapper {
         position: fixed;
@@ -979,6 +991,7 @@
       img.src = config.buttonIcon;
       img.alt = '';
       img.className = 'ozwell-chat-icon';
+      button.classList.add('ozwell-chat-button--image');
       button.appendChild(img);
     } else {
       // Built via DOM APIs (no innerHTML) so hosts enforcing Trusted Types still work
