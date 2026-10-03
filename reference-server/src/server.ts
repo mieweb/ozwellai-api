@@ -23,8 +23,9 @@ import { desktopAuthorizations } from './storage/desktop-auth';
 import googleOidcRoute from './routes/oidc-google';
 import appleOidcRoute from './routes/oidc-apple';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
-import { validateSession, SESSION_TOKEN_PREFIX, sweepExpiredSessionState } from './storage/sessions';
-import { extractToken } from './util';
+import { sweepExpiredSessionState } from './storage/sessions';
+import { desktopAttestation } from './storage/desktop-attestation';
+import { installDesktopSessionAuthorization } from './util/desktop-session-auth';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -103,6 +104,7 @@ function scheduleSessionSweep(server: FastifyInstance) {
   const interval = setInterval(() => {
     const removed = sweepExpiredSessionState();
     desktopAuthorizations.sweep();
+    desktopAttestation.sweep();
     if (removed) server.log.debug({ removed }, 'Expired widget sign-in state swept');
   }, SESSION_SWEEP_INTERVAL_MS);
   interval.unref?.();
@@ -227,21 +229,7 @@ async function buildServer() {
     }
   });
 
-  // Widget sessions: exchange a valid sess_ bearer for the signed-in user's own
-  // parent key only for widget chat and model discovery.
-  fastify.addHook('onRequest', async (request) => {
-    const token = extractToken(request.headers.authorization);
-    if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
-    if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
-    const pathname = request.url.split('?')[0];
-    const allowed = (request.method === 'POST' && pathname === '/v1/chat/completions') ||
-      (request.method === 'GET' && pathname === '/v1/models/effective') ||
-      (request.method === 'GET' && pathname === '/v1/agents');
-    if (!allowed) return;
-    const session = validateSession(token);
-    if (!session) return; // fall through: routes 401 naturally
-    request.headers.authorization = `Bearer ${session.parentKey}`;
-  });
+  installDesktopSessionAuthorization(fastify);
 
   // Register API routes
   await fastify.register(desktopAuthRoute);

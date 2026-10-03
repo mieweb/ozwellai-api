@@ -3,8 +3,9 @@
 Ozwell Desktop opens this server's hosted sign-in page in the system browser. The
 page offers the configured Google, Apple, and email methods through the same
 `AuthGate` used by the widget. Each method creates an Ozwell session. The desktop
-app receives that session after exchanging a short-lived authorization code with
-an S256 PKCE verifier that stayed in the app.
+app exchanges a short-lived authorization code with an S256 PKCE verifier that
+stayed in the app. Clients configured for Apple App Attest must then prove their
+signed application identity before receiving a bound desktop session.
 
 Google and Apple still redirect to this server's existing OIDC callbacks. They do
 not redirect directly to the desktop app. Provider configuration and account
@@ -74,7 +75,8 @@ The user should start sign-in from their own app and check the displayed client.
    }
    ```
 
-   Success returns `{ "session_token": "sess_...", "email": "..." }` with
+   For a plain registered client, success returns
+   `{ "session_token": "sess_...", "email": "..." }` with
    `Cache-Control: no-store`. The code expires after 60 seconds, is single use,
    and is bound to the client, callback, and challenge. It cannot be redeemed
    after its session, backing key, user, or registration becomes invalid.
@@ -91,6 +93,129 @@ Sessions, provider state, desktop flows, and codes are process-local. Use one
 instance for the whole authentication exchange or implement shared storage
 before distributing it across replicas. A restart clears pending exchanges and
 sessions. Do not log bearer credentials, verifier bodies, or callback query strings.
+
+## Require Apple App Attest for a desktop client
+
+An operator can require production Apple App Attest for a registered macOS
+Developer ID client. Add an `apple_app_attest` policy to that client:
+
+```json
+{
+  "ozwell-desktop": {
+    "name": "Ozwell Desktop",
+    "redirect_uris": ["http://127.0.0.1/oauth/callback"],
+    "apple_app_attest": {
+      "team_id": "AB12345678",
+      "signing_identifier": "com.example.ozwell",
+      "bundle_versions": ["12345"]
+    }
+  }
+}
+```
+
+Replace these examples with the actual signing team, the App Attest caller's code
+signing identifier, and exact approved `CFBundleVersion` strings. This policy
+accepts production macOS Developer ID proofs with signed category and version
+extensions. An unsupported device, missing extension, invalid proof, or unknown
+version fails closed. There is no plain-session fallback for this client. A
+malformed attestation policy disables its whole client registration.
+
+Apple's certificate chain, nonce, key ID, application identifier, production
+environment, and signed bundle version are verified. Enrollment receipts are
+verified locally, including their CMS signature, Apple receipt trust chain,
+application/key binding, and freshness. Subsequent assertions verify signatures,
+current version, request challenges, and strictly increasing counters. The server
+uses fixed public Apple trust anchors; clients cannot supply a replacement root.
+
+### Attested sign-in
+
+The browser and PKCE steps above stay the same. After consuming a valid code,
+`POST /auth/desktop/token` with an attestation-required client returns:
+
+```json
+{
+  "attestation_required": true,
+  "login_id": "<opaque 43-character base64url value>",
+  "account": { "email": "person@example.test", "user_id": "..." }
+}
+```
+
+It returns no bearer credential. The grant expires in five minutes and remains
+bound to the verified browser session and the exact registration configuration.
+
+1. Native code loads or generates its Apple App Attest key. Send
+   `POST /auth/desktop/attestation/challenge` with `{ "login_id": "...", "key_id": "..." }`.
+   Apple key IDs use canonical standard base64 encoding of 32 bytes, including
+   the final `=`. The response contains `{ "challenge": "...", "proof_kind": "attestation" }`
+   for a new key, or `proof_kind: "assertion"` for a previously enrolled key owned
+   by this user and client.
+2. Decode the challenge as base64url, hash those raw 32 bytes with SHA-256, and
+   supply that digest as Apple's `clientDataHash`. Send the returned CBOR proof
+   in canonical standard base64 to `POST /auth/desktop/attestation/verify` as
+   `{ "login_id": "...", "key_id": "...", "proof": "..." }`.
+3. A valid proof returns `{ "session_token": "sess_...", "email": "..." }`.
+   This is a **new session bound to the enrolled application key and client**.
+   The temporary browser session is consumed, and the new session keeps its
+   original expiry. A personal or agent key cannot enter this conversion.
+
+Challenges expire after 60 seconds and are consumed even when proof verification
+fails. A login grant permits at most five challenges. The server persists verified
+public keys, receipts, owner/client binding, bundle versions, and counters in
+SQLite's `desktop_attested_keys` table. A key cannot be reassigned to another user
+or client. Revoked keys remain recorded so they cannot be enrolled again.
+
+### Bound API requests
+
+Every use of the bound session requires a fresh assertion for these routes:
+
+- `GET /auth/session`
+- `POST /auth/logout`
+- `GET /v1/models/effective`
+- `GET /v1/agents`
+- `POST /v1/chat/completions`
+
+First send `POST /auth/desktop/challenge` with the session bearer and JSON
+`{ "method": "POST", "path": "/v1/chat/completions", "body_hash": "..." }`.
+`method` is uppercase and `path` includes the exact query string when present.
+`body_hash` is lowercase SHA-256 hex over `JSON.stringify(parsedRequestBody)`;
+for a request without a body, hash the empty string. Use the same normalized JSON
+body for hashing and transmission. The response is
+`{ "challenge_id": "...", "challenge": "..." }`.
+
+Generate an Apple assertion using SHA-256 over the decoded challenge bytes. Send
+that same bearer, exact method/path/body, and these headers on the protected call:
+
+| Header | Value |
+| --- | --- |
+| `x-ozwell-attestation-challenge` | Returned `challenge_id` |
+| `x-ozwell-attestation-key` | Enrolled Apple key ID |
+| `x-ozwell-attestation-proof` | Standard base64 CBOR assertion |
+
+The challenge is bound to the session, key, method, exact path, and body digest.
+It expires after 60 seconds and is single use. Each session may have at most eight
+outstanding request challenges. Counter advancement is a conditional SQLite write,
+so concurrent replay cannot reuse a counter. Proof validation happens before the
+existing parent-key authorization and routing checks. Unrelated routes do not
+become available to a bound session. Challenge issuance is the only exempt bound
+session endpoint; it validates the session and enrolled key without requiring a
+recursive assertion.
+
+Changing registration invalidates pending flows, codes, login grants, and existing
+bound sessions. After an approved app update, a fresh login can reuse its enrolled
+key with an assertion for the newly approved version. Revoking the enrolled key,
+backing parent key, user, or session invalidates its authority. Operators can revoke
+an installation by setting its `desktop_attested_keys.revoked_at` timestamp.
+
+This policy establishes the signed application identity for that desktop client
+and protects its bound sessions against bearer-only replay. Ordinary widget
+sessions and personal API keys keep their existing API access and scope. Requiring
+attestation for *all* account/API access needs a separate deployment policy; this
+client setting does not disable those alternatives. Protect the Apple signing
+identity and approve exact releases through the existing release process.
+
+Pending login and request challenges remain process-local alongside sessions.
+Use one process or add shared challenge/session storage before distributing traffic
+across replicas; SQLite alone does not make the whole login flow multi-instance.
 
 ## Existing API keys
 
@@ -125,11 +250,12 @@ by this repository change.
 From `reference-server`, run the isolated regression suites:
 
 ```bash
-node --test test/desktop-auth.test.js test/api-key-identity.test.js test/widget-auth.test.js
+node --test test/desktop-auth.test.js test/desktop-attestation.test.js test/apple-app-attest.test.js test/api-key-identity.test.js test/widget-auth.test.js
 ```
 
 These tests use local databases, synthetic identities, and controlled auth
-fixtures. They cover redirects, S256, browser binding, replay, expiry, revocation,
+fixtures. Apple trust-chain fixtures and injected signed service fixtures are tested
+separately. They cover redirects, S256, browser binding, replay, expiry, revocation,
 scope preservation, and identity ownership. They send no real mail and do not
 authenticate to Google or Apple.
 

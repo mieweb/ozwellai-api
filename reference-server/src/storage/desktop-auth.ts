@@ -8,15 +8,16 @@ const PKCE_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 const PKCE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/;
 const CLIENT_STATE = /^[A-Za-z0-9._~-]{32,256}$/;
 
-type Registration = { name: string; redirect_uris: string[] };
+export type AppleAppAttestPolicy = { team_id: string; signing_identifier: string; bundle_versions: string[] };
+export type Registration = { name: string; redirect_uris: string[]; apple_app_attest?: AppleAppAttestPolicy };
 export type DesktopAuthorization = {
   clientId: string;
   redirectUri: string;
   state: string;
   challenge: string;
 };
-type PendingFlow = DesktopAuthorization & { cookieHash: Buffer; expiresAt: number };
-type PendingCode = DesktopAuthorization & { sessionToken: string; expiresAt: number; attempts: number };
+type PendingFlow = DesktopAuthorization & { registrationHash: string; cookieHash: Buffer; expiresAt: number };
+type PendingCode = DesktopAuthorization & { registrationHash: string; sessionToken: string; expiresAt: number; attempts: number };
 
 export class DesktopAuthError extends Error {
   readonly code: 'invalid_request' | 'invalid_grant' | 'temporarily_unavailable';
@@ -37,7 +38,17 @@ function registrations(): Record<string, Registration> {
       const record = value as Record<string, unknown>;
       if (typeof record.name !== 'string' || record.name.length < 1 || record.name.length > 100 || !Array.isArray(record.redirect_uris)) continue;
       const redirects = record.redirect_uris.filter((uri): uri is string => typeof uri === 'string' && validRegistrationUri(uri));
-      if (redirects.length) result[id] = { name: record.name, redirect_uris: redirects };
+      let apple: AppleAppAttestPolicy | undefined;
+      if (record.apple_app_attest !== undefined) {
+        const policy = record.apple_app_attest as Record<string, unknown> | null;
+        if (!policy || typeof policy !== 'object' || Array.isArray(policy) ||
+            typeof policy.team_id !== 'string' || !/^[A-Z0-9]{10}$/.test(policy.team_id) ||
+            typeof policy.signing_identifier !== 'string' || !/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/.test(policy.signing_identifier) ||
+            !Array.isArray(policy.bundle_versions) || policy.bundle_versions.length < 1 || policy.bundle_versions.length > 100 ||
+            !policy.bundle_versions.every(version => typeof version === 'string' && /^[A-Za-z0-9._-]{1,100}$/.test(version))) continue;
+        apple = { team_id: policy.team_id, signing_identifier: policy.signing_identifier, bundle_versions: [...new Set(policy.bundle_versions as string[])].sort() };
+      }
+      if (redirects.length) result[id] = { name: record.name, redirect_uris: redirects, ...(apple ? { apple_app_attest: apple } : {}) };
     }
     return result;
   } catch { return {}; }
@@ -50,6 +61,11 @@ function validRegistrationUri(uri: string): boolean {
   } catch { return false; }
 }
 export function desktopLoginAvailable(): boolean { return Object.keys(registrations()).length > 0; }
+export function desktopClientRegistration(clientId: string): Registration | null { return registrations()[clientId] ?? null; }
+export function desktopRegistrationHash(clientId: string): string | null {
+  const registration = desktopClientRegistration(clientId);
+  return registration ? hash(JSON.stringify(registration)).toString('hex') : null;
+}
 export function registeredDesktopClient(clientId: string, redirectUri: string): Registration | null {
   const client = registrations()[clientId];
   if (!client) return null;
@@ -82,18 +98,18 @@ export class DesktopAuthorizationStore {
     if (this.flows.size + this.codes.size >= MAX_PENDING) throw new DesktopAuthError('temporarily_unavailable');
     const flowId = opaque();
     const cookie = opaque();
-    this.flows.set(flowId, { ...input, cookieHash: hash(cookie), expiresAt: this.now() + FLOW_TTL_MS });
+    this.flows.set(flowId, { ...input, registrationHash: desktopRegistrationHash(input.clientId)!, cookieHash: hash(cookie), expiresAt: this.now() + FLOW_TTL_MS });
     return { flowId, cookie, clientName: client.name };
   }
   complete(flowId: string, cookie: string, sessionToken: string): string {
     this.sweep();
     const flow = this.flows.get(flowId);
-    if (!flow || !secretMatches(cookie, flow.cookieHash) || !registeredDesktopClient(flow.clientId, flow.redirectUri)) throw new DesktopAuthError('invalid_request');
+    if (!flow || !secretMatches(cookie, flow.cookieHash) || !registeredDesktopClient(flow.clientId, flow.redirectUri) || desktopRegistrationHash(flow.clientId) !== flow.registrationHash) throw new DesktopAuthError('invalid_request');
     this.flows.delete(flowId);
     const code = opaque();
     this.codes.set(hash(code).toString('hex'), {
       clientId: flow.clientId, redirectUri: flow.redirectUri, state: flow.state, challenge: flow.challenge,
-      sessionToken, expiresAt: this.now() + CODE_TTL_MS, attempts: 0,
+      registrationHash: flow.registrationHash, sessionToken, expiresAt: this.now() + CODE_TTL_MS, attempts: 0,
     });
     const redirect = new URL(flow.redirectUri);
     redirect.searchParams.set('code', code);
@@ -104,7 +120,7 @@ export class DesktopAuthorizationStore {
     this.sweep();
     const key = hash(input.code).toString('hex');
     const grant = this.codes.get(key);
-    if (!grant || input.grantType !== 'authorization_code' || !PKCE_VERIFIER.test(input.verifier) || input.clientId !== grant.clientId || input.redirectUri !== grant.redirectUri || !registeredDesktopClient(input.clientId, input.redirectUri)) throw new DesktopAuthError('invalid_grant');
+    if (!grant || input.grantType !== 'authorization_code' || !PKCE_VERIFIER.test(input.verifier) || input.clientId !== grant.clientId || input.redirectUri !== grant.redirectUri || !registeredDesktopClient(input.clientId, input.redirectUri) || desktopRegistrationHash(grant.clientId) !== grant.registrationHash) throw new DesktopAuthError('invalid_grant');
     grant.attempts++;
     const challenge = createHash('sha256').update(input.verifier).digest('base64url');
     if (!secretMatches(challenge, hash(grant.challenge))) {
