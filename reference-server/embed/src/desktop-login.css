@@ -1,0 +1,7 @@
+html, body { min-height: 100%; height: auto; overflow: auto; }
+body { background: #f7f9fc; color: #172033; }
+.ozwell-desktop-login-shell { max-width: 480px; margin: 8vh auto 32px; padding: 0 20px; }
+.ozwell-desktop-destination { text-align: center; margin-bottom: 20px; line-height: 1.5; }
+.ozwell-desktop-login-shell .ozwell-auth-gate { padding: 0; background: transparent; }
+.ozwell-desktop-login-shell .ozwell-auth-card { width: 100%; max-width: none; box-sizing: border-box; }
+.ozwell-desktop-help { color: #526078; font-size: 13px; line-height: 1.5; text-align: center; margin-top: 20px; }

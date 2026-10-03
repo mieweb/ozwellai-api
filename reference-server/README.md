@@ -393,6 +393,16 @@ Restart the server after changing `.env`; these values are read at startup.
 - `GET /auth/session` - Describe the current session
 - `POST /auth/logout` - Revoke the current session token
 
+### Desktop Sign-In
+
+- `GET /auth/desktop/authorize` - Hosted sign-in for a registered public client with S256 PKCE
+- `POST /auth/desktop/complete` - Bind the browser's Ozwell session to its pending authorization
+- `POST /auth/desktop/token` - Exchange the short-lived authorization code with its PKCE verifier
+- `POST /auth/api-key/identity` - Verify an existing key's account email while preserving the original key and its scope
+
+See [desktop authentication deployment](../docs/backend/desktop-authentication.md)
+for registration, request contracts, and rollout checks.
+
 ### Files
 
 - `POST /v1/files` - Upload file

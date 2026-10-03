@@ -17,6 +17,9 @@ import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
+import desktopAuthRoute from './routes/desktop-auth';
+import apiKeyIdentityRoute from './routes/api-key-identity';
+import { desktopAuthorizations } from './storage/desktop-auth';
 import googleOidcRoute from './routes/oidc-google';
 import appleOidcRoute from './routes/oidc-apple';
 import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
@@ -99,6 +102,7 @@ const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 function scheduleSessionSweep(server: FastifyInstance) {
   const interval = setInterval(() => {
     const removed = sweepExpiredSessionState();
+    desktopAuthorizations.sweep();
     if (removed) server.log.debug({ removed }, 'Expired widget sign-in state swept');
   }, SESSION_SWEEP_INTERVAL_MS);
   interval.unref?.();
@@ -240,6 +244,8 @@ async function buildServer() {
   });
 
   // Register API routes
+  await fastify.register(desktopAuthRoute);
+  await fastify.register(apiKeyIdentityRoute);
   await fastify.register(authRoute);        // Widget sign-in (email OTP sessions)
   await fastify.register(googleOidcRoute);  // Widget sign-in (Google OIDC)
   await fastify.register(appleOidcRoute);
@@ -255,6 +261,10 @@ async function buildServer() {
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'embed'),
     serve: false,
+  });
+
+  fastify.get('/auth/desktop/login.js', async (_request, reply) => {
+    return reply.type('application/javascript; charset=utf-8').sendFile('desktop-login.js');
   });
 
   fastify.get('/widget', async (_request, reply) => {
