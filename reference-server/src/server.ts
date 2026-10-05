@@ -231,7 +231,8 @@ async function buildServer() {
     if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
     const pathname = request.url.split('?')[0];
     const allowed = (request.method === 'POST' && pathname === '/v1/chat/completions') ||
-      (request.method === 'GET' && pathname === '/v1/models/effective');
+      (request.method === 'GET' && pathname === '/v1/models/effective') ||
+      (request.method === 'GET' && pathname === '/v1/agents');
     if (!allowed) return;
     const session = validateSession(token);
     if (!session) return; // fall through: routes 401 naturally
@@ -262,6 +263,10 @@ async function buildServer() {
 
   fastify.get('/widget/ozwell.js', async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
+  });
+
+  fastify.get('/widget/ozwell-icon.png', async (_request, reply) => {
+    return reply.type('image/png').sendFile('ozwell-icon.png');
   });
 
   fastify.get('/widget/frame/', async (_request, reply) => {

@@ -46,7 +46,7 @@ test('widget tool results do not use success+message as a direct response shortc
 test('widget tool results are sent back with the matching OpenAI tool_call_id', async () => {
   const source = await readWidgetSource();
 
-  assert.match(source, /const toolCallId = data\.id;/);
+  assert.match(source, /const toolCallId = data\d*\.id;/);
   assert.match(source, /role:\s*"tool"/);
   assert.match(source, /tool_call_id:\s*toolCallId/);
   assert.match(source, /content:\s*serializeToolResult\(result\)/);

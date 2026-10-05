@@ -7,9 +7,14 @@ graph TB
     Events["🎯 GitHub Events"]
     PushPR["📤 Push/PR to main"]
     Release["🚀 Release Published"]
+    ReactTrigger["⚛️ Merged PR (packages/react)<br/>or Manual Dispatch"]
     
     Events --> PushPR
     Events --> Release
+    Events --> ReactTrigger
+    
+    ReactPub["⚛️ release-react.yml<br/>• ./scripts/release-react.mjs<br/>• npm (OIDC trusted publishing)"]
+    ReactTrigger --> ReactPub
     
     %% CI Workflows (triggered by Push/PR)
     TSClientCI["📦 typescript-client-ci.yml<br/>• ./scripts/ci-client.sh<br/>• Cross-platform testing"]
@@ -41,9 +46,9 @@ graph TB
     classDef publishNode fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef reusableNode fill:#fff3e0,stroke:#e65100,stroke-width:2px
     
-    class Events,PushPR,Release eventNode
+    class Events,PushPR,Release,ReactTrigger eventNode
     class TSClientCI,RefServerCI ciNode
-    class TSClientPub,RefServerPub publishNode
+    class TSClientPub,RefServerPub,ReactPub publishNode
     class TSClientTest,RefServerTest reusableNode
 ```
 
@@ -112,6 +117,7 @@ flowchart TD
 | `reference-server-ci.yml` | Push/PR | Fast feedback for reference server | `./scripts/ci-server.sh` |
 | `publish-typescript-client.yml` | Release | Controlled publishing to npm/JSR | `./scripts/extract-version.sh`<br/>`./scripts/publish-client.sh` |
 | `publish-reference-server.yml` | Release | Controlled Docker publishing | `./scripts/extract-version.sh`<br/>`./scripts/publish-server.sh` |
+| `release-react.yml` | Merged PR touching `packages/react` / Manual dispatch | `@ozwell/react` npm release (prerelease on `next`, or full release) | `./scripts/release-react.mjs` |
 | `test-typescript-client.yml` | Called by others | Reusable TypeScript test logic | `./scripts/test-client.sh` |
 | `test-reference-server.yml` | Called by others | Reusable server test logic | `./scripts/test-server.sh` |
 

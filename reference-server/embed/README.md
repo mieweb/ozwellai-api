@@ -72,6 +72,18 @@ Use your own button and layout by disabling the default floating button:
 
 **Use cases:** Sidebar layouts, embedded chat in dashboards, multi-panel UIs, or any design where you want full control over the chat placement and styling.
 
+### Custom Launcher Icon
+
+The default floating button shows the Ozwell icon, served from the widget's own origin (`/widget/ozwell-icon.png`). Override it with an absolute image URL:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    buttonIcon: 'https://example.com/my-brand-icon.svg'
+  };
+</script>
+```
+
 ## Getting Text Back into the Page
 
 Use the AI to improve text, then have it write the result back into a textarea. Expose a tool the AI can call with the improved text — the page writes it where it belongs:

@@ -200,13 +200,13 @@ jobs:
 
       - name: Set up SSH
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.OZWELL_DEV2_SSH_PRIVATE_KEY }}
           DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
           DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
         run: |
           set -euo pipefail
           if [[ -z "$SSH_PRIVATE_KEY" ]]; then
-            echo "SSH_PRIVATE_KEY is required"
+            echo "OZWELL_DEV2_SSH_PRIVATE_KEY secret is required"
             exit 1
           fi
 
