@@ -491,6 +491,16 @@
 
     if (!button || !wrapper) return;
 
+    // A moved launcher opens the window from its nearest corner instead of the default spot.
+    if (button.style.left && !isMobileViewport() && !button.classList.contains('hidden')) {
+      const b = getRect(button);
+      const onRight = (b.left + b.right) / 2 > window.innerWidth / 2;
+      const onBottom = (b.top + b.bottom) / 2 > window.innerHeight / 2;
+      const right = onRight ? window.innerWidth - b.right : window.innerWidth - b.left - wrapper.offsetWidth;
+      const bottom = onBottom ? window.innerHeight - b.bottom : window.innerHeight - b.top - wrapper.offsetHeight;
+      setWindowOffsets(wrapper, right, bottom);
+    }
+
     wrapper.classList.remove('hidden');
     wrapper.classList.add('visible');
     button.classList.add('hidden');
@@ -514,6 +524,8 @@
     wrapper.classList.remove('visible');
     wrapper.classList.add('hidden');
     button.classList.remove('hidden');
+    // Viewport may have changed while the launcher was hidden.
+    if (button.style.left) applySavedButtonPosition(button);
     state.chatOpen = false;
 
     console.log('[OzwellChat] Chat closed');
@@ -554,6 +566,14 @@
         transition: transform 0.2s, box-shadow 0.2s;
         /* Needed for badge positioning */
         overflow: visible;
+        touch-action: none;
+        user-select: none;
+      }
+
+      .ozwell-chat-button.dragging {
+        cursor: grabbing;
+        transition: none;
+        transform: none;
       }
 
       .ozwell-chat-button:hover {
@@ -646,31 +666,41 @@
         transform: scale(1) translateY(0);
       }
 
-      /* Top-left drag-resize handle: a diagonal grip (macOS / textarea style) */
+      /* Top-left corner resize handle; invisible like the other edges, but keyboard-focusable */
       .ozwell-resize-handle {
         position: absolute;
         top: 0;
         left: 0;
-        width: 22px;
-        height: 22px;
+        width: var(--ozwell-corner);
+        height: var(--ozwell-corner);
         cursor: nwse-resize;
         z-index: 3;
         touch-action: none;
         border-top-left-radius: 16px;
-        opacity: 0.65;
-        transition: opacity 0.15s ease;
-      }
-
-      .ozwell-resize-handle:hover,
-      .ozwell-resize-handle:active,
-      .ozwell-resize-handle:focus-visible {
-        opacity: 1;
       }
 
       .ozwell-resize-handle:focus-visible {
         outline: 2px solid #ffffff;
         outline-offset: -2px;
       }
+
+      /* Invisible edge/corner resize strips */
+      .ozwell-chat-wrapper {
+        --ozwell-edge: 6px;
+        --ozwell-corner: 12px;
+      }
+      .ozwell-edge-handle {
+        position: absolute;
+        z-index: 3;
+        touch-action: none;
+      }
+      .ozwell-edge-handle[data-dir="n"] { top: 0; left: var(--ozwell-corner); right: var(--ozwell-corner); height: var(--ozwell-edge); cursor: ns-resize; }
+      .ozwell-edge-handle[data-dir="s"] { bottom: 0; left: var(--ozwell-corner); right: var(--ozwell-corner); height: var(--ozwell-edge); cursor: ns-resize; }
+      .ozwell-edge-handle[data-dir="e"] { right: 0; top: var(--ozwell-corner); bottom: var(--ozwell-corner); width: var(--ozwell-edge); cursor: ew-resize; }
+      .ozwell-edge-handle[data-dir="w"] { left: 0; top: var(--ozwell-corner); bottom: var(--ozwell-corner); width: var(--ozwell-edge); cursor: ew-resize; }
+      .ozwell-edge-handle[data-dir="ne"] { top: 0; right: 0; width: var(--ozwell-corner); height: var(--ozwell-corner); cursor: nesw-resize; }
+      .ozwell-edge-handle[data-dir="sw"] { bottom: 0; left: 0; width: var(--ozwell-corner); height: var(--ozwell-corner); cursor: nesw-resize; }
+      .ozwell-edge-handle[data-dir="se"] { bottom: 0; right: 0; width: var(--ozwell-corner); height: var(--ozwell-corner); cursor: nwse-resize; }
 
       .ozwell-sr-only {
         position: absolute;
@@ -684,20 +714,6 @@
         border: 0;
       }
 
-      /* Parallel diagonal lines, clipped to the corner triangle */
-      .ozwell-resize-handle::before {
-        content: '';
-        position: absolute;
-        inset: 4px;
-        background: repeating-linear-gradient(
-          135deg,
-          rgba(255, 255, 255, 0.9) 0 1.5px,
-          transparent 1.5px 4px
-        );
-        -webkit-mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
-        mask: linear-gradient(135deg, #000 0 48%, transparent 48%);
-      }
-
       /* Chat header */
       .ozwell-chat-header {
         display: flex;
@@ -707,6 +723,8 @@
         background: var(--mieweb-primary-800, #0f749c);
         color: white;
         user-select: none;
+        cursor: move;
+        touch-action: none;
       }
 
       .ozwell-chat-title {
@@ -770,10 +788,10 @@
 
         .ozwell-chat-wrapper {
           position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          bottom: 0 !important;
           width: 100% !important;
           height: 100% !important;
           max-width: none !important;
@@ -783,8 +801,14 @@
           box-shadow: none;
         }
 
-        .ozwell-resize-handle {
+        .ozwell-resize-handle,
+        .ozwell-edge-handle {
           display: none;
+        }
+
+        .ozwell-chat-header {
+          cursor: default;
+          touch-action: auto;
         }
 
         .ozwell-chat-wrapper.hidden {
@@ -814,22 +838,44 @@
   }
 
   const SIZE_STORAGE_KEY = 'ozwell.widget.size';
+  const WINDOW_POS_STORAGE_KEY = 'ozwell.widget.position';
+  const BUTTON_POS_STORAGE_KEY = 'ozwell.launcher.position';
   const MIN_WIDTH = 320;
   const MIN_HEIGHT = 360;
+  const MOBILE_MAX_WIDTH = 767; // keep in sync with the @media query in injectDefaultCSS
+  const EDGE_MARGIN = 8;
+  const DRAG_THRESHOLD = 5;
+  const RESIZE_DIRS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
-  // Keep the window within the viewport (24px right/bottom offset + margin).
-  function clampSize(width, height) {
-    const maxWidth = Math.max(MIN_WIDTH, window.innerWidth - 40);
-    const maxHeight = Math.max(MIN_HEIGHT, window.innerHeight - 48);
+  const isMobileViewport = () => window.innerWidth <= MOBILE_MAX_WIDTH;
+  const clampRange = (value, lo, hi) => Math.min(Math.max(value, lo), hi);
+  const keyStep = (event) => (event.shiftKey ? 48 : 16);
+
+  // offsetLeft/Top ignore CSS transforms (hover scale, open/close animation), unlike getBoundingClientRect.
+  function getRect(el) {
+    const left = el.offsetLeft, top = el.offsetTop;
+    return { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight };
+  }
+
+  // Largest window that fits beside the default 24px right/bottom offset plus margin.
+  function maxWindowSize() {
     return {
-      width: Math.min(Math.max(width, MIN_WIDTH), maxWidth),
-      height: Math.min(Math.max(height, MIN_HEIGHT), maxHeight),
+      width: Math.max(MIN_WIDTH, window.innerWidth - 40),
+      height: Math.max(MIN_HEIGHT, window.innerHeight - 48),
+    };
+  }
+
+  function clampSize(width, height) {
+    const max = maxWindowSize();
+    return {
+      width: clampRange(width, MIN_WIDTH, max.width),
+      height: clampRange(height, MIN_HEIGHT, max.height),
     };
   }
 
   function applySavedSize(wrapper) {
     // Mobile uses a fullscreen window; keep its size out of localStorage's reach.
-    if (window.innerWidth <= 767) return;
+    if (isMobileViewport()) return;
     try {
       const saved = JSON.parse(localStorage.getItem(SIZE_STORAGE_KEY) || 'null');
       if (!saved || typeof saved.width !== 'number' || typeof saved.height !== 'number') return;
@@ -861,35 +907,139 @@
     announceSize(wrapper);
   }
 
-  // Drag the top-left handle to resize; the window is anchored bottom-right.
-  // Also supports keyboard resizing (arrow keys, Home to reset).
-  function enableResize(wrapper, handle) {
-    let startX = 0, startY = 0, startWidth = 0, startHeight = 0, resizing = false, lastDownAt = 0, activePointerId = null;
+  // The window stays anchored bottom-right; a custom position is stored as right/bottom offsets.
+  function setWindowOffsets(wrapper, right, bottom) {
+    const maxRight = Math.max(EDGE_MARGIN, window.innerWidth - wrapper.offsetWidth - EDGE_MARGIN);
+    const maxBottom = Math.max(EDGE_MARGIN, window.innerHeight - wrapper.offsetHeight - EDGE_MARGIN);
+    wrapper.style.right = clampRange(right, EDGE_MARGIN, maxRight) + 'px';
+    wrapper.style.bottom = clampRange(bottom, EDGE_MARGIN, maxBottom) + 'px';
+  }
 
-    const onMove = (event) => {
-      if (!resizing) return;
-      setWindowSize(wrapper, startWidth + (startX - event.clientX), startHeight + (startY - event.clientY), false);
-    };
+  function reclampWindowPosition(wrapper) {
+    if (!wrapper.style.right) return;
+    setWindowOffsets(wrapper, parseFloat(wrapper.style.right), parseFloat(wrapper.style.bottom));
+  }
 
-    const endDrag = () => {
-      if (!resizing) return;
-      resizing = false;
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', endDrag);
-      document.removeEventListener('pointercancel', endDrag);
-      handle.removeEventListener('lostpointercapture', endDrag);
-      if (activePointerId !== null) {
-        try { handle.releasePointerCapture(activePointerId); } catch { /* already released */ }
-        activePointerId = null;
+  function persistWindow(wrapper) {
+    try {
+      localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify({ width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
+      if (wrapper.style.right) {
+        localStorage.setItem(WINDOW_POS_STORAGE_KEY, JSON.stringify({
+          right: parseFloat(wrapper.style.right),
+          bottom: parseFloat(wrapper.style.bottom),
+        }));
       }
-      // Restore iframe interaction once the drag ends.
-      const iframe = wrapper.querySelector('iframe');
+    } catch { /* storage blocked */ }
+  }
+
+  function applySavedPosition(wrapper) {
+    if (isMobileViewport()) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(WINDOW_POS_STORAGE_KEY) || 'null');
+      if (!saved || typeof saved.right !== 'number' || typeof saved.bottom !== 'number') return;
+      setWindowOffsets(wrapper, saved.right, saved.bottom);
+    } catch { /* storage blocked or malformed */ }
+  }
+
+  function resetWindowPosition(wrapper) {
+    wrapper.style.right = '';
+    wrapper.style.bottom = '';
+    try { localStorage.removeItem(WINDOW_POS_STORAGE_KEY); } catch { /* storage blocked */ }
+  }
+
+  // Shared pointer-drag plumbing. Capturing the pointer guarantees a release
+  // outside the viewport still ends the drag, so the iframe never stays stuck
+  // at pointer-events: none.
+  function trackPointerDrag(target, event, onMove, onEnd, iframe) {
+    const startX = event.clientX, startY = event.clientY, pointerId = event.pointerId;
+    let active = true;
+    const move = (e) => { if (active) onMove(e.clientX - startX, e.clientY - startY); };
+    const end = () => {
+      if (!active) return;
+      active = false;
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      document.removeEventListener('pointercancel', end);
+      target.removeEventListener('lostpointercapture', end);
+      try { target.releasePointerCapture(pointerId); } catch { /* already released */ }
       if (iframe) iframe.style.pointerEvents = '';
-      try {
-        localStorage.setItem(SIZE_STORAGE_KEY, JSON.stringify({ width: wrapper.offsetWidth, height: wrapper.offsetHeight }));
-      } catch { /* storage blocked */ }
-      announceSize(wrapper);
+      onEnd();
     };
+    try { target.setPointerCapture(pointerId); } catch { /* capture unsupported */ }
+    if (iframe) iframe.style.pointerEvents = 'none';
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end);
+    document.addEventListener('pointercancel', end);
+    target.addEventListener('lostpointercapture', end);
+  }
+
+  // Resize from any edge/corner: only the dragged edges move, clamped to min size and viewport.
+  function resizeFromRect(wrapper, start, dir, dx, dy) {
+    const max = maxWindowSize();
+    const r = { ...start };
+    if (dir.includes('w')) r.left = clampRange(start.left + dx, Math.max(EDGE_MARGIN, r.right - max.width), r.right - MIN_WIDTH);
+    if (dir.includes('e')) r.right = clampRange(start.right + dx, r.left + MIN_WIDTH, Math.min(window.innerWidth - EDGE_MARGIN, r.left + max.width));
+    if (dir.includes('n')) r.top = clampRange(start.top + dy, Math.max(EDGE_MARGIN, r.bottom - max.height), r.bottom - MIN_HEIGHT);
+    if (dir.includes('s')) r.bottom = clampRange(start.bottom + dy, r.top + MIN_HEIGHT, Math.min(window.innerHeight - EDGE_MARGIN, r.top + max.height));
+    wrapper.style.width = (r.right - r.left) + 'px';
+    wrapper.style.height = (r.bottom - r.top) + 'px';
+    if (wrapper.style.right || dir.includes('e') || dir.includes('s')) {
+      wrapper.style.right = (window.innerWidth - r.right) + 'px';
+      wrapper.style.bottom = (window.innerHeight - r.bottom) + 'px';
+    }
+  }
+
+  // Park the launcher at the window corner nearest the viewport edge, so hide/reload keeps them together.
+  function anchorButtonToWindow(wrapper) {
+    const button = document.getElementById('ozwell-chat-button');
+    if (!button || !wrapper.style.right) return;
+    const w = getRect(wrapper);
+    const size = buttonSize(button);
+    const onRight = (w.left + w.right) / 2 > window.innerWidth / 2;
+    const onBottom = (w.top + w.bottom) / 2 > window.innerHeight / 2;
+    setButtonPosition(button, onRight ? w.right - size.width : w.left, onBottom ? w.bottom - size.height : w.top, true);
+  }
+
+  function startWindowResize(wrapper, handle, event, dir) {
+    const start = getRect(wrapper);
+    trackPointerDrag(handle, event,
+      (dx, dy) => resizeFromRect(wrapper, start, dir, dx, dy),
+      () => { persistWindow(wrapper); anchorButtonToWindow(wrapper); announceSize(wrapper); },
+      wrapper.querySelector('iframe'));
+  }
+
+  function enableEdgeResize(wrapper, handle) {
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      startWindowResize(wrapper, handle, event, handle.dataset.dir);
+    });
+  }
+
+  // Drag the header to move the window; double-click the header to restore the default spot.
+  function enableWindowMove(wrapper, header) {
+    header.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || isMobileViewport() || event.target.closest('button')) return;
+      event.preventDefault();
+      const start = getRect(wrapper);
+      const startRight = window.innerWidth - start.right;
+      const startBottom = window.innerHeight - start.bottom;
+      trackPointerDrag(header, event,
+        (dx, dy) => setWindowOffsets(wrapper, startRight - dx, startBottom - dy),
+        () => { persistWindow(wrapper); anchorButtonToWindow(wrapper); },
+        wrapper.querySelector('iframe'));
+    });
+    header.addEventListener('dblclick', (event) => {
+      if (event.target.closest('button')) return;
+      resetWindowPosition(wrapper);
+      const button = document.getElementById('ozwell-chat-button');
+      if (button) resetButtonPosition(button);
+    });
+  }
+
+  // Drag the top-left handle to resize; also supports keyboard resizing (arrow keys, Home to reset).
+  function enableResize(wrapper, handle) {
+    let lastDownAt = 0;
 
     handle.addEventListener('pointerdown', (event) => {
       event.preventDefault();
@@ -899,25 +1049,11 @@
       if (now - lastDownAt < 300) {
         lastDownAt = 0;
         resetWindowSize(wrapper);
+        reclampWindowPosition(wrapper);
         return;
       }
       lastDownAt = now;
-      resizing = true;
-      startX = event.clientX;
-      startY = event.clientY;
-      startWidth = wrapper.offsetWidth;
-      startHeight = wrapper.offsetHeight;
-      // Capturing the pointer guarantees a release outside the viewport still
-      // ends the drag (pointerup or lostpointercapture), so the iframe never
-      // stays stuck at pointer-events: none.
-      activePointerId = event.pointerId;
-      try { handle.setPointerCapture(activePointerId); } catch { /* capture unsupported */ }
-      const iframe = wrapper.querySelector('iframe');
-      if (iframe) iframe.style.pointerEvents = 'none';
-      document.addEventListener('pointermove', onMove);
-      document.addEventListener('pointerup', endDrag);
-      document.addEventListener('pointercancel', endDrag);
-      handle.addEventListener('lostpointercapture', endDrag);
+      startWindowResize(wrapper, handle, event, 'nw');
     });
 
     handle.addEventListener('keydown', (event) => {
@@ -926,7 +1062,7 @@
         resetWindowSize(wrapper);
         return;
       }
-      const step = event.shiftKey ? 48 : 16;
+      const step = keyStep(event);
       let dw = 0, dh = 0;
       switch (event.key) {
         case 'ArrowLeft': dw = step; break;   // wider
@@ -937,16 +1073,128 @@
       }
       event.preventDefault();
       setWindowSize(wrapper, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
+      reclampWindowPosition(wrapper);
       announceSize(wrapper);
     });
 
-    // Re-clamp an explicit size when the viewport shrinks so the window and its
-    // handle can't end up off-screen.
+    // Re-clamp an explicit size/position when the viewport shrinks so the window
+    // and its handles can't end up off-screen.
     window.addEventListener('resize', () => {
-      if (window.innerWidth <= 767) return;
-      if (!wrapper.style.width && !wrapper.style.height) return;
-      setWindowSize(wrapper, wrapper.offsetWidth, wrapper.offsetHeight, false);
+      if (isMobileViewport()) return;
+      if (wrapper.style.width || wrapper.style.height) {
+        setWindowSize(wrapper, wrapper.offsetWidth, wrapper.offsetHeight, false);
+      }
+      reclampWindowPosition(wrapper);
     });
+  }
+
+  // offsetWidth is 0 while the launcher is hidden; the computed CSS size is still available.
+  function buttonSize(button) {
+    const style = getComputedStyle(button);
+    return { width: parseFloat(style.width), height: parseFloat(style.height) };
+  }
+
+  function setButtonPosition(button, left, top, persist) {
+    const size = buttonSize(button);
+    const maxLeft = Math.max(EDGE_MARGIN, window.innerWidth - size.width - EDGE_MARGIN);
+    const maxTop = Math.max(EDGE_MARGIN, window.innerHeight - size.height - EDGE_MARGIN);
+    const pos = { left: clampRange(left, EDGE_MARGIN, maxLeft), top: clampRange(top, EDGE_MARGIN, maxTop) };
+    button.style.left = pos.left + 'px';
+    button.style.top = pos.top + 'px';
+    button.style.right = 'auto';
+    button.style.bottom = 'auto';
+    if (persist) {
+      // Store as viewport fractions so the position adapts across screen sizes.
+      const frac = {
+        x: pos.left / Math.max(1, window.innerWidth - size.width),
+        y: pos.top / Math.max(1, window.innerHeight - size.height),
+      };
+      try { localStorage.setItem(BUTTON_POS_STORAGE_KEY, JSON.stringify(frac)); } catch { /* storage blocked */ }
+    }
+  }
+
+  function resetButtonPosition(button) {
+    button.style.left = '';
+    button.style.top = '';
+    button.style.right = '';
+    button.style.bottom = '';
+    try { localStorage.removeItem(BUTTON_POS_STORAGE_KEY); } catch { /* storage blocked */ }
+  }
+
+  function applySavedButtonPosition(button) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(BUTTON_POS_STORAGE_KEY) || 'null');
+      if (!saved || typeof saved.x !== 'number' || typeof saved.y !== 'number') return;
+      const size = buttonSize(button);
+      setButtonPosition(
+        button,
+        saved.x * (window.innerWidth - size.width),
+        saved.y * (window.innerHeight - size.height),
+        false
+      );
+    } catch { /* storage blocked or malformed */ }
+  }
+
+  // Drag the launcher to reposition it; Alt+Arrow moves it by keyboard, Alt+Home resets.
+  // Returns a function reporting whether the last pointer interaction was a drag.
+  function enableButtonDrag(button) {
+    let dragged = false;
+
+    button.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      const origin = getRect(button);
+      let dragging = false;
+      dragged = false;
+      trackPointerDrag(button, event,
+        (dx, dy) => {
+          if (!dragging) {
+            if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+            dragging = true;
+            button.classList.add('dragging');
+          }
+          setButtonPosition(button, origin.left + dx, origin.top + dy, false);
+        },
+        () => {
+          if (!dragging) return;
+          dragged = true;
+          button.classList.remove('dragging');
+          setButtonPosition(button, button.offsetLeft, button.offsetTop, true);
+        });
+    });
+
+    button.addEventListener('keydown', (event) => {
+      if (!event.altKey) return;
+      if (event.key === 'Home') {
+        event.preventDefault();
+        resetButtonPosition(button);
+        return;
+      }
+      const step = keyStep(event);
+      let dx = 0, dy = 0;
+      switch (event.key) {
+        case 'ArrowLeft': dx = -step; break;
+        case 'ArrowRight': dx = step; break;
+        case 'ArrowUp': dy = -step; break;
+        case 'ArrowDown': dy = step; break;
+        default: return;
+      }
+      event.preventDefault();
+      setButtonPosition(button, button.offsetLeft + dx, button.offsetTop + dy, true);
+    });
+
+    // Keep the launcher on-screen when the viewport changes.
+    window.addEventListener('resize', () => {
+      if (!button.style.left || button.classList.contains('hidden')) return;
+      applySavedButtonPosition(button);
+    });
+
+    applySavedButtonPosition(button);
+
+    return () => {
+      const wasDrag = dragged;
+      dragged = false;
+      return wasDrag;
+    };
   }
 
   /**
@@ -994,6 +1242,7 @@
       img.src = iconSrc;
       img.alt = '';
       img.className = 'ozwell-chat-icon';
+      img.draggable = false;
       button.classList.add('ozwell-chat-button--image');
       button.appendChild(img);
     } else {
@@ -1007,8 +1256,9 @@
       svg.appendChild(path);
       button.appendChild(svg);
     }
-    button.setAttribute('aria-label', 'Open chat');
+    button.setAttribute('aria-label', 'Open chat. Drag or press Alt plus arrow keys to move.');
     button.setAttribute('type', 'button');
+    button.title = 'Open chat · drag to move';
 
     // Create wrapper
     const wrapper = document.createElement('div');
@@ -1056,6 +1306,13 @@
 
     // Assemble wrapper
     wrapper.appendChild(resizeHandle);
+    for (const dir of RESIZE_DIRS) {
+      const edge = document.createElement('div');
+      edge.className = 'ozwell-edge-handle';
+      edge.dataset.dir = dir;
+      edge.setAttribute('aria-hidden', 'true');
+      wrapper.appendChild(edge);
+    }
     wrapper.appendChild(resizeStatus);
     wrapper.appendChild(header);
     wrapper.appendChild(container);
@@ -1065,6 +1322,9 @@
     // Add to page
     document.body.appendChild(button);
     document.body.appendChild(wrapper);
+
+    // Position clamping needs the rendered size, so apply after insertion.
+    applySavedPosition(wrapper);
 
     console.log('[OzwellChat] Default UI elements created');
 
@@ -1084,9 +1344,15 @@
 
     const resizeHandle = wrapper.querySelector('.ozwell-resize-handle');
     if (resizeHandle) enableResize(wrapper, resizeHandle);
+    wrapper.querySelectorAll('.ozwell-edge-handle').forEach((edge) => enableEdgeResize(wrapper, edge));
+    const header = wrapper.querySelector('.ozwell-chat-header');
+    if (header) enableWindowMove(wrapper, header);
+
+    const wasDragged = enableButtonDrag(button);
 
     // Open chat when button clicked - use openChat() to track state and clear notifications
     button.addEventListener('click', () => {
+      if (wasDragged()) return;
       openChat();
     });
 
