@@ -265,6 +265,10 @@ async function buildServer() {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
   });
 
+  fastify.get('/widget/ozwell-icon.png', async (_request, reply) => {
+    return reply.type('image/png').sendFile('ozwell-icon.png');
+  });
+
   fastify.get('/widget/frame/', async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').sendFile('frame/index.html');
   });
