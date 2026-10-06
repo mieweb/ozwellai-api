@@ -1,5 +1,9 @@
 # Desktop browser sign-in
 
+For the user-facing account menu and browser steps, see
+[Sign in to Ozwell Desktop](../frontend/desktop-login.md), with screenshots of
+the complete local login flow.
+
 Ozwell Desktop opens this server's hosted sign-in page in the system browser. The
 page offers the configured Google, Apple, and email methods through the same
 `AuthGate` used by the widget. Each method creates an Ozwell session. The desktop

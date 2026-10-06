@@ -402,7 +402,9 @@ Restart the server after changing `.env`; these values are read at startup.
 - `POST /auth/desktop/token` - Exchange the short-lived authorization code with its PKCE verifier
 - `POST /auth/api-key/identity` - Verify an existing key's account email while preserving the original key and its scope
 
-See [desktop authentication deployment](../docs/backend/desktop-authentication.md)
+See the [desktop login walkthrough](../docs/frontend/desktop-login.md) for the
+user-facing steps and screenshots, and
+[desktop authentication deployment](../docs/backend/desktop-authentication.md)
 for registration, request contracts, and rollout checks.
 
 ### Files
