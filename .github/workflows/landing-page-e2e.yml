@@ -95,6 +95,10 @@ jobs:
 
       - name: Start landing page server
         working-directory: ./landing-page
+        env:
+          # Seeded mock agent key; without a host key the widget shows the sign-in gate
+          LANDING_AGENT_KEY: agnt_key-mock-test
+          TICTACTOE_AGENT_KEY: agnt_key-mock-test
         run: |
           npm start > /tmp/landing-page.log 2>&1 &
           echo $! > /tmp/landing-page.pid
