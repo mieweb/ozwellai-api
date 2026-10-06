@@ -602,13 +602,29 @@ body {
   color: #334155;
 }
 
-.ozwell-warning > span,
-.ozwell-queued-text {
+.ozwell-warning > span {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ozwell-queued-text {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 4px 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  background: #ffffff;
+}
+
+.ozwell-queued button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ozwell-warning button,

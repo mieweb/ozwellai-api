@@ -1291,11 +1291,17 @@ export function WidgetApp() {
         <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
       </div>
     )}
-    {queuedMessage && (
-      <div className="ozwell-queued" role="status">
-        <span className="ozwell-queued-text">{queuedMessage}</span>
+    {queuedMessage !== null && (
+      <div className="ozwell-queued" role="group" aria-label="Queued message">
+        <textarea
+          className="ozwell-queued-text"
+          aria-label="Edit queued message"
+          rows={2}
+          value={queuedMessage}
+          onChange={(event) => setQueuedMessage(event.target.value)}
+        />
         {queuedIsDraftRef.current && !sending && (
-          <button type="button" onClick={() => { const text = queuedMessage; queuedIsDraftRef.current = false; setQueuedMessage(null); void sendMessage(text); }}>
+          <button type="button" disabled={!queuedMessage.trim()} onClick={() => { const text = queuedMessage; queuedIsDraftRef.current = false; setQueuedMessage(null); void sendMessage(text); }}>
             Send
           </button>
         )}

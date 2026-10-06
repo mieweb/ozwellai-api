@@ -146,25 +146,26 @@ test('widget chat payload can include selected provider and model', async () => 
   assert.match(appSource, /requestBody\.model = selectedModel\.model/);
 });
 
-test('widget adapter uses OzwellChat for the shared model selector', async () => {
+test('widget adapter uses SuperChat composer selectors for agents and models', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();
 
-  assert.match(appSource, /<OzwellChat/);
-  assert.match(appSource, /models=\{activeModel \? \{/);
+  assert.match(appSource, /<SuperChat/);
+  assert.match(appSource, /selectedAgent=\{activeAgentId\}/);
+  assert.match(appSource, /modelSelectorProps=\{activeModel && effectiveModels\.length > 1 \? \{/);
   assert.match(appSource, /providerFilter,/);
   assert.match(appSource, /useState<string \| null>\(null\)/);
   assert.match(bundleSource, /composer-model-selector-trigger/);
 });
 
-test('widget adapter delegates queued message controls to OzwellChat', async () => {
+test('widget keeps queued drafts editable and never auto-sends them', async () => {
   const appSource = await readWidgetAppSource();
 
-  assert.match(appSource, /queuedMessage=\{queuedMessage\}/);
+  assert.match(appSource, /queuedMessage !== null &&/);
   // Editing a queued draft preserves its draft marker; only an explicit submit
   // or cancel clears it.
-  assert.match(appSource, /onQueuedMessageChange=\{setQueuedMessage\}/);
-  assert.match(appSource, /onCancelQueuedMessage=\{\(\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(null\); \}\}/);
+  assert.match(appSource, /onChange=\{\(event\) => setQueuedMessage\(event\.target\.value\)\}/);
+  assert.match(appSource, /onClick=\{\(\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(null\); \}\}/);
   assert.doesNotMatch(appSource, /id: 'queued-message'/);
   // Host-composed drafts must never be auto-sent by the completion follow-up.
   assert.match(appSource, /if \(!next \|\| queuedIsDraftRef\.current\) return;/);
