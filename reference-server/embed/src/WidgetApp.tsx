@@ -397,6 +397,8 @@ export function WidgetApp() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const activeAgentIdRef = useRef<string | null>(null);
   const lastAgentIdRef = useRef<string | null>(null);
+  // Agent and model pinned for the whole user turn, including tool follow-ups and retries.
+  const turnRef = useRef<{ agentId: string | null; model: ProviderModelSelection | null }>({ agentId: null, model: null });
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
     () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
@@ -452,10 +454,9 @@ export function WidgetApp() {
     return true;
   }, []);
 
-  const requestConfig = useCallback((): OzwellConfig => {
+  const requestConfig = useCallback((agentId: string | null = activeAgentIdRef.current): OzwellConfig => {
     const credential = userCredentialRef.current;
     if (!credential) return configRef.current;
-    const agentId = activeAgentIdRef.current;
     return {
       ...configRef.current,
       apiKey: credential.key,
@@ -713,8 +714,9 @@ export function WidgetApp() {
     const rawChunks: string[] = [];
 
     try {
-      const authConfig = requestConfig();
-      const systemPrompt = activeAgentIdRef.current ? '' : buildSystemPrompt(authConfig);
+      const turn = turnRef.current;
+      const authConfig = requestConfig(turn.agentId);
+      const systemPrompt = turn.agentId ? '' : buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -724,10 +726,12 @@ export function WidgetApp() {
         messages: requestMessages,
         stream: true,
       };
-      const selectedModel = activeModelRef.current;
+      const selectedModel = turn.model;
       if (selectedModel) {
         requestBody.provider = selectedModel.provider;
         requestBody.model = selectedModel.model;
+      } else if (turn.agentId) {
+        // No model resolved yet: let the agent's default apply server-side.
       } else if (configRef.current.provider && configRef.current.model) {
         requestBody.provider = configRef.current.provider;
         requestBody.model = configRef.current.model;
@@ -990,6 +994,7 @@ export function WidgetApp() {
       return;
     }
 
+    turnRef.current = { agentId: activeAgentIdRef.current, model: activeModelRef.current };
     await sendMessageStreaming(trimmed, toolsForRequest());
   }
 
@@ -1178,6 +1183,14 @@ export function WidgetApp() {
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
+  const selectAgent = useCallback((agentId: string) => {
+    activeAgentIdRef.current = agentId;
+    setActiveAgentId(agentId);
+    // Drop the old agent's model so a send before rediscovery can't pair it with the new agent.
+    activeModelRef.current = null;
+    setActiveModel(null);
+  }, []);
+
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
     userCredentialRef.current = credential;
@@ -1250,7 +1263,7 @@ export function WidgetApp() {
             <select
               aria-label="Agent"
               value={activeAgentId}
-              onChange={(event) => setActiveAgentId(event.target.value)}
+              onChange={(event) => selectAgent(event.target.value)}
             >
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>{agent.label}</option>
