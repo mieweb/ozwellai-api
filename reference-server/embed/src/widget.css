@@ -582,6 +582,29 @@ body {
   font-weight: 500;
 }
 
+.ozwell-agent-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 8px;
+  color: #63717b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ozwell-agent-picker select {
+  max-width: min(160px, 40vw);
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+}
+
 .ozwell-account-action {
   min-height: 32px;
   padding: 5px 8px;

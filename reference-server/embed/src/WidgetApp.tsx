@@ -134,6 +134,25 @@ function effectiveModelsEndpoint(endpoint?: string) {
   return url.toString();
 }
 
+type AgentOption = { id: string; label: string; defaultModel: ProviderModelSelection | null };
+
+function normalizeAgents(payload: unknown): AgentOption[] {
+  const data = payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown[] }).data)
+    ? (payload as { data: unknown[] }).data
+    : [];
+  return data.flatMap((item) => {
+    const record = item as Record<string, unknown> | null;
+    const id = typeof record?.id === 'string' ? record.id : '';
+    if (!id) return [];
+    const label = typeof record?.name === 'string' && record.name.trim() ? record.name : id;
+    const dm = record?.default_model as { provider?: unknown; model?: unknown } | null | undefined;
+    const defaultModel = typeof dm?.provider === 'string' && typeof dm?.model === 'string'
+      ? { provider: dm.provider, model: dm.model }
+      : null;
+    return [{ id, label, defaultModel }];
+  });
+}
+
 function apiOriginFor(endpoint?: string) {
   return new URL(effectiveModelsEndpoint(endpoint)).origin;
 }
@@ -374,6 +393,11 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const activeAgentIdRef = useRef<string | null>(null);
+  const lastAgentIdRef = useRef<string | null>(null);
+  const [agentsLoading, setAgentsLoading] = useState(false);
   const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
     () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
   );
@@ -403,6 +427,7 @@ export function WidgetApp() {
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
+  useEffect(() => { activeAgentIdRef.current = activeAgentId; }, [activeAgentId]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
@@ -421,12 +446,22 @@ export function WidgetApp() {
     setDisplayMessages([]);
     setEffectiveModels([]);
     setActiveModel(null);
+    setAgents([]);
+    setActiveAgentId(null);
+    activeAgentIdRef.current = null;
     return true;
   }, []);
 
-  const requestConfig = useCallback(() => userCredentialRef.current
-    ? { ...configRef.current, apiKey: userCredentialRef.current.key }
-    : configRef.current, []);
+  const requestConfig = useCallback((): OzwellConfig => {
+    const credential = userCredentialRef.current;
+    if (!credential) return configRef.current;
+    const agentId = activeAgentIdRef.current;
+    return {
+      ...configRef.current,
+      apiKey: credential.key,
+      ...(agentId ? { headers: { ...configRef.current.headers, 'X-Ozwell-Agent-Id': agentId } } : {}),
+    };
+  }, []);
 
   // Keyless embeds only: restore a key the user opted to remember here.
   useEffect(() => {
@@ -450,6 +485,9 @@ export function WidgetApp() {
 
     const controller = new AbortController();
     const endpoint = effectiveModelsEndpoint(config.endpoint);
+
+    // Wait for the agent list so the first fetch is already scoped to the selected agent.
+    if (agentsLoading) return;
 
     async function fetchEffectiveModels() {
       try {
@@ -477,10 +515,58 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential, activeAgentId, agentsLoading]);
+
+  // Signed-in users pick one of their own agents, then a model that agent allows.
+  useEffect(() => {
+    const sessionKey = userCredential?.source === 'session' ? userCredential.key : '';
+    if (!sessionKey) {
+      setAgents([]);
+      setActiveAgentId(null);
+      setAgentsLoading(false);
+      return;
+    }
+    setAgentsLoading(true);
+
+    const controller = new AbortController();
+    const url = new URL(effectiveModelsEndpoint(config.endpoint));
+    url.pathname = '/v1/agents';
+
+    async function fetchAgents() {
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: requestHeaders(requestConfig()),
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (response.status === 401 && resetUserCredential(sessionKey)) return;
+        const list = response.ok ? normalizeAgents(await response.json()) : [];
+        setAgents(list);
+        setActiveAgentId((current) => (
+          current && list.some((item) => item.id === current) ? current : list[0]?.id ?? null
+        ));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
+          setAgents([]);
+          setActiveAgentId(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setAgentsLoading(false);
+      }
+    }
+
+    void fetchAgents();
+    return () => controller.abort();
+  }, [config.endpoint, userCredential, requestConfig, resetUserCredential]);
 
   useEffect(() => {
-    const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
+    const agentDefault = agents.find((item) => item.id === activeAgentId)?.defaultModel;
+    const agentChanged = lastAgentIdRef.current !== activeAgentId;
+    lastAgentIdRef.current = activeAgentId;
+    const preferred = agentDefault && (agentChanged || !activeModelRef.current) ? agentDefault : activeModelRef.current;
+    const resolved = resolveActiveModel(activeAgentId ? {} : config, effectiveModels, preferred);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
 
@@ -628,7 +714,7 @@ export function WidgetApp() {
 
     try {
       const authConfig = requestConfig();
-      const systemPrompt = buildSystemPrompt(authConfig);
+      const systemPrompt = activeAgentIdRef.current ? '' : buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -1158,6 +1244,20 @@ export function WidgetApp() {
         <span className="ozwell-account-status">
           {credentialSource === 'session' ? 'Signed in' : 'Personal key'}
         </span>
+        {activeAgentId && (
+          <label className="ozwell-agent-picker">
+            <span>Agent</span>
+            <select
+              aria-label="Agent"
+              value={activeAgentId}
+              onChange={(event) => setActiveAgentId(event.target.value)}
+            >
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>{agent.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" className="ozwell-account-action" onClick={signOut}>
           {credentialSource === 'session' ? 'Sign out' : 'Forget key'}
         </button>

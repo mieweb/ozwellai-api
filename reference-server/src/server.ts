@@ -19,7 +19,7 @@ import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
 import googleOidcRoute from './routes/oidc-google';
 import appleOidcRoute from './routes/oidc-apple';
-import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
+import { agentStore, getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
 import { validateSession, SESSION_TOKEN_PREFIX, sweepExpiredSessionState } from './storage/sessions';
 import { extractToken } from './util';
 // Import schemas for OpenAPI generation
@@ -225,7 +225,7 @@ async function buildServer() {
 
   // Widget sessions: exchange a valid sess_ bearer for the signed-in user's own
   // parent key only for widget chat and model discovery.
-  fastify.addHook('onRequest', async (request) => {
+  fastify.addHook('onRequest', async (request, reply) => {
     const token = extractToken(request.headers.authorization);
     if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
     if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
@@ -237,6 +237,16 @@ async function buildServer() {
     const session = validateSession(token);
     if (!session) return; // fall through: routes 401 naturally
     request.headers.authorization = `Bearer ${session.parentKey}`;
+
+    // Act as one of the user's own agents for chat/models; the agent key never reaches the client.
+    const agentId = request.headers['x-ozwell-agent-id'];
+    if (typeof agentId !== 'string' || !agentId || pathname === '/v1/agents') return;
+    const parentKey = agentStore.lookupApiKey(session.parentKey);
+    const agent = parentKey ? agentStore.getOwned(agentId, parentKey.id) : null;
+    if (!agent) {
+      return reply.code(403).send({ error: { message: 'Agent not available for this account', type: 'invalid_request_error' } });
+    }
+    request.headers.authorization = `Bearer ${agent.agent_key}`;
   });
 
   // Register API routes
