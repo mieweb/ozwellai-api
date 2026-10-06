@@ -48,6 +48,10 @@ export default defineConfig({
     {
       command: 'npm start',
       url: 'http://localhost:8080',
+      env: {
+        LANDING_AGENT_KEY: process.env.LANDING_AGENT_KEY || 'agnt_key-mock-test',
+        TICTACTOE_AGENT_KEY: process.env.TICTACTOE_AGENT_KEY || 'agnt_key-mock-test',
+      },
       reuseExistingServer: true,  // Skip if server is already running (e.g., in CI)
       timeout: 30000,
     },
