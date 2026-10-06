@@ -152,7 +152,12 @@ test('widget adapter uses SuperChat composer selectors for agents and models', a
 
   assert.match(appSource, /<SuperChat/);
   assert.match(appSource, /selectedAgent=\{activeAgentId\}/);
-  assert.match(appSource, /modelSelectorProps=\{\(activeModel \|\| activeAgentId\) && effectiveModels\.length > 1 \? \{/);
+  // A single allowed model stays selectable when the agent default is unresolved.
+  assert.match(appSource, /modelSelectorProps=\{effectiveModels\.length > 1 \|\| \(activeAgentId && !activeModel && effectiveModels\.length === 1\) \? \{/);
+  // Switching agents drops the previous agent's options until rediscovery.
+  assert.match(appSource, /setActiveModel\(null\);\n    setEffectiveModels\(\[\]\);/);
+  // Thinking display follows the current mode without discarding stored reasoning.
+  assert.match(appSource, /content: applyThinkingMode\(message\.content, thinkingMode, message\.status\)/);
   // An agent with no resolvable default sends no model so the server applies its policy.
   assert.match(appSource, /kept \?\? \(defaultMatch \? \{ provider: defaultMatch\.provider, model: defaultMatch\.model \} : null\)/);
   assert.match(appSource, /aria-label="Show thinking"/);

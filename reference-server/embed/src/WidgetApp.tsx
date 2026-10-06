@@ -362,6 +362,16 @@ function shouldCollapseThinking(mode: ThinkingMode, status: AIMessage['status'],
   return true;
 }
 
+// Display-only: stored thinking stays intact so switching modes can reveal it again.
+function applyThinkingMode(content: WidgetMessage['content'], mode: ThinkingMode, status: AIMessage['status']): WidgetMessage['content'] {
+  if (!content.some((block) => block.type === 'thinking')) return content;
+  if (mode === THINKING.NONE) return content.filter((block) => block.type !== 'thinking');
+  const hasText = content.some((block) => block.type === 'text' && Boolean(block.text));
+  return content.map((block) => (
+    block.type === 'thinking' ? { ...block, collapsed: shouldCollapseThinking(mode, status, hasText) } : block
+  ));
+}
+
 function systemDisplayMessage(content: string): WidgetMessage {
   return {
     id: createMessageId('system'),
@@ -1207,6 +1217,7 @@ export function WidgetApp() {
     // Drop the old agent's model so a send before rediscovery can't pair it with the new agent.
     activeModelRef.current = null;
     setActiveModel(null);
+    setEffectiveModels([]);
   }, []);
 
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
@@ -1259,13 +1270,13 @@ export function WidgetApp() {
         return {
           id: message.id,
           participantId,
-          content: message.content,
+          content: applyThinkingMode(message.content, thinkingMode, message.status),
           time: message.timestamp,
           status: message.status,
         };
       });
     return { id: 'ozwell-widget', title: assistantName, participants, thread };
-  }, [agents, config.title, displayMessages]);
+  }, [agents, config.title, displayMessages, thinkingMode]);
 
   if (!initialConfigReady) return null;
 
@@ -1347,7 +1358,7 @@ export function WidgetApp() {
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
       onAgentChange={selectAgent}
-      modelSelectorProps={(activeModel || activeAgentId) && effectiveModels.length > 1 ? {
+      modelSelectorProps={effectiveModels.length > 1 || (activeAgentId && !activeModel && effectiveModels.length === 1) ? {
         models: effectiveModels,
         value: activeModel,
         onChange: setActiveModel,
