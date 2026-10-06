@@ -152,7 +152,10 @@ test('widget adapter uses SuperChat composer selectors for agents and models', a
 
   assert.match(appSource, /<SuperChat/);
   assert.match(appSource, /selectedAgent=\{activeAgentId\}/);
-  assert.match(appSource, /modelSelectorProps=\{activeModel && effectiveModels\.length > 1 \? \{/);
+  assert.match(appSource, /modelSelectorProps=\{\(activeModel \|\| activeAgentId\) && effectiveModels\.length > 1 \? \{/);
+  // An agent with no resolvable default sends no model so the server applies its policy.
+  assert.match(appSource, /kept \?\? \(defaultMatch \? \{ provider: defaultMatch\.provider, model: defaultMatch\.model \} : null\)/);
+  assert.match(appSource, /aria-label="Show thinking"/);
   assert.match(appSource, /providerFilter,/);
   assert.match(appSource, /useState<string \| null>\(null\)/);
   assert.match(bundleSource, /composer-model-selector-trigger/);

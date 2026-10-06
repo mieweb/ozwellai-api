@@ -576,10 +576,15 @@ export function WidgetApp() {
     ));
     const agentChanged = lastAgentIdRef.current !== activeAgentId;
     lastAgentIdRef.current = activeAgentId;
-    const preferred = defaultMatch && (agentChanged || !activeModelRef.current)
-      ? { provider: defaultMatch.provider, model: defaultMatch.model }
-      : activeModelRef.current;
-    const resolved = resolveActiveModel(activeAgentId ? {} : config, effectiveModels, preferred);
+    if (activeAgentId) {
+      // Never auto-pick a fallback for an agent: an unset model lets the server apply (or reject) its default.
+      const current = activeModelRef.current;
+      const kept = !agentChanged && current && effectiveModels.some((item) => sameProviderModel(item, current)) ? current : null;
+      const resolved = kept ?? (defaultMatch ? { provider: defaultMatch.provider, model: defaultMatch.model } : null);
+      setActiveModel((existing) => sameProviderModel(existing, resolved) ? existing : resolved);
+      return;
+    }
+    const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
 
@@ -1291,6 +1296,27 @@ export function WidgetApp() {
         <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
       </div>
     )}
+    {(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) && (
+      <div className="ozwell-thinking-bar">
+        <label>
+          Show thinking
+          <select
+            aria-label="Show thinking"
+            value={thinkingMode}
+            onChange={(event) => {
+              const mode = Number(event.target.value) as ThinkingMode;
+              setThinkingMode(mode);
+              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
+            }}
+          >
+            <option value={THINKING.NONE}>Never</option>
+            <option value={THINKING.PEEK}>Collapsed</option>
+            <option value={THINKING.SMART}>Auto</option>
+            <option value={THINKING.EXPANDED}>Expanded</option>
+          </select>
+        </label>
+      </div>
+    )}
     {queuedMessage !== null && (
       <div className="ozwell-queued" role="group" aria-label="Queued message">
         <textarea
@@ -1321,12 +1347,13 @@ export function WidgetApp() {
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
       onAgentChange={selectAgent}
-      modelSelectorProps={activeModel && effectiveModels.length > 1 ? {
+      modelSelectorProps={(activeModel || activeAgentId) && effectiveModels.length > 1 ? {
         models: effectiveModels,
         value: activeModel,
         onChange: setActiveModel,
         providerFilter,
         onProviderFilterChange: setProviderFilter,
+        placeholder: 'Agent default',
         variant: 'ghost',
       } : undefined}
     />

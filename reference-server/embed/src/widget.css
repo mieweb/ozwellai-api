@@ -738,3 +738,28 @@ body {
 .ozwell-session-layout [data-slot="superchat"] .grid > :has([data-slot="chat-composer-send-button"]) {
   padding: 6px;
 }
+
+.ozwell-thinking-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #63717b;
+  font-size: 11px;
+}
+
+.ozwell-thinking-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ozwell-thinking-bar select {
+  min-height: 26px;
+  padding: 2px 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font: inherit;
+}
