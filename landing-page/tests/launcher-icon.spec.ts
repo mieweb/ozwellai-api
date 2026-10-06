@@ -30,11 +30,11 @@ async function load(page: Page, config: Record<string, unknown>) {
   return requested;
 }
 
-test('default launcher uses inline SVG and never requests host favicon', async ({ page }) => {
+test('default launcher uses the Ozwell-hosted icon and never requests host favicon', async ({ page }) => {
   const requested = await load(page, {});
   const button = page.locator('#ozwell-chat-button');
   await expect(button).toBeAttached();
-  await expect(button.locator('svg.ozwell-chat-icon')).toHaveCount(1);
-  await expect(button.locator('img')).toHaveCount(0);
+  await expect(button.locator('img.ozwell-chat-icon')).toHaveAttribute('src', `${host}/widget/ozwell-icon.png`);
+  await expect(button.locator('svg')).toHaveCount(0);
   expect(requested).not.toContain('https://app.example/favicon.ico');
 });

@@ -25,3 +25,4 @@ jobs:
   test:
     name: CI Tests
     uses: ./.github/workflows/test-reference-server.yml
+    secrets: inherit

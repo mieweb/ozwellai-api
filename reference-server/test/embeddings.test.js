@@ -37,6 +37,8 @@ function spawnServer({ port, dbPath, allowMock }) {
     LLM_BASE_URL: '',
     LLM_API_KEY: '',
     LLM_PROVIDER: '',
+    OPENAI_API_KEY: '',
+    ANTHROPIC_API_KEY: '',
     // Point Ollama at an unused port so isOllamaAvailable() resolves false fast.
     OLLAMA_BASE_URL: 'http://127.0.0.1:59999',
   };

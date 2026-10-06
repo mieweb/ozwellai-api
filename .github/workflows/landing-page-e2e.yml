@@ -51,6 +51,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      # @mieweb/harness-core is a private git dependency (see test-reference-server.yml).
+      - name: Authenticate git for private npm dependencies
+        env:
+          HARNESS_CORE_SSH_KEY: ${{ secrets.HARNESS_CORE_SSH_KEY }}
+          FALLBACK_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN }}
+        run: ./scripts/ci/git-auth-harness-core.sh
+
       - name: Install all dependencies
         run: npm ci
 
@@ -87,6 +95,10 @@ jobs:
 
       - name: Start landing page server
         working-directory: ./landing-page
+        env:
+          # Seeded mock agent key; without a host key the widget shows the sign-in gate
+          LANDING_AGENT_KEY: agnt_key-mock-test
+          TICTACTOE_AGENT_KEY: agnt_key-mock-test
         run: |
           npm start > /tmp/landing-page.log 2>&1 &
           echo $! > /tmp/landing-page.pid

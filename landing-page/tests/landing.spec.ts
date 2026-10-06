@@ -83,7 +83,7 @@ test.describe('Ozwell Embed Widget', () => {
     await chatInput.press('Enter');
     
     // Verify the user message appears
-    await expect(iframe.getByText('hello')).toBeVisible();
+    await expect(iframe.getByText('hello', { exact: true })).toBeVisible();
     
     // Expect either an assistant response (agent key configured) or
     // a "No API key configured" error (CI without keys) — both are valid

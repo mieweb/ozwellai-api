@@ -38,7 +38,7 @@ Get a local development environment running in under 5 minutes:
 
 ### Prerequisites
 
-- **Node.js 18+** - [Download here](https://nodejs.org/)
+- **Node.js 22.12+** - [Download here](https://nodejs.org/)
 - **npm** - Comes with Node.js
 - **Optional: Ollama** - [Install Ollama](https://ollama.ai/) for real AI responses (otherwise mock responses are used)
 
