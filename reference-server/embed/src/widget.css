@@ -570,7 +570,7 @@ body {
   overflow: hidden;
 }
 
-.ozwell-session-layout > [data-slot="ozwell-chat"] {
+.ozwell-session-layout > [data-slot="superchat"] {
   flex: 1 1 0;
   min-height: 0;
   height: auto;
@@ -582,27 +582,43 @@ body {
   font-weight: 500;
 }
 
-.ozwell-agent-picker {
+.ozwell-warning,
+.ozwell-queued {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  margin-right: 8px;
-  color: #63717b;
-  font-size: 11px;
-  font-weight: 500;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 12px;
 }
 
-.ozwell-agent-picker select {
-  max-width: min(160px, 40vw);
-  min-height: 28px;
-  padding: 3px 6px;
-  border: 1px solid #d8e0ec;
-  border-radius: 6px;
-  background: #ffffff;
+.ozwell-warning {
+  background: #fff7e6;
+  color: #7a4b00;
+}
+
+.ozwell-queued {
+  background: #f4f8fa;
   color: #334155;
+}
+
+.ozwell-warning > span,
+.ozwell-queued-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ozwell-warning button,
+.ozwell-queued button {
+  border: 0;
+  background: transparent;
+  color: #0f7495;
   font: inherit;
-  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .ozwell-account-action {
@@ -680,4 +696,29 @@ body {
   content: "";
   flex: 1;
   border-top: 1px solid #e2e8f0;
+}
+
+/* The narrow-container composer stacks the send button on its own row; with no
+   add menu that row is empty space, so keep input and actions on one row. */
+.ozwell-session-layout [data-slot="superchat"] .grid:has([data-slot="chat-composer-send-button"]) > :first-child {
+  grid-column: 1 / span 2;
+}
+
+.ozwell-session-layout [data-slot="superchat"] .grid > :has([data-slot="chat-composer-send-button"]) {
+  grid-row: 1;
+  align-self: end;
+}
+
+/* Mirror the wide one-row composer spacing so the input and send button align. */
+.ozwell-session-layout [data-slot="superchat"] .grid:has([data-slot="chat-composer-send-button"]) > :first-child {
+  align-self: end;
+  padding: 6px 0 6px 6px;
+}
+
+.ozwell-session-layout [data-slot="superchat"] [data-slot="chat-composer-input"] {
+  padding: 6px 8px;
+}
+
+.ozwell-session-layout [data-slot="superchat"] .grid > :has([data-slot="chat-composer-send-button"]) {
+  padding: 6px;
 }

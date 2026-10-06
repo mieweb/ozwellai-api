@@ -21,13 +21,13 @@ cd "$UI_DIR"
 
 corepack pnpm install --frozen-lockfile
 
-# Index entry JS only. Positional entry overrides the config's full entry map
-# while keeping its plugins/options.
-node --max-old-space-size=4096 ./node_modules/tsup/dist/cli-default.js src/index.ts
+# Index + SuperChat entry JS only. Positional entries override the config's
+# full entry map while keeping its plugins/options.
+node --max-old-space-size=4096 ./node_modules/tsup/dist/cli-default.js src/index.ts src/components/SuperChat/index.ts
 
 # Since 0.10.0 the config emits declarations only in batches selected by
-# MIEWEB_DTS_ENTRIES (see its scripts/build-dts.mjs); build just the index batch.
-MIEWEB_DTS_ENTRIES=index node --max-old-space-size=4096 ./node_modules/tsup/dist/cli-default.js
+# MIEWEB_DTS_ENTRIES (see its scripts/build-dts.mjs); build just the widget's batch.
+MIEWEB_DTS_ENTRIES=index,components/SuperChat/index node --max-old-space-size=4096 ./node_modules/tsup/dist/cli-default.js
 
 # CSS the widget loads, mirroring the package's own build/copy steps.
 corepack pnpm run build:css

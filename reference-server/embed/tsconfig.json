@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@mieweb/ui": ["../../vendor/mieweb-ui/dist/index.d.ts"]
+      "@mieweb/ui": ["../../vendor/mieweb-ui/dist/index.d.ts"],
+      "@mieweb/ui/components/SuperChat": ["../../vendor/mieweb-ui/dist/components/SuperChat/index.d.ts"]
     }
   },
   "include": ["src/**/*"]

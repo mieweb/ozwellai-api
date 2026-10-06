@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  OzwellChat,
   type AIMessage,
   type MCPToolCall,
-  type OzwellThinkingMode,
 } from '@mieweb/ui';
+import {
+  SuperChat,
+  type Participant,
+  type SuperChatConversation,
+} from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import type {
@@ -23,6 +26,9 @@ const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearl
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
+const USER_PARTICIPANT = 'user';
+const ASSISTANT_PARTICIPANT = 'ozwell';
+const SYSTEM_PARTICIPANT = 'system';
 
 type ProviderModelOption = {
   provider: string;
@@ -776,6 +782,7 @@ export function WidgetApp() {
         content: [],
         timestamp: new Date(),
         status: 'streaming',
+        metadata: { agentId: turn.agentId },
       }]);
 
       while (true) {
@@ -1218,32 +1225,42 @@ export function WidgetApp() {
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
 
-  const chatMessages = useMemo(() => {
-    return displayMessages
+  const conversation = useMemo<SuperChatConversation>(() => {
+    const assistantName = config.title || DEFAULT_CONFIG.title;
+    const participants: Participant[] = [
+      { id: USER_PARTICIPANT, kind: 'human', name: 'You' },
+      { id: ASSISTANT_PARTICIPANT, kind: 'agent', name: assistantName, color: '#0f7495' },
+      { id: SYSTEM_PARTICIPANT, kind: 'system', name: 'System' },
+      ...agents.map((agent): Participant => ({
+        id: `agent:${agent.id}`,
+        kind: 'agent',
+        name: agent.label,
+        color: '#2563eb',
+      })),
+    ];
+    const thread = displayMessages
       .filter((message) => (
         message.status === 'streaming'
         || message.content.length > 0
         || message.role === 'tool'
-      ));
-  }, [displayMessages]);
-
-  const displayThinkingMode: OzwellThinkingMode = [
-    'never',
-    'collapsed',
-    'auto',
-    'expanded',
-  ][thinkingMode] as OzwellThinkingMode;
-
-  const setDisplayThinkingMode = useCallback((mode: OzwellThinkingMode) => {
-    const nextMode = {
-      never: THINKING.NONE,
-      collapsed: THINKING.PEEK,
-      auto: THINKING.SMART,
-      expanded: THINKING.EXPANDED,
-    }[mode] as ThinkingMode;
-    setThinkingMode(nextMode);
-    setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-  }, []);
+      ))
+      .map((message) => {
+        const agentId = typeof message.metadata?.agentId === 'string' ? message.metadata.agentId : null;
+        const participantId = message.role === 'user'
+          ? USER_PARTICIPANT
+          : message.role === 'system'
+            ? SYSTEM_PARTICIPANT
+            : agentId && agents.some((agent) => agent.id === agentId) ? `agent:${agentId}` : ASSISTANT_PARTICIPANT;
+        return {
+          id: message.id,
+          participantId,
+          content: message.content,
+          time: message.timestamp,
+          status: message.status,
+        };
+      });
+    return { id: 'ozwell-widget', title: assistantName, participants, thread };
+  }, [agents, config.title, displayMessages]);
 
   if (!initialConfigReady) return null;
 
@@ -1263,48 +1280,49 @@ export function WidgetApp() {
         <span className="ozwell-account-status">
           {credentialSource === 'session' ? 'Signed in' : 'Personal key'}
         </span>
-        {activeAgentId && (
-          <label className="ozwell-agent-picker">
-            <span>Agent</span>
-            <select
-              aria-label="Agent"
-              value={activeAgentId}
-              onChange={(event) => selectAgent(event.target.value)}
-            >
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>{agent.label}</option>
-              ))}
-            </select>
-          </label>
-        )}
         <button type="button" className="ozwell-account-action" onClick={signOut}>
           {credentialSource === 'session' ? 'Sign out' : 'Forget key'}
         </button>
       </div>
     )}
-    <OzwellChat
-      messages={chatMessages}
-      isGenerating={sending}
-      inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
-      onSendMessage={(message) => void sendMessage(message)}
-      queuedMessage={queuedMessage}
-      onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
+    {toast && (
+      <div className="ozwell-warning" role="status">
+        <span>{toast}</span>
+        <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
+      </div>
+    )}
+    {queuedMessage && (
+      <div className="ozwell-queued" role="status">
+        <span className="ozwell-queued-text">{queuedMessage}</span>
+        {queuedIsDraftRef.current && !sending && (
+          <button type="button" onClick={() => { const text = queuedMessage; queuedIsDraftRef.current = false; setQueuedMessage(null); void sendMessage(text); }}>
+            Send
+          </button>
+        )}
+        <button type="button" onClick={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}>
+          Cancel
+        </button>
+      </div>
+    )}
+    <SuperChat
+      conversation={conversation}
+      currentParticipantId={USER_PARTICIPANT}
+      showHeader={false}
+      allowAttachments={false}
+      placeholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       renderTextContent={renderTextContent}
-      thinking={{
-        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
-        mode: displayThinkingMode,
-        onModeChange: setDisplayThinkingMode,
-      }}
-      models={activeModel ? {
-        options: effectiveModels,
+      onMessageSent={(message) => { void sendMessage(message); }}
+      agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
+      selectedAgent={activeAgentId}
+      onAgentChange={selectAgent}
+      modelSelectorProps={activeModel && effectiveModels.length > 1 ? {
+        models: effectiveModels,
         value: activeModel,
         onChange: setActiveModel,
         providerFilter,
         onProviderFilterChange: setProviderFilter,
+        variant: 'ghost',
       } : undefined}
-      warning={toast}
-      onDismissWarning={() => setToast(null)}
     />
     </div>
   );
