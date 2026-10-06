@@ -242,7 +242,8 @@ async function buildServer() {
     const agentId = request.headers['x-ozwell-agent-id'];
     if (typeof agentId !== 'string' || !agentId || pathname === '/v1/agents') return;
     const parentKey = agentStore.lookupApiKey(session.parentKey);
-    const agent = parentKey ? agentStore.getOwned(agentId, parentKey.id) : null;
+    if (!parentKey) return; // revoked parent: let the route reply 401 so the widget signs out
+    const agent = agentStore.getOwned(agentId, parentKey.id);
     if (!agent) {
       return reply.code(403).send({ error: { message: 'Agent not available for this account', type: 'invalid_request_error' } });
     }

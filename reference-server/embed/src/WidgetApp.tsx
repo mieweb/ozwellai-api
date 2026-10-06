@@ -134,7 +134,7 @@ function effectiveModelsEndpoint(endpoint?: string) {
   return url.toString();
 }
 
-type AgentOption = { id: string; label: string; defaultModel: ProviderModelSelection | null };
+type AgentOption = { id: string; label: string; defaultModel: { provider: string | null; model: string } | null };
 
 function normalizeAgents(payload: unknown): AgentOption[] {
   const data = payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown[] }).data)
@@ -146,9 +146,10 @@ function normalizeAgents(payload: unknown): AgentOption[] {
     if (!id) return [];
     const label = typeof record?.name === 'string' && record.name.trim() ? record.name : id;
     const dm = record?.default_model as { provider?: unknown; model?: unknown } | null | undefined;
-    const defaultModel = typeof dm?.provider === 'string' && typeof dm?.model === 'string'
-      ? { provider: dm.provider, model: dm.model }
-      : null;
+    // Legacy agents expose only `model`; its provider is resolved against the effective list.
+    const model = typeof dm?.model === 'string' ? dm.model : typeof record?.model === 'string' ? record.model : '';
+    const provider = typeof dm?.provider === 'string' ? dm.provider : typeof record?.provider === 'string' ? record.provider : null;
+    const defaultModel = model ? { provider, model } : null;
     return [{ id, label, defaultModel }];
   });
 }
@@ -564,9 +565,14 @@ export function WidgetApp() {
 
   useEffect(() => {
     const agentDefault = agents.find((item) => item.id === activeAgentId)?.defaultModel;
+    const defaultMatch = agentDefault && effectiveModels.find((item) => (
+      item.model === agentDefault.model && (!agentDefault.provider || item.provider === agentDefault.provider)
+    ));
     const agentChanged = lastAgentIdRef.current !== activeAgentId;
     lastAgentIdRef.current = activeAgentId;
-    const preferred = agentDefault && (agentChanged || !activeModelRef.current) ? agentDefault : activeModelRef.current;
+    const preferred = defaultMatch && (agentChanged || !activeModelRef.current)
+      ? { provider: defaultMatch.provider, model: defaultMatch.model }
+      : activeModelRef.current;
     const resolved = resolveActiveModel(activeAgentId ? {} : config, effectiveModels, preferred);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
