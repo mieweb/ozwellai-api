@@ -953,9 +953,9 @@
   function trackPointerDrag(target, event, onMove, onEnd, iframe) {
     const startX = event.clientX, startY = event.clientY, pointerId = event.pointerId;
     let active = true;
-    const move = (e) => { if (active) onMove(e.clientX - startX, e.clientY - startY); };
-    const end = () => {
-      if (!active) return;
+    const move = (e) => { if (active && e.pointerId === pointerId) onMove(e.clientX - startX, e.clientY - startY); };
+    const end = (e) => {
+      if (!active || e.pointerId !== pointerId) return;
       active = false;
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerup', end);
@@ -1050,6 +1050,7 @@
         lastDownAt = 0;
         resetWindowSize(wrapper);
         reclampWindowPosition(wrapper);
+        anchorButtonToWindow(wrapper);
         return;
       }
       lastDownAt = now;
@@ -1060,6 +1061,8 @@
       if (event.key === 'Home') {
         event.preventDefault();
         resetWindowSize(wrapper);
+        reclampWindowPosition(wrapper);
+        anchorButtonToWindow(wrapper);
         return;
       }
       const step = keyStep(event);
@@ -1074,6 +1077,7 @@
       event.preventDefault();
       setWindowSize(wrapper, wrapper.offsetWidth + dw, wrapper.offsetHeight + dh, true);
       reclampWindowPosition(wrapper);
+      anchorButtonToWindow(wrapper);
       announceSize(wrapper);
     });
 
