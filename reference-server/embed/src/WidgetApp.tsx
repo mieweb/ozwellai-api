@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  OzwellChat,
   type AIMessage,
   type MCPToolCall,
-  type OzwellThinkingMode,
 } from '@mieweb/ui';
+import {
+  SuperChat,
+  type Participant,
+  type SuperChatConversation,
+} from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import type {
@@ -23,6 +26,9 @@ const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearl
 const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
+const USER_PARTICIPANT = 'user';
+const ASSISTANT_PARTICIPANT = 'ozwell';
+const SYSTEM_PARTICIPANT = 'system';
 
 type ProviderModelOption = {
   provider: string;
@@ -132,6 +138,26 @@ function effectiveModelsEndpoint(endpoint?: string) {
   url.search = '';
   url.hash = '';
   return url.toString();
+}
+
+type AgentOption = { id: string; label: string; defaultModel: { provider: string | null; model: string } | null };
+
+function normalizeAgents(payload: unknown): AgentOption[] {
+  const data = payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown[] }).data)
+    ? (payload as { data: unknown[] }).data
+    : [];
+  return data.flatMap((item) => {
+    const record = item as Record<string, unknown> | null;
+    const id = typeof record?.id === 'string' ? record.id : '';
+    if (!id) return [];
+    const label = typeof record?.name === 'string' && record.name.trim() ? record.name : id;
+    const dm = record?.default_model as { provider?: unknown; model?: unknown } | null | undefined;
+    // Legacy agents expose only `model`; its provider is resolved against the effective list.
+    const model = typeof dm?.model === 'string' ? dm.model : typeof record?.model === 'string' ? record.model : '';
+    const provider = typeof dm?.provider === 'string' ? dm.provider : typeof record?.provider === 'string' ? record.provider : null;
+    const defaultModel = model ? { provider, model } : null;
+    return [{ id, label, defaultModel }];
+  });
 }
 
 function apiOriginFor(endpoint?: string) {
@@ -336,6 +362,16 @@ function shouldCollapseThinking(mode: ThinkingMode, status: AIMessage['status'],
   return true;
 }
 
+// Display-only: stored thinking stays intact so switching modes can reveal it again.
+function applyThinkingMode(content: WidgetMessage['content'], mode: ThinkingMode, status: AIMessage['status']): WidgetMessage['content'] {
+  if (!content.some((block) => block.type === 'thinking')) return content;
+  if (mode === THINKING.NONE) return content.filter((block) => block.type !== 'thinking');
+  const hasText = content.some((block) => block.type === 'text' && Boolean(block.text));
+  return content.map((block) => (
+    block.type === 'thinking' ? { ...block, collapsed: shouldCollapseThinking(mode, status, hasText) } : block
+  ));
+}
+
 function systemDisplayMessage(content: string): WidgetMessage {
   return {
     id: createMessageId('system'),
@@ -374,6 +410,13 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const activeAgentIdRef = useRef<string | null>(null);
+  const lastAgentIdRef = useRef<string | null>(null);
+  // Agent and model pinned for the whole user turn, including tool follow-ups and retries.
+  const turnRef = useRef<{ agentId: string | null; model: ProviderModelSelection | null }>({ agentId: null, model: null });
+  const [agentsLoading, setAgentsLoading] = useState(false);
   const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
     () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
   );
@@ -403,6 +446,7 @@ export function WidgetApp() {
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
+  useEffect(() => { activeAgentIdRef.current = activeAgentId; }, [activeAgentId]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
@@ -421,12 +465,21 @@ export function WidgetApp() {
     setDisplayMessages([]);
     setEffectiveModels([]);
     setActiveModel(null);
+    setAgents([]);
+    setActiveAgentId(null);
+    activeAgentIdRef.current = null;
     return true;
   }, []);
 
-  const requestConfig = useCallback(() => userCredentialRef.current
-    ? { ...configRef.current, apiKey: userCredentialRef.current.key }
-    : configRef.current, []);
+  const requestConfig = useCallback((agentId: string | null = activeAgentIdRef.current): OzwellConfig => {
+    const credential = userCredentialRef.current;
+    if (!credential) return configRef.current;
+    return {
+      ...configRef.current,
+      apiKey: credential.key,
+      ...(agentId ? { headers: { ...configRef.current.headers, 'X-Ozwell-Agent-Id': agentId } } : {}),
+    };
+  }, []);
 
   // Keyless embeds only: restore a key the user opted to remember here.
   useEffect(() => {
@@ -450,6 +503,9 @@ export function WidgetApp() {
 
     const controller = new AbortController();
     const endpoint = effectiveModelsEndpoint(config.endpoint);
+
+    // Wait for the agent list so the first fetch is already scoped to the selected agent.
+    if (agentsLoading) return;
 
     async function fetchEffectiveModels() {
       try {
@@ -477,9 +533,67 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential, activeAgentId, agentsLoading]);
+
+  // Signed-in users pick one of their own agents, then a model that agent allows.
+  useEffect(() => {
+    const sessionKey = userCredential?.source === 'session' ? userCredential.key : '';
+    if (!sessionKey) {
+      setAgents([]);
+      setActiveAgentId(null);
+      setAgentsLoading(false);
+      return;
+    }
+    setAgentsLoading(true);
+
+    const controller = new AbortController();
+    const url = new URL(effectiveModelsEndpoint(config.endpoint));
+    url.pathname = '/v1/agents';
+
+    async function fetchAgents() {
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: requestHeaders(requestConfig()),
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (response.status === 401 && resetUserCredential(sessionKey)) return;
+        const list = response.ok ? normalizeAgents(await response.json()) : [];
+        setAgents(list);
+        setActiveAgentId((current) => (
+          current && list.some((item) => item.id === current) ? current : list[0]?.id ?? null
+        ));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
+          setAgents([]);
+          setActiveAgentId(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setAgentsLoading(false);
+      }
+    }
+
+    void fetchAgents();
+    return () => controller.abort();
+  }, [config.endpoint, userCredential, requestConfig, resetUserCredential]);
 
   useEffect(() => {
+    const agentDefault = agents.find((item) => item.id === activeAgentId)?.defaultModel;
+    const defaultMatch = agentDefault && effectiveModels.find((item) => (
+      item.model === agentDefault.model && (!agentDefault.provider || item.provider === agentDefault.provider)
+    ));
+    const agentChanged = lastAgentIdRef.current !== activeAgentId;
+    lastAgentIdRef.current = activeAgentId;
+    if (activeAgentId) {
+      // Never auto-pick a fallback for an agent: an unset model lets the server apply (or reject) its default.
+      const current = activeModelRef.current;
+      const kept = !agentChanged && current && effectiveModels.some((item) => sameProviderModel(item, current)) ? current : null;
+      const resolved = kept ?? (defaultMatch ? { provider: defaultMatch.provider, model: defaultMatch.model } : null);
+      setActiveModel((existing) => sameProviderModel(existing, resolved) ? existing : resolved);
+      return;
+    }
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
@@ -627,8 +741,9 @@ export function WidgetApp() {
     const rawChunks: string[] = [];
 
     try {
-      const authConfig = requestConfig();
-      const systemPrompt = buildSystemPrompt(authConfig);
+      const turn = turnRef.current;
+      const authConfig = requestConfig(turn.agentId);
+      const systemPrompt = turn.agentId ? '' : buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -638,10 +753,12 @@ export function WidgetApp() {
         messages: requestMessages,
         stream: true,
       };
-      const selectedModel = activeModelRef.current;
+      const selectedModel = turn.model;
       if (selectedModel) {
         requestBody.provider = selectedModel.provider;
         requestBody.model = selectedModel.model;
+      } else if (turn.agentId) {
+        // No model resolved yet: let the agent's default apply server-side.
       } else if (configRef.current.provider && configRef.current.model) {
         requestBody.provider = configRef.current.provider;
         requestBody.model = configRef.current.model;
@@ -680,6 +797,7 @@ export function WidgetApp() {
         content: [],
         timestamp: new Date(),
         status: 'streaming',
+        metadata: { agentId: turn.agentId },
       }]);
 
       while (true) {
@@ -904,6 +1022,7 @@ export function WidgetApp() {
       return;
     }
 
+    turnRef.current = { agentId: activeAgentIdRef.current, model: activeModelRef.current };
     await sendMessageStreaming(trimmed, toolsForRequest());
   }
 
@@ -1092,6 +1211,15 @@ export function WidgetApp() {
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
+  const selectAgent = useCallback((agentId: string) => {
+    activeAgentIdRef.current = agentId;
+    setActiveAgentId(agentId);
+    // Drop the old agent's model so a send before rediscovery can't pair it with the new agent.
+    activeModelRef.current = null;
+    setActiveModel(null);
+    setEffectiveModels([]);
+  }, []);
+
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
     userCredentialRef.current = credential;
@@ -1113,32 +1241,42 @@ export function WidgetApp() {
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
 
-  const chatMessages = useMemo(() => {
-    return displayMessages
+  const conversation = useMemo<SuperChatConversation>(() => {
+    const assistantName = config.title || DEFAULT_CONFIG.title;
+    const participants: Participant[] = [
+      { id: USER_PARTICIPANT, kind: 'human', name: 'You' },
+      { id: ASSISTANT_PARTICIPANT, kind: 'agent', name: assistantName, color: '#0f7495' },
+      { id: SYSTEM_PARTICIPANT, kind: 'system', name: 'System' },
+      ...agents.map((agent): Participant => ({
+        id: `agent:${agent.id}`,
+        kind: 'agent',
+        name: agent.label,
+        color: '#2563eb',
+      })),
+    ];
+    const thread = displayMessages
       .filter((message) => (
         message.status === 'streaming'
         || message.content.length > 0
         || message.role === 'tool'
-      ));
-  }, [displayMessages]);
-
-  const displayThinkingMode: OzwellThinkingMode = [
-    'never',
-    'collapsed',
-    'auto',
-    'expanded',
-  ][thinkingMode] as OzwellThinkingMode;
-
-  const setDisplayThinkingMode = useCallback((mode: OzwellThinkingMode) => {
-    const nextMode = {
-      never: THINKING.NONE,
-      collapsed: THINKING.PEEK,
-      auto: THINKING.SMART,
-      expanded: THINKING.EXPANDED,
-    }[mode] as ThinkingMode;
-    setThinkingMode(nextMode);
-    setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-  }, []);
+      ))
+      .map((message) => {
+        const agentId = typeof message.metadata?.agentId === 'string' ? message.metadata.agentId : null;
+        const participantId = message.role === 'user'
+          ? USER_PARTICIPANT
+          : message.role === 'system'
+            ? SYSTEM_PARTICIPANT
+            : agentId && agents.some((agent) => agent.id === agentId) ? `agent:${agentId}` : ASSISTANT_PARTICIPANT;
+        return {
+          id: message.id,
+          participantId,
+          content: applyThinkingMode(message.content, thinkingMode, message.status),
+          time: message.timestamp,
+          status: message.status,
+        };
+      });
+    return { id: 'ozwell-widget', title: assistantName, participants, thread };
+  }, [agents, config.title, displayMessages, thinkingMode]);
 
   if (!initialConfigReady) return null;
 
@@ -1163,29 +1301,72 @@ export function WidgetApp() {
         </button>
       </div>
     )}
-    <OzwellChat
-      messages={chatMessages}
-      isGenerating={sending}
-      inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
-      onSendMessage={(message) => void sendMessage(message)}
-      queuedMessage={queuedMessage}
-      onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
+    {toast && (
+      <div className="ozwell-warning" role="status">
+        <span>{toast}</span>
+        <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
+      </div>
+    )}
+    {(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) && (
+      <div className="ozwell-thinking-bar">
+        <label>
+          Show thinking
+          <select
+            aria-label="Show thinking"
+            value={thinkingMode}
+            onChange={(event) => {
+              const mode = Number(event.target.value) as ThinkingMode;
+              setThinkingMode(mode);
+              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
+            }}
+          >
+            <option value={THINKING.NONE}>Never</option>
+            <option value={THINKING.PEEK}>Collapsed</option>
+            <option value={THINKING.SMART}>Auto</option>
+            <option value={THINKING.EXPANDED}>Expanded</option>
+          </select>
+        </label>
+      </div>
+    )}
+    {queuedMessage !== null && (
+      <div className="ozwell-queued" role="group" aria-label="Queued message">
+        <textarea
+          className="ozwell-queued-text"
+          aria-label="Edit queued message"
+          rows={2}
+          value={queuedMessage}
+          onChange={(event) => setQueuedMessage(event.target.value)}
+        />
+        {queuedIsDraftRef.current && !sending && (
+          <button type="button" disabled={!queuedMessage.trim()} onClick={() => { const text = queuedMessage; queuedIsDraftRef.current = false; setQueuedMessage(null); void sendMessage(text); }}>
+            Send
+          </button>
+        )}
+        <button type="button" onClick={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}>
+          Cancel
+        </button>
+      </div>
+    )}
+    <SuperChat
+      conversation={conversation}
+      currentParticipantId={USER_PARTICIPANT}
+      showHeader={false}
+      allowAttachments={false}
+      placeholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       renderTextContent={renderTextContent}
-      thinking={{
-        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
-        mode: displayThinkingMode,
-        onModeChange: setDisplayThinkingMode,
-      }}
-      models={activeModel ? {
-        options: effectiveModels,
+      onMessageSent={(message) => { void sendMessage(message); }}
+      agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
+      selectedAgent={activeAgentId}
+      onAgentChange={selectAgent}
+      modelSelectorProps={effectiveModels.length > 1 || (activeAgentId && !activeModel && effectiveModels.length === 1) ? {
+        models: effectiveModels,
         value: activeModel,
         onChange: setActiveModel,
         providerFilter,
         onProviderFilterChange: setProviderFilter,
+        placeholder: 'Agent default',
+        variant: 'ghost',
       } : undefined}
-      warning={toast}
-      onDismissWarning={() => setToast(null)}
     />
     </div>
   );

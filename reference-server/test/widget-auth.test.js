@@ -255,6 +255,16 @@ test('widget sessions can list their agents but cannot access agent management o
         const response = await fetch(`${BASE}${route}`, { headers: { Authorization: `Bearer ${token}` } });
         assert.equal(response.status, 401, route);
     }
+    // Listing the user's own agents is allowed (widget agent picker); managing them is not.
+    const list = await fetch(`${BASE}/v1/agents`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(list.status, 200);
+    assert.ok((await list.json()).data.every((agent) => !('agent_key' in agent)), 'agent keys never listed');
+    const create = await fetch(`${BASE}/v1/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ yaml: 'name: X\ninstructions: x\n' }),
+    });
+    assert.equal(create.status, 401, 'POST /v1/agents');
     const models = await fetch(`${BASE}/v1/models/effective`, { headers: { Authorization: `Bearer ${token}` } });
     assert.equal(models.status, 200);
     const agents = await fetch(`${BASE}/v1/agents`, { headers: { Authorization: `Bearer ${token}` } });
@@ -630,4 +640,135 @@ test('sign-in methods report Google as unconfigured without credentials', async 
 test('Google start route is absent until credentials are configured', async () => {
     const res = await fetch(`${BASE}/auth/oidc/google/start`, { redirect: 'manual' });
     assert.equal(res.status, 404);
+});
+
+// --- session acting as one of the user's own agents (X-Ozwell-Agent-Id) ---
+
+const { default: Database } = await import('better-sqlite3');
+
+function serverDb() {
+    return new Database(path.join(tmp, 'ozwell.db'));
+}
+
+function parentKeyFor(email) {
+    const db = serverDb();
+    try {
+        return db.prepare(`
+          SELECT k.key FROM api_keys k JOIN users u ON u.id = k.user_id
+          WHERE u.email = ? AND COALESCE(k.status, 'active') = 'active' AND k.revoked_at IS NULL
+        `).get(email).key;
+    } finally {
+        db.close();
+    }
+}
+
+async function createMockAgent(parentKey, name, model) {
+    const res = await fetch(`${BASE}/v1/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${parentKey}` },
+        body: JSON.stringify({ yaml: `name: ${name}\ninstructions: You are ${name}.\ntype: mock\nmodel: ${model}\n` }),
+    });
+    assert.equal(res.status, 201);
+    return (await res.json()).agent_id;
+}
+
+function sessionAgentFetch(pathname, sessionToken, agentId, init = {}) {
+    return fetch(`${BASE}${pathname}`, {
+        ...init,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionToken}`,
+            ...(agentId ? { 'X-Ozwell-Agent-Id': agentId } : {}),
+        },
+    });
+}
+
+const chatBody = JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] });
+
+test('session chat runs as the selected owned agent', async () => {
+    const email = 'agent-owner@example.test';
+    const session = await signIn(email);
+    const parentKey = parentKeyFor(email);
+    const alpha = await createMockAgent(parentKey, 'Alpha', 'alpha-model');
+    const beta = await createMockAgent(parentKey, 'Beta', 'beta-model');
+
+    for (const [agentId, model] of [[alpha, 'alpha-model'], [beta, 'beta-model']]) {
+        const res = await sessionAgentFetch('/v1/chat/completions', session, agentId, { method: 'POST', body: chatBody });
+        assert.equal(res.status, 200);
+        await res.json();
+        const db = serverDb();
+        try {
+            const usage = db.prepare('SELECT model, auth_type FROM usage_events WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1').get(agentId);
+            assert.equal(usage?.model, model, 'usage attributed to the agent with its default model');
+        } finally {
+            db.close();
+        }
+    }
+});
+
+test('session model discovery is scoped to the selected agent policy', async () => {
+    const email = 'agent-models@example.test';
+    const session = await signIn(email);
+    const agentId = await createMockAgent(parentKeyFor(email), 'Scoped', 'scoped-model');
+
+    const db = serverDb();
+    try {
+        const now = new Date().toISOString();
+        const upsert = db.prepare(`
+          INSERT INTO provider_models (id, provider, model, label, source, enabled, last_discovered_at, created_at)
+          VALUES (@id, @provider, @model, @model, 'fallback', 1, @now, @now)
+          ON CONFLICT(provider, model) DO UPDATE SET enabled = 1
+        `);
+        upsert.run({ id: 'scope-a', provider: 'scopetest', model: 'scope-a', now });
+        upsert.run({ id: 'scope-b', provider: 'scopetest', model: 'scope-b', now });
+        db.prepare(`
+          INSERT OR REPLACE INTO agent_model_restrictions (id, agent_id, provider, model, created_at)
+          VALUES (?, ?, 'scopetest', 'scope-a', ?)
+        `).run(`${agentId}:scopetest:scope-a`, agentId, now);
+    } finally {
+        db.close();
+    }
+
+    const pairs = async (agent) => {
+        const res = await sessionAgentFetch('/v1/models/effective', session, agent);
+        assert.equal(res.status, 200);
+        return (await res.json()).data.map((m) => `${m.provider}:${m.model}`);
+    };
+    const unscoped = await pairs(null);
+    assert.ok(unscoped.includes('scopetest:scope-a') && unscoped.includes('scopetest:scope-b'));
+    assert.deepEqual(await pairs(agentId), ['scopetest:scope-a']);
+});
+
+test('session cannot act as another account\'s agent or a nonexistent agent', async () => {
+    const ownerEmail = 'agent-victim@example.test';
+    await signIn(ownerEmail);
+    const foreignAgent = await createMockAgent(parentKeyFor(ownerEmail), 'Foreign', 'foreign-model');
+    const attacker = await signIn('agent-attacker@example.test');
+
+    for (const agentId of [foreignAgent, 'agent-does-not-exist']) {
+        const chat = await sessionAgentFetch('/v1/chat/completions', attacker, agentId, { method: 'POST', body: chatBody });
+        assert.equal(chat.status, 403);
+        const models = await sessionAgentFetch('/v1/models/effective', attacker, agentId);
+        assert.equal(models.status, 403);
+    }
+});
+
+test('session agent requests return 401 after the parent key is revoked', async () => {
+    const email = 'agent-revoked@example.test';
+    const session = await signIn(email);
+    const parentKey = parentKeyFor(email);
+    const agentId = await createMockAgent(parentKey, 'Revoked', 'revoked-model');
+
+    const db = serverDb();
+    try {
+        db.prepare(`UPDATE api_keys SET status = 'revoked', revoked_at = ? WHERE key = ?`)
+            .run(new Date().toISOString(), parentKey);
+    } finally {
+        db.close();
+    }
+
+    const chat = await sessionAgentFetch('/v1/chat/completions', session, agentId, { method: 'POST', body: chatBody });
+    assert.equal(chat.status, 401);
+    const models = await sessionAgentFetch('/v1/models/effective', session, agentId);
+    assert.equal(models.status, 401);
 });
