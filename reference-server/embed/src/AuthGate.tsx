@@ -8,9 +8,11 @@ export const REMEMBERED_KEY_STORAGE = 'ozwell.widget.userKey';
  * Shown only when the embedding page supplies no key. Offers email sign-in
  * (one-time code) or entry of the user's own agent/parent key.
  */
-export function AuthGate({ apiOrigin, onAuthenticated }: {
+export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
   apiOrigin: string;
   onAuthenticated: (credential: WidgetCredential) => void;
+  /** Desktop key sign-in preserves the original key through its separate native flow. */
+  allowUserKey?: boolean;
 }) {
   const [mode, setMode] = useState<'email' | 'key'>('email');
   const [email, setEmail] = useState('');
@@ -40,12 +42,12 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           setGoogleEnabled(!!methods?.google);
           setAppleEnabled(!!methods?.apple);
           setEmailEnabled(!!methods?.email_otp);
-          if (!methods?.email_otp) setMode('key');
+          if (!methods?.email_otp && allowUserKey) setMode('key');
         }
       })
-      .catch(() => { if (!cancelled) setMode('key'); });
+      .catch(() => { if (!cancelled) { if (allowUserKey) setMode('key'); else setError('Sign-in methods are unavailable. Try again shortly.'); } });
     return () => { cancelled = true; };
-  }, [apiOrigin]);
+  }, [apiOrigin, allowUserKey]);
 
   /**
    * Google refuses to render its consent screen in an iframe, so sign-in runs
@@ -167,7 +169,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
     <div className="ozwell-auth-gate">
       <div className="ozwell-auth-card">
         <h2 className="ozwell-auth-title">Sign in to Ozwell</h2>
-        <p className="ozwell-auth-subtitle">Use your email, or bring your own Ozwell key.</p>
+        <p className="ozwell-auth-subtitle">{allowUserKey ? 'Use your email, or bring your own Ozwell key.' : 'Choose how to sign in to your Ozwell account.'}</p>
 
         {(googleEnabled || appleEnabled) && (
           <>
@@ -193,7 +195,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           </>
         )}
 
-        <div className="ozwell-auth-tabs" role="tablist">
+        {allowUserKey && <div className="ozwell-auth-tabs" role="tablist">
           {emailEnabled && (
           <button
             type="button"
@@ -214,7 +216,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           >
             Use my key
           </button>
-        </div>
+        </div>}
 
         {mode === 'email' && emailEnabled && (challengeId === null ? (
           <div className="ozwell-auth-fields">
@@ -268,7 +270,7 @@ export function AuthGate({ apiOrigin, onAuthenticated }: {
           </div>
         ))}
 
-        {mode === 'key' && (
+        {allowUserKey && mode === 'key' && (
           <div className="ozwell-auth-fields">
             <input
               className="ozwell-auth-input"

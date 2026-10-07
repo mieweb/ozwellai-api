@@ -144,3 +144,4 @@ vite.config.ts.timestamp-*
 
 # Generated widget bundle. Source lives in reference-server/embed/src.
 reference-server/embed/ozwell.js
+reference-server/embed/desktop-login.js

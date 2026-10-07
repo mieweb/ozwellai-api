@@ -34,6 +34,11 @@ Experience the Ozwell AI chat widget with:
 
 ## Quick Start
 
+For the installed desktop app, follow the
+[desktop login walkthrough](docs/frontend/desktop-login.md). Server operators
+can use [desktop authentication deployment](docs/backend/desktop-authentication.md)
+to configure the matching client registration and sign-in methods.
+
 Get a local development environment running in under 5 minutes:
 
 ### Prerequisites
