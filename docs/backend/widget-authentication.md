@@ -101,8 +101,10 @@ through the real Phoenix relay. For manual local delivery testing, run
 That sink prints local test mail; never use it with production credentials or data.
 
 ## Verification Before Rollout
-Widget sessions authorize only `POST /v1/chat/completions` and
-`GET /v1/models/effective`, plus the session inspection/logout auth routes.
+Widget sessions authorize `POST /v1/chat/completions`, `GET /v1/models/effective`,
+and read-only listing of the user's agents at `GET /v1/agents`, plus the session
+inspection/logout auth routes. Desktop browser handoff is covered in the
+[desktop authentication guide](desktop-authentication.md).
 They do not grant agent-management or key-management access.
 
 Google and Apple starts share a limit of ten requests per client IP per

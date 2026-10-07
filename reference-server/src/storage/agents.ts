@@ -356,6 +356,7 @@ export class AgentStore {
     // Lazy-prepared: api_keys table is created after import by initializeAuthTables()
     private _stmtLookupApiKey: Database.Statement | null = null;
     private _stmtValidateKey: Database.Statement | null = null;
+    private _stmtKeyIdentity: Database.Statement | null = null;
 
     constructor() {
         this.db = getDatabase();
@@ -531,6 +532,34 @@ export class AgentStore {
             `);
         }
         return this._stmtLookupApiKey.get(key) as { id: string; name: string } | undefined;
+    }
+
+    /** Resolve existing ownership without claiming a key or granting a parent-key session. */
+    lookupKeyIdentity(token: string): { email: string; user_id: string } | undefined {
+        if (!this._stmtKeyIdentity) {
+            this._stmtKeyIdentity = this.db.prepare(`
+              SELECT u.email, u.id AS user_id
+              FROM api_keys k
+              JOIN users u ON u.id = k.user_id
+              WHERE k.key = ?
+                AND COALESCE(k.status, 'active') = 'active'
+                AND k.revoked_at IS NULL
+                AND u.status = 'active'
+                AND u.email IS NOT NULL AND trim(u.email) <> ''
+              UNION ALL
+              SELECT u.email, u.id AS user_id
+              FROM agents a
+              JOIN api_keys k ON k.id = a.parent_key
+              JOIN users u ON u.id = k.user_id
+              WHERE a.agent_key = ?
+                AND COALESCE(k.status, 'active') = 'active'
+                AND k.revoked_at IS NULL
+                AND u.status = 'active'
+                AND u.email IS NOT NULL AND trim(u.email) <> ''
+              LIMIT 1
+            `);
+        }
+        return this._stmtKeyIdentity.get(token, token) as { email: string; user_id: string } | undefined;
     }
 
     upsertManagerUser(identity: ManagerIdentity): ManagerUser {

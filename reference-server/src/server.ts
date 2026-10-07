@@ -17,11 +17,15 @@ import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
 import authRoute from './routes/auth';
+import desktopAuthRoute from './routes/desktop-auth';
+import apiKeyIdentityRoute from './routes/api-key-identity';
+import { desktopAuthorizations } from './storage/desktop-auth';
 import googleOidcRoute from './routes/oidc-google';
 import appleOidcRoute from './routes/oidc-apple';
-import { agentStore, getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
-import { validateSession, SESSION_TOKEN_PREFIX, sweepExpiredSessionState } from './storage/sessions';
-import { extractToken } from './util';
+import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from './storage/agents';
+import { sweepExpiredSessionState } from './storage/sessions';
+import { desktopAttestation } from './storage/desktop-attestation';
+import { installDesktopSessionAuthorization } from './util/desktop-session-auth';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -99,6 +103,8 @@ const SESSION_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 function scheduleSessionSweep(server: FastifyInstance) {
   const interval = setInterval(() => {
     const removed = sweepExpiredSessionState();
+    desktopAuthorizations.sweep();
+    desktopAttestation.sweep();
     if (removed) server.log.debug({ removed }, 'Expired widget sign-in state swept');
   }, SESSION_SWEEP_INTERVAL_MS);
   interval.unref?.();
@@ -223,34 +229,11 @@ async function buildServer() {
     }
   });
 
-  // Widget sessions: exchange a valid sess_ bearer for the signed-in user's own
-  // parent key only for widget chat and model discovery.
-  fastify.addHook('onRequest', async (request, reply) => {
-    const token = extractToken(request.headers.authorization);
-    if (!token.startsWith(SESSION_TOKEN_PREFIX)) return;
-    if (request.url.startsWith('/auth/')) return; // auth routes handle sess_ themselves
-    const pathname = request.url.split('?')[0];
-    const allowed = (request.method === 'POST' && pathname === '/v1/chat/completions') ||
-      (request.method === 'GET' && pathname === '/v1/models/effective') ||
-      (request.method === 'GET' && pathname === '/v1/agents');
-    if (!allowed) return;
-    const session = validateSession(token);
-    if (!session) return; // fall through: routes 401 naturally
-    request.headers.authorization = `Bearer ${session.parentKey}`;
-
-    // Act as one of the user's own agents for chat/models; the agent key never reaches the client.
-    const agentId = request.headers['x-ozwell-agent-id'];
-    if (typeof agentId !== 'string' || !agentId || pathname === '/v1/agents') return;
-    const parentKey = agentStore.lookupApiKey(session.parentKey);
-    if (!parentKey) return; // revoked parent: let the route reply 401 so the widget signs out
-    const agent = agentStore.getOwned(agentId, parentKey.id);
-    if (!agent) {
-      return reply.code(403).send({ error: { message: 'Agent not available for this account', type: 'invalid_request_error' } });
-    }
-    request.headers.authorization = `Bearer ${agent.agent_key}`;
-  });
+  installDesktopSessionAuthorization(fastify);
 
   // Register API routes
+  await fastify.register(desktopAuthRoute);
+  await fastify.register(apiKeyIdentityRoute);
   await fastify.register(authRoute);        // Widget sign-in (email OTP sessions)
   await fastify.register(googleOidcRoute);  // Widget sign-in (Google OIDC)
   await fastify.register(appleOidcRoute);
@@ -266,6 +249,10 @@ async function buildServer() {
   await fastify.register(fastifyStatic, {
     root: path.join(rootDir, 'embed'),
     serve: false,
+  });
+
+  fastify.get('/auth/desktop/login.js', async (_request, reply) => {
+    return reply.type('application/javascript; charset=utf-8').sendFile('desktop-login.js');
   });
 
   fastify.get('/widget', async (_request, reply) => {

@@ -249,10 +249,12 @@ test('OIDC starts are limited per client without blocking other clients', (conte
     assert.equal(sessions.allowOidcStart('192.0.2.1'), true);
 });
 
-test('widget sessions cannot access agent management or key validation', async () => {
+test('widget sessions can list their agents but cannot access agent management or key validation', async () => {
     const token = await signIn('scoped-session@example.test');
-    const keyCheck = await fetch(`${BASE}/v1/keys/validate`, { headers: { Authorization: `Bearer ${token}` } });
-    assert.equal(keyCheck.status, 401, '/v1/keys/validate');
+    for (const route of ['/v1/agents/not-an-agent', '/v1/keys/validate']) {
+        const response = await fetch(`${BASE}${route}`, { headers: { Authorization: `Bearer ${token}` } });
+        assert.equal(response.status, 401, route);
+    }
     // Listing the user's own agents is allowed (widget agent picker); managing them is not.
     const list = await fetch(`${BASE}/v1/agents`, { headers: { Authorization: `Bearer ${token}` } });
     assert.equal(list.status, 200);
@@ -265,6 +267,10 @@ test('widget sessions cannot access agent management or key validation', async (
     assert.equal(create.status, 401, 'POST /v1/agents');
     const models = await fetch(`${BASE}/v1/models/effective`, { headers: { Authorization: `Bearer ${token}` } });
     assert.equal(models.status, 200);
+    const agents = await fetch(`${BASE}/v1/agents`, { headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(agents.status, 200);
+    const reveal = await fetch(`${BASE}/v1/agents/not-an-agent/reveal-key`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(reveal.status, 401);
 });
 
 test('Fastify supplies plugin options and returns OTP policy rejection as 403', async () => {
@@ -628,7 +634,7 @@ test('each signed-in email gets its own parent key', async () => {
 test('sign-in methods report Google as unconfigured without credentials', async () => {
     const res = await fetch(`${BASE}/auth/methods`);
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { google: false, apple: false, email_otp: true, user_key: true });
+    assert.deepEqual(await res.json(), { google: false, apple: false, email_otp: true, user_key: true, desktop_login: false });
 });
 
 test('Google start route is absent until credentials are configured', async () => {
