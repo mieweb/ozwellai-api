@@ -69,5 +69,15 @@ test('page budget is shared across all TIFFs in a request', async () => {
         { role: 'user', content: [{ type: 'image_url', image_url: { url } }] },
         { role: 'user', content: [{ type: 'image_url', image_url: { url } }] },
     ];
-    await assert.rejects(convertTiffParts(messages), TiffConversionError);
+    await assert.rejects(convertTiffParts(messages), (err) => {
+        assert.ok(err instanceof TiffConversionError);
+        assert.match(err.message, /15 pages but only 5/);
+        return true;
+    });
+});
+
+test('TIFF page over the pixel limit is rejected', async () => {
+    const buf = await sharp({ create: { width: 8000, height: 6000, channels: 3, background: '#fff' } }).tiff({ compression: 'lzw' }).toBuffer();
+    const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:image/tiff;base64,${buf.toString('base64')}` } }] }];
+    await assert.rejects(convertTiffParts(messages), /pixel limit/);
 });

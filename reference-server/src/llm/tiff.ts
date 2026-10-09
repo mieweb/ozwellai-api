@@ -7,6 +7,8 @@ import sharp from 'sharp';
 const TIFF_DATA_URL = /^data:image\/tiff?;base64,/i;
 const MAX_TIFF_PAGES = 20;
 const MAX_DIMENSION = 2048;
+// ~600 DPI US Letter page; anything larger is rejected before decoding.
+const MAX_INPUT_PIXELS = 40_000_000;
 
 type Part = { type: string; image_url?: { url: string; detail?: string }; file?: { file_data?: string } };
 type MessageLike = { content?: unknown };
@@ -20,13 +22,19 @@ export function isTiffDataUrl(value: unknown): value is string {
 export async function tiffDataUrlToPngDataUrls(dataUrl: string, maxPages = MAX_TIFF_PAGES): Promise<string[]> {
   const input = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
   try {
-    const { pages = 1 } = await sharp(input).metadata();
+    // Header-only read; the explicit pixel check below gives callers a clear error.
+    const { pages = 1, width = 0, height = 0, pageHeight } = await sharp(input, { limitInputPixels: false }).metadata();
     if (pages > maxPages) {
-      throw new TiffConversionError(`TIFF pages exceed the per-request maximum of ${MAX_TIFF_PAGES}`);
+      throw new TiffConversionError(
+        `TIFF has ${pages} pages but only ${maxPages} of the ${MAX_TIFF_PAGES}-page per-request limit remain`
+      );
+    }
+    if (width * (pageHeight ?? height) > MAX_INPUT_PIXELS) {
+      throw new TiffConversionError(`TIFF page exceeds the ${MAX_INPUT_PIXELS}-pixel limit`);
     }
     const urls: string[] = [];
     for (let page = 0; page < pages; page++) {
-      const png = await sharp(input, { page })
+      const png = await sharp(input, { page, limitInputPixels: MAX_INPUT_PIXELS })
         .rotate()
         .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
         .png()
