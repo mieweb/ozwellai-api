@@ -9,6 +9,10 @@ const MAX_TIFF_PAGES = 20;
 const MAX_DIMENSION = 2048;
 // ~600 DPI US Letter page; anything larger is rejected before decoding.
 const MAX_INPUT_PIXELS = 40_000_000;
+// Total source pixels decoded per request, across all TIFF pages.
+const MAX_REQUEST_PIXELS = 200_000_000;
+
+type Budget = { pages: number; pixels: number };
 
 type Part = { type: string; image_url?: { url: string; detail?: string }; file?: { file_data?: string } };
 type MessageLike = { content?: unknown };
@@ -19,19 +23,28 @@ export function isTiffDataUrl(value: unknown): value is string {
   return typeof value === 'string' && TIFF_DATA_URL.test(value);
 }
 
-export async function tiffDataUrlToPngDataUrls(dataUrl: string, maxPages = MAX_TIFF_PAGES): Promise<string[]> {
+export async function tiffDataUrlToPngDataUrls(
+  dataUrl: string,
+  budget: Budget = { pages: MAX_TIFF_PAGES, pixels: MAX_REQUEST_PIXELS }
+): Promise<string[]> {
   const input = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
   try {
-    // Header-only read; the explicit pixel check below gives callers a clear error.
+    // Header-only read; the explicit pixel checks below give callers a clear error.
     const { pages = 1, width = 0, height = 0, pageHeight } = await sharp(input, { limitInputPixels: false }).metadata();
-    if (pages > maxPages) {
+    if (pages > budget.pages) {
       throw new TiffConversionError(
-        `TIFF has ${pages} pages but only ${maxPages} of the ${MAX_TIFF_PAGES}-page per-request limit remain`
+        `TIFF has ${pages} pages but only ${budget.pages} of the ${MAX_TIFF_PAGES}-page per-request limit remain`
       );
     }
-    if (width * (pageHeight ?? height) > MAX_INPUT_PIXELS) {
+    const pagePixels = width * (pageHeight ?? height);
+    if (pagePixels > MAX_INPUT_PIXELS) {
       throw new TiffConversionError(`TIFF page exceeds the ${MAX_INPUT_PIXELS}-pixel limit`);
     }
+    if (pagePixels * pages > budget.pixels) {
+      throw new TiffConversionError(`TIFF images exceed the ${MAX_REQUEST_PIXELS}-pixel per-request limit`);
+    }
+    budget.pages -= pages;
+    budget.pixels -= pagePixels * pages;
     const urls: string[] = [];
     for (let page = 0; page < pages; page++) {
       const png = await sharp(input, { page, limitInputPixels: MAX_INPUT_PIXELS })
@@ -48,10 +61,10 @@ export async function tiffDataUrlToPngDataUrls(dataUrl: string, maxPages = MAX_T
   }
 }
 
-/** Replaces TIFF `image_url` / `file` parts in place, with a page budget shared across the request. */
+/** Replaces TIFF `image_url` / `file` parts in place, with page and pixel budgets shared across the request. */
 export async function convertTiffParts(messages: MessageLike[]): Promise<boolean> {
   let changed = false;
-  let remainingPages = MAX_TIFF_PAGES;
+  const budget: Budget = { pages: MAX_TIFF_PAGES, pixels: MAX_REQUEST_PIXELS };
   for (const message of messages) {
     if (!Array.isArray(message.content)) continue;
     const parts = message.content as Part[];
@@ -65,8 +78,7 @@ export async function convertTiffParts(messages: MessageLike[]): Promise<boolean
         continue;
       }
       const detail = part.type === 'image_url' ? part.image_url?.detail : undefined;
-      const urls = await tiffDataUrlToPngDataUrls(tiffUrl, remainingPages);
-      remainingPages -= urls.length;
+      const urls = await tiffDataUrlToPngDataUrls(tiffUrl, budget);
       for (const url of urls) {
         next.push({ type: 'image_url', image_url: { url, ...(detail && { detail }) } });
       }

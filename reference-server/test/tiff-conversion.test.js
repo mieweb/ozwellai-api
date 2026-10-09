@@ -76,6 +76,13 @@ test('page budget is shared across all TIFFs in a request', async () => {
     });
 });
 
+test('request-wide pixel budget is shared across TIFFs', async () => {
+    const buf = await sharp({ create: { width: 6000, height: 6000, channels: 3, background: '#fff' } }).tiff({ compression: 'lzw' }).toBuffer();
+    const url = `data:image/tiff;base64,${buf.toString('base64')}`;
+    const messages = Array.from({ length: 6 }, () => ({ role: 'user', content: [{ type: 'image_url', image_url: { url } }] }));
+    await assert.rejects(convertTiffParts(messages), /pixel per-request limit/);
+});
+
 test('TIFF page over the pixel limit is rejected', async () => {
     const buf = await sharp({ create: { width: 8000, height: 6000, channels: 3, background: '#fff' } }).tiff({ compression: 'lzw' }).toBuffer();
     const messages = [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:image/tiff;base64,${buf.toString('base64')}` } }] }];
