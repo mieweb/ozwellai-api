@@ -10,6 +10,7 @@ import { generateMockResponse, extractUserMessage, hasToolResult, extractToolRes
 import { getCachedModelsList } from './models';
 import { quotaExceededError, resolveRouteUsageContext } from './quota';
 import { ensureProvidersConfigured, isDirectProviderConfigured, resolveChatTransport } from '../llm/providers';
+import { convertTiffParts, TiffConversionError } from '../llm/tiff';
 import { capabilitiesFor, createChunkTranslator, toChatCompletion, toChatUsage, toResponsesInput, toResponsesTools, usesReasoningTokenParam, type ChatInputMessage, type ChatToolDef } from '../llm/harness-adapter';
 
 // SSE Heartbeat Configuration
@@ -620,6 +621,14 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         'invalid_request_error',
         `messages[${invalidMessageIndex}].content`
       );
+    }
+
+    try {
+      await convertTiffParts(body.messages as Message[]);
+    } catch (err) {
+      if (!(err instanceof TiffConversionError)) throw err;
+      reply.code(400);
+      return createError(err.message, 'invalid_request_error', 'messages', 'invalid_image');
     }
 
     // --- Agent key resolution ---
