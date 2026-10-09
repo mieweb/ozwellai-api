@@ -17,12 +17,12 @@ export function isTiffDataUrl(value: unknown): value is string {
   return typeof value === 'string' && TIFF_DATA_URL.test(value);
 }
 
-export async function tiffDataUrlToPngDataUrls(dataUrl: string): Promise<string[]> {
+export async function tiffDataUrlToPngDataUrls(dataUrl: string, maxPages = MAX_TIFF_PAGES): Promise<string[]> {
   const input = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64');
   try {
     const { pages = 1 } = await sharp(input).metadata();
-    if (pages > MAX_TIFF_PAGES) {
-      throw new TiffConversionError(`TIFF has ${pages} pages; maximum is ${MAX_TIFF_PAGES}`);
+    if (pages > maxPages) {
+      throw new TiffConversionError(`TIFF pages exceed the per-request maximum of ${MAX_TIFF_PAGES}`);
     }
     const urls: string[] = [];
     for (let page = 0; page < pages; page++) {
@@ -40,9 +40,10 @@ export async function tiffDataUrlToPngDataUrls(dataUrl: string): Promise<string[
   }
 }
 
-/** Replaces TIFF `image_url` / `file` parts in place. Returns true if anything changed. */
+/** Replaces TIFF `image_url` / `file` parts in place, with a page budget shared across the request. */
 export async function convertTiffParts(messages: MessageLike[]): Promise<boolean> {
   let changed = false;
+  let remainingPages = MAX_TIFF_PAGES;
   for (const message of messages) {
     if (!Array.isArray(message.content)) continue;
     const parts = message.content as Part[];
@@ -56,7 +57,9 @@ export async function convertTiffParts(messages: MessageLike[]): Promise<boolean
         continue;
       }
       const detail = part.type === 'image_url' ? part.image_url?.detail : undefined;
-      for (const url of await tiffDataUrlToPngDataUrls(tiffUrl)) {
+      const urls = await tiffDataUrlToPngDataUrls(tiffUrl, remainingPages);
+      remainingPages -= urls.length;
+      for (const url of urls) {
         next.push({ type: 'image_url', image_url: { url, ...(detail && { detail }) } });
       }
     }

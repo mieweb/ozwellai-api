@@ -623,14 +623,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       );
     }
 
-    try {
-      await convertTiffParts(body.messages as Message[]);
-    } catch (err) {
-      if (!(err instanceof TiffConversionError)) throw err;
-      reply.code(400);
-      return createError(err.message, 'invalid_request_error', 'messages', 'invalid_image');
-    }
-
     // --- Agent key resolution ---
     let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
 
@@ -731,11 +723,25 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return inputTokens + outputTokens;
     };
 
+    // Runs only after auth, model and quota checks so rejected requests never pay for decoding.
+    const tiffError = async (items: { content?: unknown }[]) => {
+      try {
+        await convertTiffParts(items);
+        return null;
+      } catch (err) {
+        if (!(err instanceof TiffConversionError)) throw err;
+        reply.code(400);
+        return createError(err.message, 'invalid_request_error', 'messages', 'invalid_image');
+      }
+    };
+
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {
       const { messages: rawMessages, stream = false, max_tokens } = body as ChatCompletionRequestWithTools;
       const quota = quotaError(estimateChatTokens(rawMessages as Message[], max_tokens));
       if (quota) return quota;
+      const mockTiffError = await tiffError(rawMessages as Message[]);
+      if (mockTiffError) return mockTiffError;
       const mockMessages: NonNullableMessage[] = (rawMessages as Message[]).map((m) => ({
         role: m.role,
         content: m.content ?? '',
@@ -859,6 +865,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : DEFAULT_DIRECT_MAX_TOKENS);
     const quota = quotaError(estimateChatTokens(messages as Message[], backend === 'direct' ? directMaxOutputTokens : max_tokens));
     if (quota) return quota;
+    const imageError = await tiffError(normalizedMessages);
+    if (imageError) return imageError;
 
     // --- Agent: filter tools ---
     // Tools arriving from the widget use two namespaces:
