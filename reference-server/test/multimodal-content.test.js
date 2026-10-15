@@ -5,6 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import sharp from 'sharp';
 
 // Keep MOCK_KEY in sync with MOCK_AGENT_KEY in src/storage/agents.ts.
 // Test file is plain JS (no TS imports) so the constant cannot be pulled directly.
@@ -79,6 +80,33 @@ test('multimodal content — array of text + image_url is accepted (no 400/valid
     // proving the content array was flattened to text rather than crashing on
     // `userMessage.toLowerCase is not a function`.
     assert.match(j.choices[0].message.content, /Hello/);
+});
+
+async function postTiff(url) {
+    return fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: H,
+        body: JSON.stringify({ messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url } }] }] }),
+    });
+}
+
+test('TIFF — corrupt data returns 400 invalid_image', async () => {
+    const r = await postTiff('data:image/tiff;base64,AAAA');
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error.code, 'invalid_image');
+});
+
+test('TIFF — more than 20 pages returns 400 invalid_image', async () => {
+    const tiff = await sharp(Buffer.alloc(4 * 84 * 3), { raw: { width: 4, height: 84, channels: 3, pageHeight: 4 } }).tiff().toBuffer();
+    const r = await postTiff(`data:image/tiff;base64,${tiff.toString('base64')}`);
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error.code, 'invalid_image');
+});
+
+test('TIFF — valid single page is accepted', async () => {
+    const tiff = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#fff' } }).tiff().toBuffer();
+    const r = await postTiff(`data:image/tiff;base64,${tiff.toString('base64')}`);
+    assert.equal(r.status, 200);
 });
 
 test('multimodal content — streaming array request completes without crashing', async () => {
