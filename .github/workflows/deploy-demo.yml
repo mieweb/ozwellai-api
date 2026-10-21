@@ -10,6 +10,7 @@ on:
       - 'landing-page/**'
       - '.github/workflows/deploy-demo.yml'
       - 'reference-server/embed/**'
+      - 'scripts/build-demo-package.sh'
 
 concurrency:
   group: deploy-demo-${{ github.ref_name }}

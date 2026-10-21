@@ -571,6 +571,125 @@ test('a rejected action releases both visual layers and leaves the page usable',
   );
 });
 
+test('aborting a visual preview leaves the work order unchanged and releases both overlays', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('both');
+  await expandDemoDetails(page);
+  await page.locator('#run-speed').selectOption('slow');
+  const initialState = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  const before = await snapshot(page);
+  const index = await findIndex(
+    page,
+    '[data-testid="open-WO-1042"]',
+    before.snapshotId,
+  );
+
+  await page.evaluate(
+    ({ snapshotId, index }) => {
+      const controller = new AbortController();
+      (window as any).browserToolAbortController = controller;
+      (window as any).pendingBrowserToolCall = (
+        window as any
+      ).browserToolsDemo.callTool(
+        'browser_click',
+        { snapshotId, index },
+        { signal: controller.signal },
+      );
+    },
+    { snapshotId: before.snapshotId, index },
+  );
+  await expect(page.locator(maskSelector)).toBeVisible();
+  await expect(page.locator(highlightSelector)).toBeVisible();
+  await page.evaluate(() => (window as any).browserToolAbortController.abort());
+
+  const result = await finishToolCall(page);
+  expect(result.isError).toBe(true);
+  expect(result.content[0].text).toMatch(/aborted/i);
+  expect(
+    await page.evaluate(() => (window as any).browserToolsDemo.getState()),
+  ).toEqual(initialState);
+  await expectOverlaysReleased(page);
+});
+
+test('an aborted queued request cannot mutate the page after the preceding action succeeds', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('both');
+  await expandDemoDetails(page);
+  await page.locator('#run-speed').selectOption('slow');
+  const initialState = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  const before = await snapshot(page);
+  const clickIndex = await findIndex(
+    page,
+    '[data-testid="open-WO-1042"]',
+    before.snapshotId,
+  );
+  const fillIndex = await findIndex(
+    page,
+    '#work-order-notes',
+    before.snapshotId,
+  );
+
+  // Queue both requests together. The successful selection expires this token;
+  // cancellation must win before the second request validates or uses it.
+  await page.evaluate(
+    ({ snapshotId, clickIndex, fillIndex }) => {
+      const api = (window as any).browserToolsDemo;
+      const controller = new AbortController();
+      (window as any).pendingBrowserToolCall = api.callTool('browser_click', {
+        snapshotId,
+        index: clickIndex,
+      });
+      (window as any).pendingAbortedBrowserToolCall = api.callTool(
+        'browser_fill',
+        {
+          snapshotId,
+          index: fillIndex,
+          value: 'An aborted queued request must never enter these notes.',
+        },
+        { signal: controller.signal },
+      );
+      controller.abort();
+    },
+    { snapshotId: before.snapshotId, clickIndex, fillIndex },
+  );
+  await expect(page.locator(maskSelector)).toBeVisible();
+  await expect(page.locator(highlightSelector)).toBeVisible();
+  const after = readSnapshot(await finishToolCall(page));
+  expect(after.snapshotId).not.toBe(before.snapshotId);
+  const cancelled: ToolResult = await page.evaluate(
+    () => (window as any).pendingAbortedBrowserToolCall,
+  );
+  expect(cancelled.isError).toBe(true);
+  expect(cancelled.content[0].text).toMatch(/aborted/i);
+  expect(cancelled.content[0].text).not.toMatch(/stale|expired/i);
+
+  const state = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  const selected = initialState.workOrders.find(
+    (order: any) => order.id === 'WO-1042',
+  );
+  expect(state.selectedId).toBe('WO-1042');
+  expect(state.workOrders).toEqual(initialState.workOrders);
+  expect(state.activity).toEqual(initialState.activity);
+  expect(state.pendingChanges).toBeNull();
+  expect(state.draft).toEqual({
+    owner: selected.owner,
+    status: selected.status,
+    notes: selected.notes,
+    urgent: selected.urgent,
+  });
+  await expectOverlaysReleased(page);
+});
+
 test('reset and a cancelled confirmation both restart the step runner safely', async ({
   page,
 }) => {

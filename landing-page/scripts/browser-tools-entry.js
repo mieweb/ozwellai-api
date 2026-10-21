@@ -42,8 +42,8 @@ function log(name, args, result) {
   while (output.children.length > 12) output.lastChild.remove();
 }
 
-async function callTool(name, args = {}) {
-  const result = await browser.callTool(name, args);
+async function callTool(name, args = {}, options) {
+  const result = await browser.callTool(name, args, options);
   log(name, args, result);
   return result;
 }
@@ -53,7 +53,7 @@ document.addEventListener('ozwell-tool-call', (event) => {
   const { name, arguments: args, respond, signal } = event.detail;
   if (!browser.tools.some((tool) => tool.name === name)) return;
   if (signal?.aborted) return;
-  callTool(name, args).then((result) => {
+  callTool(name, args, { signal }).then((result) => {
     if (!signal?.aborted) respond(result);
   });
 });

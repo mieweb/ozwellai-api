@@ -217,7 +217,13 @@ export function createBrowserTools(root) {
     },
   ];
 
-  async function execute(name, args) {
+  function checkAbort(signal) {
+    if (signal?.aborted)
+      throw new DOMException('Browser tool execution aborted.', 'AbortError');
+  }
+
+  async function execute(name, args, signal) {
+    checkAbort(signal);
     const tool = tools.find((tool) => tool.name === name);
     if (!tool) throw new Error(`Unknown tool: ${name}`);
     if (!args || typeof args !== 'object' || Array.isArray(args))
@@ -243,6 +249,7 @@ export function createBrowserTools(root) {
         root,
         `Scroll ${args.direction}`,
         async () => {
+          checkAbort(signal);
           checkSnapshot(args.snapshotId);
           const result = await controller.scroll({
             down: args.direction === 'down',
@@ -279,7 +286,9 @@ export function createBrowserTools(root) {
       async () => {
         // Highlight mode allows manual interaction during the preview delay.
         // Recheck the token before committing an action to a changing page.
+        checkAbort(signal);
         await resolve(args, name);
+        checkAbort(signal);
         action = { element };
         try {
           const result =
@@ -298,12 +307,15 @@ export function createBrowserTools(root) {
     );
   }
 
-  function callTool(name, args = {}) {
+  function callTool(name, args = {}, { signal } = {}) {
     const pending = queue.then(async () => {
       try {
         return {
           content: [
-            { type: 'text', text: JSON.stringify(await execute(name, args)) },
+            {
+              type: 'text',
+              text: JSON.stringify(await execute(name, args, signal)),
+            },
           ],
         };
       } catch (error) {

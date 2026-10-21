@@ -763,6 +763,9 @@ Each action requires the current `snapshotId` and returns a fresh snapshot.
 User edits invalidate older references. Assistant and tool-console content is
 outside the controller's root.
 
+Cancelled tool requests are skipped while queued or previewing an action.
+Cancellation does not undo page events that have already started.
+
 This is a controlled-page POC: actions support explicit buttons and native form
 controls. Links, submit/file/password controls, arbitrary evaluation, and browser
 navigation tools are excluded. The event guard is not a universal sandbox for
@@ -775,6 +778,10 @@ Build the browser bundle with `npm --prefix landing-page run build:browser-tools
 suite is `npm --prefix landing-page run test:browser-tools`; it uses
 the shipped loader and a mock assistant iframe on a separate origin, without
 model credentials or running development servers.
+
+`./scripts/build-demo-package.sh` installs locked build dependencies and includes
+the generated JavaScript and CSS in the deployment archive. The deployed service
+does not need to rebuild those assets.
 
 ## Local Development
 
