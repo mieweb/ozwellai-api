@@ -1,5 +1,12 @@
 # ozwell preview and page control
 
+[Watch the 30-second page-control demo](./ozwell-page-control.mp4).
+It shows synchronized views of the actual extension popup and a local
+`ui.mieweb.org` fixture: power on, click, fill, select, scroll, and power off.
+The widget uses local demonstration authentication. Tool requests are scripted
+from the real widget iframe through the extension bridge; no live model request
+or simulated assistant response is used. The video keeps that disclosure visible.
+
 [Watch the 30-second install and activation walkthrough](./ozwell-install-activation.mp4).
 The recording shows Chrome installation, enabling, and activation using the local preview. Authentication
 is demonstrated with test responses; the typed draft is not sent to a live model.
@@ -54,6 +61,6 @@ Sam through the toolbar widget bridge. The “Activate page control” button is
 test-page control. The fabricated private field and private subtree remain visible
 on the page; the test asserts that their contents are absent from tool snapshots.
 
-The install video predates page-control integration; it documents the unchanged
-installation, branding, and power flow. Page-control validation is documented by
-the browser checks and the current screenshots.
+The install video predates page-control integration and documents installation,
+branding, and activation. The page-control video shows the current integration;
+the browser checks and screenshots provide the accompanying validation.

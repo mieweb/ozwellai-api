@@ -9,7 +9,7 @@ Chat, models, rendering, and authentication stay in the hosted widget.
 
 **The public widget server still needs this PR's embedding update before toolbar
 chat can render.** See [deployment status](#widget-deployment). The
-[screenshots and 30-second walkthrough](./docs/README.md) use a local preview.
+[screenshots and short videos](./docs/README.md) use a local preview.
 
 ## Install
 
