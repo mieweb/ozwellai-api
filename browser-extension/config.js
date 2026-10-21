@@ -1,6 +1,6 @@
 // The only deployment setting. For development, use http://localhost:3000.
-// This origin must serve the reference server's widget, API, and auth routes.
-export const WIDGET_ORIGIN = 'https://ozwell.ai';
+// Move to https://ozwell.ai once its widget/API/auth routes are deployed.
+export const WIDGET_ORIGIN = 'https://ozwellapi.os.mieweb.org';
 
 export const WIDGET = Object.freeze({
   origin: WIDGET_ORIGIN,

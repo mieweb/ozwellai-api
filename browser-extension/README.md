@@ -1,118 +1,112 @@
-# Ozwell Minimal browser extension
+# ozwell browser extension
 
-A build-free Manifest V3 framework for Chrome and Chromium browsers, based on
-the Ozwell widget and stacked on [PR #323](https://github.com/mieweb/ozwellai-api/pull/323).
-The extension adds a small, collapsed **Ozwell** launcher. Opening it loads the
-existing hosted widget; chat, rendering, models, and sign-in stay on Ozwell's
-origin. There are no runtime dependencies or bundled copies of the chat app.
+A small Manifest V3 shell around the hosted ozwell widget, stacked on
+[PR #323](https://github.com/mieweb/ozwellai-api/pull/323). Click the mascot in the
+browser toolbar to open chat directly. The yellow power button switches ozwell
+on or off immediately; **Page settings** controls the optional floating launcher.
+Chat, models, rendering, and authentication stay in the hosted widget.
 
-## Try it
+**The public widget server still needs this PR's embedding update before toolbar
+chat can render.** See [deployment status](#widget-deployment). The
+[screenshots and 30-second walkthrough](./docs/README.md) use a local preview.
 
-1. Open `chrome://extensions` and turn on **Developer mode**.
+## Install
+
+For Chrome and Chromium browsers:
+
+1. Open `chrome://extensions` and enable **Developer mode**.
 2. Choose **Load unpacked** and select this `browser-extension` folder.
-3. Pin **Ozwell Minimal** in the toolbar and open a regular HTTP or HTTPS page.
-4. Open the toolbar popup and choose **Show Ozwell on this page**.
-5. Click the floating **Ozwell** launcher to open chat.
+3. Pin **ozwell** in the toolbar, then click its mascot to open chat.
+4. Sign in through the widget. After authentication, the composer receives focus.
 
-No build or `npm install` is needed. After editing files, reload the extension
-and refresh any test pages. Firefox and Safari packaging are outside this scaffold.
+No extension build or `npm install` is required. Reload the extension after
+editing its files, and refresh pages containing the launcher. Toolbar chat also
+opens on browser pages where a content script cannot run.
 
-## Modes
+For Safari, use the [development packaging script](./scripts/README.md). It builds
+a branded, self-contained `ozwell.app` on macOS with Xcode; install the containing
+app and enable **ozwell** in Safari Extensions settings. The existing development
+bundle identifiers are retained, so the lowercase name updates the same local
+extension. Packaging does not install or enable it automatically.
 
-| Mode | Behavior | Site access |
+## Power and page settings
+
+Turning ozwell off immediately removes its toolbar iframe and page launchers.
+Turning it back on restores the saved page mode. Page mode buttons select a draft;
+**Save settings** applies it and requests any required site access. Saving page
+settings while off keeps ozwell off and updates the mode to resume.
+
+| Page mode | Launcher behavior | Site access |
 | --- | --- | --- |
-| **On demand** (default) | Show or hide Ozwell for the current page from the toolbar. Resets on navigation or reload. | Temporary `activeTab` access from the toolbar action. |
-| **Whitelisted domains** | Show the launcher automatically on saved exact hostnames. | Ask for those hosts when saving. |
-| **Always on** | Show the launcher automatically on HTTP and HTTPS pages. | Ask for HTTP and HTTPS site access when saving. |
-| **Off** | Remove all extension launchers and frames. | No injection. |
+| **On demand** (default) | **Show page launcher** enables it for the current page; navigation or reload resets it. | Temporary `activeTab` access from the toolbar action. |
+| **Selected sites** | Show it automatically on saved exact domains. | Request those hosts when saving or resuming. |
+| **All sites** | Show it automatically on supported HTTP and HTTPS pages. | Request HTTP and HTTPS host access when saving or resuming. |
 
-Domain entries accept hostnames or HTTP(S) URLs. `example.com` does not include
-`www.example.com` or `app.example.com`; add each explicitly. Schemes, ports, and
-paths are not domain filters. Browser-protected pages such as `chrome://` and
-the Chrome Web Store cannot host the launcher.
+Toolbar chat is available in every enabled page mode. The page toggle can
+temporarily override automatic launcher behavior; saving settings clears these
+overrides. Domains accept hostnames or HTTP(S) URLs. Add `ui.mieweb.org` and
+`app.ui.mieweb.org` separately; schemes, paths, and ports are not domain filters.
+Browser-protected pages and the Chrome Web Store cannot host the page launcher.
 
-The page toggle can temporarily override either automatic mode. Saving any mode
-clears page overrides. Closing the chat panel preserves its frame and conversation;
-hiding Ozwell, navigating, or switching Off destroys the frame. Previously granted
-browser host permissions remain until revoked in Chrome's extension site-access
-settings. Mode rules still control injection; revocation removes automatic
-injection for the affected hosts.
+Closing a page chat panel preserves its iframe. Hiding its launcher, navigating,
+or switching off destroys it. Existing host grants remain until revoked in the
+browser's extension site-access settings; revocation stops automatic injection.
 
-## Hosted widget deployment
+## Widget deployment
 
-[`config.js`](./config.js) is the single deployment setting. The default is
-`https://ozwell.ai`. That origin needs to serve the existing reference server's:
+[`config.js`](./config.js) selects the widget origin. It currently uses
+`https://ozwellapi.os.mieweb.org` while the primary domain is prepared.
 
-- `/widget/frame/` and `/widget/ozwell.js` (the frame's runtime bundle)
-- `/v1/*` (chat, models, and agent endpoints)
-- `/auth/*` (the widget's sign-in routes)
+Deployment checks on **October 21, 2026** found:
 
-**Deployment status, checked October 21, 2026:** `https://ozwell.ai/widget/frame/`
-returns 404 with `X-Frame-Options: SAMEORIGIN`. The public domain needs those
-routes deployed or reverse-proxied before live chat works. This scaffold displays
-a fallback link when the frame does not complete the widget handshake.
+- `https://ozwell.ai/widget/frame/` returns **404** with
+  `X-Frame-Options: SAMEORIGIN`; its widget, API, and auth routes need deployment
+  or reverse proxying.
+- `https://ozwellapi.os.mieweb.org/widget/frame/` returns **200**, but its current
+  `frame-ancestors *` policy blocks extension toolbar popups. This PR updates the
+  reference server to `frame-ancestors * chrome-extension: safari-web-extension:`.
+  That server change and the widget autofocus update must be deployed there.
 
-For a working local widget, follow the
-[widget build instructions](../reference-server/embed/README.md#building-and-validating),
-start the reference server, and change `WIDGET_ORIGIN` in `config.js` to
-`http://localhost:3000`. Reload the extension. HTTP loopback origins are supported
-for development; deployed widget origins must use HTTPS.
+The configured origin must serve `/widget/frame/`, `/widget/ozwell.js`, `/v1/*`,
+and `/auth/*`. Its proxy must preserve the widget embedding policy and avoid
+conflicting `X-Frame-Options`. A visited site's own `frame-src` can also block the
+page widget. The shell shows an **Open ozwell** fallback after a failed handshake;
+it does not rewrite response headers.
 
-The widget host must permit cross-origin framing. The reference server already
-sets `frame-ancestors *` for widget routes; its reverse proxy must also avoid
-conflicting `X-Frame-Options`. A visited website's own `frame-src` policy can block
-embedding; the fallback opens Ozwell directly. The extension does not rewrite
-site response headers.
+For local development, [build the widget](../reference-server/embed/README.md#building-and-validating),
+start the reference server, and set `WIDGET_ORIGIN` to `http://localhost:3000` in
+`config.js`. Reload the extension. The manifest permits the two public hosts and
+HTTP loopback development servers. For another HTTPS deployment, also add its
+origin to `content_security_policy.extension_pages` → `frame-src` in
+[`manifest.json`](./manifest.json).
 
-## Small local shell, hosted application
+## Authentication and session lifetime
 
-```text
-toolbar popup → background mode/permission policy → isolated content script
-                                                    └─ sandboxed Ozwell iframe
-                                                       └─ hosted widget + API + auth
-```
+The widget owns sign-in and optional **Remember on this device** key storage;
+the extension stores only page settings and temporary overrides. Browser toolbar
+popups close when focus moves outside them, destroying their conversation and
+in-memory sign-in session. Opening an OIDC provider window can therefore close
+the initiating popup, and changing tabs to retrieve an email code has the same
+constraint. Use **Open ozwell** to continue in the standalone widget for those
+flows or longer sessions. An optionally remembered key belongs to widget-origin
+storage, which browsers may partition by embedding site. Live sign-in and chat
+must be checked after deployment.
 
-Manifest V3 requires extension scripts to be packaged locally. Code in an iframe
-isolated from extension APIs can be hosted remotely under
-[Chrome's MV3 policy](https://developer.chrome.com/docs/webstore/program-policies/mv3-requirements).
-This framework therefore bundles only the mode policy, popup, launcher, and fixed
-widget protocol bridge. It never loads `/widget` as a remote script into a visited
-page or extension context, evaluates remote JavaScript, or accepts remote browser
-commands. Store submission/review is a separate step.
+## Local shell and validation
 
-The iframe uses the widget's existing `ozwell-chat-parent` / `ozwell-chat-widget`
-config protocol and MCP JSON-RPC transport. Both sender window and exact origin
-are checked, and outgoing messages target that origin. The shell supplies an
-empty page-tool list and handles the MCP handshake. It does not read page content,
-register native WebMCP tools, execute page tools, or forward arbitrary extension
-APIs. Adding explicit tools can build on #323's schemas and authorization rules
-in a later layer.
+All extension scripts are packaged locally. The sandboxed remote iframe receives
+only widget configuration and the empty MCP tool handshake. Both message origin
+and sender frame are checked. The extension supplies no page content, native
+WebMCP tools, browser commands, or API keys to chat.
 
-The extension stores only modes/domains (`storage.local`) and temporary page
-overrides (`storage.session`). It does not store API keys or authentication tokens.
-Sign-in and any optional remembered key belong to the hosted widget; browser
-storage partitioning can require sign-in on different sites. No page context is
-sent to chat by this scaffold.
-
-## Validation
-
-```bash
+```sh
 npm --prefix browser-extension test
+npm --prefix browser-extension run test:browser
 ```
 
-Dependency-free Node tests exercise domain rules, permission changes, worker
-lifecycle, temporary overrides, launcher teardown, lazy loading, and the iframe
-message boundary.
-
-After building the widget and installing the landing-page Playwright dependencies,
-run `npm --prefix browser-extension run test:browser` for a loaded Chromium
-extension check. It copies the extension into a disposable fixture with site access
-pregranted, routes requests to the built widget bundle, and checks the real sign-in
-UI, message handshake, lazy loading, and mode changes across hosts. It does not test
-Chrome's permission consent dialog or a live backend. Optional environment overrides
-are `PLAYWRIGHT_MODULE_PATH`, `CHROMIUM_EXECUTABLE_PATH`, and `OZWELL_WIDGET_BUNDLE`.
-
-For a manual browser check, test all modes, navigation/reload,
-permission revocation, and opening/closing chat on two unrelated hosts. Verify
-network requests start only when the launcher is opened and target the configured
-widget origin. A deployment must also validate its real chat backend and sign-in.
+The browser check requires the built widget and landing-page Playwright
+dependencies. It loads the extension, routes requests to the actual widget bundle
+with demonstration auth responses, and verifies toolbar chat, focus, power,
+launcher modes, and message boundaries. It does not validate a live model,
+provider sign-in, or browser permission consent dialogs. See the
+[preview evidence](./docs/README.md) for screenshots and the recorded workflow.

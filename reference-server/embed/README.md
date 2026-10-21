@@ -308,6 +308,7 @@ The test enables experimental support in its isolated browser session. Browsers 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `autoMount` | boolean | `true` | Auto-mount widget on page load |
+| `autoFocus` | boolean | `false` | Focus the available sign-in field or chat composer when the embedded widget becomes ready |
 | `defaultUI` | boolean | `true` | Enable default floating button and wrapper. Set to `false` to use custom UI |
 | `endpoint` | string | (auto-detected) | Chat API endpoint (auto-detected from script URL) |
 | `widgetUrl` | string | (auto-detected) | Widget iframe URL (auto-detected from script URL) |
@@ -571,6 +572,7 @@ Messages sent from the parent page to the widget iframe. All messages require `s
 |------|---------|-------------|
 | `ozwell:send-message` | `{ content: string }` | Send a chat message programmatically (appears as user message, triggers AI response) |
 | `config` | `{ config: OzwellChatConfig }` | Update widget configuration at runtime |
+| `focus` | (none) | Focus the available sign-in field or chat composer; accepted only from the trusted parent |
 | `close` | — | Close/hide the chat widget |
 
 #### Sending a Message Programmatically

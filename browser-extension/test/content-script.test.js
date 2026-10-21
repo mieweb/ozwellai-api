@@ -29,7 +29,7 @@ class Element {
     this.listeners.set(name, list);
   }
   dispatch(name, event = {}) { for (const listener of this.listeners.get(name) || []) listener(event); }
-  remove() { this.parent.children = this.parent.children.filter(child => child !== this); this.parent = null; }
+  remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); this.parent = null; }
   focus() { this.focused = true; }
   get firstElementChild() { return this.children[0]; }
   querySelector(selector) { return descendants(this).find(child => child.tagName === selector); }
@@ -55,6 +55,7 @@ async function setup({ enabled = true, response } = {}) {
     } },
     chrome: { runtime: {
       id: 'ozwell-test-extension',
+      getURL: path => `chrome-extension://ozwell-test-extension/${path}`,
       sendMessage: response || (async () => state),
       onMessage: { addListener: listener => syncListeners.push(listener) },
     } },
@@ -79,17 +80,17 @@ test('content shell mounts once and creates the hosted widget only when opened',
   assert.equal(page.root.children.length, 1);
   assert.equal(page.root.children[0].shadowMode, 'closed');
   assert.equal(page.find('iframe'), undefined);
-  const launcher = page.byLabel('Open Ozwell assistant');
+  const launcher = page.byLabel('Open ozwell assistant');
   launcher.dispatch('click');
   const frame = page.find('iframe');
   assert.equal(frame.src, WIDGET.frameUrl);
-  assert.equal(frame.title, 'Ozwell assistant');
+  assert.equal(frame.title, 'ozwell assistant');
   assert.equal(frame.hidden, true);
   assert.equal(launcher.attributes['aria-expanded'], 'true');
-  const panel = page.byLabel('Ozwell assistant');
+  const panel = page.byLabel('ozwell assistant');
   assert.equal(panel.hidden, false);
-  assert.equal(page.byLabel('Close Ozwell assistant').focused, true);
-  page.byLabel('Close Ozwell assistant').dispatch('click');
+  assert.equal(page.byLabel('Close ozwell assistant').focused, true);
+  page.byLabel('Close ozwell assistant').dispatch('click');
   assert.equal(panel.hidden, true);
   assert.equal(launcher.focused, true);
   launcher.dispatch('click');
@@ -103,7 +104,7 @@ test('content shell mounts once and creates the hosted widget only when opened',
 
 test('widget ready handshake requires both the hosted origin and this exact frame', async () => {
   const page = await setup();
-  page.byLabel('Open Ozwell assistant').dispatch('click');
+  page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
   const data = { source: 'ozwell-chat-widget', type: 'ready' };
   page.message({ source: frame.contentWindow, origin: 'https://evil.test', data });
@@ -116,14 +117,14 @@ test('widget ready handshake requires both the hosted origin and this exact fram
   assert.deepEqual(frame.sent, [{
     origin: WIDGET.origin,
     message: { source: 'ozwell-chat-parent', type: 'config', payload: { config: {
-      endpoint: WIDGET.endpoint, title: 'Ozwell', thinkingEnabled: false, tools: [],
+      endpoint: WIDGET.endpoint, title: 'ozwell', thinkingEnabled: false, tools: [],
     } } },
   }]);
 });
 
 test('MCP handshake exposes an empty tool list and rejects arbitrary tool execution', async () => {
   const page = await setup();
-  page.byLabel('Open Ozwell assistant').dispatch('click');
+  page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
   const request = (method, id) => page.message({
     source: frame.contentWindow, origin: WIDGET.origin,
@@ -142,7 +143,7 @@ test('MCP handshake exposes an empty tool list and rejects arbitrary tool execut
 
 test('off removes the mounted frame, clears timers, and stale frame messages cannot remount it', async () => {
   const page = await setup();
-  page.byLabel('Open Ozwell assistant').dispatch('click');
+  page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
   assert.equal(page.timers.size, 1);
   page.sync({ enabled: false });
@@ -163,7 +164,7 @@ test('malformed or untrusted widget configuration cannot create a remote frame',
     { ...WIDGET, frameUrl: 'https://ozwell.ai.evil.test/widget' },
     { ...WIDGET, endpoint: 'https://evil.test/chat' },
     { ...WIDGET, frameUrl: 'javascript:alert(1)' },
-    { origin: 'http://example.com', frameUrl: 'http://example.com/widget', endpoint: 'http://example.com/api' },
+    { origin: 'http://ui.mieweb.org', frameUrl: 'http://ui.mieweb.org/widget', endpoint: 'http://ui.mieweb.org/api' },
   ]) {
     page.sync({ enabled: true, widget });
     assert.equal(page.root.children.length, 0);
@@ -182,13 +183,13 @@ test('runtime messages require this extension sender and support configured loop
     endpoint: 'http://localhost:3000/v1/chat/completions',
   };
   page.sync({ enabled: true, widget });
-  page.byLabel('Open Ozwell assistant').dispatch('click');
+  page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
   assert.equal(frame.src, widget.frameUrl);
   page.message({ source: frame.contentWindow, origin: widget.origin, data: { source: 'ozwell-chat-widget', type: 'ready' } });
   assert.equal(frame.sent[0].origin, widget.origin);
   assert.equal(frame.sent[0].message.payload.config.endpoint, widget.endpoint);
-  assert.equal(page.find('a').href, widget.origin);
+  assert.equal(page.find('a').href, widget.frameUrl);
   page.sync({ enabled: false }, { id: 'other-extension' });
   assert.equal(page.root.children.length, 1);
   page.sync({ enabled: false });
@@ -207,13 +208,13 @@ test('a newer disable message wins over an outstanding initial state response', 
 
 test('a hosted frame that never becomes ready exposes a direct Ozwell fallback', async () => {
   const page = await setup();
-  page.byLabel('Open Ozwell assistant').dispatch('click');
+  page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
   const link = page.find('a');
   assert.equal(link.hidden, true);
   for (const callback of page.timers) callback();
   assert.equal(link.hidden, false);
-  assert.equal(link.href, WIDGET.origin);
+  assert.equal(link.href, WIDGET.frameUrl);
   assert.equal(link.target, '_blank');
   assert.equal(link.rel, 'noopener noreferrer');
   assert.equal(frame.hidden, true);

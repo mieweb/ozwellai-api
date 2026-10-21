@@ -1,7 +1,8 @@
 import { DEFAULT_SETTINGS, normalizeSettings, patternsForSettings, pageInfo, isEnabled } from './policy.js';
 import { WIDGET } from './config.js';
 
-const SCRIPT_ID = 'ozwell-minimal';
+const SCRIPT_ID = 'ozwell';
+const LEGACY_SCRIPT_IDS = ['ozwell-minimal'];
 const SETTINGS_KEY = 'settings';
 const OVERRIDES_KEY = 'tabOverrides';
 
@@ -52,9 +53,12 @@ export function createController(api) {
         }
       }
     }
+    // Also remove the previous extension version's registration on upgrade.
     // Remove old matches before adding new ones, including when switching Off.
-    const registered = await api.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID] });
-    if (registered.length) await api.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] });
+    const registered = await api.scripting.getRegisteredContentScripts({ ids: [SCRIPT_ID, ...LEGACY_SCRIPT_IDS] });
+    if (registered.length) {
+      await api.scripting.unregisterContentScripts({ ids: registered.map(script => script.id) });
+    }
     if (matches.length) {
       await api.scripting.registerContentScripts([{
         id: SCRIPT_ID, matches, js: ['content-script.js'],
@@ -81,6 +85,10 @@ export function createController(api) {
     refresh: () => serialize(refresh),
     setSettings: value => serialize(async () => {
       const config = normalizeSettings(value);
+      // Older popup clients do not send resumeMode when switching Off.
+      if (config.mode === 'off' && value.resumeMode === undefined) {
+        config.resumeMode = (await settings()).resumeMode;
+      }
       for (const pattern of patternsForSettings(config)) {
         if (!await api.permissions.contains({ origins: [pattern] })) {
           throw new Error('Grant site access before saving this mode.');

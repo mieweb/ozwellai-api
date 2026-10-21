@@ -1,6 +1,7 @@
 export const ALL_SITE_PATTERNS = ['http://*/*', 'https://*/*'];
-export const DEFAULT_SETTINGS = Object.freeze({ mode: 'manual', domains: [] });
+export const DEFAULT_SETTINGS = Object.freeze({ mode: 'manual', domains: [], resumeMode: 'manual' });
 const MODES = new Set(['manual', 'allowlist', 'always', 'off']);
+const RESUME_MODES = new Set(['manual', 'allowlist', 'always']);
 
 export function pageInfo(value) {
   try {
@@ -27,7 +28,14 @@ export function normalizeSettings(value) {
   if (!value || !MODES.has(value.mode) || !Array.isArray(value.domains)) {
     throw new Error('Choose a mode and provide a domain list.');
   }
-  return { mode: value.mode, domains: [...new Set(value.domains.map(normalizeDomain))].sort() };
+  if (value.resumeMode !== undefined && !RESUME_MODES.has(value.resumeMode)) {
+    throw new Error('Choose a valid mode to resume.');
+  }
+  return {
+    mode: value.mode,
+    domains: [...new Set(value.domains.map(normalizeDomain))].sort(),
+    resumeMode: value.mode === 'off' ? (value.resumeMode ?? 'manual') : value.mode,
+  };
 }
 
 export function patternsForSettings(settings) {

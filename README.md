@@ -35,7 +35,7 @@ Experience the Ozwell AI chat widget with:
 - Secure iframe isolation
 
 For an unpacked Chromium extension with on-demand, whitelist, always-on, and off
-modes, see the [Ozwell Minimal browser extension](browser-extension/README.md).
+modes, see the [ozwell browser extension](browser-extension/README.md).
 
 ---
 

@@ -377,6 +377,20 @@ export function WidgetApp() {
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
 
+  // A toolbar popup is already an explicit user action. Focus its composer
+  // (or sign-in input) after configuration/authentication has rendered it.
+  const focusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)') ||
+        document.querySelector<HTMLInputElement>('input:not(:disabled):not([type="hidden"]):not([type="checkbox"])');
+      input?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (config.autoFocus && initialConfigReady) focusInput();
+  }, [config.autoFocus, initialConfigReady, userCredential, focusInput]);
+
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
@@ -1021,6 +1035,8 @@ export function WidgetApp() {
         }
         applyConfig(data.payload.config);
       }
+
+      if (data.type === 'focus') focusInput();
 
       if (data.type === 'close') {
         postToParent({

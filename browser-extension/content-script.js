@@ -1,4 +1,4 @@
-/* The extension owns only this shell. Ozwell serves the widget and sign-in UI. */
+/* The extension owns only this shell. ozwell serves the widget and sign-in UI. */
 (() => {
   if (globalThis.__ozwellExtension) {
     globalThis.__ozwellExtension.refresh();
@@ -41,7 +41,7 @@
       payload: {
         config: {
           endpoint: widget.endpoint,
-          title: 'Ozwell',
+          title: 'ozwell',
           thinkingEnabled: false,
           tools: [],
         },
@@ -53,25 +53,25 @@
     if (!panel) return;
     panel.hidden = true;
     launcher.setAttribute('aria-expanded', 'false');
-    launcher.setAttribute('aria-label', 'Open Ozwell assistant');
+    launcher.setAttribute('aria-label', 'Open ozwell assistant');
     launcher.focus();
   }
 
   function showLoadError() {
     if (!status || ready) return;
-    status.firstElementChild.textContent = 'Ozwell could not load here. Try opening it directly.';
+    status.firstElementChild.textContent = 'ozwell could not load here. Try opening it directly.';
     fallback.hidden = false;
   }
 
   function open() {
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
-    launcher.setAttribute('aria-label', 'Close Ozwell assistant');
+    launcher.setAttribute('aria-label', 'Close ozwell assistant');
     panel.querySelector('button').focus();
     if (frame) return;
 
     frame = document.createElement('iframe');
-    frame.title = 'Ozwell assistant';
+    frame.title = 'ozwell assistant';
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.addEventListener('error', showLoadError);
@@ -93,29 +93,40 @@
       [hidden] { display: none !important; }
       button, a { font: 14px/1.4 system-ui, sans-serif; }
       button { cursor: pointer; }
-      button:focus-visible, a:focus-visible { outline: 3px solid #0284c7; outline-offset: 3px; }
-      .launcher { display: block; margin-left: auto; border: 0; border-radius: 24px;
-        padding: 12px 18px; background: #0f749c; color: white;
-        box-shadow: 0 3px 16px #0003; font-weight: 600; }
+      button:focus-visible, a:focus-visible { outline: 3px solid #00aede; outline-offset: 3px; }
+      .launcher { display: flex; align-items: center; gap: 7px; margin-left: auto;
+        border: 1px solid #182958; border-radius: 26px; padding: 7px 16px 7px 8px;
+        background: #101b46; color: white; box-shadow: 0 5px 20px #101b4633;
+        font-size: 17px; font-weight: 700; letter-spacing: -.45px; }
+      .launcher:hover { background: #1e2b58; }
+      .launcher img { display: block; width: 32px; height: 32px; object-fit: contain; }
       .panel { position: absolute; right: 0; bottom: 60px; display: flex; flex-direction: column;
         width: min(380px, calc(100vw - 40px)); height: min(540px, calc(100dvh - 100px));
-        min-height: 240px; overflow: hidden; border: 1px solid #d1d5db; border-radius: 14px;
-        background: white; box-shadow: 0 8px 32px #0003; font: 14px/1.5 system-ui, sans-serif; color: #1f2937; }
+        min-height: 240px; overflow: hidden; border: 1px solid #e2e6f0; border-radius: 14px;
+        background: white; box-shadow: 0 8px 32px #101b462b; font: 14px/1.5 system-ui, sans-serif; color: #101b46; }
       .header { display: flex; align-items: center; justify-content: space-between;
-        padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
-      .header button { border: 0; border-radius: 6px; background: transparent; color: #374151;
+        padding: 8px 12px; border-bottom: 1px solid #e8ebf4; background: #fafbff; }
+      .header strong { display: flex; align-items: center; gap: 7px; font-size: 17px; letter-spacing: -.45px; }
+      .header img { display: block; width: 28px; height: 28px; object-fit: contain; }
+      .header button { border: 0; border-radius: 6px; background: transparent; color: #8793af;
         min-width: 36px; min-height: 36px; font-size: 22px; }
-      .status { padding: 20px; }
+      .header button:hover { background: #eef1fa; color: #101b46; }
+      .status { padding: 20px; color: #8290ab; }
       .status p { margin: 0 0 12px; }
-      .status a { color: #0f749c; }
+      .status a { color: #009bc9; }
       iframe { width: 100%; flex: 1; min-height: 0; border: 0; background: white; }
     `;
 
     launcher = document.createElement('button');
     launcher.className = 'launcher';
     launcher.type = 'button';
-    launcher.textContent = 'Ozwell';
-    launcher.setAttribute('aria-label', 'Open Ozwell assistant');
+    const launcherMascot = document.createElement('img');
+    launcherMascot.src = chrome.runtime.getURL('assets/ozwell-48.png');
+    launcherMascot.alt = '';
+    const launcherWordmark = document.createElement('span');
+    launcherWordmark.textContent = 'ozwell';
+    launcher.append(launcherMascot, launcherWordmark);
+    launcher.setAttribute('aria-label', 'Open ozwell assistant');
     launcher.setAttribute('aria-expanded', 'false');
     launcher.setAttribute('aria-haspopup', 'dialog');
     launcher.setAttribute('aria-controls', 'ozwell-extension-panel');
@@ -126,15 +137,20 @@
     panel.className = 'panel';
     panel.hidden = true;
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', 'Ozwell assistant');
+    panel.setAttribute('aria-label', 'ozwell assistant');
     const header = document.createElement('div');
     header.className = 'header';
     const title = document.createElement('strong');
-    title.textContent = 'Ozwell';
+    const headerMascot = document.createElement('img');
+    headerMascot.src = chrome.runtime.getURL('assets/ozwell-48.png');
+    headerMascot.alt = '';
+    const titleWordmark = document.createElement('span');
+    titleWordmark.textContent = 'ozwell';
+    title.append(headerMascot, titleWordmark);
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
     closeButton.textContent = '×';
-    closeButton.setAttribute('aria-label', 'Close Ozwell assistant');
+    closeButton.setAttribute('aria-label', 'Close ozwell assistant');
     closeButton.addEventListener('click', close);
     header.append(title, closeButton);
 
@@ -142,10 +158,10 @@
     status.className = 'status';
     status.setAttribute('role', 'status');
     const loading = document.createElement('p');
-    loading.textContent = 'Loading Ozwell…';
+    loading.textContent = 'Loading ozwell…';
     fallback = document.createElement('a');
-    fallback.textContent = 'Open Ozwell';
-    fallback.href = widget.origin;
+    fallback.textContent = 'Open ozwell';
+    fallback.href = widget.frameUrl;
     fallback.target = '_blank';
     fallback.rel = 'noopener noreferrer';
     fallback.hidden = true;

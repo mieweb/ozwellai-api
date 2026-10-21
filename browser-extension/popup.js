@@ -1,21 +1,28 @@
 import { DEFAULT_SETTINGS, normalizeSettings, normalizeDomain, patternsForSettings } from './policy.js';
+import { createWidgetHost, normalizeWidget } from './widget-host.js';
 
-const mode = document.querySelector('#mode');
+const power = document.querySelector('#power-button');
+const powerLabel = document.querySelector('#power-label');
+const modeButtons = [...document.querySelectorAll('button[data-mode]')];
 const domains = document.querySelector('#domains');
 const save = document.querySelector('#save');
 const toggle = document.querySelector('#toggle-tab');
 const addSite = document.querySelector('#add-current-site');
 const status = document.querySelector('#status');
 const error = document.querySelector('#error');
+const chatContainer = document.querySelector('#chat-container');
+const chatEmpty = document.querySelector('#chat-empty');
+const openOzwell = document.querySelector('#open-ozwell');
+const chat = createWidgetHost(chatContainer);
 const descriptions = {
-  off: 'Keep Ozwell hidden on every page.',
-  manual: 'Show Ozwell when you choose it for a page.',
-  allowlist: 'Show Ozwell automatically on the domains below.',
-  always: 'Show Ozwell automatically on all supported web pages.',
+  manual: 'Show the page launcher when you choose it.',
+  allowlist: 'Show the page launcher automatically on the domains below.',
+  always: 'Show the page launcher automatically on all supported web pages.',
 };
 
 let tabId;
 let state;
+let draftMode = 'manual';
 let busy = true;
 
 function showFeedback(message = '', failure = '') {
@@ -25,39 +32,55 @@ function showFeedback(message = '', failure = '') {
 }
 
 function updateMode() {
-  document.querySelector('#domains-field').hidden = mode.value !== 'allowlist';
-  document.querySelector('#mode-description').textContent = descriptions[mode.value];
+  for (const button of modeButtons) button.setAttribute('aria-pressed', String(button.dataset.mode === draftMode));
+  document.querySelector('#domains-field').hidden = draftMode !== 'allowlist';
+  document.querySelector('#mode-description').textContent = descriptions[draftMode];
 }
 
 function updateControls() {
-  mode.disabled = busy;
-  domains.disabled = busy;
-  save.disabled = busy;
+  const enabled = Boolean(state && state.settings.mode !== 'off');
+  power.disabled = busy || !state;
+  power.setAttribute('aria-pressed', String(enabled));
+  powerLabel.textContent = enabled ? 'Turn ozwell off' : 'Turn ozwell on';
+  for (const button of modeButtons) button.disabled = busy;
+  domains.disabled = save.disabled = busy;
   addSite.disabled = busy || !state?.tab?.supported || !state.tab.hostname;
-  toggle.disabled = busy || !state?.tab?.supported || state.settings.mode === 'off';
+  toggle.disabled = busy || !state?.tab?.supported || !enabled;
 }
 
 async function send(message) {
   const result = await chrome.runtime.sendMessage(message);
   if (result?.error) throw new Error(result.error);
-  if (!result) throw new Error('Ozwell could not respond. Please reopen the extension.');
+  if (!result) throw new Error('ozwell could not respond. Please reopen the extension.');
   return result;
 }
 
 async function refresh() {
   state = await send({ type: 'ozwell:get-state', tabId });
-  const settings = normalizeSettings(state.settings ?? DEFAULT_SETTINGS);
-  mode.value = settings.mode;
-  domains.value = settings.domains.join('\n');
-  document.querySelector('#current-site').textContent = state.tab?.hostname || 'This page is unavailable';
-  toggle.textContent = state.tab?.enabled ? 'Hide Ozwell on this page' : 'Show Ozwell on this page';
+  state.settings = normalizeSettings(state.settings ?? DEFAULT_SETTINGS);
+  draftMode = state.settings.mode === 'off' ? state.settings.resumeMode : state.settings.mode;
+  domains.value = state.settings.domains.join('\n');
+  document.querySelector('#current-site').textContent = state.tab?.hostname || 'Chat is available on this page';
+  toggle.textContent = state.tab?.enabled ? 'Hide page launcher' : 'Show page launcher';
   toggle.setAttribute('aria-pressed', String(Boolean(state.tab?.enabled)));
   updateMode();
+  const enabled = state.settings.mode !== 'off';
+  chatContainer.hidden = !enabled;
+  chatEmpty.hidden = enabled;
+  openOzwell.hidden = true;
+  openOzwell.removeAttribute('href');
+  if (enabled) {
+    const widget = normalizeWidget(state.widget);
+    openOzwell.href = widget.frameUrl;
+    openOzwell.hidden = false;
+    chat.mount(widget);
+  } else chat.destroy();
 }
 
-mode.addEventListener('change', () => {
+for (const button of modeButtons) button.addEventListener('click', () => {
+  draftMode = button.dataset.mode;
   updateMode();
-  showFeedback('Save to apply this mode.');
+  showFeedback('Save to apply these page settings.');
 });
 
 addSite.addEventListener('click', () => {
@@ -69,33 +92,62 @@ addSite.addEventListener('click', () => {
   showFeedback('Current site added. Save to apply.');
 });
 
-document.querySelector('#settings-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  if (busy) return;
+async function applySettings(settings, message) {
+  const origins = patternsForSettings(settings);
+  busy = true;
+  updateControls();
+  showFeedback();
   try {
-    const settings = normalizeSettings({
-      mode: mode.value,
-      domains: mode.value === 'allowlist'
-        ? domains.value.split(/[\s,]+/).filter(Boolean).map(normalizeDomain)
-        : state?.settings?.domains ?? DEFAULT_SETTINGS.domains,
-    });
-    const origins = patternsForSettings(settings);
-    busy = true;
-    updateControls();
-    showFeedback();
-    // Request from this user gesture before any other asynchronous work.
+    // Both callers are direct clicks/submits. Request before any other async work.
     if (origins.length && !await chrome.permissions.request({ origins })) {
       showFeedback('', 'Site access was not granted. Settings were not saved.');
       return;
     }
     await send({ type: 'ozwell:set-settings', settings });
     await refresh();
-    showFeedback('Settings saved.');
+    showFeedback(message);
   } catch (cause) {
+    // A failed power change must reflect the stored state after its immediate teardown.
+    try { await refresh(); } catch { /* Preserve the original settings error. */ }
     showFeedback('', cause.message || 'Could not save settings. Please try again.');
   } finally {
     busy = false;
     updateControls();
+  }
+}
+
+power.addEventListener('click', () => {
+  if (busy || !state) return;
+  const enabled = state.settings.mode !== 'off';
+  const settings = normalizeSettings({
+    ...state.settings,
+    mode: enabled ? 'off' : state.settings.resumeMode,
+  });
+  // Tear down credentials and conversation immediately when the user switches off.
+  if (enabled) {
+    chat.destroy();
+    chatContainer.hidden = true;
+    chatEmpty.hidden = false;
+    openOzwell.hidden = true;
+    openOzwell.removeAttribute('href');
+  }
+  void applySettings(settings, enabled ? 'ozwell is off.' : 'ozwell is on.');
+});
+
+document.querySelector('#settings-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (busy || !state) return;
+  try {
+    const settings = normalizeSettings({
+      mode: state.settings.mode === 'off' ? 'off' : draftMode,
+      resumeMode: draftMode,
+      domains: draftMode === 'allowlist'
+        ? domains.value.split(/[\s,]+/).filter(Boolean).map(normalizeDomain)
+        : state.settings.domains,
+    });
+    void applySettings(settings, 'Page settings saved.');
+  } catch (cause) {
+    showFeedback('', cause.message || 'Check your selected domains and try again.');
   }
 });
 
@@ -107,7 +159,7 @@ toggle.addEventListener('click', async () => {
   try {
     await send({ type: 'ozwell:toggle-tab', tabId });
     await refresh();
-    showFeedback(state.tab?.enabled ? 'Ozwell is available on this page.' : 'Ozwell is hidden on this page.');
+    showFeedback(state.tab?.enabled ? 'Page launcher is visible.' : 'Page launcher is hidden.');
   } catch (cause) {
     showFeedback('', cause.message || 'Could not update this page. Please try again.');
   } finally {
@@ -118,17 +170,19 @@ toggle.addEventListener('click', async () => {
 
 async function initialize() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    tabId = tab?.id;
+    // Toolbar chat works even when this browser page cannot host a content script.
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      tabId = tab?.id;
+    } catch { /* Keep the toolbar chat available without a current tab. */ }
     await refresh();
-    if (!state.tab?.supported) showFeedback('Open a regular HTTP or HTTPS page to use Ozwell.');
-    if (state.settings.mode === 'off') showFeedback('Choose another mode and save to enable Ozwell.');
   } catch (cause) {
-    showFeedback('', cause.message || 'Could not load Ozwell. Please reopen the extension.');
+    showFeedback('', cause.message || 'Could not load ozwell. Please reopen the extension.');
   } finally {
     busy = false;
     updateControls();
   }
 }
 
-initialize();
+window.addEventListener('pagehide', () => chat.destroy());
+void initialize();
