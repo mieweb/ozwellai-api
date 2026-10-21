@@ -28,6 +28,6 @@
     "matches": ["http://*/*", "https://*/*"]
   }],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'none'; frame-src https://ozwell.ai https://ozwellapi.os.mieweb.org http://localhost:* http://127.0.0.1:*;"
+    "extension_pages": "script-src 'self'; object-src 'none'; frame-src https://api.ozwell.ai https://ozwellapi.os.mieweb.org http://localhost:* http://127.0.0.1:*;"
   }
 }

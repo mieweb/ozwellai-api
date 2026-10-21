@@ -54,18 +54,23 @@ browser's extension site-access settings; revocation stops automatic injection.
 
 ## Widget deployment
 
-[`config.js`](./config.js) selects the widget origin. It currently uses
-`https://ozwellapi.os.mieweb.org` while the primary domain is prepared.
+[`config.js`](./config.js) selects the widget origin. It uses
+`https://api.ozwell.ai`, the production API and widget origin documented in the
+[project overview](../docs/overview.md). The `ozwell.ai` apex is not the API origin.
 
 Deployment checks on **October 21, 2026** found:
 
-- `https://ozwell.ai/widget/frame/` returns **404** with
-  `X-Frame-Options: SAMEORIGIN`; its widget, API, and auth routes need deployment
-  or reverse proxying.
+- `https://api.ozwell.ai/widget/frame/?ozwellLoader=1` returns **200**, but its
+  current `frame-ancestors *` policy blocks extension toolbar popups. Its response
+  also includes `X-Frame-Options: SAMEORIGIN`; Chrome enforces the CSP ancestor
+  policy in preference to that header.
 - `https://ozwellapi.os.mieweb.org/widget/frame/` returns **200**, but its current
-  `frame-ancestors *` policy blocks extension toolbar popups. This PR updates the
-  reference server to `frame-ancestors * chrome-extension: safari-web-extension:`.
-  That server change and the widget autofocus update must be deployed there.
+  embedding policy has the same restriction, so switching to that legacy host
+  does not resolve the popup failure.
+
+This PR updates the reference server to
+`frame-ancestors * chrome-extension: safari-web-extension:`. That server change
+and the widget autofocus update must be deployed at the configured origin.
 
 The configured origin must serve `/widget/frame/`, `/widget/ozwell.js`, `/v1/*`,
 and `/auth/*`. Its proxy must preserve the widget embedding policy and avoid
@@ -75,9 +80,10 @@ it does not rewrite response headers.
 
 For local development, [build the widget](../reference-server/embed/README.md#building-and-validating),
 start the reference server, and set `WIDGET_ORIGIN` to `http://localhost:3000` in
-`config.js`. Reload the extension. The manifest permits the two public hosts and
-HTTP loopback development servers. For another HTTPS deployment, also add its
-origin to `content_security_policy.extension_pages` → `frame-src` in
+`config.js`. Reload the extension. The manifest permits the production API host,
+the legacy host, and HTTP loopback development servers. For another
+HTTPS deployment, also add its origin to
+`content_security_policy.extension_pages` → `frame-src` in
 [`manifest.json`](./manifest.json).
 
 ## Authentication and session lifetime
