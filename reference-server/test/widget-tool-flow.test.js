@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { loadWidgetModule } from './helpers/load-widget-module.js';
+
+const { createToolResultMessage } = await loadWidgetModule('tool-results.ts');
 
 const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
 const WIDGET_APP_PATH = new URL('../embed/src/WidgetApp.tsx', import.meta.url);
@@ -28,38 +31,41 @@ async function readServerSource() {
   return readFile(SERVER_PATH, 'utf8');
 }
 
-test('widget tool results do not use success+message as a direct response shortcut', async () => {
-  const source = await readWidgetSource();
-
-  assert.equal(
-    source.includes('result.success && result.message'),
-    false,
-    'success+message must remain ordinary tool output and continue through the model'
-  );
-  assert.equal(
-    source.includes("addMessage('assistant', result.message)"),
-    false,
-    'tool result messages must not be displayed directly by the widget'
-  );
+test('widget success+message tool output remains a tool result for the model', () => {
+  const result = { success: true, message: 'Action completed' };
+  assert.deepEqual(createToolResultMessage('call-1', result), {
+    role: 'tool',
+    tool_call_id: 'call-1',
+    content: JSON.stringify(result),
+  });
 });
 
-test('widget tool results are sent back with the matching OpenAI tool_call_id', async () => {
-  const source = await readWidgetSource();
-
-  assert.match(source, /const toolCallId = data\.id;/);
-  assert.match(source, /role:\s*"tool"/);
-  assert.match(source, /tool_call_id:\s*toolCallId/);
-  assert.match(source, /content:\s*serializeToolResult\(result\)/);
-  assert.match(source, /sendMessageStreaming\("", tools, thinkingRetryCount \+ 1\)/);
+test('widget tool results preserve their OpenAI tool_call_id, including falsy IDs', () => {
+  for (const id of ['call-1', 'call-2', 42, 0, '']) {
+    assert.deepEqual(createToolResultMessage(id, { value: id }), {
+      role: 'tool',
+      tool_call_id: id,
+      content: JSON.stringify({ value: id }),
+    });
+  }
 });
 
-test('widget accepts falsy JSON-RPC ids and always serializes tool result content as a string', async () => {
-  const source = await readWidgetSource();
-
-  assert.match(source, /if \(toolCallId == null\)/);
-  assert.doesNotMatch(source, /if \(!toolCallId\)/);
-  assert.match(source, /function serializeToolResult\(result\)/);
-  assert.match(source, /return serialized === void 0 \? "null" : serialized;/);
+test('widget tool result content is always a string, including falsy and undefined results', () => {
+  const cases = [
+    ['already text', 'already text'],
+    ['', ''],
+    [false, 'false'],
+    [0, '0'],
+    [null, 'null'],
+    [undefined, 'null'],
+    [{ answer: 42 }, '{"answer":42}'],
+    [[1, 2], '[1,2]'],
+  ];
+  for (const [result, expected] of cases) {
+    const message = createToolResultMessage('call-1', result);
+    assert.equal(typeof message.content, 'string');
+    assert.equal(message.content, expected);
+  }
 });
 
 test('loader strips callable tool functions before sending config through postMessage', async () => {
@@ -201,8 +207,17 @@ test('widget sends exactly one follow-up completion after all parallel tool resu
   assert.notEqual(handlerEnd, -1, 'Parent-message handler registration must exist');
   assert.ok(handlerEnd > handlerStart, 'Handler registration must follow its declaration');
   const handlerSource = appSource.slice(handlerStart, handlerEnd);
+  // Keep a wiring check on the authored source, never on bundler-chosen names.
+  // The executable helper tests above cover the message contents and values.
+  assert.match(handlerSource, /data\.id != null/);
+  assert.match(handlerSource, /const toolCallId = data\.id;/);
+  assert.match(handlerSource, /if \(toolCallId == null\)/);
+  assert.doesNotMatch(handlerSource, /if \(!toolCallId\)/);
+  assert.doesNotMatch(handlerSource, /result\.success && result\.message/);
+  assert.doesNotMatch(handlerSource, /assistantDisplayMessage\(result\.message\)/);
   assert.doesNotMatch(handlerSource, /sendMessageStreaming\(/);
   assert.match(handlerSource, /recordToolResultRef\.current\(toolCallId, result\);/);
+  assert.match(appSource, /appendHistory\(createToolResultMessage\(toolCallId, result\)\);/);
   // A timed-out tool call records a synthetic error result so the history remains valid.
   assert.match(appSource, /recordToolResultRef\.current\(id, \{ error: 'Tool call timed out' \}\);/);
 });

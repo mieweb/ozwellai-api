@@ -1,50 +1,55 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { loadWidgetModule } from './helpers/load-widget-module.js';
 
-const WIDGET_PATH = new URL('../embed/ozwell.js', import.meta.url);
+const { buildSystemPrompt, getAuthKey } = await loadWidgetModule('system-prompt.ts');
 
-async function readWidgetSource() {
-  // Normalize CRLF -> LF: git may check out CRLF on Windows, breaking the
-  // source-matching regexes below that anchor on \n.
-  const source = await readFile(WIDGET_PATH, 'utf8');
-  return source.replace(/\r\n/g, '\n');
-}
+const DEFAULT_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
+const TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
+const tools = [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object' } } }];
 
-test('agent-key widgets do not add a client-side system prompt', async () => {
-  const source = await readWidgetSource();
-
-  assert.match(source, /function isAgentKeyConfigured\(config\)/);
-  assert.match(source, /getAuthKey\(config\)\.startsWith\("agnt_key-"\)/);
-  assert.match(source, /if \(isAgentKeyConfigured\(config\)\) return "";/);
+test('agent keys omit client-side system prompts through either credential option', () => {
+  for (const keyOption of ['apiKey', 'openaiApiKey']) {
+    const config = { [keyOption]: 'agnt_key-example' };
+    assert.equal(buildSystemPrompt(config), '', keyOption);
+    assert.equal(buildSystemPrompt({ ...config, system: 'A custom prompt', tools }), '', keyOption);
+  }
 });
 
-test('widget default prompt does not discourage tool use', async () => {
-  const source = await readWidgetSource();
-
-  assert.doesNotMatch(source, /=== TOOL USAGE GUIDELINES ===/);
-  assert.doesNotMatch(source, /Do NOT use tools/);
-  assert.doesNotMatch(source, /Only use tools when truly necessary/);
+test('parent keys and unconfigured credentials receive the neutral default prompt', () => {
+  for (const config of [{ apiKey: 'parent-key' }, { openaiApiKey: 'parent-key' }, {}]) {
+    assert.equal(buildSystemPrompt(config), DEFAULT_PROMPT);
+    assert.equal(buildSystemPrompt({ ...config, tools: [] }), DEFAULT_PROMPT);
+    assert.equal(buildSystemPrompt({ ...config, system: '' }), DEFAULT_PROMPT);
+  }
 });
 
-test('parent-key widgets keep a small neutral default prompt and tool hint', async () => {
-  const source = await readWidgetSource();
+test('available tools add the helpful tool hint to the default prompt', () => {
+  const prompt = buildSystemPrompt({ apiKey: 'parent-key', tools });
 
-  assert.match(source, /var DEFAULT_PARENT_SYSTEM_PROMPT = "You are a helpful assistant\. Answer clearly and concisely\.";/);
-  assert.match(source, /var DEFAULT_PARENT_TOOL_HINT = "Use the available tools when they are helpful for answering the user or performing a requested action\.";/);
-  assert.match(source, /let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;/);
-  assert.match(source, /systemPrompt \+= ` \$\{DEFAULT_PARENT_TOOL_HINT\}`;/);
+  assert.equal(prompt, `${DEFAULT_PROMPT} ${TOOL_HINT}`);
+  assert.equal(buildSystemPrompt({ apiKey: 'parent-key', system: '', tools }), prompt);
+  assert.doesNotMatch(prompt, /=== TOOL USAGE GUIDELINES ===|Do NOT use tools|Only use tools when truly necessary/);
 });
 
-test('parent-key custom system prompt is preserved without widget tool rules', async () => {
-  const source = await readWidgetSource();
-  const promptFunctionMatch = source.match(/function buildSystemPrompt\(config\) \{[\s\S]*?\n  \}\n/);
-  assert.ok(promptFunctionMatch, 'could not extract buildSystemPrompt function body');
-  const promptFunction = promptFunctionMatch[0];
+test('parent-key custom system prompts are preserved without adding tool instructions', () => {
+  const system = '  Follow the application instructions exactly.\nKeep this formatting.  ';
 
-  assert.match(promptFunction, /if \(config\.system\) return config\.system;/);
-  assert.ok(
-    promptFunction.indexOf('return config.system;') < promptFunction.indexOf('let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;'),
-    'custom system prompt should return before default prompt or tool hint is appended'
-  );
+  assert.equal(buildSystemPrompt({ apiKey: 'parent-key', system }), system);
+  assert.equal(buildSystemPrompt({ apiKey: 'parent-key', system, tools }), system);
+});
+
+test('credential precedence also determines whether the widget supplies a system prompt', () => {
+  const parentFirst = { apiKey: 'parent-key', openaiApiKey: 'agnt_key-fallback' };
+  assert.equal(getAuthKey(parentFirst), 'parent-key');
+  assert.equal(buildSystemPrompt(parentFirst), DEFAULT_PROMPT);
+
+  const agentFirst = { apiKey: 'agnt_key-primary', openaiApiKey: 'parent-key' };
+  assert.equal(getAuthKey(agentFirst), 'agnt_key-primary');
+  assert.equal(buildSystemPrompt(agentFirst), '');
+
+  const emptyPrimary = { apiKey: '', openaiApiKey: 'agnt_key-fallback' };
+  assert.equal(getAuthKey(emptyPrimary), 'agnt_key-fallback');
+  assert.equal(buildSystemPrompt(emptyPrimary), '');
+  assert.equal(getAuthKey({}), '');
 });

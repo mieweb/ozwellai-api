@@ -7,6 +7,8 @@ import {
 } from '@mieweb/ui';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
+import { buildSystemPrompt, getAuthKey } from './system-prompt';
+import { createToolResultMessage } from './tool-results';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -19,8 +21,6 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
-const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
-const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
 
@@ -81,36 +81,12 @@ function ensureToolCallId(toolCall: OpenAIToolCall, nextId: () => number) {
   return toolCall.id;
 }
 
-function serializeToolResult(result: unknown) {
-  if (typeof result === 'string') return result;
-  const serialized = JSON.stringify(result);
-  return serialized === undefined ? 'null' : serialized;
-}
-
 function getContentText(message: ChatHistoryMessage) {
   return typeof message.content === 'string' ? message.content : '';
 }
 
 function historyToRequestMessages(messages: ChatHistoryMessage[]) {
   return messages.map(({ thinking, ...rest }) => rest);
-}
-
-function isAgentKeyConfigured(config: OzwellConfig) {
-  return getAuthKey(config).startsWith('agnt_key-');
-}
-
-function getAuthKey(config: OzwellConfig) {
-  return config.apiKey || config.openaiApiKey || '';
-}
-
-function buildSystemPrompt(config: OzwellConfig) {
-  if (isAgentKeyConfigured(config)) return '';
-  if (config.system) return config.system;
-  let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;
-  if (config.tools && config.tools.length > 0) {
-    systemPrompt += ` ${DEFAULT_PARENT_TOOL_HINT}`;
-  }
-  return systemPrompt;
 }
 
 function requestHeaders(config: OzwellConfig) {
@@ -868,11 +844,7 @@ export function WidgetApp() {
     delete pendingToolCallsRef.current[String(toolCallId)];
     const wasAwaiting = awaitingToolResultsRef.current.has(String(toolCallId));
     updateToolExecutionResult(toolCallId, result);
-    appendHistory({
-      role: 'tool',
-      tool_call_id: toolCallId,
-      content: serializeToolResult(result),
-    });
+    appendHistory(createToolResultMessage(toolCallId, result));
     awaitingToolResultsRef.current.delete(String(toolCallId));
     // Only continue the turn once every parallel tool call has a result.
     if (wasAwaiting && awaitingToolResultsRef.current.size === 0) {
