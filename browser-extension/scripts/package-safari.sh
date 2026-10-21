@@ -113,11 +113,12 @@ source, destination = map(Path, sys.argv[1:])
 destination.mkdir()
 excluded = {'.git', 'node_modules', 'test', 'tests', 'scripts', 'screenshots', 'artifacts', 'build', 'dist'}
 allowed = {'.js', '.mjs', '.json', '.html', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.woff', '.woff2', '.ttf', '.otf', '.wasm'}
+vendor_notices = {'vendor/LICENSE', 'vendor/THIRD_PARTY_NOTICES.md', 'vendor/ai-motion-LICENSE'}
 for path in source.rglob('*'):
     relative = path.relative_to(source)
     if any(part in excluded or part.startswith('.') for part in relative.parts):
         continue
-    if not path.is_file() or path.suffix.lower() not in allowed or path.name in {'package.json', 'package-lock.json'}:
+    if not path.is_file() or (path.suffix.lower() not in allowed and relative.as_posix() not in vendor_notices) or path.name in {'package.json', 'package-lock.json'}:
         continue
     target = destination / relative
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +127,7 @@ manifest = json.loads((destination / 'manifest.json').read_text())
 if manifest.get('name') != 'ozwell':
     raise SystemExit('Rename manifest.name to "ozwell" before packaging the branded app.')
 # Keep the complete toolbar chat surface and branding in the self-contained app.
-required = ('background.js', 'config.js', 'content-script.js', 'policy.js', 'popup.html', 'popup.js', 'popup.css', 'widget-host.js', 'assets/ozwell-512.png')
+required = ('background.js', 'config.js', 'content-script.js', 'policy.js', 'popup.html', 'popup.js', 'popup.css', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'assets/ozwell-512.png', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', *sorted(vendor_notices))
 for name in required:
     if not (destination / name).is_file():
         raise SystemExit(f'Required runtime resource is missing: {name}')
@@ -313,7 +314,7 @@ if manifest.get('name') != 'ozwell':
     raise SystemExit('Built extension has an unexpected name')
 if manifest.get('background', {}).get('type'):
     raise SystemExit('Safari worker must be bundled as a classic script')
-for name in ('popup.js', 'widget-host.js', 'assets/ozwell-512.png'):
+for name in ('popup.js', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', 'vendor/LICENSE', 'vendor/THIRD_PARTY_NOTICES.md', 'vendor/ai-motion-LICENSE', 'assets/ozwell-512.png'):
     if not (resources / name).is_file():
         raise SystemExit(f'Built app is missing a runtime resource: {name}')
 PY

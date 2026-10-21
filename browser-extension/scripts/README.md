@@ -15,7 +15,8 @@ extension, generated Xcode project, final app, build logs, and tool versions.
 `--build-number` sets and verifies `CFBundleVersion` in both the app and its
 embedded extension. It defaults to `1`; choose a higher number than the installed
 build when updating. The bundle identifiers stay unchanged.
-The script checks that the chat host and brand assets are packaged. It bundles
+The script checks that the chat host, page tools, pinned controller and its license
+notices, and brand assets are packaged. It bundles
 only the copied background worker as a classic script for Safari compatibility;
 the repository's Chrome source keeps its ES modules. Safari 16.4 or later is
 required for session storage and dynamic content-script registration.

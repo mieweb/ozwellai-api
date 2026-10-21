@@ -8,6 +8,141 @@
   let host, launcher, panel, frame, status, fallback, widget, loadTimer;
   let ready = false;
   let revision = 0;
+  let powered = false, launcherEnabled = false, pageTools, pageHref, pageMcp, navigationTimer;
+  const ports = new Set();
+  const currentUrl = () => globalThis.location?.href || window.location?.href || '';
+  let observedUrl = currentUrl();
+
+  function stopWatching() {
+    if (ports.size || pageTools) return;
+    globalThis.clearInterval?.(navigationTimer);
+    navigationTimer = null;
+  }
+
+  function checkNavigation() {
+    const url = currentUrl();
+    if (url === observedUrl) return;
+    observedUrl = url;
+    resetConnections();
+    if (panel && !panel.hidden) close();
+    else resetPageTools();
+    void refresh();
+  }
+
+  function watchNavigation() {
+    observedUrl = currentUrl();
+    if (!navigationTimer && globalThis.setInterval) navigationTimer = setInterval(checkNavigation, 250);
+  }
+
+  function pageAuthorized() {
+    return Boolean(powered && launcherEnabled && frame && panel && !panel.hidden && pageHref === currentUrl());
+  }
+
+  function resetPageTools() {
+    pageMcp?.reset();
+    pageTools?.dispose();
+    pageTools = pageHref = null;
+    stopWatching();
+  }
+
+  function ensurePageTools() {
+    if (pageTools && pageHref === currentUrl()) return pageTools;
+    resetPageTools();
+    if (!globalThis.__ozwellCreatePageTools) return null;
+    pageHref = currentUrl();
+    try { pageTools = globalThis.__ozwellCreatePageTools({ root: document.body, isAuthorized: pageAuthorized }); }
+    catch { pageTools = pageHref = null; return null; }
+    watchNavigation();
+    return pageTools;
+  }
+
+  async function authorized(url, requireLauncher) {
+    if (currentUrl() !== url) return false;
+    const stamp = revision;
+    const state = await chrome.runtime.sendMessage({ type: 'ozwell:get-state' });
+    if (stamp === revision) powered = state?.settings?.mode !== 'off' && Boolean(state?.settings);
+    return powered && state?.settings?.mode !== 'off' && state?.tab?.url === url
+      && currentUrl() === url && (!requireLauncher || (launcherEnabled && state?.tab?.enabled));
+  }
+
+  function resetConnections() {
+    for (const connection of [...ports]) connection.dispose();
+  }
+
+  chrome.runtime.onConnect?.addListener((port) => {
+    if (port.name !== 'ozwell:page-tools' || port.sender?.id !== chrome.runtime.id
+      || port.sender?.url !== chrome.runtime.getURL('popup.html')) {
+      port.disconnect();
+      return;
+    }
+    const connection = { active: true, pending: new Map(), factory: null, session: null, url: currentUrl(), dispose };
+    ports.add(connection);
+    watchNavigation();
+    function dispose() {
+      if (!connection.active) return;
+      connection.active = false;
+      for (const request of connection.pending.values()) {
+        clearTimeout(request.timer);
+        request.controller.abort();
+      }
+      connection.pending.clear();
+      connection.factory?.dispose();
+      ports.delete(connection);
+      try { port.disconnect(); } catch { /* Already disconnected. */ }
+      stopWatching();
+    }
+    const allowed = () => connection.active && powered && currentUrl() === connection.url;
+    const send = message => { if (connection.active) try { port.postMessage(message); } catch { dispose(); } };
+    port.onDisconnect.addListener(dispose);
+    port.onMessage.addListener(async (message) => {
+      if (!connection.active || !message || typeof message !== 'object') return;
+      if (message.type === 'hello' && !connection.session) {
+        if (message.url !== connection.url) return dispose();
+        connection.session = 'initializing';
+        try {
+          if (!await authorized(connection.url, false) || !allowed() || !globalThis.__ozwellCreatePageTools) return dispose();
+          connection.factory = globalThis.__ozwellCreatePageTools({ root: document.body, isAuthorized: allowed });
+          connection.session = [...crypto.getRandomValues(new Uint32Array(4))]
+            .map(value => value.toString(16).padStart(8, '0')).join('');
+          send({ type: 'ready', session: connection.session, url: connection.url, tools: connection.factory.tools });
+        } catch { dispose(); }
+        return;
+      }
+      if (!connection.factory || message.session !== connection.session || !Number.isInteger(message.id)) return;
+      if (message.type === 'cancel') {
+        const request = connection.pending.get(message.id);
+        if (request) {
+          clearTimeout(request.timer);
+          request.controller.abort();
+          connection.pending.delete(message.id);
+        }
+        return;
+      }
+      if (message.type !== 'call' || connection.pending.has(message.id)) return;
+      const request = { controller: new AbortController() };
+      connection.pending.set(message.id, request);
+      const finish = (result, error) => {
+        if (!connection.active || connection.pending.get(message.id) !== request || request.controller.signal.aborted) return;
+        clearTimeout(request.timer);
+        connection.pending.delete(message.id);
+        send({ type: error ? 'error' : 'result', session: connection.session, id: message.id,
+          ...(error ? { error: { message: error.message || 'Page tool failed.' } } : { result }) });
+      };
+      request.timer = setTimeout(() => {
+        finish(null, new Error('Page tool timed out.'));
+        request.controller.abort();
+      }, 29000);
+      try {
+        if (!await authorized(connection.url, false) || !allowed()) throw new Error('Page access ended.');
+        if (request.controller.signal.aborted) return;
+        const result = await connection.factory.callTool(message.name, message.args, { signal: request.controller.signal });
+        if (allowed()) finish(result);
+      } catch (error) { finish(null, error); }
+    });
+  });
+
+  window.addEventListener('popstate', checkNavigation);
+  window.addEventListener('hashchange', checkNavigation);
 
   function pinnedWidget(value) {
     try {
@@ -24,6 +159,9 @@
   }
 
   function teardown() {
+    resetPageTools();
+    pageMcp?.dispose();
+    pageMcp = null;
     clearTimeout(loadTimer);
     host?.remove();
     host = launcher = panel = frame = status = fallback = null;
@@ -43,7 +181,9 @@
           endpoint: widget.endpoint,
           title: 'ozwell',
           thinkingEnabled: false,
-          tools: [],
+          tools: (pageAuthorized() ? pageTools?.tools || [] : []).map(tool => ({
+            type: 'function', function: { name: `postMessage_${tool.name}`, description: tool.description || '', parameters: tool.inputSchema || { type: 'object', properties: {} } },
+          })),
         },
       },
     });
@@ -52,6 +192,8 @@
   function close() {
     if (!panel) return;
     panel.hidden = true;
+    resetPageTools();
+    if (ready) sendConfig();
     launcher.setAttribute('aria-expanded', 'false');
     launcher.setAttribute('aria-label', 'Open ozwell assistant');
     launcher.focus();
@@ -68,13 +210,26 @@
     launcher.setAttribute('aria-expanded', 'true');
     launcher.setAttribute('aria-label', 'Close ozwell assistant');
     panel.querySelector('button').focus();
-    if (frame) return;
+    if (frame) { ensurePageTools(); if (ready) sendConfig(); return; }
 
     frame = document.createElement('iframe');
     frame.title = 'ozwell assistant';
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.addEventListener('error', showLoadError);
+    ensurePageTools();
+    pageMcp = globalThis.__ozwellCreateMcpBridge?.({
+      post,
+      isAuthorized: pageAuthorized,
+      getTools: async ({ signal }) => {
+        if (!pageAuthorized() || !await authorized(pageHref, true) || signal.aborted) return [];
+        return pageTools?.tools || [];
+      },
+      callTool: async (name, args, { signal }) => {
+        if (!pageAuthorized() || !await authorized(pageHref, true) || signal.aborted) throw new Error('Page access ended.');
+        return pageTools.callTool(name, args, { signal });
+      },
+    });
     frame.src = widget.frameUrl;
     panel.appendChild(frame);
     // A blocked frame or a server 404 may still fire `load`. Require widget ready.
@@ -177,9 +332,16 @@
     document.documentElement.appendChild(host);
   }
 
-  function update(enabled, value) {
+  function update(enabled, value, isPowered = true, resetTools = false) {
+    powered = Boolean(isPowered);
+    launcherEnabled = Boolean(enabled && powered);
+    if (!powered || resetTools) {
+      resetConnections();
+      if (panel && !panel.hidden) close();
+      else resetPageTools();
+    }
     const nextWidget = pinnedWidget(value);
-    if (!enabled || !nextWidget) {
+    if (!launcherEnabled || !nextWidget) {
       teardown();
       widget = null;
       return;
@@ -203,30 +365,16 @@
       } else if (data.type === 'closed') close();
       return;
     }
-    if (data.jsonrpc !== '2.0' || typeof data.method !== 'string' || data.id == null) return;
-    const reply = { jsonrpc: '2.0', id: data.id };
-    switch (data.method) {
-      case 'initialize':
-        reply.result = {
-          protocolVersion: '2025-11-25',
-          capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'ozwell-browser-extension', version: '0.1.0' },
-        };
-        break;
-      case 'tools/list': reply.result = { tools: [] }; break;
-      case 'ping': reply.result = {}; break;
-      default: reply.error = { code: -32601, message: 'No page tools are exposed by this extension.' };
-    }
-    post(reply);
+    pageMcp?.handle(data);
   });
 
   async function refresh() {
     const requestedRevision = ++revision;
     try {
       const state = await chrome.runtime.sendMessage({ type: 'ozwell:get-state' });
-      if (requestedRevision === revision) update(state?.tab?.enabled, state?.widget);
+      if (requestedRevision === revision) update(state?.tab?.enabled, state?.widget, state?.settings ? state.settings.mode !== 'off' : true);
     } catch {
-      if (requestedRevision === revision) teardown();
+      if (requestedRevision === revision) { powered = false; resetConnections(); teardown(); }
     }
   }
 
@@ -234,7 +382,7 @@
     if (sender && sender.id !== chrome.runtime.id) return;
     if (message?.type !== 'ozwell:sync') return;
     revision++;
-    update(message.enabled, message.widget);
+    update(message.enabled, message.widget, message.powered ?? powered, message.resetTools);
   });
   globalThis.__ozwellExtension = { refresh };
   void refresh();

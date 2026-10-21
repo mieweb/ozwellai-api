@@ -5,6 +5,7 @@ const SCRIPT_ID = 'ozwell';
 const LEGACY_SCRIPT_IDS = ['ozwell-minimal'];
 const SETTINGS_KEY = 'settings';
 const OVERRIDES_KEY = 'tabOverrides';
+const CONTENT_FILES = ['vendor/page-controller.js', 'page-tools.js', 'mcp-bridge.js', 'content-script.js'];
 
 // Exported for dependency-free lifecycle tests; the browser instance is below.
 export function createController(api) {
@@ -40,7 +41,7 @@ export function createController(api) {
     return { settings: config, tab: { id: tab.id, ...page, enabled }, widget: WIDGET };
   }
 
-  async function refresh() {
+  async function refresh({ resetTools = false } = {}) {
     const config = await settings();
     const desired = patternsForSettings(config);
     const matches = [];
@@ -61,7 +62,7 @@ export function createController(api) {
     }
     if (matches.length) {
       await api.scripting.registerContentScripts([{
-        id: SCRIPT_ID, matches, js: ['content-script.js'],
+        id: SCRIPT_ID, matches, js: CONTENT_FILES,
         runAt: 'document_idle', allFrames: false, persistAcrossSessions: true,
       }]);
     }
@@ -70,11 +71,14 @@ export function createController(api) {
       const state = await getState(tab.id);
       try {
         // Existing scripts must also receive Off, even after a host grant is revoked.
-        await api.tabs.sendMessage(tab.id, { type: 'ozwell:sync', enabled: state.tab.enabled, widget: WIDGET });
+        await api.tabs.sendMessage(tab.id, {
+          type: 'ozwell:sync', enabled: state.tab.enabled,
+          powered: state.settings.mode !== 'off', resetTools, widget: WIDGET,
+        });
       } catch { /* No content script on this tab yet. */ }
       if (state.tab.enabled) {
         try {
-          await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-script.js'] });
+          await api.scripting.executeScript({ target: { tabId: tab.id }, files: CONTENT_FILES });
         } catch { /* Browser-protected pages and revoked host grants cannot be injected. */ }
       }
     }));
@@ -82,7 +86,7 @@ export function createController(api) {
 
   return {
     getState: async tabId => { await queue; return getState(tabId); },
-    refresh: () => serialize(refresh),
+    refresh: options => serialize(() => refresh(options)),
     setSettings: value => serialize(async () => {
       const config = normalizeSettings(value);
       // Older popup clients do not send resumeMode when switching Off.
@@ -104,11 +108,14 @@ export function createController(api) {
         throw new Error('Choose an enabled mode and open a regular website first.');
       }
       // activeTab grants access for this explicit toolbar action only.
-      await api.scripting.executeScript({ target: { tabId }, files: ['content-script.js'] });
+      await api.scripting.executeScript({ target: { tabId }, files: CONTENT_FILES });
       const current = await overrides();
       current[tabId] = { url: state.tab.url, enabled: !state.tab.enabled };
       await api.storage.session.set({ [OVERRIDES_KEY]: current });
-      await api.tabs.sendMessage(tabId, { type: 'ozwell:sync', enabled: !state.tab.enabled, widget: WIDGET });
+      await api.tabs.sendMessage(tabId, {
+        type: 'ozwell:sync', enabled: !state.tab.enabled,
+        powered: true, widget: WIDGET,
+      });
     }),
     clearTab: tabId => serialize(async () => {
       const current = await overrides();
@@ -116,7 +123,10 @@ export function createController(api) {
       await api.storage.session.set({ [OVERRIDES_KEY]: current });
       const state = await getState(tabId);
       try {
-        await api.tabs.sendMessage(tabId, { type: 'ozwell:sync', enabled: state.tab.enabled, widget: WIDGET });
+        await api.tabs.sendMessage(tabId, {
+          type: 'ozwell:sync', enabled: state.tab.enabled,
+          powered: state.settings.mode !== 'off', resetTools: true, widget: WIDGET,
+        });
       } catch { /* Tab may have closed or started a new document. */ }
     }),
   };
@@ -128,7 +138,7 @@ if (globalThis.chrome?.runtime?.id) {
   chrome.runtime.onInstalled.addListener(() => controller.refresh().catch(report));
   chrome.runtime.onStartup.addListener(() => controller.refresh().catch(report));
   chrome.permissions.onAdded.addListener(() => controller.refresh().catch(report));
-  chrome.permissions.onRemoved.addListener(() => controller.refresh().catch(report));
+  chrome.permissions.onRemoved.addListener(() => controller.refresh({ resetTools: true }).catch(report));
   chrome.tabs.onRemoved.addListener(tabId => controller.clearTab(tabId).catch(report));
   chrome.tabs.onUpdated.addListener((tabId, change) => {
     if (change.status === 'loading' || change.url) controller.clearTab(tabId).catch(report);

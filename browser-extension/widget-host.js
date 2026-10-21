@@ -1,4 +1,6 @@
-// Only the frame has the chat runtime and credentials; this local shell has no page tools.
+import './mcp-bridge.js';
+
+// Chat and credentials remain in the remote frame; page tools use a local, pinned connection.
 export function normalizeWidget(value) {
   const origin = new URL(value?.origin);
   const local = origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
@@ -13,8 +15,8 @@ export function normalizeWidget(value) {
   return { origin: origin.origin, frameUrl: frameUrl.href, endpoint: endpoint.href };
 }
 
-export function createWidgetHost(container, { onReady = () => {}, onError = () => {} } = {}) {
-  let widget, frame, loading, fallback, loadTimer;
+export function createWidgetHost(container, { onReady = () => {}, onError = () => {}, getTools = async () => [], callTool, isAuthorized = () => true } = {}) {
+  let widget, frame, loading, fallback, loadTimer, mcp, toolsController;
   let ready = false;
 
   function post(message) {
@@ -26,6 +28,21 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
     if (!ready) return;
     frame?.focus();
     post({ source: 'ozwell-chat-parent', type: 'focus' });
+  }
+
+  async function refreshTools() {
+    if (!ready || !frame || !mcp) return;
+    const target = frame;
+    toolsController?.abort();
+    toolsController = new AbortController();
+    const signal = toolsController.signal;
+    try {
+      const tools = await mcp.getTools({ signal });
+      if (signal.aborted || frame !== target || !ready) return;
+      post({ source: 'ozwell-chat-parent', type: 'config', payload: { config: { tools: tools.map(tool => ({
+        type: 'function', function: { name: tool.name, description: tool.description || '', parameters: tool.inputSchema || { type: 'object', properties: {} } },
+      })) } } });
+    } catch { /* Chat remains available if page tool discovery fails. */ }
   }
 
   function showError() {
@@ -55,6 +72,7 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
             thinkingEnabled: false, tools: [],
           } },
         });
+        void refreshTools();
         if (firstReady) {
           focus();
           onReady();
@@ -62,24 +80,15 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
       }
       return;
     }
-    if (data.jsonrpc !== '2.0' || typeof data.method !== 'string' || data.id == null) return;
-    const reply = { jsonrpc: '2.0', id: data.id };
-    switch (data.method) {
-      case 'initialize':
-        reply.result = {
-          protocolVersion: '2025-11-25', capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'ozwell-browser-extension', version: '0.1.0' },
-        };
-        break;
-      case 'tools/list': reply.result = { tools: [] }; break;
-      case 'ping': reply.result = {}; break;
-      default: reply.error = { code: -32601, message: 'No page tools are exposed by this extension.' };
-    }
-    post(reply);
+    mcp?.handle(data);
   }
 
   function destroy() {
     clearTimeout(loadTimer);
+    toolsController?.abort();
+    toolsController = null;
+    mcp?.dispose();
+    mcp = null;
     window.removeEventListener('message', handleMessage);
     frame?.remove();
     loading?.remove();
@@ -111,6 +120,7 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.addEventListener('error', showError);
+    mcp = globalThis.__ozwellCreateMcpBridge({ getTools, callTool, post, isAuthorized });
     window.addEventListener('message', handleMessage);
     frame.src = widget.frameUrl;
     container.append(loading, frame);
@@ -119,5 +129,5 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
     return frame;
   }
 
-  return { mount, destroy, focus };
+  return { mount, destroy, focus, refreshTools };
 }

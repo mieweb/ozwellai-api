@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:controller": "node scripts/build-page-controller.mjs",
     "test": "node --test test/*.test.js",
-    "test:browser": "node test/browser-smoke.mjs"
+    "test:page-tools": "node test/page-tools-browser.mjs",
+    "test:browser": "node test/page-tools-browser.mjs && node test/browser-smoke.mjs"
   }
 }

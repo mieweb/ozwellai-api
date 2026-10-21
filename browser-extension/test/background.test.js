@@ -4,6 +4,7 @@ import { createController } from '../background.js';
 import { WIDGET } from '../config.js';
 
 const clone = value => structuredClone(value);
+const CONTENT_FILES = ['vendor/page-controller.js', 'page-tools.js', 'mcp-bridge.js', 'content-script.js'];
 
 function mockChrome({ settings, tabs = [{ id: 1, url: 'https://ui.mieweb.org/path' }], grants = [], session = {}, scripts = [] } = {}) {
   const local = settings ? { settings: clone(settings) } : {};
@@ -60,8 +61,8 @@ test('default manual mode registers nothing and enables only the explicitly togg
   assert.deepEqual(mock.calls.injected, []);
   await controller.toggleTab(1);
   assert.equal((await controller.getState(1)).tab.enabled, true);
-  assert.deepEqual(mock.calls.injected, [{ target: { tabId: 1 }, files: ['content-script.js'] }]);
-  assert.deepEqual(mock.calls.messages.at(-1), { tabId: 1, type: 'ozwell:sync', enabled: true, widget: WIDGET });
+  assert.deepEqual(mock.calls.injected, [{ target: { tabId: 1 }, files: CONTENT_FILES }]);
+  assert.deepEqual(mock.calls.messages.at(-1), { tabId: 1, type: 'ozwell:sync', enabled: true, powered: true, widget: WIDGET });
   await controller.toggleTab(1);
   assert.equal((await controller.getState(1)).tab.enabled, false);
   assert.equal(mock.calls.messages.at(-1).enabled, false);
@@ -86,7 +87,7 @@ test('allowlist persistently registers only exact hosts and injects eligible ope
   await controller.setSettings({ mode: 'allowlist', domains: ['HTTPS://UI.MIEWEB.ORG/path'] });
   assert.deepEqual(mock.local.settings, { mode: 'allowlist', domains: ['ui.mieweb.org'], resumeMode: 'allowlist' });
   assert.deepEqual(mock.registered, [{
-    id: 'ozwell', matches: ['*://ui.mieweb.org/*'], js: ['content-script.js'],
+    id: 'ozwell', matches: ['*://ui.mieweb.org/*'], js: CONTENT_FILES,
     runAt: 'document_idle', allFrames: false, persistAcrossSessions: true,
   }]);
   assert.deepEqual(mock.calls.injected.map(call => call.target.tabId), [1]);
@@ -112,6 +113,7 @@ test('always mode covers HTTP and HTTPS, while off unregisters and tells mounted
   assert.deepEqual(mock.local.settings, { mode: 'off', domains: [], resumeMode: 'always' });
   assert.deepEqual(mock.session.tabOverrides, {});
   assert.ok(mock.calls.messages.slice(-3).every(message => message.enabled === false));
+  assert.ok(mock.calls.messages.slice(-3).every(message => message.powered === false));
   await assert.rejects(controller.toggleTab(1), /enabled mode/);
   assert.equal((await controller.getState(1)).tab.enabled, false);
 });
@@ -180,6 +182,7 @@ test('page toggles are scoped to the full URL and clearing on navigation removes
   mock.tabs.get(1).url = 'https://ui.mieweb.org/another';
   assert.equal((await controller.getState(1)).tab.enabled, false);
   await controller.clearTab(1);
+  assert.equal(mock.calls.messages.at(-1).resetTools, true);
   assert.deepEqual(mock.session.tabOverrides, {});
   mock.tabs.get(1).url = 'https://ui.mieweb.org/path';
   assert.equal((await controller.getState(1)).tab.enabled, false);
@@ -215,11 +218,21 @@ test('revoking site permission unregisters automatic injection and hides the exi
   await controller.setSettings({ mode: 'allowlist', domains: ['ui.mieweb.org'] });
   mock.permissions.clear();
   mock.calls.injected.length = 0;
-  await controller.refresh();
+  await controller.refresh({ resetTools: true });
   assert.deepEqual(mock.registered, []);
   assert.equal((await controller.getState(1)).tab.enabled, false);
   assert.equal(mock.calls.messages.at(-1).enabled, false);
+  assert.equal(mock.calls.messages.at(-1).resetTools, true);
   assert.deepEqual(mock.calls.injected, []);
+});
+
+test('resetting page tools reaches manual sessions independently of launcher visibility', async () => {
+  const mock = mockChrome();
+  await createController(mock.api).refresh({ resetTools: true });
+  assert.deepEqual(mock.calls.injected, []);
+  assert.deepEqual(mock.calls.messages, [{
+    tabId: 1, type: 'ozwell:sync', enabled: false, powered: true, resetTools: true, widget: WIDGET,
+  }]);
 });
 
 test('partial broad permission revocation preserves only the still granted scheme', async () => {

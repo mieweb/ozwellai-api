@@ -1,0 +1,33 @@
+{
+  "package": "@mieweb/page-controller",
+  "version": "1.12.4-mie.1",
+  "repository": "https://github.com/mieweb/page-agent",
+  "commit": "cf185d55a44ecd46eb38a9feb296dbbc7b3485ce",
+  "upstreamCommit": "9eb6b6646500264d9034dd466a4270cb9fc1ef1e",
+  "lockIntegrity": "sha512-JUeRHxSyF1aN8i3Zh0xzkTtbj7agCJAT/B6AQJll2p1FQBkKuK0LH6NiYIbMzAouFIRGsVLrD0vcAdH8eJ7fwg==",
+  "sourceFiles": {
+    "package.json": "69aa430109876ea0d21b54be2e301e314451b2deb4347b8395f6c0dce21d785f",
+    "dist/page-controller.js": "fffc37b74720b5ce4f3363fe99586e47d731596639b60761d1242b88a0bd8ea0",
+    "CONTROLLER-DISTRIBUTION.md": "43ab842e49e43c1eb6ff0ae0346c909b0d84ee637532f1659698fb02bbfcd03b",
+    "LICENSE": "393ad563ce5dd0bbe283ec40f9f5d631817262bc9bbd5eb17ed038a9d9f44803",
+    "THIRD_PARTY_NOTICES.md": "f0b4832cd9b24df11e97f438c7026db73b39dc68040a86cedc678baac52d84d7",
+    "licenses/ai-motion-LICENSE": "df71b50b0d46b282e5ed6fe67c1c23874b10b2a1512a4658d3aafa9fb9d23b76"
+  },
+  "esbuild": "0.27.2",
+  "target": [
+    "chrome102",
+    "safari16.4"
+  ],
+  "patches": [
+    "Disable executeJavascript; no evaluation or dynamic module imports in output.",
+    "Forward excludeElements(Element) and prune its matching subtrees before extraction/indexing.",
+    "Forward omitAttributes and remove matching attributes from defaults, explicit and wildcard serialization; omit textarea default text when value is omitted.",
+    "Skip invisible highlight DOM while preserving indexed parent grouping.",
+    "Export only PageController as globalThis.OzwellPageController.PageController."
+  ],
+  "bundle": {
+    "file": "page-controller.js",
+    "bytes": 55213,
+    "sha256": "739c45b66e1b1bb65ecdbd38fd9a4e55ec418621f72fed5c5599d560958f0e36"
+  }
+}

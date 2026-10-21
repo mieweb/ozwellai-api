@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWidgetHost, normalizeWidget } from '../widget-host.js';
 import { WIDGET } from '../config.js';
+const settle = () => new Promise(resolve => setImmediate(resolve));
 
 class Element {
   constructor(tag) {
@@ -110,18 +111,45 @@ test('toolbar widget messages require the exact frame and configured origin', t 
   assert.equal(frame.hidden, false);
 });
 
-test('toolbar MCP supports initialization and empty tools without allowing page or extension commands', t => {
+test('toolbar MCP supports async discovery while rejecting unadvertised tools and arbitrary methods', async t => {
   const page = fixture(t);
   const frame = page.host.mount(WIDGET);
   for (const [index, method] of ['initialize', 'tools/list', 'ping', 'tools/call', 'chrome.tabs.query'].entries()) {
     page.message(frame, { jsonrpc: '2.0', id: index + 1, method, params: { name: 'read-page' } });
   }
-  assert.equal(frame.sent[0].message.result.protocolVersion, '2025-11-25');
-  assert.deepEqual(frame.sent[1].message, { jsonrpc: '2.0', id: 2, result: { tools: [] } });
-  assert.deepEqual(frame.sent[2].message, { jsonrpc: '2.0', id: 3, result: {} });
-  assert.equal(frame.sent[3].message.error.code, -32601);
-  assert.equal(frame.sent[4].message.error.code, -32601);
+  await settle();
+  const reply = id => frame.sent.find(item => item.message.id === id).message;
+  assert.equal(reply(1).result.protocolVersion, '2025-11-25');
+  assert.deepEqual(reply(2), { jsonrpc: '2.0', id: 2, result: { tools: [] } });
+  assert.deepEqual(reply(3), { jsonrpc: '2.0', id: 3, result: {} });
+  assert.equal(reply(4).error.code, -32602);
+  assert.equal(reply(5).error.code, -32601);
   assert.ok(frame.sent.every(item => item.origin === WIDGET.origin));
+});
+
+test('toolbar host advertises connected page tools and cancels pending work on power-off', async t => {
+  const calls = [];
+  let finish;
+  const page = fixture(t, {
+    getTools: async () => [{ name: 'browser_snapshot', inputSchema: { type: 'object' } }],
+    callTool: (name, args, { signal }) => { calls.push({ name, args, signal }); return new Promise(resolve => { finish = resolve; }); },
+  });
+  const frame = page.host.mount(WIDGET);
+  page.message(frame, { source: 'ozwell-chat-widget', type: 'ready' });
+  await settle();
+  const config = frame.sent.filter(item => item.message.type === 'config').at(-1).message.payload.config;
+  assert.equal(config.tools[0].function.name, 'postMessage_browser_snapshot');
+  page.message(frame, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } }, { origin: 'https://other.test' });
+  await settle();
+  assert.equal(calls.length, 0);
+  page.message(frame, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } });
+  await settle();
+  assert.equal(calls[0].name, 'browser_snapshot');
+  page.host.destroy();
+  assert.equal(calls[0].signal.aborted, true);
+  finish({ late: true });
+  await settle();
+  assert.equal(frame.sent.filter(item => item.message.id === 10).length, 0);
 });
 
 test('power-off teardown removes credentials frame, timer and listener, ignoring stale frame messages', t => {

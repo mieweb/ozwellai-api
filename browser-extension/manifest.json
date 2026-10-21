@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ozwell",
   "version": "0.1.0",
-  "description": "Chat with ozwell from your browser and bring its page launcher to the sites you choose.",
+  "description": "Chat with ozwell and let it read and control the current website, with an optional launcher on the sites you choose.",
   "minimum_chrome_version": "102",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_host_permissions": ["*://*/*"],

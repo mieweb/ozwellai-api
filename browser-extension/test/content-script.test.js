@@ -2,10 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 import { WIDGET } from '../config.js';
 
 const source = await readFile(new URL('../content-script.js', import.meta.url), 'utf8');
+const bridgeSource = await readFile(new URL('../mcp-bridge.js', import.meta.url), 'utf8');
 const plain = value => JSON.parse(JSON.stringify(value));
+const toolNames = ['browser_snapshot', 'browser_click', 'browser_fill', 'browser_select', 'browser_scroll'];
+const toolDefinitions = toolNames.map(name => ({ name, inputSchema: { type: 'object' } }));
 
 class Element {
   constructor(tag) {
@@ -39,15 +43,26 @@ function descendants(element) {
   return element.children.flatMap(child => [child, ...descendants(child)]);
 }
 
-async function setup({ enabled = true, response } = {}) {
+async function setup({ enabled = true, response, callTool = async () => ({ content: [{ type: 'text', text: 'ok' }] }) } = {}) {
   const root = new Element('html');
   const windowListeners = new Map();
   const syncListeners = [];
+  const connectListeners = [];
+  const intervals = new Set();
+  const factories = [];
   const timers = new Set();
-  const state = { tab: { enabled }, widget: plain(WIDGET) };
+  const location = { href: 'https://ui.mieweb.org/workspace' };
+  const state = { settings: { mode: 'manual', domains: [] }, tab: { enabled, url: location.href }, widget: plain(WIDGET) };
   const context = vm.createContext({
-    URL,
-    document: { documentElement: root, createElement: tag => new Element(tag) },
+    URL, AbortController, DOMException, location,
+    crypto: webcrypto,
+    document: { documentElement: root, body: new Element('body'), createElement: tag => new Element(tag) },
+    __ozwellCreatePageTools: options => {
+      const factory = { options, tools: toolDefinitions, disposed: false,
+        callTool: (...args) => callTool(...args), dispose() { this.disposed = true; } };
+      factories.push(factory);
+      return factory;
+    },
     window: { addEventListener(name, listener) {
       const list = windowListeners.get(name) || [];
       list.push(listener);
@@ -58,10 +73,14 @@ async function setup({ enabled = true, response } = {}) {
       getURL: path => `chrome-extension://ozwell-test-extension/${path}`,
       sendMessage: response || (async () => state),
       onMessage: { addListener: listener => syncListeners.push(listener) },
+      onConnect: { addListener: listener => connectListeners.push(listener) },
     } },
     setTimeout: callback => { timers.add(callback); return callback; },
     clearTimeout: callback => timers.delete(callback),
+    setInterval: callback => { intervals.add(callback); return callback; },
+    clearInterval: callback => intervals.delete(callback),
   });
+  vm.runInContext(bridgeSource, context);
   const run = () => vm.runInContext(source, context);
   const settle = async () => { await new Promise(resolve => setImmediate(resolve)); };
   const sync = (message, sender = { id: 'ozwell-test-extension' }) => {
@@ -72,7 +91,7 @@ async function setup({ enabled = true, response } = {}) {
   const byLabel = label => descendants(root.children[0].shadow).find(element => element.attributes['aria-label'] === label);
   run();
   await settle();
-  return { root, context, timers, state, syncListeners, windowListeners, sync, message, find, byLabel, run, settle };
+  return { root, context, timers, intervals, factories, location, state, syncListeners, connectListeners, windowListeners, sync, message, find, byLabel, run, settle };
 }
 
 test('content shell mounts once and creates the hosted widget only when opened', async () => {
@@ -117,12 +136,134 @@ test('widget ready handshake requires both the hosted origin and this exact fram
   assert.deepEqual(frame.sent, [{
     origin: WIDGET.origin,
     message: { source: 'ozwell-chat-parent', type: 'config', payload: { config: {
-      endpoint: WIDGET.endpoint, title: 'ozwell', thinkingEnabled: false, tools: [],
+      endpoint: WIDGET.endpoint, title: 'ozwell', thinkingEnabled: false,
+      tools: toolNames.map(name => ({ type: 'function', function: { name: `postMessage_${name}`, description: '', parameters: { type: 'object' } } })),
     } } },
   }]);
 });
 
-test('MCP handshake exposes an empty tool list and rejects arbitrary tool execution', async () => {
+function connect(page, sender = { id: 'ozwell-test-extension', url: 'chrome-extension://ozwell-test-extension/popup.html' }) {
+  const messages = [], incoming = [], ended = [];
+  let disconnectCount = 0;
+  const port = {
+    name: 'ozwell:page-tools', sender,
+    postMessage: message => messages.push(plain(message)),
+    disconnect: () => { disconnectCount++; },
+    onMessage: { addListener: listener => incoming.push(listener) },
+    onDisconnect: { addListener: listener => ended.push(listener) },
+  };
+  page.connectListeners.forEach(listener => listener(port));
+  return { messages, receive: message => Promise.all(incoming.map(listener => listener(message))),
+    disconnect: () => ended.forEach(listener => listener()), get disconnectCount() { return disconnectCount; } };
+}
+
+test('content ports authenticate the exact extension popup sender and captured URL', async () => {
+  const page = await setup({ enabled: false });
+  for (const sender of [
+    { id: 'other-extension', url: 'chrome-extension://ozwell-test-extension/popup.html' },
+    { id: 'ozwell-test-extension', url: 'https://ui.mieweb.org/' },
+    { id: 'ozwell-test-extension', url: 'chrome-extension://ozwell-test-extension/popup.html?spoof=1' },
+  ]) assert.equal(connect(page, sender).disconnectCount, 1);
+  assert.equal(page.factories.length, 0);
+  const moved = connect(page);
+  await moved.receive({ type: 'hello', url: `${page.location.href}/different` });
+  assert.equal(moved.disconnectCount, 1);
+  const port = connect(page);
+  await port.receive({ type: 'hello', url: page.location.href });
+  const ready = port.messages[0];
+  assert.equal(ready.type, 'ready');
+  assert.match(ready.session, /^[a-f0-9]{32}$/);
+  assert.equal(ready.url, page.location.href);
+  assert.deepEqual(ready.tools, toolDefinitions);
+  port.disconnect();
+});
+
+test('content calls require the exact session and integer ID and pass cancellation to local tools', async () => {
+  const calls = [];
+  let finish;
+  const page = await setup({ enabled: false, callTool: (name, args, { signal }) => {
+    calls.push({ name, args, signal }); return new Promise(resolve => { finish = resolve; });
+  } });
+  const port = connect(page);
+  await port.receive({ type: 'hello', url: page.location.href });
+  const session = port.messages[0].session;
+  await port.receive({ type: 'call', session: 'different', id: 1, name: 'browser_fill', args: {} });
+  await port.receive({ type: 'call', session, id: '1', name: 'browser_fill', args: {} });
+  assert.equal(calls.length, 0);
+  const pending = port.receive({ type: 'call', session, id: 1, name: 'browser_fill', args: { value: 'Draft' } });
+  await page.settle();
+  assert.equal(calls[0].name, 'browser_fill');
+  await port.receive({ type: 'cancel', session: 'different', id: 1 });
+  assert.equal(calls[0].signal.aborted, false);
+  await port.receive({ type: 'cancel', session, id: 1 });
+  assert.equal(calls[0].signal.aborted, true);
+  finish({ cancelled: true });
+  await pending;
+  assert.equal(port.messages.length, 1, 'Cancelled calls do not produce stale results.');
+  port.disconnect();
+});
+
+test('off and navigation disconnect popup sessions and abort current page work', async () => {
+  for (const stop of ['off', 'navigation']) {
+    let signal, finish;
+    const page = await setup({ enabled: false, callTool: (name, args, options) => {
+      signal = options.signal; return new Promise(resolve => { finish = resolve; });
+    } });
+    const port = connect(page);
+    await port.receive({ type: 'hello', url: page.location.href });
+    const pending = port.receive({ type: 'call', session: port.messages[0].session, id: 1, name: 'browser_fill', args: {} });
+    await page.settle();
+    if (stop === 'off') page.sync({ enabled: false, powered: false });
+    else {
+      page.location.href = 'https://ui.mieweb.org/changed';
+      page.state.tab.url = page.location.href;
+      for (const callback of [...page.intervals]) callback();
+    }
+    assert.equal(signal.aborted, true, stop);
+    assert.equal(port.disconnectCount, 1, stop);
+    finish({ late: true }); await pending; await page.settle();
+    assert.equal(port.messages.length, 1, stop);
+    assert.ok(page.factories.every(factory => factory.disposed), stop);
+  }
+});
+
+test('closing a page panel cancels its tools and reopening refreshes the existing frame tool configuration', async () => {
+  let signal, finish;
+  const page = await setup({ callTool: (name, args, options) => {
+    signal = options.signal; return new Promise(resolve => { finish = resolve; });
+  } });
+  page.byLabel('Open ozwell assistant').dispatch('click');
+  const frame = page.find('iframe');
+  page.message({ source: frame.contentWindow, origin: WIDGET.origin, data: { source: 'ozwell-chat-widget', type: 'ready' } });
+  page.message({ source: frame.contentWindow, origin: WIDGET.origin,
+    data: { jsonrpc: '2.0', id: 55, method: 'tools/call', params: { name: 'postMessage_browser_snapshot' } } });
+  await page.settle();
+  page.byLabel('Close ozwell assistant').dispatch('click');
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(frame.sent.at(-1).message.payload.config.tools, [], 'The still-mounted chat loses its page tools immediately.');
+  finish({ late: true }); await page.settle();
+  assert.ok(!frame.sent.some(item => item.message.id === 55));
+  page.byLabel('Open ozwell assistant').dispatch('click');
+  assert.equal(page.find('iframe'), frame);
+  assert.equal(frame.sent.at(-1).message.payload.config.tools.length, 5);
+});
+
+test('a power-off update defeats a stale authorization response during popup connection setup', async () => {
+  let respond, count = 0;
+  const stale = new Promise(resolve => { respond = resolve; });
+  const state = { settings: { mode: 'manual', domains: [] }, tab: { enabled: false, url: 'https://ui.mieweb.org/workspace' }, widget: WIDGET };
+  const page = await setup({ enabled: false, response: () => ++count === 1 ? Promise.resolve(state) : stale });
+  const port = connect(page);
+  const pending = port.receive({ type: 'hello', url: page.location.href });
+  await page.settle();
+  page.sync({ enabled: false, powered: false });
+  respond(state); await pending;
+  assert.equal(port.disconnectCount, 1);
+  assert.equal(page.factories.length, 0);
+  assert.deepEqual(port.messages, []);
+});
+
+test('page MCP asynchronously exposes the five allowed tools and rejects arbitrary tool execution', async () => {
   const page = await setup();
   page.byLabel('Open ozwell assistant').dispatch('click');
   const frame = page.find('iframe');
@@ -134,10 +275,12 @@ test('MCP handshake exposes an empty tool list and rejects arbitrary tool execut
   request('tools/list', 2);
   request('ping', 3);
   request('tools/call', 4);
-  assert.equal(frame.sent[0].message.result.serverInfo.name, 'ozwell-browser-extension');
-  assert.deepEqual(frame.sent[1].message, { jsonrpc: '2.0', id: 2, result: { tools: [] } });
-  assert.deepEqual(frame.sent[2].message, { jsonrpc: '2.0', id: 3, result: {} });
-  assert.equal(frame.sent[3].message.error.code, -32601);
+  await page.settle();
+  const reply = id => frame.sent.find(item => item.message.id === id).message;
+  assert.equal(reply(1).result.serverInfo.name, 'ozwell-browser-extension');
+  assert.deepEqual(reply(2).result.tools.map(tool => tool.name), toolNames.map(name => `postMessage_${name}`));
+  assert.deepEqual(reply(3), { jsonrpc: '2.0', id: 3, result: {} });
+  assert.equal(reply(4).error.code, -32602);
   assert.ok(frame.sent.every(item => item.origin === WIDGET.origin));
 });
 

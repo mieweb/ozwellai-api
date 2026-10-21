@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, normalizeSettings, normalizeDomain, patternsForSettings } from './policy.js';
 import { createWidgetHost, normalizeWidget } from './widget-host.js';
+import { createPageConnection } from './page-connection.js';
 
 const power = document.querySelector('#power-button');
 const powerLabel = document.querySelector('#power-label');
@@ -13,7 +14,16 @@ const error = document.querySelector('#error');
 const chatContainer = document.querySelector('#chat-container');
 const chatEmpty = document.querySelector('#chat-empty');
 const openOzwell = document.querySelector('#open-ozwell');
-const chat = createWidgetHost(chatContainer);
+const pageControlStatus = document.querySelector('#page-control-status');
+let pageConnection, connectedUrl;
+const chat = createWidgetHost(chatContainer, {
+  isAuthorized: () => Boolean(pageConnection && !pageConnection.disposed),
+  getTools: options => pageConnection?.getTools(options) ?? [],
+  callTool: (name, args, options) => {
+    if (!pageConnection) throw new Error('Page access is unavailable.');
+    return pageConnection.callTool(name, args, options);
+  },
+});
 const descriptions = {
   manual: 'Show the page launcher when you choose it.',
   allowlist: 'Show the page launcher automatically on the domains below.',
@@ -55,6 +65,39 @@ async function send(message) {
   return result;
 }
 
+function disposePageConnection() {
+  const previous = pageConnection;
+  pageConnection = connectedUrl = null;
+  previous?.dispose();
+}
+
+function connectPage(enabled) {
+  if (pageControlStatus) pageControlStatus.hidden = !enabled;
+  if (!enabled || !state.tab?.supported || !Number.isInteger(tabId)) {
+    disposePageConnection();
+    if (pageControlStatus) pageControlStatus.textContent = 'Chat only on this page';
+    return;
+  }
+  if (pageConnection && !pageConnection.disposed && connectedUrl === state.tab.url) return;
+  disposePageConnection();
+  connectedUrl = state.tab.url;
+  if (pageControlStatus) pageControlStatus.textContent = 'Connecting to this page…';
+  let candidate;
+  candidate = createPageConnection(tabId, connectedUrl, {
+    onStateChange: ({ connected }) => {
+      if (pageConnection === candidate && pageControlStatus) {
+        pageControlStatus.textContent = connected ? 'Can read and control this page' : 'Chat only on this page';
+      }
+      if (pageConnection === candidate) void chat.refreshTools();
+    },
+  });
+  pageConnection = candidate;
+  if (candidate.disposed) {
+    if (pageControlStatus) pageControlStatus.textContent = 'Chat only on this page';
+    void chat.refreshTools();
+  }
+}
+
 async function refresh() {
   state = await send({ type: 'ozwell:get-state', tabId });
   state.settings = normalizeSettings(state.settings ?? DEFAULT_SETTINGS);
@@ -65,6 +108,7 @@ async function refresh() {
   toggle.setAttribute('aria-pressed', String(Boolean(state.tab?.enabled)));
   updateMode();
   const enabled = state.settings.mode !== 'off';
+  connectPage(enabled);
   chatContainer.hidden = !enabled;
   chatEmpty.hidden = enabled;
   openOzwell.hidden = true;
@@ -125,6 +169,8 @@ power.addEventListener('click', () => {
   });
   // Tear down credentials and conversation immediately when the user switches off.
   if (enabled) {
+    disposePageConnection();
+    if (pageControlStatus) pageControlStatus.hidden = true;
     chat.destroy();
     chatContainer.hidden = true;
     chatEmpty.hidden = false;
@@ -184,5 +230,5 @@ async function initialize() {
   }
 }
 
-window.addEventListener('pagehide', () => chat.destroy());
+window.addEventListener('pagehide', () => { disposePageConnection(); chat.destroy(); });
 void initialize();

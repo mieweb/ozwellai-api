@@ -1,7 +1,8 @@
 # ozwell browser extension
 
 A small Manifest V3 shell around the hosted ozwell widget, stacked on
-[PR #323](https://github.com/mieweb/ozwellai-api/pull/323). Click the mascot in the
+[PR #326](https://github.com/mieweb/ozwellai-api/pull/326), using its pinned
+`@mieweb/page-controller` fork for page control. Click the mascot in the
 browser toolbar to open chat directly. The yellow power button switches ozwell
 on or off immediately; **Page settings** controls the optional floating launcher.
 Chat, models, rendering, and authentication stay in the hosted widget.
@@ -32,6 +33,7 @@ extension. Packaging does not install or enable it automatically.
 ## Power and page settings
 
 Turning ozwell off immediately removes its toolbar iframe and page launchers.
+It also cancels pending page tools and closes their connections.
 Turning it back on restores the saved page mode. Page mode buttons select a draft;
 **Save settings** applies it and requests any required site access. Saving page
 settings while off keeps ozwell off and updates the mode to resume.
@@ -48,9 +50,50 @@ overrides. Domains accept hostnames or HTTP(S) URLs. Add `ui.mieweb.org` and
 `app.ui.mieweb.org` separately; schemes, paths, and ports are not domain filters.
 Browser-protected pages and the Chrome Web Store cannot host the page launcher.
 
-Closing a page chat panel preserves its iframe. Hiding its launcher, navigating,
-or switching off destroys it. Existing host grants remain until revoked in the
-browser's extension site-access settings; revocation stops automatic injection.
+Closing a page chat panel preserves its iframe and stops page tools until reopened.
+Hiding its launcher, navigating, or switching off destroys it. Existing host grants
+remain until revoked in the browser's extension site-access settings; revocation
+stops automatic injection and resets page-tool connections.
+
+## Page control
+
+Opening toolbar chat while ozwell is on connects the widget to the website that
+was active when the popup opened, using the browser's temporary `activeTab`
+permission. This also works in **On demand** mode with the floating launcher
+hidden. The popup reports whether page control is available; protected browser
+pages retain ordinary chat. Opening a page launcher connects to that page only.
+
+The widget discovers five page tools through MCP:
+
+| Tool | Behavior |
+| --- | --- |
+| `browser_snapshot` | Read visible page text and indexed controls. |
+| `browser_click` | Click a supported visible control. |
+| `browser_fill` | Replace text in an editable input or textarea. |
+| `browser_select` | Choose a native select option by its visible label. |
+| `browser_scroll` | Scroll up or down. |
+
+Actions require the latest snapshot's unpredictable `snapshotId` and element
+index, show a brief cyan and gold outline, and return a fresh snapshot. Changes
+to the DOM, fields, or URL invalidate old references. Closing toolbar chat,
+navigation, permission revocation, or turning ozwell off cancels pending work.
+The widget cannot choose another tab or frame. Tools are advertised on the wire
+as `postMessage_browser_*` and respect the agent's
+[`pageTools` policy](../docs/backend/agents.md#yaml-fields).
+
+Snapshots exclude the extension UI, embedded frames, password/file/hidden and
+recognized credential fields, and subtrees marked `data-ozwell-private`.
+Field values and URL queries/fragments are omitted. Ordinary visible page text
+may still contain sensitive information: tool results become conversation context
+when the agent requests them. This filtering is not a general data-loss prevention
+system.
+
+Actions support native inputs, textareas, selects, and explicit
+`button[type="button"]` controls. Links, form submission, sensitive fields,
+disabled/read-only controls, arbitrary JavaScript, cross-frame actions, and
+browser navigation commands are unavailable. The extension performs guarded DOM
+actions locally; a website's own event handlers can still have side effects.
+It cannot undo an action that the page has already handled.
 
 ## Widget deployment
 
@@ -100,10 +143,17 @@ must be checked after deployment.
 
 ## Local shell and validation
 
-All extension scripts are packaged locally. The sandboxed remote iframe receives
-only widget configuration and the empty MCP tool handshake. Both message origin
-and sender frame are checked. The extension supplies no page content, native
-WebMCP tools, browser commands, or API keys to chat.
+All extension scripts, including the controller, are packaged locally. The
+sandboxed remote iframe receives widget configuration, five tool schemas when
+available, and requested tool results. Both message origin and sender frame are
+checked. Popup-to-page ports authenticate the extension popup and pin its original
+tab, document session, and URL. No public page events or main-world bridge expose
+these tools. The extension stores no API keys.
+
+The checked-in controller requires no installation build. Its
+[provenance and rebuild instructions](./vendor/README.md) document the exact
+fork commit inherited from #326, reproducible packaging, license notices, and
+local patches that disable dynamic evaluation and support snapshot exclusions.
 
 ```sh
 npm --prefix browser-extension test
@@ -113,6 +163,6 @@ npm --prefix browser-extension run test:browser
 The browser check requires the built widget and landing-page Playwright
 dependencies. It loads the extension, routes requests to the actual widget bundle
 with demonstration auth responses, and verifies toolbar chat, focus, power,
-launcher modes, and message boundaries. It does not validate a live model,
+launcher modes, page-tool round trips, and message boundaries. It does not validate a live model,
 provider sign-in, or browser permission consent dialogs. See the
 [preview evidence](./docs/README.md) for screenshots and the recorded workflow.
