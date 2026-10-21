@@ -1,16 +1,18 @@
 import { PageController } from '@mieweb/page-controller';
+import { createActionVisuals } from './browser-tools-visuals.js';
 
 // This demo deliberately exposes a small page API, never arbitrary evaluation.
 // The fork scopes both extraction and reference resolution to the sample app.
 export function createBrowserTools(root) {
   const controller = new PageController({
     rootElement: root,
-    enableMask: false,
+    enableMask: true,
     highlightOpacity: 0,
     highlightLabelOpacity: 0,
     viewportExpansion: -1,
     keepSemanticTags: true,
   });
+  const visuals = createActionVisuals(controller);
   let revision = 0;
   let sequence = 0;
   let snapshotId;
@@ -237,13 +239,21 @@ export function createBrowserTools(root) {
       ) {
         throw new Error('Invalid scroll arguments.');
       }
-      const result = await controller.scroll({
-        down: args.direction === 'down',
-        numPages: 1,
-        pixels: args.amount || 600,
-      });
-      if (!result.success) throw new Error(result.message);
-      return snapshot();
+      return visuals.withAction(
+        root,
+        `Scroll ${args.direction}`,
+        async () => {
+          checkSnapshot(args.snapshotId);
+          const result = await controller.scroll({
+            down: args.direction === 'down',
+            numPages: 1,
+            pixels: args.amount || 600,
+          });
+          if (!result.success) throw new Error(result.message);
+          return snapshot();
+        },
+        false,
+      );
     }
     const element = await resolve(args, name);
     if (
@@ -253,20 +263,39 @@ export function createBrowserTools(root) {
     ) {
       throw new Error('Invalid field value.');
     }
-    action = { element };
-    try {
-      const result =
-        name === 'browser_click'
-          ? await controller.clickElement(args.index)
-          : name === 'browser_fill'
-            ? await controller.inputText(args.index, args.value)
-            : await controller.selectOption(args.index, args.value);
-      if (action.blocked) throw action.blocked;
-      if (!result.success) throw new Error(result.message);
-    } finally {
-      action = undefined;
-    }
-    return snapshot();
+    const targetName =
+      element.labels?.[0]?.textContent?.trim() ||
+      element.getAttribute('aria-label') ||
+      element.textContent.trim() ||
+      element.id;
+    const verb = {
+      browser_click: 'Click',
+      browser_fill: 'Fill',
+      browser_select: 'Select',
+    }[name];
+    return visuals.withAction(
+      element,
+      `${verb} · ${targetName.slice(0, 80)}`,
+      async () => {
+        // Highlight mode allows manual interaction during the preview delay.
+        // Recheck the token before committing an action to a changing page.
+        await resolve(args, name);
+        action = { element };
+        try {
+          const result =
+            name === 'browser_click'
+              ? await controller.clickElement(args.index)
+              : name === 'browser_fill'
+                ? await controller.inputText(args.index, args.value)
+                : await controller.selectOption(args.index, args.value);
+          if (action.blocked) throw action.blocked;
+          if (!result.success) throw new Error(result.message);
+        } finally {
+          action = undefined;
+        }
+        return snapshot();
+      },
+    );
   }
 
   function callTool(name, args = {}) {
@@ -296,6 +325,8 @@ export function createBrowserTools(root) {
   return {
     tools,
     callTool,
+    setVisualOptions: (options) => visuals.setOptions(options),
+    runWithVisuals: (work) => visuals.withSession(work),
     // Deterministic demo/test driver only. Agents discover references from snapshots.
     findIndex(selector, id) {
       checkSnapshot(id);
@@ -309,6 +340,7 @@ export function createBrowserTools(root) {
       root.removeEventListener('change', changed, true);
       document.removeEventListener('click', guardClick, true);
       document.removeEventListener('submit', guardSubmit, true);
+      visuals.dispose();
       controller.dispose();
     },
   };

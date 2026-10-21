@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
     <title>Service operations desk · Ozwell browser tools</title>
+    <link rel="stylesheet" href="/assets/browser-tools-bundle.css" />
     <link rel="stylesheet" href="/assets/browser-tools.css" />
   </head>
   <body data-reference-base="__REFERENCE_BASE_URL__">
@@ -22,9 +23,14 @@
             <p>Try a guided work order update. No sign-in needed.</p>
           </div>
           <div class="demo-banner-actions">
-            <button id="run-demo" type="button" class="primary-button">
-              Run guided demo <span aria-hidden="true">→</span>
-            </button>
+            <div class="demo-action-buttons">
+              <button id="step-demo" type="button" class="secondary-button">
+                Step through
+              </button>
+              <button id="run-demo" type="button" class="primary-button">
+                Run guided demo <span aria-hidden="true">→</span>
+              </button>
+            </div>
             <div class="controller-state">
               <span class="live-dot" aria-hidden="true"></span
               ><span id="controller-status" role="status"
@@ -33,6 +39,25 @@
             </div>
           </div>
         </div>
+        <div class="demo-options-row">
+          <label class="demo-option-control" for="visual-mode">
+            Show actions
+            <select id="visual-mode">
+              <option value="mask" selected>Animated mask</option>
+              <option value="highlight">Target highlight</option>
+              <option value="both">Mask + highlight</option>
+              <option value="none">No overlay</option>
+            </select>
+          </label>
+          <p
+            id="demo-step-status"
+            class="demo-step-status"
+            role="status"
+            aria-live="polite"
+          >
+            Run the full workflow or step through one action at a time.
+          </p>
+        </div>
         <details id="demo-details">
           <summary>Demo details and tool activity</summary>
           <div class="demo-detail-content">
@@ -40,9 +65,18 @@
               <h3>A complete dispatch update</h3>
               <p>
                 The guided run opens WO-1042, assigns Maya Chen, changes its
-                status to In progress, adds dispatch notes, marks it urgent,
-                and confirms the update. Follow each tool call in the activity
-                log.
+                status to In progress, adds dispatch notes, marks it urgent, and
+                confirms the update. Follow each tool call in the activity log.
+              </p>
+              <p>
+                Run guided demo completes the workflow continuously. Step
+                through performs one action per click. Choose the run speed
+                below to follow along at your own pace.
+              </p>
+              <p>
+                Modes with a mask temporarily block the page while actions run.
+                Target highlight leaves the page interactive. Your display
+                choice also applies to live agent actions.
               </p>
               <p>
                 Use the floating Ozwell button to chat with the page. Sign in
@@ -55,6 +89,13 @@
                 <button id="reset-demo" type="button" class="text-button">
                   Reset sample
                 </button>
+                <label class="demo-option-control" for="run-speed">
+                  Run speed
+                  <select id="run-speed">
+                    <option value="normal" selected>Normal</option>
+                    <option value="slow">Slow</option>
+                  </select>
+                </label>
               </div>
             </div>
             <div
@@ -375,7 +416,6 @@
           </div>
         </dialog>
       </main>
-
     </div>
     <script type="module" src="/assets/browser-tools-bundle.js"></script>
   </body>

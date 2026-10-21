@@ -47,6 +47,10 @@ button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
+.demo-option-control select:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
 button {
   transition:
     background 0.15s,
@@ -746,9 +750,54 @@ tr.selected td:first-child {
   flex: none;
   text-align: right;
 }
-.demo-banner-actions .primary-button {
+.demo-action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+.demo-banner-actions .primary-button,
+.demo-banner-actions .secondary-button {
   padding: 11px 17px;
   font-size: 11px;
+}
+.demo-options-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 0 16px;
+}
+.demo-option-control {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 9px;
+  color: #819373;
+  font-size: 9px;
+  font-weight: 550;
+}
+.demo-option-control select {
+  min-width: 135px;
+  max-width: 100%;
+  border: 1px solid #dce5d4;
+  border-radius: 5px;
+  padding: 7px 9px;
+  background: #fff;
+  color: #5f7952;
+  font-size: 10px;
+}
+.demo-step-status {
+  min-width: 0;
+  color: #90a080;
+  font-size: 9px;
+  line-height: 1.7;
+  margin: 0;
+}
+.tool-actions .demo-option-control {
+  margin-left: auto;
+}
+.tool-actions .demo-option-control select {
+  min-width: 78px;
 }
 .controller-state {
   font-size: 8px;
@@ -940,6 +989,62 @@ dialog > p:not(.eyebrow) {
   font-size: 10px;
   line-height: 1.7;
 }
+/* The focused action marker is visual only and never receives page input. */
+#page-agent-runtime_simulator-mask[popover] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  background: transparent;
+}
+[data-demo-highlight][popover] {
+  margin: 0;
+  padding: 0;
+  inset: auto;
+  overflow: visible;
+}
+#page-agent-runtime_simulator-mask::backdrop,
+[data-demo-highlight]::backdrop {
+  background: transparent;
+  pointer-events: none;
+}
+#dialog-next-action {
+  margin-top: 12px;
+}
+[data-demo-highlight].demo-action-highlight {
+  position: fixed;
+  z-index: 2147483646;
+  pointer-events: none;
+  border: 2px solid #267861;
+  border-radius: 5px;
+  box-shadow:
+    0 0 0 4px #4b987526,
+    0 3px 12px #174c2520;
+  background: #559e7c0a;
+}
+[data-demo-highlight] .demo-action-label {
+  position: absolute;
+  left: -2px;
+  bottom: calc(100% + 7px);
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  padding: 6px 9px;
+  border: 1px solid #34785c;
+  border-radius: 5px;
+  background: #205e50;
+  color: #fff;
+  box-shadow: 0 2px 6px #173b2820;
+  font:
+    10px/1.5 ui-sans-serif,
+    system-ui,
+    sans-serif;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
 @media (min-width: 1600px) {
   .operations-app { padding: 38px 42px 20px; }
   .demo-banner { margin-left: 42px; margin-right: 42px; }
@@ -959,6 +1064,9 @@ dialog > p:not(.eyebrow) {
 @media (max-width: 760px) {
   .operations-app { padding: 24px 20px 14px; }
   .demo-banner { margin: 16px 20px 0; padding: 16px 18px 0; }
+  .demo-banner-main { gap: 16px; }
+  .demo-banner-actions .primary-button, .demo-banner-actions .secondary-button { padding: 10px 12px; font-size: 10px; }
+  .demo-options-row { gap: 15px; }
   .desk-grid { grid-template-columns: minmax(0, 1fr); }
   .detail-scroll { max-height: 680px; }
   .table-scroll { max-height: 420px; }
@@ -973,10 +1081,16 @@ dialog > p:not(.eyebrow) {
   .demo-banner-copy h2 { font-size: 18px; }
   .demo-banner-copy > p:last-child { font-size: 10px; margin-top: 6px; }
   .demo-banner-copy .eyebrow { font-size: 7px; letter-spacing: 1.1px; }
-  .demo-banner-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; text-align: left; }
-  .demo-banner-actions .primary-button { padding: 10px 12px; font-size: 10px; white-space: nowrap; flex: none; }
+  .demo-banner-actions { margin-top: 14px; text-align: left; }
+  .demo-action-buttons { justify-content: flex-start; gap: 7px; }
+  .demo-banner-actions .primary-button, .demo-banner-actions .secondary-button { padding: 10px 12px; font-size: 10px; white-space: nowrap; flex: none; }
   .demo-banner-actions .primary-button > span { margin-left: 6px; }
-  .controller-state { margin-top: 0; font-size: 7px; line-height: 1.6; }
+  .controller-state { margin-top: 10px; font-size: 7px; line-height: 1.6; }
+  .demo-options-row { display: block; padding-bottom: 13px; }
+  .demo-step-status { margin-top: 8px; font-size: 8px; }
+  .demo-option-control { font-size: 9px; gap: 8px; }
+  .tool-actions { gap: 12px; }
+  .tool-actions .demo-option-control { margin-left: 0; }
   #demo-details > summary { font-size: 9px; padding: 11px 0; }
   .demo-instructions p { font-size: 10px; }
   .demo-detail-content { padding-bottom: 16px; }

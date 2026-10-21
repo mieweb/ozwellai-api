@@ -20,6 +20,12 @@ type Snapshot = {
   title: string;
 };
 
+test.setTimeout(60_000);
+
+const maskSelector = '#page-agent-runtime_simulator-mask';
+const highlightSelector = '[data-demo-highlight]';
+const savedNotes = 'Dispatch confirmed for the afternoon service window.';
+
 // Exercise the checked-in page and built package without an agent key or model.
 // Only the remote assistant UI is replaced; messages use the real loader.
 async function openDemo(page: Page) {
@@ -84,9 +90,35 @@ async function callTool(
 
 async function expandDemoDetails(page: Page) {
   const details = page.locator('#demo-details');
-  if (!(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
+  if (
+    !(await details.evaluate((element: HTMLDetailsElement) => element.open))
+  ) {
     await details.locator(':scope > summary').click();
   }
+}
+
+async function beginToolCall(
+  page: Page,
+  name: string,
+  args: Record<string, unknown>,
+) {
+  await page.evaluate(
+    ({ name, args }) => {
+      (window as any).pendingBrowserToolCall = (
+        window as any
+      ).browserToolsDemo.callTool(name, args);
+    },
+    { name, args },
+  );
+}
+
+async function finishToolCall(page: Page): Promise<ToolResult> {
+  return page.evaluate(() => (window as any).pendingBrowserToolCall);
+}
+
+async function expectOverlaysReleased(page: Page) {
+  await expect(page.locator(maskSelector)).toBeHidden();
+  await expect(page.locator(highlightSelector)).toBeHidden();
 }
 
 function readSnapshot(result: ToolResult): Snapshot {
@@ -158,13 +190,17 @@ test('the scripted workflow persists a work order through the browser tools', as
   await expect(page.locator('#demo-details')).toHaveJSProperty('open', false);
   await expect(page.locator('#run-demo')).toBeVisible();
   await expect(page.locator('#reset-demo')).toBeHidden();
+  await expect(page.locator('#visual-mode')).toHaveValue('mask');
   await page.locator('#run-demo').click();
+  await expect(page.locator(maskSelector)).toBeVisible();
   await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const state = (window as any).browserToolsDemo.getState();
-        return state.workOrders.find((order: any) => order.id === 'WO-1042');
-      }),
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const state = (window as any).browserToolsDemo.getState();
+          return state.workOrders.find((order: any) => order.id === 'WO-1042');
+        }),
+      { timeout: 30_000 },
     )
     .toMatchObject({
       owner: 'Maya Chen',
@@ -177,6 +213,7 @@ test('the scripted workflow persists a work order through the browser tools', as
     'WO-1042 saved',
   );
   await expect(page.locator('#save-confirmation')).not.toBeVisible();
+  await expectOverlaysReleased(page);
   expect(
     await page.evaluate(() => (window as any).browserToolsDemo.getState()),
   ).toMatchObject({
@@ -331,4 +368,254 @@ test('the real iframe loader discovers and invokes scoped browser tools across o
   const after = readSnapshot(action.result);
   expect(after.snapshotId).not.toBe(before.snapshotId);
   expect(await page.evaluate(() => (window as any).iframeActionCount)).toBe(1);
+});
+
+for (const mode of ['mask', 'highlight', 'both', 'none']) {
+  test(`live tool actions use the ${mode} display mode and exclude visuals from their snapshots`, async ({
+    page,
+  }) => {
+    await openDemo(page);
+    await expandDemoDetails(page);
+    await page.locator('#run-speed').selectOption('slow');
+    if (mode === 'mask') {
+      await expect(page.locator('#visual-mode')).toHaveValue('mask');
+    } else {
+      await page.locator('#visual-mode').selectOption(mode);
+    }
+    await expectOverlaysReleased(page);
+    const before = await snapshot(page);
+    const index = await findIndex(
+      page,
+      '[data-testid="open-WO-1042"]',
+      before.snapshotId,
+    );
+
+    // Record all visible transitions, including accidental flashes in None mode.
+    await page.evaluate(
+      ({ maskSelector, highlightSelector }) => {
+        const seen = new Set<string>();
+        const observe = () => {
+          for (const [name, selector] of [
+            ['mask', maskSelector],
+            ['highlight', highlightSelector],
+          ]) {
+            const element = document.querySelector(selector);
+            if (element?.checkVisibility({ checkVisibilityCSS: true }))
+              seen.add(name);
+          }
+        };
+        const observer = new MutationObserver(observe);
+        observer.observe(document.body, {
+          subtree: true,
+          attributes: true,
+          childList: true,
+        });
+        document.addEventListener('toggle', observe, true);
+        (window as any).finishOverlayObservation = () => {
+          observer.disconnect();
+          document.removeEventListener('toggle', observe, true);
+          return [...seen].sort();
+        };
+      },
+      { maskSelector, highlightSelector },
+    );
+
+    await beginToolCall(page, 'browser_click', {
+      snapshotId: before.snapshotId,
+      index,
+    });
+    if (mode === 'mask' || mode === 'both') {
+      await expect(page.locator(maskSelector)).toBeVisible();
+    }
+    if (mode === 'highlight' || mode === 'both') {
+      const highlight = page.locator(highlightSelector);
+      await expect(highlight).toBeVisible();
+      await expect(highlight).toContainText(/click/i);
+      await expect(highlight).toContainText('WO-1042');
+    }
+    if (mode !== 'none') {
+      const visibleOverlay = page.locator(
+        mode === 'mask' ? maskSelector : highlightSelector,
+      );
+      expect(
+        await visibleOverlay.evaluate(
+          (element) =>
+            !document.querySelector('#operations-app')!.contains(element),
+        ),
+      ).toBe(true);
+      await visibleOverlay.evaluate((element) => {
+        const marker = document.createElement('span');
+        marker.textContent = 'VISUAL_OVERLAY_SENTINEL';
+        element.append(marker);
+      });
+    }
+    const after = readSnapshot(await finishToolCall(page));
+    expect(after.snapshotId).not.toBe(before.snapshotId);
+    expect(after.content).not.toContain('VISUAL_OVERLAY_SENTINEL');
+    expect(after.content).not.toContain('page-agent-runtime_simulator-mask');
+    expect(after.content).not.toContain('data-demo-highlight');
+    expect(
+      await page.evaluate(
+        () => (window as any).browserToolsDemo.getState().selectedId,
+      ),
+    ).toBe('WO-1042');
+    const seen = await page.evaluate(() =>
+      (window as any).finishOverlayObservation(),
+    );
+    expect(seen).toEqual(
+      mode === 'both' ? ['highlight', 'mask'] : mode === 'none' ? [] : [mode],
+    );
+    await expectOverlaysReleased(page);
+  });
+}
+
+test('step mode performs one action at a time, refreshes after manual edits, and releases overlays between steps', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('both');
+  const step = page.locator('#step-demo');
+  await expect(step).toHaveText('Step through');
+
+  for (let number = 1; number <= 7; number += 1) {
+    await page
+      .locator(number === 7 ? '#dialog-next-action' : '#step-demo')
+      .click();
+    if (number === 1) {
+      await expect(page.locator(maskSelector)).toBeVisible();
+      await expect(page.locator(highlightSelector)).toBeVisible();
+    }
+    await expect(step).toBeEnabled({ timeout: 15_000 });
+    await expect(page.locator('#demo-step-status')).toContainText(
+      new RegExp(`\\b${number}\\s*/\\s*7\\b`),
+    );
+    await expectOverlaysReleased(page);
+    await expect(step).toHaveText(
+      number === 7 ? 'Step through' : 'Next action',
+    );
+    const state = await page.evaluate(() =>
+      (window as any).browserToolsDemo.getState(),
+    );
+    expect(state.selectedId).toBe('WO-1042');
+    if (number === 1) {
+      expect(state.draft.owner).toBe('Unassigned');
+      await page
+        .locator('#work-order-notes')
+        .fill('Inspected manually between steps.');
+    } else if (number === 2) {
+      expect(state.draft).toMatchObject({
+        owner: 'Maya Chen',
+        status: 'New',
+        notes: 'Inspected manually between steps.',
+      });
+    } else if (number === 3) {
+      expect(state.draft).toMatchObject({
+        status: 'In progress',
+        notes: 'Inspected manually between steps.',
+      });
+    } else if (number === 4) {
+      expect(state.draft).toMatchObject({ notes: savedNotes, urgent: false });
+    } else if (number === 5) {
+      expect(state.draft.urgent).toBe(true);
+      expect(state.pendingChanges).toBeNull();
+    } else if (number === 6) {
+      expect(state.pendingChanges).toMatchObject({
+        workOrderId: 'WO-1042',
+        owner: 'Maya Chen',
+        notes: savedNotes,
+      });
+      await expect(page.locator('#save-confirmation')).toBeVisible();
+      await expect(page.locator('#dialog-next-action')).toBeVisible();
+    } else {
+      expect(state.pendingChanges).toBeNull();
+      expect(
+        state.workOrders.find((order: any) => order.id === 'WO-1042'),
+      ).toMatchObject({
+        owner: 'Maya Chen',
+        status: 'In progress',
+        notes: savedNotes,
+        urgent: true,
+      });
+      await expect(page.locator('#save-confirmation')).toBeHidden();
+    }
+  }
+});
+
+test('a rejected action releases both visual layers and leaves the page usable', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('both');
+  await expandDemoDetails(page);
+  await page.locator('#run-speed').selectOption('slow');
+  const before = await snapshot(page);
+  const index = await findIndex(page, '#work-order-status', before.snapshotId);
+  const originalStatus = await page.locator('#work-order-status').inputValue();
+  await beginToolCall(page, 'browser_select', {
+    snapshotId: before.snapshotId,
+    index,
+    value: 'Status that is not an available option',
+  });
+  await expect(page.locator(maskSelector)).toBeVisible();
+  await expect(page.locator(highlightSelector)).toBeVisible();
+  const result = await finishToolCall(page);
+  expect(result.isError).toBe(true);
+  expect(result.content[0].text).toMatch(/option|select/i);
+  await expectOverlaysReleased(page);
+  await expect(page.locator('#work-order-status')).toHaveValue(originalStatus);
+  await page
+    .locator('#work-order-notes')
+    .fill('Manual editing works after the rejected action.');
+  await expect(page.locator('#work-order-notes')).toHaveValue(
+    'Manual editing works after the rejected action.',
+  );
+});
+
+test('reset and a cancelled confirmation both restart the step runner safely', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('none');
+  const step = page.locator('#step-demo');
+  await step.click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(step).toHaveText('Next action');
+  await expandDemoDetails(page);
+  await page.locator('#reset-demo').click();
+  await expect(step).toHaveText('Step through');
+  expect(
+    await page.evaluate(
+      () => (window as any).browserToolsDemo.getState().selectedId,
+    ),
+  ).toBe('WO-1038');
+
+  for (let number = 1; number <= 6; number += 1) {
+    await step.click();
+    await expect(step).toBeEnabled({ timeout: 15_000 });
+    await expect(page.locator('#demo-step-status')).toContainText(
+      new RegExp(`\\b${number}\\s*/\\s*7\\b`),
+    );
+  }
+  await expect(page.locator('#save-confirmation')).toBeVisible();
+  await page.locator('#cancel-save').click();
+  await step.click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(step).toHaveText('Step through');
+  await expect(page.locator('#controller-status')).toContainText(
+    /No indexed element|not found|missing/i,
+  );
+  await expectOverlaysReleased(page);
+  const state = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  expect(state.pendingChanges).toBeNull();
+  expect(
+    state.workOrders.find((order: any) => order.id === 'WO-1042').owner,
+  ).toBe('Unassigned');
+  await step.click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(step).toHaveText('Next action');
+  await expect(page.locator('#demo-step-status')).toContainText(
+    /\b1\s*\/\s*7\b/,
+  );
 });

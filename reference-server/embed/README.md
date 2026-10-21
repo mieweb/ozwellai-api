@@ -736,6 +736,16 @@ API key. Expand **Demo details and tool activity** for the explanation, page
 snapshot, reset control, and tool results. Use the floating chat button to talk
 to Ozwell.
 
+**Show actions** defaults to the controller's animated mask and moving cursor.
+Choose **Target highlight**, **Mask + highlight**, or **No overlay** to compare
+the visual feedback; the choice applies to guided and live agent actions.
+**Step through** runs one action per click and releases the overlay between
+steps; the final **Next action** control appears inside the confirmation dialog.
+**Run guided demo** runs continuously. **Run speed** in the details switches
+between normal and slower action previews. Mask modes temporarily block manual
+input while running; highlight mode allows interaction and revalidates the
+snapshot before acting. Overlays stay outside the indexed app.
+
 The demo uses `@mieweb/page-controller` from
 [MIE Web's Page Agent fork](https://github.com/mieweb/page-agent/tree/mie-controller-dist),
 pinned to a full Git commit in the landing-page package manifest and lockfile.

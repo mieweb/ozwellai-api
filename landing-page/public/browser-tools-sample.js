@@ -419,7 +419,6 @@ export function initSamplePage() {
   return {
     reset,
     getState() {
-      readDraft();
       return clone({
         selectedId,
         workOrders,
