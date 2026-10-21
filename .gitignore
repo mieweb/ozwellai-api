@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 
 # Generated widget bundle. Source lives in reference-server/embed/src.
 reference-server/embed/ozwell.js
+
+# Generated host-page browser tools demo bundle.
+landing-page/public/browser-tools-bundle.js
+landing-page/public/browser-tools-bundle.css

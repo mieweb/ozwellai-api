@@ -723,6 +723,46 @@ The widget handles all mobile optimizations automatically.
 - **Demo:** <https://ozwelldemo.os.mieweb.org>
 - **Reference Server:** <https://ozwellapi.os.mieweb.org>
 
+### Host-page browser tools proof of concept
+
+The landing-page server includes `/browser-tools.html`, a synthetic service
+operations desk with filters, a work-order editor, confirmation dialog, and
+activity history. Run `npm ci` in `landing-page`, then `npm start`, and open
+`http://localhost:8080/browser-tools.html`. Start the reference server separately
+for the embedded Ozwell sign-in/chat UI. `REFERENCE_SERVER_URL` overrides its
+default address (`http://localhost:3000`). **Run demo** exercises the same tools
+locally without an account, model, or API key.
+
+The demo uses `@mieweb/page-controller` from
+[MIE Web's Page Agent fork](https://github.com/mieweb/page-agent/tree/mie-controller-dist),
+pinned to a full Git commit in the landing-page package manifest and lockfile.
+The fork's distribution branch includes its built controller and license notices;
+it needs no npm publication or install-time monorepo build. Its `rootElement`
+option scopes DOM extraction, and `resolveElement()` rejects detached or
+out-of-scope references. See the fork's `CONTROLLER-DISTRIBUTION.md` for source provenance and
+rebuilding instructions.
+
+The host adapter exposes `browser_snapshot`, `browser_click`, `browser_fill`,
+`browser_select`, and `browser_scroll` through the existing `ozwell-tool-call`
+handler. This also opts those tools into the preceding native WebMCP adapter
+where supported; normal iframe tool calls do not require WebMCP support.
+Each action requires the current `snapshotId` and returns a fresh snapshot.
+User edits invalidate older references. Assistant and tool-console content is
+outside the controller's root.
+
+This is a controlled-page POC: actions support explicit buttons and native form
+controls. Links, submit/file/password controls, arbitrary evaluation, and browser
+navigation tools are excluded. The event guard is not a universal sandbox for
+arbitrary host JavaScript. Screenshots, native keyboard input, other browser tabs,
+and cross-origin frame traversal are outside this demo's scope. All work orders
+are synthetic and reset on reload.
+
+Build the browser bundle with `npm --prefix landing-page run build:browser-tools`
+(also run automatically before `start`, `dev`, and `test`). The focused browser
+suite is `npm --prefix landing-page run test:browser-tools`; it uses
+the shipped loader and a mock assistant iframe on a separate origin, without
+model credentials or running development servers.
+
 ## Local Development
 
 ```bash
