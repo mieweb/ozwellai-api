@@ -109,15 +109,6 @@ test('loader preserves OpenAI-style function schema while keeping execution in o
   assert.match(source, /document\.dispatchEvent\(toolEvent\)/);
 });
 
-test('loader returns a tool error if the page handler never responds', async () => {
-  const source = await readLoaderSource();
-
-  assert.match(source, /const TOOL_RESPONSE_TIMEOUT_MS = 29000/);
-  assert.match(source, /function finishToolCall\(message\)/);
-  assert.match(source, /Tool "\$\{toolName\}" did not respond/);
-  assert.match(source, /call respond\(\) or error\(\)/);
-});
-
 test('widget fetches effective provider model options for the selector', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();

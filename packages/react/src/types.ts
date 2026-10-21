@@ -71,6 +71,14 @@ export interface OzwellConfig {
   /** MCP tools available to the assistant */
   tools?: OzwellTool[];
 
+  /** Opt selected page tools into the native WebMCP API (disabled by default). */
+  webMCP?: false | {
+    /** Bare names from tools[].function.name to expose through WebMCP. */
+    tools: string[];
+    /** Additional secure origins allowed to discover and call these tools. */
+    exposedTo?: string[];
+  };
+
   /** Enable debug mode (shows tool execution details) */
   debug?: boolean;
 

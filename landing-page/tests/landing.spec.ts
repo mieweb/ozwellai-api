@@ -22,16 +22,36 @@ test.describe('Ozwell Embed Widget', () => {
     // Navigate to the landing page
     await page.goto('/');
     
-    // Wait for the page to load
-    await page.waitForLoadState('networkidle');
-    
     // Wait for the OzwellChat object to be available (script loaded)
     await page.waitForFunction(() => typeof (window as any).OzwellChat !== 'undefined', { timeout: 15000 });
 
     // Chat scenarios use the reference server's seeded mock agent. Keyless
     // widget sign-in behavior is covered separately in widget-auth.spec.ts.
     await page.evaluate(() => {
-      (window as any).OzwellChat.configure({ apiKey: 'agnt_key-mock-test' });
+      (window as any).OzwellChat.configure({
+        apiKey: 'agnt_key-mock-test',
+        // The seeded mock agent has no server-defined tools. Declare the
+        // handlers this page implements so discovery and execution agree.
+        tools: [
+          {
+            name: 'get_form_data',
+            description: 'Read the current name, address, and zip code',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'update_form_data',
+            description: 'Update the name, address, or zip code',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                address: { type: 'string' },
+                zipCode: { type: 'string' },
+              },
+            },
+          },
+        ],
+      });
     });
     
     // Click the chat button to open the widget
@@ -263,11 +283,19 @@ test.describe('Tic-Tac-Toe Demo', () => {
       chatRequests.push(requestBody);
 
       if (chatRequests.length === 1) {
+        // Simulate a model calling the exact tool advertised in the request.
+        const tool = requestBody.tools.find((tool: any) => tool.function.name === 'postMessage_make_move');
+        expect(tool).toBeTruthy();
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
           body: [
-            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_center_1","type":"function","function":{"name":"make_move","arguments":"{\\"position\\":\\"center\\"}"}}]}}]}',
+            `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{
+              index: 0,
+              id: 'call_center_1',
+              type: 'function',
+              function: { name: tool.function.name, arguments: JSON.stringify({ position: 'center' }) },
+            }] } }] })}`,
             '',
             'data: [DONE]',
             '',

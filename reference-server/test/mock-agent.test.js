@@ -101,7 +101,94 @@ test('mock agent — streaming tool-call response ends with tool_calls', async (
     const text = await r.text();
     assert.ok(text.includes('data: [DONE]'), 'stream terminates with [DONE]');
     assert.ok(text.includes('"tool_calls"'), 'tool call chunk emitted');
+    assert.ok(text.includes('"name":"update_form_data"'), 'legacy requests retain the bare tool name');
     assert.ok(text.includes('"finish_reason":"tool_calls"'), 'final chunk has tool_calls');
+});
+
+const advertisedTool = (name) => ({ type: 'function', function: { name, parameters: { type: 'object' } } });
+
+async function requestToolResponse(content, tools, stream, headers = H) {
+    const response = await fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ messages: [{ role: 'user', content }], tools, stream }),
+    });
+    assert.equal(response.status, 200);
+    if (!stream) {
+        const body = await response.json();
+        return { toolCalls: body.choices[0].message.tool_calls, finishReason: body.choices[0].finish_reason };
+    }
+    const text = await response.text();
+    assert.ok(text.includes('data: [DONE]'));
+    const choices = text.split('\n')
+        .filter((line) => line.startsWith('data: {'))
+        .flatMap((line) => JSON.parse(line.slice(6)).choices || []);
+    return {
+        toolCalls: choices.flatMap((choice) => choice.delta.tool_calls || []),
+        finishReason: choices.at(-1).finish_reason,
+    };
+}
+
+for (const stream of [false, true]) {
+    test(`mock agent — ${stream ? 'streaming' : 'non-stream'} calls use the advertised tool namespace`, async (t) => {
+        const scenarios = [
+            ['update name to Bob', 'update_form_data'],
+            ['what is my address', 'get_form_data'],
+            ['play center', 'make_move'],
+            ['reset game', 'reset_game'],
+        ];
+        for (const [content, bareName] of scenarios) {
+            for (const prefix of ['', 'postMessage_', 'postMessage:']) {
+                const name = prefix + bareName;
+                await t.test(name, async () => {
+                    const result = await requestToolResponse(content, [advertisedTool(name)], stream);
+                    assert.equal(result.finishReason, 'tool_calls');
+                    assert.equal(result.toolCalls.length, 1);
+                    assert.equal(result.toolCalls[0].function.name, name);
+                });
+            }
+        }
+    });
+
+    test(`mock agent — ${stream ? 'streaming' : 'non-stream'} does not fabricate unadvertised tools`, async () => {
+        for (const tools of [[], [advertisedTool('postMessage_get_form_data')]]) {
+            const result = await requestToolResponse('update name to Bob', tools, stream);
+            assert.equal(result.finishReason, 'stop');
+            assert.equal(result.toolCalls?.length || 0, 0);
+        }
+    });
+
+    test(`mock agent — ${stream ? 'streaming' : 'non-stream'} prefers an advertised bare name`, async () => {
+        const tools = ['postMessage_update_form_data', 'update_form_data'].map(advertisedTool);
+        const result = await requestToolResponse('update name to Bob', tools, stream);
+        assert.equal(result.toolCalls[0].function.name, 'update_form_data');
+    });
+}
+
+test('mock agent — agent policy excludes advertised tools before mock generation', async () => {
+    const response = await fetch(`${BASE}/v1/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/yaml', Authorization: 'Bearer ozw_demo_localhost_key_for_testing' },
+        body: `name: Restricted Mock
+type: mock
+instructions: Deterministic mock with restricted tools.
+tools:
+  - get_form_data
+pageTools:
+  blocked:
+    - update_form_data
+`,
+    });
+    assert.equal(response.status, 201);
+    const { agent_key } = await response.json();
+    const tools = ['', 'postMessage_', 'postMessage:'].map((prefix) => advertisedTool(prefix + 'update_form_data'));
+    for (const stream of [false, true]) {
+        const result = await requestToolResponse('update name to Bob', tools, stream, {
+            ...H, Authorization: `Bearer ${agent_key}`,
+        });
+        assert.equal(result.finishReason, 'stop');
+        assert.equal(result.toolCalls?.length || 0, 0);
+    }
 });
 
 test('mock agent — unauthenticated request rejected', async () => {
