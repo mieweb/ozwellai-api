@@ -68,6 +68,14 @@ function startServer(port, dbPath, extraEnv = {}) {
             DB_PATH: dbPath,
             NODE_ENV: 'development',
             ALLOW_MOCK: 'true',
+            // Auth tests use deterministic mock completions. Keep local model
+            // services out of the fixture and prevent background discovery
+            // from disabling the fallback model after an empty discovery run.
+            LLM_BASE_URL: '',
+            LLM_API_KEY: '',
+            LLM_PROVIDER: '',
+            OLLAMA_BASE_URL: '',
+            MODEL_DISCOVERY_REFRESH_MS: '0',
             AUTH_DEV_ECHO_OTP: '1',
             WIDGET_SIGNUP_POLICY: 'open',
             // Present-but-empty so dotenv leaves them alone: these assert the
@@ -574,7 +582,9 @@ test('session token authorizes chat; bogus session token does not', async () => 
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
     });
-    assert.equal(authed.status, 200);
+    const completion = await authed.json();
+    assert.equal(authed.status, 200, JSON.stringify(completion));
+    assert.equal(completion.model, 'ozwell-mock', 'auth fixture must not use a local model service');
 
     const bogus = await fetch(`${BASE}/v1/chat/completions`, {
         method: 'POST',
