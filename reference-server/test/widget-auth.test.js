@@ -14,7 +14,7 @@ import oidcModule from '../dist/reference-server/src/util/oidc.js';
 const storeDirectory = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-store-'));
 process.env.DB_PATH = path.join(storeDirectory, 'auth.db');
 const sessions = await import('../dist/reference-server/src/storage/sessions.js');
-const { agentStore } = await import('../dist/reference-server/src/storage/agents.js');
+const { agentStore, getDatabase } = await import('../dist/reference-server/src/storage/agents.js');
 const { default: appleRouteModule } = await import('../dist/reference-server/src/routes/oidc-apple.js');
 const { default: authRouteModule } = await import('../dist/reference-server/src/routes/auth.js');
 const { default: googleRouteModule } = await import('../dist/reference-server/src/routes/oidc-google.js');
@@ -105,6 +105,8 @@ before(async () => {
 after(() => {
     stopServer(server);
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
+    // Windows cannot unlink the unit-test database while SQLite holds it open.
+    getDatabase().close();
     rmSync(storeDirectory, { recursive: true, force: true });
 });
 
