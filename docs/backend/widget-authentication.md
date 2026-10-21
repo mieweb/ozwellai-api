@@ -1,6 +1,6 @@
 # Widget Authentication Deployment
 
-The [embed guide](../frontend/cdn-embed.md#alternative-let-visitors-sign-in) covers
+The [embed guide](../frontend/cdn-embed.md#let-visitors-sign-in) covers
 both host-key and keyless embeds. This guide covers deployment of the existing
 widget sign-in implementation from PR #275. Do not publish OAuth secrets, Apple
 private keys, or SMTP configuration in browser bundles or committed files.

@@ -251,10 +251,10 @@ The server will start at `http://localhost:3000`
 
 ### Embeddable Chat Widget
 
-**Simple (one line):**
+**Production embed (one line):**
 
 ```html
-<script src="http://localhost:3000/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 **Advanced (with config):**
@@ -262,21 +262,19 @@ The server will start at `http://localhost:3000`
 ```html
 <script>
   window.OzwellChatConfig = {
-    endpoint: 'http://localhost:3000/v1/chat/completions',
     welcomeMessage: 'Hi! How can I help?',
     debug: false  // Set to true to see tool execution details (developer mode)
   };
 </script>
-<script src="http://localhost:3000/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
-**Current recommended environment:**
+For development, switch the script URL to
+`https://ozwellapi.os.mieweb.org/widget`, or `http://localhost:3000/widget` for
+your local reference server. The loader selects the iframe and API from the
+same origin automatically.
 
-```html
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
-```
-
-**Live Demo:** <https://ozwelldemo.os.mieweb.org>
+**Development demo:** <https://ozwelldemo.os.mieweb.org>
 
 **Watch Demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
@@ -289,7 +287,9 @@ No code changes needed — just set the environment variables and restart.
 
 For local dev or demos without a backend, set `ALLOW_MOCK=true` to use deterministic mock responses (keyword pattern matching). Mock is off by default, so without it an unconfigured server returns a 503. See [Mock responses](#mock-responses-allow_mock) below.
 
-See [embed/README.md](embed/README.md) for full documentation.
+See [embed/README.md](embed/README.md) for full documentation, including the
+[proposed page-control configuration](embed/README.md#proposed-page-control-option)
+(not implemented in the loader yet).
 
 ### Local OpenAI-Compatible Client Testing
 

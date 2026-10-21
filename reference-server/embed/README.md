@@ -1,45 +1,36 @@
 # Ozwell Chat Widget
 
-Add an AI chatbot to any website with one script tag.
-
-## Building and Validating
-
-The widget uses the pinned MIE Web UI submodule, not the older npm fallback.
-From the repository root:
-
-```bash
-git submodule update --init --recursive
-./scripts/ci/build-pinned-ui.sh
-npm ci
-npm run build -w reference-server
-npm --prefix landing-page test -- tests/widget-auth.spec.ts --reporter=line
-```
-
-`build-pinned-ui.sh` builds only the `@mieweb/ui` `index` entry plus the CSS the
-widget loads. The package's full `pnpm run build` also builds heavy opt-in
-entries (esheet, datavis, globe, ag-grid, kerebron) that the widget never
-imports and whose rollup-dts step exhausts a CI runner's memory.
-
-The build type-checks the widget against the pinned UI declarations before
-generating `embed/ozwell.js`. Run `npm run type-check:widget -w reference-server`
-for the focused type check. Browser tests require the landing-page dependencies
-and Playwright Chromium to be installed.
+Add a floating Ozwell chat widget to your website with one script tag.
 
 ## Basic Usage
 
-Add this to your HTML:
+For **production**, add this before the closing `</body>` tag:
 
 ```html
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
-The chat button appears automatically in the bottom-right corner.
+The chat button appears automatically in the bottom-right corner. Visitors sign
+in through the widget; the host page can omit API and agent keys.
 
 **How it works:** The loader auto-detects its API origin, then opens the hosted iframe page at `/widget/frame/`. The iframe calls that same origin's chat API.
 
+### Production and development URLs
+
+| Environment | Loader script | Hosted chat iframe |
+|-------------|---------------|--------------------|
+| Production | `https://api.ozwell.ai/widget` | `https://api.ozwell.ai/widget/frame/` |
+| Development | `https://ozwellapi.os.mieweb.org/widget` | `https://ozwellapi.os.mieweb.org/widget/frame/` |
+| Local development | `http://localhost:3000/widget` | `http://localhost:3000/widget/frame/` |
+
+Use one environment consistently. Loading its script also selects that
+environment's iframe and API by default. The examples below use production;
+switch the script URL when testing against development.
+
 ## With Configuration
 
-Customize the widget with `window.OzwellChatConfig`:
+Define `window.OzwellChatConfig` **before** loading the script. Existing options
+such as title, welcome message, and page tools go in this object:
 
 ```html
 <script>
@@ -48,8 +39,55 @@ Customize the widget with `window.OzwellChatConfig`:
     system: 'You are a helpful assistant.'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
+
+## Proposed page control option
+
+> **Design proposal — not implemented in the loader.** The following shows the
+> intended embedding API. Adding `pageControl` to today's loader does not
+> activate page control. The working implementation is currently wired
+> explicitly in the [browser-tools demo](#host-page-browser-tools-proof-of-concept).
+
+The intended change to a normal production embed is one additional
+`OzwellChatConfig` property:
+
+```html
+<div id="app">
+  <!-- Your application's page content and controls -->
+</div>
+
+<script>
+  window.OzwellChatConfig = {
+    title: 'Ask Ozwell',
+    pageControl: { root: '#app', visual: 'mask' }
+  };
+</script>
+<script src="https://api.ozwell.ai/widget"></script>
+```
+
+The MCP bridge is already part of the widget loader. With this proposed option,
+the loader would load the page controller and its styles on demand, register
+`browser_snapshot`, `browser_click`, `browser_fill`, `browser_select`, and
+`browser_scroll`, and make those tools available through the existing host-to-iframe
+MCP channel. It would handle registration and dispatch alongside any custom
+`tools` already configured by the host.
+
+| Proposed setting | Default | Meaning |
+|------------------|---------|---------|
+| `pageControl` | Omitted (off) | Opt in to page tools by supplying the configuration object. |
+| `pageControl.root` | Required | Selector for one application container. Keep the Ozwell widget outside this scope. |
+| `pageControl.visual` | `'mask'` | `'mask'`, `'highlight'`, `'both'`, or `'none'`. |
+
+The mask would show the moving cursor and temporarily block manual input during
+actions. Highlight would outline the current target while leaving the page
+interactive; both would combine them, and none would hide the visual feedback.
+Omitting `visual` would select the mask. Omitting `pageControl` would keep the
+standard chat-only embed.
+
+Guided workflows, step-through controls, and run-speed choices belong to the
+example page. Native browser WebMCP publication has its own explicit
+[configuration](#optional-webmcp-exposure).
 
 ## With Custom UI
 
@@ -65,7 +103,7 @@ Use your own button and layout by disabling the default floating button:
     containerId: 'my-chat-container'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 **How it works:** Setting `defaultUI: false` disables the automatic floating button and wrapper. The widget iframe mounts directly in your custom container instead.
@@ -107,7 +145,7 @@ Use the AI to improve text, then have it write the result back into a textarea. 
     respond({ success: true });
   });
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 **How it works:** User asks the AI to improve their text. The AI calls `update_note` with the improved text, and the page writes it into the textarea. The page controls exactly where text lands — nothing is inserted without an explicit tool call.
@@ -140,7 +178,7 @@ Page tools act on the host page (read inputs, update fields). The page owns the 
     // no tools / model / prompt needed — the agent provides them
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 **They combine.** When you use an agent key *and* declare page-side `tools`, both sets are offered to the model: the agent's server-side tools plus the page tools (the loader prefixes page tools so the server can tell them apart). Use the agent for prompt/model/shared tools, and page-side `tools` for anything that must run in the browser.
@@ -181,7 +219,7 @@ Expose current page data as a tool so the AI can request it when needed:
     });
   });
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 Now users can ask: "What's my name?" and the AI responds: "Your name is Alice."
@@ -226,7 +264,7 @@ Enable page interactions using MCP tools (OpenAI function calling format). The l
     }
   });
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 The `tools[].function` object above is a schema only. Actual JavaScript execution stays in your `ozwell-tool-call` event listener.
@@ -386,7 +424,7 @@ Disable auto-mount and control when/where the widget appears. Useful for:
     autoMount: false
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 
 <script>
   // Mount when user clicks button
@@ -410,7 +448,7 @@ The reference server automatically detects and routes to the best available back
     apiKey: 'agnt_key-your-agent-key'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 Parent keys can also authenticate direct chat-completions/API requests when the page supplies the chat configuration inline:
@@ -423,7 +461,7 @@ Parent keys can also authenticate direct chat-completions/API requests when the 
     system: 'You are a helpful assistant.'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 To use Ollama as the backend, configure the server's `.env` file — set `OLLAMA_BASE_URL` (and optionally `OLLAMA_MODEL`). No client-side changes needed; the widget talks to the reference server and the server handles backend routing. See `../.env.example` for details.
@@ -440,7 +478,7 @@ Use `openaiApiKey` or custom headers for API authentication:
     model: 'gpt-4o'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 Or use custom headers for any authentication scheme:
@@ -455,7 +493,7 @@ Or use custom headers for any authentication scheme:
     }
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### Sign-In (No Key Required)
@@ -470,7 +508,7 @@ You can embed the widget without giving it a key at all. Leave both `apiKey` and
     // no apiKey — the visitor signs in for themselves
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 The visitor signs in and the server hands the widget a session token belonging to them. Your
@@ -694,7 +732,7 @@ Enable debug mode during development to visualize tool executions:
     debug: true  // Shows tool execution details
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 **How it works:** Clickable tool pills appear before AI responses. Click a pill to expand and see:
@@ -720,8 +758,8 @@ The widget handles all mobile optimizations automatically.
 
 ## Live Demo
 
-- **Demo:** <https://ozwelldemo.os.mieweb.org>
-- **Reference Server:** <https://ozwellapi.os.mieweb.org>
+- **Development demo:** <https://ozwelldemo.os.mieweb.org>
+- **Development reference server:** <https://ozwellapi.os.mieweb.org>
 
 ### Host-page browser tools proof of concept
 
@@ -782,6 +820,29 @@ model credentials or running development servers.
 `./scripts/build-demo-package.sh` installs locked build dependencies and includes
 the generated JavaScript and CSS in the deployment archive. The deployed service
 does not need to rebuild those assets.
+
+## Building and Validating
+
+The widget uses the pinned MIE Web UI submodule, not the older npm fallback.
+From the repository root:
+
+```bash
+git submodule update --init --recursive
+./scripts/ci/build-pinned-ui.sh
+npm ci
+npm run build -w reference-server
+npm --prefix landing-page test -- tests/widget-auth.spec.ts --reporter=line
+```
+
+`build-pinned-ui.sh` builds only the `@mieweb/ui` `index` entry plus the CSS the
+widget loads. The package's full `pnpm run build` also builds heavy opt-in
+entries (esheet, datavis, globe, ag-grid, kerebron) that the widget never
+imports and whose rollup-dts step exhausts a CI runner's memory.
+
+The build type-checks the widget against the pinned UI declarations before
+generating `embed/ozwell.js`. Run `npm run type-check:widget -w reference-server`
+for the focused type check. Browser tests require the landing-page dependencies
+and Playwright Chromium to be installed.
 
 ## Local Development
 
