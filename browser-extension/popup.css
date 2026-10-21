@@ -1,0 +1,40 @@
+:root {
+  color-scheme: light;
+  font: 13px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172735;
+  background: #f7f9fc;
+}
+
+* { box-sizing: border-box; }
+body { width: 350px; margin: 0; }
+main { padding: 22px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+h1 { margin: 0; font-size: 23px; line-height: 1.2; letter-spacing: -0.6px; }
+h2 { margin: 0; font-size: 11px; color: #536576; text-transform: uppercase; letter-spacing: 0.07em; }
+p { margin: 0; }
+header p { margin-top: 3px; color: #536576; font-size: 12px; }
+.mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; color: #fff; background: #147895; font-size: 26px; font-weight: 500; }
+.page-card { padding: 14px; margin-bottom: 22px; border: 1px solid #d8e0ec; border-radius: 12px; background: #fff; }
+.site { margin: 4px 0 12px; overflow-wrap: anywhere; font-weight: 600; }
+label { display: block; margin-bottom: 6px; font-weight: 600; }
+button, select, textarea { font: inherit; }
+button, select { min-height: 38px; }
+button { width: 100%; padding: 8px 12px; border: 1px solid #c8d4e1; border-radius: 8px; background: #fff; color: #234352; font-weight: 600; cursor: pointer; }
+button:hover:enabled { background: #eaf4f8; border-color: #147895; }
+button:disabled { opacity: 0.55; cursor: default; }
+select, textarea { width: 100%; padding: 9px 10px; border: 1px solid #c8d4e1; border-radius: 8px; background: #fff; color: inherit; }
+select { cursor: pointer; }
+textarea { display: block; min-height: 92px; resize: vertical; }
+:is(button, select, textarea, a):focus-visible { outline: 3px solid #69bfd5; outline-offset: 2px; }
+.help { margin: 7px 0 14px; color: #536576; font-size: 12px; }
+.field-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.text-button { width: auto; min-height: 30px; padding: 3px 0; border: 0; color: #096580; font-size: 12px; background: transparent; }
+.text-button:hover:enabled { background: transparent; text-decoration: underline; }
+.primary { margin-top: 2px; background: #147895; color: #fff; border-color: #147895; }
+.primary:hover:enabled { background: #0f627b; color: #fff; }
+.feedback { margin-top: 12px; color: #385a69; font-size: 12px; }
+.feedback:empty { display: none; }
+.error { color: #aa2638; }
+footer { margin-top: 18px; padding-top: 14px; border-top: 1px solid #d8e0ec; color: #536576; font-size: 11px; }
+a { color: #096580; }
+[hidden] { display: none !important; }

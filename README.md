@@ -34,6 +34,9 @@ Experience the Ozwell AI chat widget with:
 - Interactive demo with live event logging
 - Secure iframe isolation
 
+For an unpacked Chromium extension with on-demand, whitelist, always-on, and off
+modes, see the [Ozwell Minimal browser extension](browser-extension/README.md).
+
 ---
 
 ## Quick Start

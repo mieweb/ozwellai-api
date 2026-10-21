@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Ozwell Minimal",
+  "version": "0.1.0",
+  "description": "A minimal launcher for the hosted Ozwell widget, on demand or on your chosen sites.",
+  "minimum_chrome_version": "102",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": ["*://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Ozwell", "default_popup": "popup.html" }
+}
