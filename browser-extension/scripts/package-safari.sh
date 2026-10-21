@@ -6,6 +6,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 extension_dir="$(cd -- "$script_dir/.." && pwd)"
 bundle_id="ai.ozwell.minimal.development"
 sign_identity="-"
+build_number="1"
 esbuild_path=""
 output_dir=""
 icon_path="$extension_dir/assets/ozwell-512.png"
@@ -22,6 +23,7 @@ system temporary directory. Existing output apps are never overwritten.
   --icon PATH             Square PNG for the app and setup window (default assets/ozwell-512.png)
   --bundle-id IDENTIFIER  Host identifier (default preserves the existing Ozwell development app)
   --sign-identity NAME    Local codesign identity (default '-' for ad-hoc development)
+  --build-number NUMBER   Positive integer CFBundleVersion for both bundles (default 1)
   --esbuild PATH          esbuild executable (otherwise find it in PATH or repository dependencies)
   --help                 Show usage
 USAGE
@@ -29,7 +31,7 @@ USAGE
 
 while (($#)); do
   case "$1" in
-    --output-dir|--icon|--bundle-id|--sign-identity|--esbuild)
+    --output-dir|--icon|--bundle-id|--sign-identity|--esbuild|--build-number)
       if (($# < 2)); then printf 'Missing value for %s\n' "$1" >&2; exit 2; fi
       case "$1" in
         --output-dir) output_dir="$2" ;;
@@ -37,6 +39,7 @@ while (($#)); do
         --bundle-id) bundle_id="$2" ;;
         --sign-identity) sign_identity="$2" ;;
         --esbuild) esbuild_path="$2" ;;
+        --build-number) build_number="$2" ;;
       esac
       shift 2 ;;
     --help|-h) usage; exit 0 ;;
@@ -44,6 +47,10 @@ while (($#)); do
   esac
 done
 
+if [[ ! "$build_number" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'Build number must be a positive integer: %s\n' "$build_number" >&2
+  exit 2
+fi
 if [[ "$(uname -s)" != Darwin ]]; then
   printf 'Safari packaging requires macOS and Xcode.\n' >&2
   exit 1
@@ -81,6 +88,20 @@ if [[ -e "$output_dir/ozwell.app" || -e "$output_dir/project" || -e "$output_dir
   printf 'Output contains a previous build; choose a fresh --output-dir: %s\n' "$output_dir" >&2
   exit 1
 fi
+
+# Xcode registers macOS app build products even when asked only to build. Remove
+# this run's temporary registration on success or failure, never the installed app.
+cleanup_generated_registration() {
+  local generated_app="$output_dir/DerivedData/Build/Products/Debug/ozwell.app"
+  local lsregister="/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister"
+  if [[ -d "$generated_app" ]]; then
+    {
+      pluginkit -r "$generated_app/Contents/PlugIns/ozwell Extension.appex" || true
+      "$lsregister" -u "$generated_app" || true
+    } >"$output_dir/registration-cleanup.log" 2>&1
+  fi
+}
+trap cleanup_generated_registration EXIT
 
 # Stage only browser runtime files; do not ship tests, package metadata, or tooling.
 python3 - "$extension_dir" "$output_dir/extension" <<'PY'
@@ -153,17 +174,19 @@ if [[ ! -d "$project_dir/ozwell.xcodeproj" ]]; then
 fi
 
 # Keep the stable development identifiers while presenting the lowercase brand.
-python3 - "$project_dir" "$bundle_id" <<'PY'
+python3 - "$project_dir" "$bundle_id" "$build_number" <<'PY'
 import plistlib
 import re
 from pathlib import Path
 import sys
 project = Path(sys.argv[1])
 bundle_id = sys.argv[2]
+build_number = sys.argv[3]
 for path in (project / 'ozwell/Info.plist', project / 'ozwell Extension/Info.plist'):
     data = plistlib.loads(path.read_bytes())
     data['CFBundleDisplayName'] = 'ozwell'
     data['CFBundleName'] = 'ozwell'
+    data['CFBundleVersion'] = build_number
     path.write_bytes(plistlib.dumps(data))
 settings = project / 'ozwell.xcodeproj/project.pbxproj'
 text = settings.read_text()
@@ -176,6 +199,7 @@ def identifier(match):
     return f'PRODUCT_BUNDLE_IDENTIFIER = {bundle_id}{suffix};'
 text = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);', identifier, text)
 text = re.sub(r'INFOPLIST_KEY_CFBundleDisplayName = [^;]+;', 'INFOPLIST_KEY_CFBundleDisplayName = ozwell;', text)
+text = re.sub(r'CURRENT_PROJECT_VERSION = [^;]+;', f'CURRENT_PROJECT_VERSION = {build_number};', text)
 settings.write_text(text)
 controller = project / 'ozwell/ViewController.swift'
 text = controller.read_text()
@@ -262,7 +286,7 @@ xcodebuild -project "$project_dir/ozwell.xcodeproj" \
   -derivedDataPath "$output_dir/DerivedData" \
   CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$sign_identity" DEVELOPMENT_TEAM= \
   CODE_SIGNING_ALLOWED=YES MACOSX_DEPLOYMENT_TARGET=12.0 \
-  REGISTER_APP_WITH_LAUNCH_SERVICES=NO build \
+  CURRENT_PROJECT_VERSION="$build_number" build \
   >"$output_dir/build.log" 2>&1 || {
     tail -40 "$output_dir/build.log" >&2
     exit 1
@@ -270,17 +294,19 @@ xcodebuild -project "$project_dir/ozwell.xcodeproj" \
 
 built_app="$output_dir/DerivedData/Build/Products/Debug/ozwell.app"
 codesign --verify --deep --strict "$built_app"
-python3 - "$built_app" "$bundle_id" <<'PY'
+codesign --verify --strict "$built_app/Contents/PlugIns/ozwell Extension.appex"
+python3 - "$built_app" "$bundle_id" "$build_number" <<'PY'
 import json
 import plistlib
 from pathlib import Path
 import sys
 app = Path(sys.argv[1])
 expected = sys.argv[2]
+build_number = sys.argv[3]
 for bundle, identifier in ((app, expected), (app / 'Contents/PlugIns/ozwell Extension.appex', expected + '.Extension')):
     info = plistlib.loads((bundle / 'Contents/Info.plist').read_bytes())
-    if info['CFBundleIdentifier'] != identifier or info['CFBundleDisplayName'] != 'ozwell':
-        raise SystemExit(f'Unexpected branding or identifier in {bundle}')
+    if info['CFBundleIdentifier'] != identifier or info['CFBundleDisplayName'] != 'ozwell' or info['CFBundleVersion'] != build_number:
+        raise SystemExit(f'Unexpected branding, identifier, or build number in {bundle}')
 resources = app / 'Contents/PlugIns/ozwell Extension.appex/Contents/Resources'
 manifest = json.loads((resources / 'manifest.json').read_text())
 if manifest.get('name') != 'ozwell':
@@ -292,6 +318,7 @@ for name in ('popup.js', 'widget-host.js', 'assets/ozwell-512.png'):
         raise SystemExit(f'Built app is missing a runtime resource: {name}')
 PY
 ditto "$built_app" "$output_dir/ozwell.app"
-printf '\nBuilt app: %s\nHost identifier: %s\nExtension identifier: %s.Extension\nBuild log: %s\n' \
-  "$output_dir/ozwell.app" "$bundle_id" "$bundle_id" "$output_dir/build.log"
+codesign --verify --deep --strict "$output_dir/ozwell.app"
+printf '\nBuilt app: %s\nBuild number: %s\nHost identifier: %s\nExtension identifier: %s.Extension\nBuild log: %s\n' \
+  "$output_dir/ozwell.app" "$build_number" "$bundle_id" "$bundle_id" "$output_dir/build.log"
 printf 'Build only: install and enable this local development app through Finder and Safari.\n'
