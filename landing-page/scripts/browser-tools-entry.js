@@ -41,8 +41,6 @@ document.addEventListener('ozwell-tool-call', (event) => {
 
 const referenceBase = document.body.dataset.referenceBase.replace(/\/$/, '');
 window.OzwellChatConfig = {
-  containerId: 'assistant-container',
-  defaultUI: false,
   widgetUrl: `${referenceBase}/widget/frame/`,
   title: 'Service desk assistant',
   welcomeMessage:
@@ -62,7 +60,7 @@ loader.onerror = () => {
   hint.className = 'assistant-offline';
   hint.textContent =
     'Start the reference server for live chat. The local tool demo works independently.';
-  document.getElementById('assistant-container').append(hint);
+  document.getElementById('tool-console').append(hint);
 };
 document.head.append(loader);
 

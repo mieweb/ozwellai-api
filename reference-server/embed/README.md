@@ -729,9 +729,12 @@ The landing-page server includes `/browser-tools.html`, a synthetic service
 operations desk with filters, a work-order editor, confirmation dialog, and
 activity history. Run `npm ci` in `landing-page`, then `npm start`, and open
 `http://localhost:8080/browser-tools.html`. Start the reference server separately
-for the embedded Ozwell sign-in/chat UI. `REFERENCE_SERVER_URL` overrides its
-default address (`http://localhost:3000`). **Run demo** exercises the same tools
-locally without an account, model, or API key.
+for the standard floating Ozwell sign-in/chat widget. `REFERENCE_SERVER_URL`
+overrides its default address (`http://localhost:3000`). **Run guided demo** in
+the top banner exercises the same tools locally without an account, model, or
+API key. Expand **Demo details and tool activity** for the explanation, page
+snapshot, reset control, and tool results. Use the floating chat button to talk
+to Ozwell.
 
 The demo uses `@mieweb/page-controller` from
 [MIE Web's Page Agent fork](https://github.com/mieweb/page-agent/tree/mie-controller-dist),

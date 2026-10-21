@@ -82,6 +82,13 @@ async function callTool(
   );
 }
 
+async function expandDemoDetails(page: Page) {
+  const details = page.locator('#demo-details');
+  if (!(await details.evaluate((element: HTMLDetailsElement) => element.open))) {
+    await details.locator(':scope > summary').click();
+  }
+}
+
 function readSnapshot(result: ToolResult): Snapshot {
   expect(result.isError).not.toBe(true);
   expect(result.content[0].type).toBe('text');
@@ -148,6 +155,9 @@ test('the scripted workflow persists a work order through the browser tools', as
   page,
 }) => {
   await openDemo(page);
+  await expect(page.locator('#demo-details')).toHaveJSProperty('open', false);
+  await expect(page.locator('#run-demo')).toBeVisible();
+  await expect(page.locator('#reset-demo')).toBeHidden();
   await page.locator('#run-demo').click();
   await expect
     .poll(() =>
@@ -179,6 +189,7 @@ test('the scripted workflow persists a work order through the browser tools', as
       }),
     ]),
   });
+  await expandDemoDetails(page);
   await page.locator('#reset-demo').click();
   await expect
     .poll(() =>
@@ -203,6 +214,7 @@ test('snapshots include only the operations app, excluding the console and assis
     marker.id = 'outside-scope-action';
     document.querySelector('#tool-console')!.append(marker);
   });
+  await expandDemoDetails(page);
   await page.locator('#read-page').click();
   await expect(page.locator('#tool-output')).toContainText('snapshotId');
   const state = await snapshot(page);
@@ -263,7 +275,14 @@ test('the real iframe loader discovers and invokes scoped browser tools across o
   page,
 }) => {
   await openDemo(page);
-  const iframe = page.locator('#assistant-container iframe');
+  const launcher = page.getByRole('button', { name: 'Open chat', exact: true });
+  const chat = page.locator('#ozwell-chat-wrapper');
+  await expect(launcher).toBeVisible();
+  await expect(chat).toHaveClass(/hidden/);
+  await launcher.click();
+  await expect(chat).toHaveClass(/visible/);
+  await expect(launcher).toBeHidden();
+  const iframe = page.locator('#ozwell-chat-container iframe');
   await expect(iframe).toHaveCount(1);
   const frame = (await (await iframe.elementHandle())!.contentFrame())!;
   await expect.poll(() => frame.url()).not.toBe('about:blank');
@@ -280,6 +299,9 @@ test('the real iframe loader discovers and invokes scoped browser tools across o
     'postMessage_browser_select',
     'postMessage_browser_snapshot',
   ]);
+  await page.getByRole('button', { name: 'Hide chat', exact: true }).click();
+  await expect(chat).toHaveClass(/hidden/);
+  await expect(launcher).toBeVisible();
 
   await page.evaluate(() => {
     (window as any).iframeActionCount = 0;

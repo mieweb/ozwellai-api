@@ -9,6 +9,66 @@
   </head>
   <body data-reference-base="__REFERENCE_BASE_URL__">
     <div class="workspace-layout">
+      <section
+        id="tool-console"
+        class="demo-banner"
+        data-page-agent-ignore="true"
+        aria-labelledby="tool-console-heading"
+      >
+        <div class="demo-banner-main">
+          <div class="demo-banner-copy">
+            <p class="eyebrow">OZWELL / IN-PAGE BROWSER TOOLS</p>
+            <h2 id="tool-console-heading">Let the page do the work.</h2>
+            <p>Try a guided work order update. No sign-in needed.</p>
+          </div>
+          <div class="demo-banner-actions">
+            <button id="run-demo" type="button" class="primary-button">
+              Run guided demo <span aria-hidden="true">→</span>
+            </button>
+            <div class="controller-state">
+              <span class="live-dot" aria-hidden="true"></span
+              ><span id="controller-status" role="status"
+                >Starting page controller…</span
+              >
+            </div>
+          </div>
+        </div>
+        <details id="demo-details">
+          <summary>Demo details and tool activity</summary>
+          <div class="demo-detail-content">
+            <div class="demo-instructions">
+              <h3>A complete dispatch update</h3>
+              <p>
+                The guided run opens WO-1042, assigns Maya Chen, changes its
+                status to In progress, adds dispatch notes, marks it urgent,
+                and confirms the update. Follow each tool call in the activity
+                log.
+              </p>
+              <p>
+                Use the floating Ozwell button to chat with the page. Sign in
+                there to use natural language, or explore the sample by hand.
+              </p>
+              <div class="tool-actions">
+                <button id="read-page" type="button" class="secondary-button">
+                  Read page
+                </button>
+                <button id="reset-demo" type="button" class="text-button">
+                  Reset sample
+                </button>
+              </div>
+            </div>
+            <div
+              id="tool-output"
+              tabindex="0"
+              role="log"
+              aria-label="Browser tool output"
+              aria-live="polite"
+            >
+              Tool results will appear here.
+            </div>
+          </div>
+        </details>
+      </section>
       <main id="operations-app" class="operations-app">
         <header class="workspace-header">
           <div class="brand-line">
@@ -316,78 +376,6 @@
         </dialog>
       </main>
 
-      <aside
-        class="assistant-sidebar"
-        data-page-agent-ignore="true"
-        aria-label="Ozwell assistant and browser tool controls"
-      >
-        <header class="assistant-header">
-          <div class="assistant-wordmark">
-            <span aria-hidden="true">✳</span> ozwell
-          </div>
-          <span class="poc-badge">BROWSER TOOLS / POC</span>
-        </header>
-        <div class="assistant-intro">
-          <h2>Work with the page.</h2>
-          <p>
-            Read the queue, make an assignment, and verify the result through
-            the same tools an agent can use.
-          </p>
-          <div class="controller-state">
-            <span class="live-dot" aria-hidden="true"></span
-            ><span id="controller-status" role="status"
-              >Starting page controller…</span
-            >
-          </div>
-        </div>
-        <section
-          id="tool-console"
-          class="tool-console"
-          data-page-agent-ignore="true"
-          aria-labelledby="tool-console-heading"
-        >
-          <div class="console-heading">
-            <h3 id="tool-console-heading">Try the browser tools</h3>
-            <span>NO SIGN-IN NEEDED</span>
-          </div>
-          <p>
-            The guided run updates WO-1042: assign Maya Chen, move it to In
-            progress, add dispatch notes, and mark it urgent.
-          </p>
-          <div class="tool-actions">
-            <button id="read-page" type="button" class="secondary-button">
-              Read page</button
-            ><button id="run-demo" type="button" class="primary-button">
-              Run guided demo <span aria-hidden="true">→</span></button
-            ><button id="reset-demo" type="button" class="text-button">
-              Reset sample
-            </button>
-          </div>
-          <div
-            id="tool-output"
-            tabindex="0"
-            role="log"
-            aria-label="Browser tool output"
-            aria-live="polite"
-          >
-            Tool results will appear here.
-          </div>
-        </section>
-        <section class="chat-section" aria-labelledby="chat-heading">
-          <div class="console-heading">
-            <h3 id="chat-heading">Ask Ozwell</h3>
-            <span>LIVE ASSISTANT</span>
-          </div>
-          <p class="chat-help">
-            Sign in inside the assistant to use natural language. The guided
-            demo above works independently.
-          </p>
-          <div id="assistant-container" data-page-agent-ignore="true"></div>
-        </section>
-        <footer class="assistant-footer">
-          In-page DOM actions · MCP over iframe · Optional native WebMCP
-        </footer>
-      </aside>
     </div>
     <script type="module" src="/assets/browser-tools-bundle.js"></script>
   </body>
