@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import { waitForServer } from './helpers/wait-for-server.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,18 +12,6 @@ const BASE = `http://localhost:${PORT}`;
 
 let server;
 let tmp;
-
-async function waitForReady(base, maxMs = 10_000) {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    try {
-      const r = await fetch(`${base}/health`);
-      if (r.status === 200) return;
-    } catch { /* not ready */ }
-    await delay(200);
-  }
-  throw new Error('server never became ready');
-}
 
 // Spawn a reference server with mock/LLM env fully controlled so dotenv/.env
 // can't leak a real backend into the test.
@@ -54,7 +42,7 @@ before(async () => {
   tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-embeddings-test-'));
   const dbPath = path.join(tmp, 'ozwell.db');
   server = spawnServer({ port: PORT, dbPath, allowMock: true });
-  await waitForReady(BASE);
+  await waitForServer(server, BASE);
 });
 
 after(() => {
@@ -147,7 +135,7 @@ test('embeddings — 503 when no backend and mock disabled', async () => {
     allowMock: false,
   });
   try {
-    await waitForReady(localBase);
+    await waitForServer(localServer, localBase);
     const r = await fetch(`${localBase}/v1/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },

@@ -150,6 +150,11 @@ building the spec, client, and pinned UI. Widget prompt and tool-result tests
 execute shared TypeScript helpers with local identifiers minified, so ordinary
 bundler renaming does not invalidate the assertions.
 
+Server integration tests run at most two test files concurrently to limit
+simultaneous server startups on constrained runners. Their shared readiness
+helper allows up to 30 seconds, bounds each health probe, and includes captured
+child-process output when startup fails.
+
 Test any workflow locally by running its scripts:
 
 ```bash

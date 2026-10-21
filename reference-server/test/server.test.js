@@ -4,8 +4,8 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { setTimeout } from 'node:timers/promises';
 import { createServer } from 'node:http';
+import { waitForServer } from './helpers/wait-for-server.js';
 
 const TEST_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -21,20 +21,6 @@ function freePort() {
       probe.close(() => resolve(port));
     });
   });
-}
-
-// Poll until the server answers /health, instead of a fixed sleep — a fixed
-// delay is flaky on slow hosts (Windows CI, constrained containers).
-async function waitForReady(base, maxMs = 20_000) {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    try {
-      const r = await fetch(`${base}/health`);
-      if (r.status === 200) return;
-    } catch { /* not ready yet */ }
-    await setTimeout(200);
-  }
-  throw new Error('server never became ready');
 }
 
 function stop(server) {
@@ -74,7 +60,7 @@ test('Reference Server - Health Check', async () => {
   const { server, tmp, base } = await startServer();
 
   try {
-    await waitForReady(base);
+    await waitForServer(server, base);
 
     // Test health endpoint
     const response = await fetch(`${base}/health`);
@@ -101,7 +87,7 @@ test('Reference Server - Health Check uses unknown commit in production without 
   });
 
   try {
-    await waitForReady(base);
+    await waitForServer(server, base);
 
     const response = await fetch(`${base}/health`);
     assert.strictEqual(response.status, 200);
@@ -122,7 +108,7 @@ test('Reference Server - OpenAPI Spec', async () => {
   const { server, tmp, base } = await startServer();
 
   try {
-    await waitForReady(base);
+    await waitForServer(server, base);
 
     // Test OpenAPI endpoint
     const response = await fetch(`${base}/openapi.json`);

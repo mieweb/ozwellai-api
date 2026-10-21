@@ -2,11 +2,11 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { waitForServer } from './helpers/wait-for-server.js';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -46,18 +46,6 @@ const SHORT_SUMMARY_FORMAT = {
         },
     },
 };
-
-async function waitForReady(base, maxMs = 10_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            const r = await fetch(`${base}/health`);
-            if (r.status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
 
 function startServer(port, extraEnv = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-structured-test-'));
@@ -146,7 +134,7 @@ let acceptTmp;
 
 before(async () => {
     ({ server: acceptServer, tmp: acceptTmp } = startServer(ACCEPT_PORT, { ALLOW_MOCK: '' }));
-    await waitForReady(ACCEPT_BASE);
+    await waitForServer(acceptServer, ACCEPT_BASE);
 });
 
 after(() => stopServer(acceptServer, acceptTmp));
@@ -188,7 +176,7 @@ test('e2e — response_format json_schema is forwarded to upstream intact', asyn
     });
     const base = 'http://localhost:3339';
     try {
-        await waitForReady(base);
+        await waitForServer(server, base);
         // Auto-provision a real (non-mock) parent key.
         await fetch(`${base}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const key = getActiveParentKey(dbPath, MANAGER_EXTERNAL_ID);

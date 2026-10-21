@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import { waitForServer } from './helpers/wait-for-server.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -15,18 +15,6 @@ const BASE = `http://localhost:${PORT}`;
 let server;
 let tmp;
 
-async function waitForReady(maxMs = 10_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            const r = await fetch(`${BASE}/health`);
-            if (r.status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
-
 before(async () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-mock-test-'));
     const dbPath = path.join(tmp, 'ozwell.db');
@@ -38,7 +26,7 @@ before(async () => {
         detached: true,
         env: { ...process.env, PORT: String(PORT), DB_PATH: dbPath, NODE_ENV: 'development', ALLOW_MOCK: '' }
     });
-    await waitForReady();
+    await waitForServer(server, BASE);
 });
 
 after(() => {

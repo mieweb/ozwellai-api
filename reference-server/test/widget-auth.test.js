@@ -9,6 +9,7 @@ import net from 'node:net';
 import Fastify from 'fastify';
 import { generateKeyPair, exportPKCS8, exportJWK, createLocalJWKSet, SignJWT, jwtVerify } from 'jose';
 import oidcModule from '../dist/reference-server/src/util/oidc.js';
+import { waitForServer } from './helpers/wait-for-server.js';
 
 // Store unit tests import the compiled module (npm pretest runs the build)
 const storeDirectory = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-store-'));
@@ -26,17 +27,6 @@ const BASE = `http://localhost:${PORT}`;
 
 let server;
 let tmp;
-
-async function waitForReady(base = BASE, maxMs = 10_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            if ((await fetch(`${base}/health`)).status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
 
 async function postJson(path, body) {
     return fetch(`${BASE}${path}`, {
@@ -99,7 +89,7 @@ function stopServer(child) {
 before(async () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-widget-auth-test-'));
     server = startServer(PORT, path.join(tmp, 'ozwell.db'));
-    await waitForReady();
+    await waitForServer(server, BASE);
 });
 
 after(() => {
@@ -485,7 +475,7 @@ test('a server that can send mail never echoes the code, and says so when delive
     });
 
     try {
-        await waitForReady(mailBase);
+        await waitForServer(mailServer, mailBase);
         const res = await fetch(`${mailBase}/auth/otp/request`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -505,7 +495,7 @@ test('production disables email login without SMTP even when dev echo is enabled
     const port = 3349;
     const child = startServer(port, path.join(tmp, 'production.db'), { NODE_ENV: 'production' });
     try {
-        await waitForReady(`http://localhost:${port}`);
+        await waitForServer(child, `http://localhost:${port}`);
         const methods = await (await fetch(`http://localhost:${port}/auth/methods`)).json();
         assert.equal(methods.email_otp, false);
         const response = await fetch(`http://localhost:${port}/auth/otp/request`, {
@@ -550,7 +540,7 @@ test('SMTP delivery sends a usable code without exposing it in the API or logs',
     child.stdout.on('data', chunk => { logs += chunk.toString(); });
     child.stderr.on('data', chunk => { logs += chunk.toString(); });
     try {
-        await waitForReady(base);
+        await waitForServer(child, base);
         const requested = await fetch(`${base}/auth/otp/request`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: 'delivered@example.test' }),
