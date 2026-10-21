@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import { waitForServer } from './helpers/wait-for-server.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -12,18 +12,6 @@ const require = createRequire(import.meta.url);
 const DEMO_KEY = 'ozw_demo_localhost_key_for_testing';
 const PORT = 3333;
 const BASE = `http://localhost:${PORT}`;
-
-async function waitForReady(maxMs = 10_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            const r = await fetch(`${BASE}/health`);
-            if (r.status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
 
 function startServer() {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-test-'));
@@ -59,7 +47,7 @@ const H_YAML = { 'Content-Type': 'application/yaml', 'Authorization': `Bearer ${
 test('agents route — YAML blob round-trip preserves comments and ordering', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const yamlInput = `# This comment must survive the round-trip
 name: Pirate Bot
@@ -108,7 +96,7 @@ custom_unknown_field: 42
 test('agents route — PUT preserves custom YAML verbatim', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const yaml1 = `name: Bot
 instructions: First version
@@ -144,7 +132,7 @@ extra_future_field: still_here
 test('agents route — list + delete flow', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const yamlInput = `name: Disposable\ninstructions: Go away\n`;
         const create = await fetch(`${BASE}/v1/agents`, { method: 'POST', headers: H_YAML, body: yamlInput });
@@ -170,7 +158,7 @@ test('agents route — list + delete flow', async () => {
 test('agents route — invalid YAML rejected', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const res = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'not: : valid: yaml: ::'
@@ -194,7 +182,7 @@ test('agents route — invalid YAML rejected', async () => {
 test('agents route — JSON wrapper {yaml: "..."} works too', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const yamlInput = `name: Wrap\ninstructions: test\n`;
         const res = await fetch(`${BASE}/v1/agents`, {
@@ -218,7 +206,7 @@ const HINT_PATTERN = /^agnt_key-\.\.\.[a-z0-9]{4}$/;
 test('agents route — create returns full key + hint, list masks key', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: K1\ninstructions: hi\n'
         });
@@ -242,7 +230,7 @@ test('agents route — create returns full key + hint, list masks key', async ()
 test('agents route — GET :id and PUT :id mask key', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: K2\ninstructions: hi\n'
         });
@@ -269,7 +257,7 @@ test('agents route — GET :id and PUT :id mask key', async () => {
 test('agents route — reveal-key returns full key with parent auth', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: R1\ninstructions: hi\n'
         });
@@ -290,7 +278,7 @@ test('agents route — reveal-key returns full key with parent auth', async () =
 test('agents route — reveal-key rejects agent key auth', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: R2\ninstructions: hi\n'
         });
@@ -308,7 +296,7 @@ test('agents route — reveal-key rejects agent key auth', async () => {
 test('agents route — rotate-key invalidates old, new key validates', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: Rot\ninstructions: hi\n'
         });
@@ -344,7 +332,7 @@ test('agents route — rotate-key invalidates old, new key validates', async () 
 test('agents route — corrupt stored YAML returns 500 (Aaron fix)', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const create = await fetch(`${BASE}/v1/agents`, {
             method: 'POST', headers: H_YAML, body: 'name: Doomed\ninstructions: hi\n'
         });

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { setTimeout as delay } from 'node:timers/promises';
+import { waitForServer } from './helpers/wait-for-server.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -42,18 +42,6 @@ const DESTINATION_MANAGER_HEADERS = {
     'x-email': 'destination@example.test',
     'x-groups': 'ldapusers',
 };
-
-async function waitForReady(maxMs = 30_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            const r = await fetch(`${BASE}/health`);
-            if (r.status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
 
 function startServer({ trustHeaders = true, adminExternalUserIds = '', extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-manager-auth-test-'));
@@ -203,7 +191,7 @@ function getActiveKeyForExternalUser(dbPath, externalUserId) {
 test('manager auth — /v1/me alias is not exposed', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const res = await fetch(`${BASE}/v1/me`, { headers: MANAGER_HEADERS });
         assert.equal(res.status, 404);
     } finally {
@@ -214,7 +202,7 @@ test('manager auth — /v1/me alias is not exposed', async () => {
 test('manager auth — /v1/manager/me auto-provisions user and parent key from trusted headers', async () => {
     const { server, tmp, dbPath } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const res = await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         assert.equal(res.status, 200);
@@ -261,7 +249,7 @@ test('manager auth — /v1/manager/me auto-provisions user and parent key from t
 test('manager auth — can reveal the active parent key explicitly', async () => {
     const { server, tmp, dbPath } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
 
@@ -282,7 +270,7 @@ test('manager auth — can reveal the active parent key explicitly', async () =>
 test('manager auth — active users can create/list/update/reveal/rotate/delete agents', async () => {
     const { server, tmp, dbPath } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
 
         const yaml1 = `name: Manager Bot\ninstructions: Original instructions\n`;
@@ -364,7 +352,7 @@ test('manager auth — active users can create/list/update/reveal/rotate/delete 
 test('manager auth — users cannot access or mutate agents owned by another manager user', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
 
@@ -419,7 +407,7 @@ test('manager auth — users cannot access or mutate agents owned by another man
 test('manager auth — claim-key moves auto-key agents to claimed parent key and revokes auto key', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { user, key: autoKey } = getUserAndActiveKey(dbPath);
         seedClaimableKey(dbPath);
@@ -504,7 +492,7 @@ test('manager auth — claim-key moves auto-key agents to claimed parent key and
 test('manager auth — claim-key rejects keys already linked to another manager user', async () => {
     const { server, tmp, dbPath } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         seedClaimableKey(dbPath);
 
@@ -535,7 +523,7 @@ test('manager auth — claim-key rejects keys already linked to another manager 
 test('manager admin — bootstrap admin can view users and non-admin cannot', async () => {
     const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
 
         const adminMe = await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         assert.equal(adminMe.status, 200);
@@ -567,7 +555,7 @@ test('manager admin — bootstrap admin can view users and non-admin cannot', as
 test('manager admin — can promote and demote users with self-demote guard', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
         const other = getUserByExternalId(dbPath, 'other-user');
@@ -600,7 +588,7 @@ test('manager admin — can promote and demote users with self-demote guard', as
 test('manager admin — revoking a parent key disables agent keys under it', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
 
@@ -642,7 +630,7 @@ test('manager admin — revoking a parent key disables agent keys under it', asy
 test('manager admin — transfers an agent to another user parent key', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: DESTINATION_MANAGER_HEADERS });
@@ -714,7 +702,7 @@ test('manager admin — transfers an agent to another user parent key', async ()
 test('manager admin — transfer rejects non-admins and invalid targets', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         await fetch(`${BASE}/v1/manager/me`, { headers: OTHER_MANAGER_HEADERS });
 
@@ -782,7 +770,7 @@ test('manager admin — transfer rejects non-admins and invalid targets', async 
 test('manager admin — user-first APIs include key history, agents, and usage metrics', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
 
         const create = await fetch(`${BASE}/v1/manager/agents`, {
@@ -877,7 +865,7 @@ test('manager admin — user-first APIs include key history, agents, and usage m
 test('manager admin — user monthly quota blocks chat over the limit', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { user, key } = getUserAndActiveKey(dbPath);
 
@@ -917,7 +905,7 @@ test('manager admin — chat quota estimate uses server max tokens when request 
         extraEnv: { LLM_MAX_TOKENS: '50' },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { user, key } = getUserAndActiveKey(dbPath);
 
@@ -949,7 +937,7 @@ test('manager admin — chat quota estimate uses server max tokens when request 
 test('manager admin — disabled user quota allows chat', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { user, key } = getUserAndActiveKey(dbPath);
 
@@ -979,7 +967,7 @@ test('manager admin — disabled user quota allows chat', async () => {
 test('manager admin — agent monthly quota blocks agent chat over the limit', async () => {
     const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
 
         const create = await fetch(`${BASE}/v1/manager/agents`, {
@@ -1018,7 +1006,7 @@ test('manager admin — agent monthly quota blocks agent chat over the limit', a
 test('manager admin — previous-month usage does not count against user quota', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { user, key } = getUserAndActiveKey(dbPath);
         const db = new Database(dbPath);
@@ -1071,7 +1059,7 @@ test('manager admin — previous-month usage does not count against user quota',
 test('manager admin — embeddings and responses record usage events', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
 
@@ -1127,7 +1115,7 @@ test('manager auth — streaming LLM usage chunks are requested and recorded', a
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
 
@@ -1185,7 +1173,7 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
         const { key } = getUserAndActiveKey(dbPath);
 
@@ -1215,7 +1203,7 @@ test('manager auth — gpt-5 streaming request omits unsupported temperature', a
 test('manager admin — global key and agent table routes are not exposed', async () => {
     const { server, tmp } = startServer({ adminExternalUserIds: 'admin-user' });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
 
         const parentKeys = await fetch(`${BASE}/v1/manager/admin/parent-keys`, { headers: MANAGER_HEADERS });
@@ -1231,7 +1219,7 @@ test('manager admin — global key and agent table routes are not exposed', asyn
 test('manager auth — existing parent-key agent route still works', async () => {
     const { server, tmp } = startServer();
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         const res = await fetch(`${BASE}/v1/agents`, {
             method: 'POST',
             headers: {

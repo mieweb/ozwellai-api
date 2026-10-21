@@ -13,8 +13,8 @@
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "pretest": "npm run build",
-    "test": "node --test test/*.test.js",
-    "test:watch": "node --test --watch test/*.test.js",
+    "test": "node --test --test-concurrency=2 test/*.test.js",
+    "test:watch": "node --test --watch --test-concurrency=2 test/*.test.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {

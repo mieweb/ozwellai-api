@@ -27,6 +27,12 @@ test.describe('Ozwell Embed Widget', () => {
     
     // Wait for the OzwellChat object to be available (script loaded)
     await page.waitForFunction(() => typeof (window as any).OzwellChat !== 'undefined', { timeout: 15000 });
+
+    // Chat scenarios use the reference server's seeded mock agent. Keyless
+    // widget sign-in behavior is covered separately in widget-auth.spec.ts.
+    await page.evaluate(() => {
+      (window as any).OzwellChat.configure({ apiKey: 'agnt_key-mock-test' });
+    });
     
     // Click the chat button to open the widget
     await page.locator('#ozwell-chat-button, button:has-text("💬")').click();
@@ -83,10 +89,10 @@ test.describe('Ozwell Embed Widget', () => {
     await chatInput.press('Enter');
     
     // Verify the user message appears
-    await expect(iframe.getByText('hello')).toBeVisible();
+    await expect(iframe.getByText('hello', { exact: true })).toBeVisible();
     
-    // Expect either an assistant response (agent key configured) or
-    // a "No API key configured" error (CI without keys) — both are valid
+    // The seeded mock agent returns an assistant reply without an LLM backend.
+    await expect(iframe.getByText('Hello! I can help you view or update your information.', { exact: false })).toBeVisible();
     await expect.poll(
       () => widgetMessageBubbles(iframe).count(),
       { timeout: 15000 }
@@ -94,44 +100,29 @@ test.describe('Ozwell Embed Widget', () => {
   });
 
   test('should update name via tool call', async ({ page }) => {
-    test.setTimeout(120000); // 2 minute timeout for AI tool call test
-    
     // Type a message requesting name change
     const responseBaseline = await widgetMessageBubbles(iframe).count();
     const chatInput = widgetInput(iframe);
     await chatInput.fill('change my name to TestUser');
     await chatInput.press('Enter');
     
-    // Wait for AI response or auth error (CI has no agent key)
+    // Wait for the deterministic mock response and the page tool's update.
     await expect.poll(
       () => widgetMessageBubbles(iframe).count(),
-      { timeout: 60000 }
+      { timeout: 10000 }
     ).toBeGreaterThan(responseBaseline + 1);
-    
-    // Check if name was updated (only possible with a valid agent key + Ollama)
-    try {
-      await expect(page.locator('#input-name')).not.toHaveValue('Alice Johnson', { timeout: 30000 });
-    } catch {
-      // Expected in CI or when AI doesn't trigger tool call
-      await expect(iframe.getByText('change my name to TestUser')).toBeVisible();
-    }
+
+    await expect(page.locator('#input-name')).toHaveValue('TestUser');
   });
 
   test('should show event log entries for tool calls', async ({ page }) => {
-    test.setTimeout(120000); // 2 minute timeout for AI tool call test
-    
     // Type a message requesting name change
     const chatInput = widgetInput(iframe);
     await chatInput.fill('update my name to EventTest');
     await chatInput.press('Enter');
     
-    // Wait for potential tool call event or auth error
-    try {
-      await expect(page.locator('text=Tool call received').or(page.locator('text=update_form_data'))).toBeVisible({ timeout: 60000 });
-    } catch {
-      // Expected in CI (no agent key) or when AI doesn't trigger tool
-      await expect(iframe.getByText('update my name to EventTest')).toBeVisible();
-    }
+    await expect(page.locator('#event-log').getByText('[Tool Call] update_form_data', { exact: true })).toBeVisible();
+    await expect(page.locator('#input-name')).toHaveValue('EventTest');
   });
 
   test('should auto-detect endpoint from script URL', async ({ page }) => {
