@@ -69,6 +69,7 @@
   const EMPTY_SCHEMA = { type: 'object', properties: {} };
   const PAGE_TOOL_PREFIX = 'postMessage_';
   const TOOL_RESPONSE_TIMEOUT_MS = 29000;
+  const webMcpRegistrations = new Map();
 
   function readGlobalConfig() {
     const { OzwellChatConfig } = window;
@@ -140,8 +141,12 @@
 
   function sanitizeConfigForWidget(config) {
     const sanitized = { ...config };
+    // Browser tool exposure is host policy, never widget configuration.
+    delete sanitized.webMCP;
     if (Array.isArray(config.tools)) {
-      sanitized.tools = config.tools
+      // Config pushes and MCP discovery must expose the same model-facing
+      // names, including the page-tool namespace used by agent policy.
+      sanitized.tools = getMcpTools(config)
         .map(toolSchemaForWidget)
         .filter(Boolean);
     }
@@ -192,7 +197,7 @@
     iframeWindow.postMessage({
       source: 'ozwell-chat-parent',
       ...message,
-    }, '*');
+    }, state.frameOrigin);
   }
 
   function flushPending() {
@@ -202,7 +207,7 @@
       state.iframe.contentWindow.postMessage({
         source: 'ozwell-chat-parent',
         ...message,
-      }, '*');
+      }, state.frameOrigin);
     });
   }
 
@@ -222,7 +227,7 @@
   function postJsonRpc(message) {
     const iframeWindow = state.iframe && state.iframe.contentWindow;
     if (!iframeWindow) return;
-    iframeWindow.postMessage(message, '*');
+    iframeWindow.postMessage(message, state.frameOrigin);
   }
 
   /** Add postMessage_ prefix to a page tool so it can't collide with server-side tools. */
@@ -230,17 +235,26 @@
     return { ...tool, name: PAGE_TOOL_PREFIX + tool.name };
   }
 
-  function getMcpTools() {
+  function getPageTools(config = currentConfig()) {
+    const configured = config.tools;
+    const tools = new Map();
+    for (const value of Array.isArray(configured) ? configured : []) {
+      const tool = normalizeTool(value);
+      if (tool && typeof tool.name === 'string' && tool.name && !tools.has(tool.name)) {
+        tools.set(tool.name, tool);
+      }
+    }
+    return [...tools.values()];
+  }
+
+  function getMcpTools(config = currentConfig()) {
     const agentTools = (state.agentTools && state.agentTools.length > 0)
       ? state.agentTools.map(normalizeTool).filter(Boolean)
       : [];
     // Page tools are prefixed so they occupy a separate namespace from
     // server-implemented tools. The prefix is transparent to page authors —
     // it is stripped before dispatching ozwell-tool-call events.
-    const pageTools = (currentConfig().tools || [])
-      .map(normalizeTool)
-      .filter(Boolean)
-      .map(prefixPageTool);
+    const pageTools = getPageTools(config).map(prefixPageTool);
 
     // Merge: agent-defined tools first, then page tools that don't collide.
     // If the agent defines no tools, all page tools are available.
@@ -249,6 +263,138 @@
     const agentNames = new Set(agentTools.map(t => t.name));
     const extra = pageTools.filter(t => !agentNames.has(t.name));
     return agentTools.concat(extra);
+  }
+
+  // Both adapters execute the same DOM event and settle only once. Tool
+  // handlers remain responsible for application authorization and validation.
+  function invokeHostTool(rawToolName, toolArgs, { pageOnly = false, signals = [] } = {}) {
+    return new Promise((resolve, reject) => {
+      const toolName = !pageOnly && typeof rawToolName === 'string' && rawToolName.startsWith(PAGE_TOOL_PREFIX)
+        ? rawToolName.slice(PAGE_TOOL_PREFIX.length)
+        : rawToolName;
+      const controller = new AbortController();
+      const abortListeners = [];
+      let settled = false;
+      let timer;
+
+      function finishToolCall(error, result) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        abortListeners.forEach(([signal, listener]) => signal.removeEventListener('abort', listener));
+        if (error) reject(error);
+        else resolve(result);
+      }
+
+      function abortToolCall() {
+        const error = new Error(`Tool "${toolName}" execution aborted`);
+        error.name = 'AbortError';
+        finishToolCall(error);
+        controller.abort(error);
+      }
+
+      for (const signal of signals.filter(Boolean)) {
+        if (signal.aborted) {
+          abortToolCall();
+          return;
+        }
+        signal.addEventListener('abort', abortToolCall, { once: true });
+        abortListeners.push([signal, abortToolCall]);
+      }
+      const availableTools = pageOnly ? getPageTools() : getMcpTools();
+      if (!availableTools.some((tool) => tool.name === rawToolName)) {
+        const error = new Error(`Unknown tool "${rawToolName}"`);
+        error.code = -32602;
+        finishToolCall(error);
+        return;
+      }
+      timer = setTimeout(() => {
+        const error = new Error(`Tool "${toolName}" did not respond. Add an ozwell-tool-call handler and call respond() or error().`);
+        finishToolCall(error);
+        controller.abort(error);
+      }, TOOL_RESPONSE_TIMEOUT_MS);
+
+      const toolEvent = new CustomEvent('ozwell-tool-call', {
+        detail: {
+          name: toolName,
+          arguments: toolArgs,
+          signal: controller.signal,
+          respond: (result) => finishToolCall(null, result),
+          error: (message) => finishToolCall(new Error(String(message))),
+        },
+      });
+      try {
+        document.dispatchEvent(toolEvent);
+      } catch (error) {
+        finishToolCall(error);
+      }
+    });
+  }
+
+  // Native WebMCP is an opt-in publication adapter for selected page tools.
+  // Abort only registrations owned here; never unregister tools by name.
+  function syncWebMcpTools() {
+    const modelContext = document.modelContext;
+    const config = currentConfig().webMCP;
+    const desired = new Map();
+    if (modelContext && typeof modelContext.registerTool === 'function' && config && typeof config === 'object') {
+      try {
+        if (!Array.isArray(config.tools) || !config.tools.every((name) => typeof name === 'string')) {
+          throw new Error('webMCP.tools must be an explicit array of page tool names');
+        }
+        let exposedTo;
+        if (config.exposedTo !== undefined) {
+          if (!Array.isArray(config.exposedTo) || !config.exposedTo.every((origin) => (
+            typeof origin === 'string' && new URL(origin).origin === origin && origin !== 'null'
+          ))) {
+            throw new Error('webMCP.exposedTo must be an array of exact origins');
+          }
+          exposedTo = [...new Set(config.exposedTo)];
+        }
+        const selectedNames = new Set(config.tools);
+        for (const tool of getPageTools()) {
+          if (selectedNames.has(tool.name)) {
+            desired.set(tool.name, { tool, exposedTo, signature: JSON.stringify([tool, exposedTo]) });
+          }
+        }
+      } catch (error) {
+        desired.clear();
+        console.warn('[OzwellChat] WebMCP configuration ignored:', error);
+      }
+    }
+
+    for (const [name, registration] of webMcpRegistrations) {
+      if (registration.modelContext !== modelContext || registration.signature !== desired.get(name)?.signature) {
+        webMcpRegistrations.delete(name);
+        registration.controller.abort();
+      }
+    }
+    for (const [name, definition] of desired) {
+      if (webMcpRegistrations.has(name)) continue;
+      const controller = new AbortController();
+      const registration = { controller, modelContext, signature: definition.signature };
+      webMcpRegistrations.set(name, registration);
+      const failed = (error) => {
+        if (webMcpRegistrations.get(name) === registration) webMcpRegistrations.delete(name);
+        if (!controller.signal.aborted) {
+          controller.abort();
+          console.warn(`[OzwellChat] Could not register WebMCP tool "${name}":`, error);
+        }
+      };
+      try {
+        const options = { signal: controller.signal };
+        if (definition.exposedTo !== undefined) options.exposedTo = definition.exposedTo;
+        Promise.resolve(modelContext.registerTool({
+          ...definition.tool,
+          execute: (args = {}, { signal } = {}) => invokeHostTool(name, args, {
+            pageOnly: true,
+            signals: [controller.signal, signal],
+          }),
+        }, options)).catch(failed);
+      } catch (error) {
+        failed(error);
+      }
+    }
   }
 
   function handleMcpMessage(event) {
@@ -285,53 +431,15 @@
         const rawToolName = data.params?.name;
         const toolArgs = data.params?.arguments || {};
         const requestId = data.id;
-        let settled = false;
-
-        function finishToolCall(message) {
-          if (settled) return;
-          settled = true;
-          postJsonRpc(message);
-        }
-
-        // Strip postMessage_ prefix so page handlers see the original name
-        const toolName = rawToolName && rawToolName.startsWith(PAGE_TOOL_PREFIX)
-          ? rawToolName.slice(PAGE_TOOL_PREFIX.length)
-          : rawToolName;
-
-        // Dispatch as DOM event — integrator listens for this
-        const toolEvent = new CustomEvent('ozwell-tool-call', {
-          detail: {
-            name: toolName,
-            arguments: toolArgs,
-            respond: (result) => {
-              finishToolCall({
-                jsonrpc: '2.0',
-                id: requestId,
-                result: result,
-              });
-            },
-            error: (message) => {
-              finishToolCall({
-                jsonrpc: '2.0',
-                id: requestId,
-                error: { code: -32000, message: message },
-              });
-            },
-          },
+        invokeHostTool(rawToolName, toolArgs).then((result) => {
+          postJsonRpc({ jsonrpc: '2.0', id: requestId, result });
+        }).catch((error) => {
+          postJsonRpc({
+            jsonrpc: '2.0',
+            id: requestId,
+            error: { code: error.code || -32000, message: error.message },
+          });
         });
-        document.dispatchEvent(toolEvent);
-        setTimeout(() => {
-          if (!settled) {
-            finishToolCall({
-              jsonrpc: '2.0',
-              id: requestId,
-              error: {
-                code: -32000,
-                message: `Tool "${toolName}" did not respond. Add an ozwell-tool-call handler and call respond() or error().`,
-              },
-            });
-          }
-        }, TOOL_RESPONSE_TIMEOUT_MS);
         break;
       }
 
@@ -1081,6 +1189,7 @@
    */
   function mount(options = {}) {
     discoverAgentContext();
+    syncWebMcpTools();
 
     // Inject CSS for default UI (if enabled)
     injectDefaultCSS();
@@ -1115,6 +1224,7 @@
       ...state.runtimeConfig,
       ...nextConfig,
     };
+    syncWebMcpTools();
 
     if (state.ready) {
       sendConfig();

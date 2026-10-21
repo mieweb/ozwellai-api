@@ -91,6 +91,8 @@ Content-Security-Policy:
 
 The host page and iframe communicate via the [PostMessage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage), implementing an *inverted* MCP postMessage transport pattern. See [MCP postMessage Standard](./mcp-postmessage-standard.md) for the community proposals that inspired this design.
 
+The loader can also expose an explicit subset of the host's page tools through the native WebMCP API, reusing the same handlers. The embedded assistant continues using `postMessage`. See [Optional WebMCP Exposure](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed#optional-webmcp-exposure) for setup, browser requirements, and exposure controls.
+
 ### Message Format
 
 All messages follow this structure:

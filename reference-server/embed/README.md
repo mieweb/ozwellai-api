@@ -233,6 +233,38 @@ The `tools[].function` object above is a schema only. Actual JavaScript executio
 
 Now users can type: "update my email to john@example.com" and the field updates automatically.
 
+## Optional WebMCP Exposure
+
+Expose selected page tools to compatible browser and in-page agents using the native [WebMCP API](https://webmachinelearning.github.io/webmcp/). This is disabled by default. Enable it alongside your existing `tools` configuration and `ozwell-tool-call` listener:
+
+```javascript
+window.OzwellChatConfig = {
+  ...window.OzwellChatConfig,
+  // tools includes get_form_data, with the handler shown above.
+  webMCP: {
+    tools: ['get_form_data'],
+    // Optional: permit additional web documents to discover/call these tools.
+    // exposedTo: ['https://partner.example']
+  }
+};
+```
+
+List bare names from `tools[].function.name`; only those page tools are registered with `document.modelContext.registerTool`. The adapter reuses their descriptions, input schemas, and existing `ozwell-tool-call` handlers. It does not expose server/agent tools or relay conversation content. The Ozwell iframe continues calling tools through MCP JSON-RPC over `postMessage`, so each call uses a single route.
+
+The loader feature-detects the native API, without installing a polyfill. When it is unavailable or registration fails, the existing widget integration remains available. Chrome's [imperative API](https://developer.chrome.com/docs/ai/webmcp/imperative-api) is in an origin trial as of October 2026; enable the trial or the browser's experimental support when testing.
+
+`exposedTo` permits access by the specified secure web origins. Cross-origin callers must also request the host origin with `getTools({ fromOrigins: [...] })` and satisfy the browser's Permissions Policy. This option does not hide tools from browser agents or make them exclusive to Ozwell. Host handlers must enforce authorization, validate arguments, and obtain any required confirmation for either route.
+
+Registrations are refreshed when the widget mounts or configuration changes, using an `AbortController` to remove the loader's previous registrations. Disable exposure at runtime with `OzwellChat.configure({ webMCP: false })`. In React, pass the same `webMCP` configuration as an `OzwellChat` prop.
+
+After building the widget, run the native cross-origin browser test with an installed Chrome that supports the current API:
+
+```bash
+WEBMCP_BROWSER_CHANNEL=chrome npm --prefix landing-page test -- tests/webmcp.spec.ts --reporter=line
+```
+
+The test enables experimental support in its isolated browser session. Browsers without the current API skip the native case; the loader behavior and React lifecycle tests also cover unsupported browsers and registration failures.
+
 ## Configuration Options
 
 | Property | Type | Default | Description |
@@ -244,6 +276,7 @@ Now users can type: "update my email to john@example.com" and the field updates 
 | `model` | string | (server default) | Model name to use for chat completions. **Optional** - if not specified, the server chooses the appropriate model |
 | `system` | string | `'You are a helpful assistant.'` | System prompt for the AI |
 | `tools` | array | `[]` | MCP tools in OpenAI function calling format |
+| `webMCP` | `false` or `{ tools: string[], exposedTo?: string[] }` | `false` | Opt an explicit subset of page tools into native WebMCP; see [Optional WebMCP Exposure](#optional-webmcp-exposure) |
 | `welcomeMessage` | string | (none) | Initial greeting message displayed in chat |
 | `placeholder` | string | `'Ask a question...'` | Input field placeholder text |
 | `title` | string | `'Ozwell Assistant'` | Widget header title |

@@ -969,8 +969,19 @@ export function WidgetApp() {
   }, [clearHistory, displayMessages]);
 
   useEffect(() => {
+    // Every MCP listener shares the same parent identity checks. Once the
+    // handshake pins an origin, navigation must not silently change that peer.
+    function isParentMessage(event: MessageEvent) {
+      return event.source === window.parent
+        && event.origin !== 'null'
+        && !!event.origin
+        && (!parentOriginRef.current || event.origin === parentOriginRef.current);
+    }
+
+    let onToolsResponse: ((event: MessageEvent) => void) | undefined;
+
     function handleParentMessage(event: MessageEvent) {
-      if (event.source !== window.parent) return;
+      if (!isParentMessage(event)) return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
 
@@ -1029,15 +1040,18 @@ export function WidgetApp() {
     });
 
     function onInitResponse(event: MessageEvent) {
+      if (!isParentMessage(event)) return;
       const data = event.data;
-      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId) return;
+      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId || !data.result) return;
+      parentOriginRef.current = event.origin;
       mcpNotify('notifications/initialized');
       const toolsReqId = mcpSend('tools/list');
 
-      function onToolsResponse(event2: MessageEvent) {
+      onToolsResponse = (event2: MessageEvent) => {
+        if (!isParentMessage(event2)) return;
         const d = event2.data;
         if (!d || d.jsonrpc !== '2.0' || d.id !== toolsReqId) return;
-        window.removeEventListener('message', onToolsResponse);
+        window.removeEventListener('message', onToolsResponse!);
         const mcpTools = (d.result && d.result.tools) || [];
         setConfig((current) => ({
           ...current,
@@ -1050,7 +1064,7 @@ export function WidgetApp() {
             },
           })),
         }));
-      }
+      };
 
       window.addEventListener('message', onToolsResponse);
       window.removeEventListener('message', onInitResponse);
@@ -1061,6 +1075,7 @@ export function WidgetApp() {
     return () => {
       window.removeEventListener('message', handleParentMessage);
       window.removeEventListener('message', onInitResponse);
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
