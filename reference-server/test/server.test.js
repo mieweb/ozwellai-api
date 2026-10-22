@@ -77,6 +77,45 @@ test('Reference Server - Health Check', async () => {
   }
 });
 
+test('Reference Server - Widget embedding policy allows websites and extension origins only on widget paths', async () => {
+  const { server, tmp, base } = await startServer();
+
+  try {
+    await waitForServer(server, base);
+
+    for (const route of [
+      '/widget',
+      '/widget?version=1',
+      '/widget/ozwell.js',
+      '/widget/ozwell.js?version=1',
+      '/widget/frame/',
+      '/widget/frame/?ozwellLoader=1',
+    ]) {
+      const response = await fetch(`${base}${route}`);
+      await response.arrayBuffer();
+      assert.strictEqual(response.status, 200, route);
+      assert.strictEqual(response.headers.get('content-security-policy'),
+        'frame-ancestors * chrome-extension: safari-web-extension:', route);
+    }
+
+    for (const [route, status] of [
+      ['/health', 200],
+      ['/health?path=/widget/frame/', 200],
+      ['/openapi.json', 200],
+      ['/auth/methods', 200],
+      ['/widgetish', 404],
+      ['/widgetish/frame/?ozwellLoader=1', 404],
+    ]) {
+      const response = await fetch(`${base}${route}`);
+      await response.arrayBuffer();
+      assert.strictEqual(response.status, status, route);
+      assert.strictEqual(response.headers.get('content-security-policy'), null, route);
+    }
+  } finally {
+    cleanup(server, tmp);
+  }
+});
+
 test('Reference Server - Health Check uses unknown commit in production without revision metadata', async () => {
   const { server, tmp, base } = await startServer({
     NODE_ENV: 'production',
