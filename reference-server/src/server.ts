@@ -216,10 +216,11 @@ async function buildServer() {
     return fastify.swagger();
   });
 
-  // Allow widget to be embedded on any website (CSP frame-ancestors)
+  // Extension toolbar popups use non-network schemes, which CSP's '*' excludes.
+  // They get the same isolated widget surface as website embeds.
   fastify.addHook('onSend', async (request, reply) => {
     if (request.url === '/widget' || request.url.startsWith('/widget/')) {
-      reply.header('Content-Security-Policy', 'frame-ancestors *');
+      reply.header('Content-Security-Policy', 'frame-ancestors * chrome-extension: safari-web-extension:');
     }
   });
 

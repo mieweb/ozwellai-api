@@ -72,6 +72,11 @@ test('Reference Server - Health Check', async () => {
     assert.strictEqual(typeof data.commit, 'string');
     assert.strictEqual(data.commit, TEST_COMMIT);
 
+    const widgetResponse = await fetch(`${base}/widget/frame/`);
+    assert.strictEqual(widgetResponse.status, 200);
+    assert.strictEqual(widgetResponse.headers.get('content-security-policy'),
+      'frame-ancestors * chrome-extension: safari-web-extension:');
+
   } finally {
     cleanup(server, tmp);
   }
