@@ -5,8 +5,8 @@ Loading the unpacked extension needs no dependency install or browser build.
 The controller runs in the extension's isolated content world; the Ozwell chat
 application remains remotely hosted in its iframe.
 
-The source is `@mieweb/page-controller` 1.12.4-mie.1 from
-[`mieweb/page-agent` commit cf185d55a44ecd46eb38a9feb296dbbc7b3485ce](https://github.com/mieweb/page-agent/commit/cf185d55a44ecd46eb38a9feb296dbbc7b3485ce),
+The source is `@mieweb/page-controller` 1.12.4-mie.2 from
+[`mieweb/page-agent` commit 6963ab7a183ce38cce3f1bfc29e5c3ff206a1973](https://github.com/mieweb/page-agent/commit/6963ab7a183ce38cce3f1bfc29e5c3ff206a1973),
 also pinned by the landing-page manifest and lockfile. See `PROVENANCE.json` for
 verified source hashes, build tool version, local patches, and output hash.
 
@@ -33,10 +33,16 @@ serialized snapshot even when requested through a wildcard.
 `omitAttributes: ['value']` also suppresses textarea default-value text while
 retaining the indexed textarea control. With both highlight
 opacities set to zero, indexing works without creating upstream highlight DOM.
-Hidden descendant and standalone text are excluded, while visible native option
-labels and rendered `display:contents` text remain available. The complete bundle
-has a document initialization guard, so repeated injections retain the same
-controller export and do not add navigation listeners or polling intervals.
+Hidden descendant and standalone text are excluded. Invisible controls expose
+neither attributes nor action indices: display, content visibility, and zero
+opacity are checked through composed ancestors, including slots and shadow
+hosts. A child that restores CSS visibility and rendered `display:contents` text
+remain available. Explicit native select labels use `option.label`, including
+labels without text children; implicit labels retain descendant exclusion and
+visibility checks. Unused fallback text and choices hidden on their option,
+optgroup, select, or ancestors are omitted. The complete bundle has a document
+initialization guard, so repeated injections retain the same controller export
+and do not add navigation listeners or polling intervals.
 
 Only `globalThis.OzwellPageController.PageController` is exported. The extension's
 adapter owns tool exposure, authorization, stale-reference checks, exclusions,

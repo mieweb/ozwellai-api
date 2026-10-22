@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const extensionDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryDir = resolve(extensionDir, '..');
-const commit = 'cf185d55a44ecd46eb38a9feb296dbbc7b3485ce';
+const commit = '6963ab7a183ce38cce3f1bfc29e5c3ff206a1973';
 const upstreamCommit = '9eb6b6646500264d9034dd466a4270cb9fc1ef1e';
 const dependency = `git+https://github.com/mieweb/page-agent.git#${commit}`;
 let packageDir = join(repositoryDir, 'landing-page/node_modules/@mieweb/page-controller');
@@ -37,9 +37,9 @@ if (manifest.dependencies['@mieweb/page-controller'] !== dependency || lockedPac
 // the distribution and legal notices rather than trusting a package directory's
 // name or its self-reported version. Updating the pin requires reviewing them.
 const expectedHashes = {
-  'package.json': '69aa430109876ea0d21b54be2e301e314451b2deb4347b8395f6c0dce21d785f',
-  'dist/page-controller.js': 'fffc37b74720b5ce4f3363fe99586e47d731596639b60761d1242b88a0bd8ea0',
-  'CONTROLLER-DISTRIBUTION.md': '43ab842e49e43c1eb6ff0ae0346c909b0d84ee637532f1659698fb02bbfcd03b',
+  'package.json': 'd38f49de0190f894a8225d93f8d28ad827a4490f22172631be9186f676d24167',
+  'dist/page-controller.js': '13293aa70c99c89e281bdd029593453f3b9a4dfa4a92632c2524fd5f8b55569c',
+  'CONTROLLER-DISTRIBUTION.md': '961b9e18f68ca942d14ec36de34e23bd78cc92730f1ca6baf9e799e0bcf77111',
   LICENSE: '393ad563ce5dd0bbe283ec40f9f5d631817262bc9bbd5eb17ed038a9d9f44803',
   'THIRD_PARTY_NOTICES.md': 'f0b4832cd9b24df11e97f438c7026db73b39dc68040a86cedc678baac52d84d7',
   'licenses/ai-motion-LICENSE': 'df71b50b0d46b282e5ed6fe67c1c23874b10b2a1512a4658d3aafa9fb9d23b76',
@@ -113,16 +113,25 @@ if (source.split(textVisibilityStart).length !== 2 || source.split(textVisibilit
 }
 patch(
   source.slice(source.indexOf(textVisibilityStart), source.indexOf(textVisibilityEnd)),
-  `  function isTextNodeVisible(textNode) {
+  `  function isElementStyleVisible(element) {
+    const ownStyle = getCachedComputedStyle(element);
+    if (!ownStyle || ownStyle.visibility === "hidden" || ownStyle.visibility === "collapse") return false;
+    // Visibility can be restored on a child. Display, content visibility, and
+    // opacity cannot; check every composed ancestor, including slots and hosts.
+    for (let ancestor = element; ancestor; ancestor = ancestor.assignedSlot || ancestor.parentElement || ancestor.getRootNode()?.host) {
+      const style = getCachedComputedStyle(ancestor);
+      if (!style || style.display === "none" || style.contentVisibility === "hidden" || Number(style.opacity) === 0) return false;
+    }
+    return true;
+  }
+  function isNativeOptionVisible(option) {
+    const select = option.closest("select");
+    return Boolean(select && isElementVisible(select) && isElementStyleVisible(option));
+  }
+  function isTextNodeVisible(textNode) {
     try {
       const parent = textNode.parentElement;
-      if (!parent) return false;
-      const textStyle = getCachedComputedStyle(parent);
-      if (!textStyle || textStyle.visibility === "hidden" || textStyle.visibility === "collapse") return false;
-      for (let ancestor = parent; ancestor; ancestor = ancestor.parentElement || ancestor.getRootNode()?.host) {
-        const style = getCachedComputedStyle(ancestor);
-        if (!style || style.display === "none" || style.contentVisibility === "hidden" || Number(style.opacity) === 0) return false;
-      }
+      if (!parent || !isElementStyleVisible(parent)) return false;
       const option = parent.closest("option");
       const select = option?.closest("select");
       let rects;
@@ -146,6 +155,28 @@ patch(
   }
 `,
   'measure rendered text and preserve visible native option semantics',
+);
+patch(
+  '  function isElementVisible(element) {\n    const style = getCachedComputedStyle(element);\n    return element.offsetWidth > 0 && element.offsetHeight > 0 && style?.visibility !== "hidden" && style?.display !== "none";\n  }',
+  '  function isElementVisible(element) {\n    return element.offsetWidth > 0 && element.offsetHeight > 0 && isElementStyleVisible(element);\n  }',
+  'exclude invisible element attributes and action indices using composed ancestor styles',
+);
+patch(
+  '      } else {\n        if (node.shadowRoot) {',
+  `      } else if (tagName === "option" && node.closest("select") && node.hasAttribute("label")) {
+        // Native controls display option.label, which can replace textContent
+        // or exist without a text child. Do not disclose the unused fallback.
+        // Implicit labels retain normal child traversal so exclusion callbacks
+        // and hidden descendant checks still redact their source text.
+        const label = node.label.trim();
+        if (label && isNativeOptionVisible(node)) {
+          const labelId = String(ID.current++);
+          DOM_HASH_MAP[labelId] = { type: "TEXT_NODE", text: label, isVisible: true };
+          nodeData.children.push(labelId);
+        }
+      } else {
+        if (node.shadowRoot) {`,
+  'serialize explicit visible native option labels without traversing unused fallback text',
 );
 patch(
   '    if (currentNode.type === "text" && currentNode.text) {',
@@ -188,7 +219,7 @@ const result = await esbuild.build({
   write: false,
   // Wrap the complete compiled program: checking only at export time still
   // duplicates the pinned module's navigation listeners and interval fallback.
-  banner: { js: `/*! @mieweb/page-controller 1.12.4-mie.1; ${commit}; MIT. See vendor/LICENSE and vendor/THIRD_PARTY_NOTICES.md. */\n(() => { if (globalThis.OzwellPageController?.PageController) return;` },
+  banner: { js: `/*! @mieweb/page-controller 1.12.4-mie.2; ${commit}; MIT. See vendor/LICENSE and vendor/THIRD_PARTY_NOTICES.md. */\n(() => { if (globalThis.OzwellPageController?.PageController) return;` },
   footer: { js: 'globalThis.OzwellPageController = Object.freeze(OzwellPageController); })();' },
 });
 const bundle = result.outputFiles[0].text;
@@ -204,7 +235,7 @@ for (const [origin, name] of [['LICENSE', 'LICENSE'], ['THIRD_PARTY_NOTICES.md',
   await writeFile(join(destination, name), files[origin]);
 }
 await writeFile(join(destination, 'PROVENANCE.json'), JSON.stringify({
-  package: '@mieweb/page-controller', version: '1.12.4-mie.1',
+  package: '@mieweb/page-controller', version: '1.12.4-mie.2',
   repository: 'https://github.com/mieweb/page-agent', commit, upstreamCommit,
   lockIntegrity: lockedPackage.integrity,
   sourceFiles: expectedHashes,
@@ -213,7 +244,9 @@ await writeFile(join(destination, 'PROVENANCE.json'), JSON.stringify({
     'Disable executeJavascript; no evaluation or dynamic module imports in output.',
     'Forward excludeElements(Element) and prune its matching subtrees before extraction/indexing.',
     'Forward omitAttributes and remove matching attributes from defaults, explicit and wildcard serialization; omit textarea default text when value is omitted.',
-    'Exclude invisible descendant and standalone text; measure rendered text including display:contents and retain nonhidden native option labels for visible select controls.',
+    'Exclude invisible descendant and standalone text; measure rendered text including display:contents and preserve visibility restored on descendants.',
+    'Apply composed ancestor display, content-visibility, and opacity checks before indexing or serializing element attributes, including slots and shadow hosts.',
+    'Serialize explicit visible native option.label values, including labels without text children; implicit labels retain descendant exclusion and visibility checks. Omit unused fallback text and hidden option labels.',
     'Skip invisible highlight DOM while preserving indexed parent grouping.',
     'Export only PageController as globalThis.OzwellPageController.PageController.',
     'Guard the entire generated program before any side effects, preserving one controller export and one set of navigation hooks per document.',

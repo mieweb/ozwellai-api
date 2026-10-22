@@ -135,14 +135,16 @@ test('toolbar host advertises connected page tools and cancels pending work on p
     callTool: (name, args, { signal }) => { calls.push({ name, args, signal }); return new Promise(resolve => { finish = resolve; }); },
   });
   const frame = page.host.mount(WIDGET);
-  page.message(frame, { source: 'ozwell-chat-widget', type: 'ready' });
+  const documentId = '11111111111111111111111111111111';
+  const send = (data, options) => page.message(frame, { ...data, ozwellDocumentId: documentId }, options);
+  send({ source: 'ozwell-chat-widget', type: 'ready' });
   await settle();
   const config = frame.sent.filter(item => item.message.type === 'config').at(-1).message.payload.config;
   assert.equal(config.tools[0].function.name, 'postMessage_browser_snapshot');
-  page.message(frame, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } }, { origin: 'https://other.test' });
+  send({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } }, { origin: 'https://other.test' });
   await settle();
   assert.equal(calls.length, 0);
-  page.message(frame, { jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } });
+  send({ jsonrpc: '2.0', id: 10, method: 'tools/call', params: { name: 'postMessage_browser_snapshot', arguments: {} } });
   await settle();
   assert.equal(calls[0].name, 'browser_snapshot');
   page.host.destroy();
@@ -150,6 +152,82 @@ test('toolbar host advertises connected page tools and cancels pending work on p
   finish({ late: true });
   await settle();
   assert.equal(frame.sent.filter(item => item.message.id === 10).length, 0);
+});
+
+test('widget document identity cancels old work, rejects retired traffic and permits reused MCP IDs', async t => {
+  const firstId = '11111111-1111-4111-8111-111111111111';
+  const nextId = '22222222-2222-4222-8222-222222222222';
+  const states = [], calls = [];
+  const page = fixture(t, {
+    onDocumentChange: state => states.push(state.active),
+    getTools: async () => [{ name: 'browser_snapshot' }],
+    callTool: (name, args, { signal }) => new Promise(resolve => calls.push({ signal, resolve })),
+  });
+  const frame = page.host.mount(WIDGET);
+  const send = (documentId, data, options) => page.message(frame, { ...data, ozwellDocumentId: documentId }, options);
+  const handshake = documentId => send(documentId, { source: 'ozwell-chat-widget', type: 'ready' });
+  const call = documentId => send(documentId, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'postMessage_browser_snapshot' } });
+  handshake(firstId);
+  frame.listeners.get('load')();
+  call(firstId);
+  await settle();
+  send(firstId, { source: 'ozwell-chat-widget', type: 'request-config' });
+  assert.deepEqual(states, [true], 'Ordinary configuration refresh keeps the current connection.');
+  assert.equal(calls[0].signal.aborted, false);
+  send(nextId, { source: 'ozwell-chat-widget', type: 'pagehide' }, { source: null });
+  send(undefined, { source: 'ozwell-chat-widget', type: 'pagehide' }, { source: null });
+  send(firstId, { source: 'ozwell-chat-widget', type: 'pagehide' }, { source: {} });
+  send(firstId, { source: 'ozwell-chat-widget', type: 'pagehide' }, { source: null, origin: 'https://other.test' });
+  send(firstId, { source: 'ozwell-chat-widget', type: 'pagehide', injected: true }, { source: null });
+  assert.equal(calls[0].signal.aborted, false, 'Null-source unload requires the exact current document, origin and message shape.');
+  send(firstId, { source: 'ozwell-chat-widget', type: 'pagehide' }, { source: null });
+  assert.equal(calls[0].signal.aborted, true, 'Cancel on unload, before replacement load.');
+  assert.deepEqual(states, [true, false]);
+  handshake(nextId);
+  frame.listeners.get('load')();
+  for (const type of ['ready', 'request-config', 'pagehide']) send(firstId, { source: 'ozwell-chat-widget', type });
+  for (const type of ['ready', 'request-config']) page.message(frame, { source: 'ozwell-chat-widget', type });
+  for (const type of ['ready', 'request-config']) page.message(frame, { source: 'ozwell-chat-widget', type, ozwellDocumentId: 'invalid' });
+  page.message(frame, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'postMessage_browser_snapshot' } });
+  call(firstId);
+  call(nextId);
+  await settle();
+  assert.deepEqual(states, [true, false, true]);
+  assert.equal(calls.length, 2);
+  calls[0].resolve({ old: true });
+  calls[1].resolve({ fresh: true });
+  await settle();
+  assert.deepEqual(frame.sent.filter(item => item.message.id === 4).map(item => item.message), [
+    { jsonrpc: '2.0', id: 4, result: { fresh: true }, ozwellDocumentId: nextId },
+  ]);
+  page.host.destroy();
+});
+
+test('legacy widgets retain chat but never receive page tools across iframe reloads', async t => {
+  const states = [], calls = [];
+  const page = fixture(t, {
+    onDocumentChange: state => states.push(state.active),
+    getTools: async () => [{ name: 'browser_snapshot' }],
+    callTool: (name, args, { signal }) => new Promise(resolve => calls.push({ signal, resolve })),
+  });
+  const frame = page.host.mount(WIDGET);
+  const ready = { source: 'ozwell-chat-widget', type: 'ready' };
+  const call = { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'postMessage_browser_snapshot' } };
+  page.message(frame, ready);
+  frame.listeners.get('load')();
+  page.message(frame, call);
+  await settle();
+  assert.equal(calls.length, 0);
+  page.message(frame, ready);
+  frame.listeners.get('load')();
+  assert.deepEqual(states, [false, false, false]);
+  page.message(frame, call);
+  await settle();
+  assert.equal(calls.length, 0);
+  assert(frame.sent.filter(item => item.message.id === 4).every(item => item.message.error.code === -32602));
+  const config = frame.sent.filter(item => item.message.type === 'config').at(-1).message.payload.config;
+  assert.deepEqual(config.tools, []);
+  page.host.destroy();
 });
 
 test('power-off teardown removes credentials frame, timer and listener, ignoring stale frame messages', t => {
@@ -166,6 +244,22 @@ test('power-off teardown removes credentials frame, timer and listener, ignoring
   assert.notEqual(next, frame);
   assert.equal(page.listeners.size, 1);
   assert.equal(page.timers.size, 1);
+});
+
+test('queued load and error events from a removed iframe cannot retire its replacement', t => {
+  const states = [], errors = [];
+  const page = fixture(t, { onDocumentChange: state => states.push(state.active), onError: error => errors.push(error) });
+  const old = page.host.mount(WIDGET);
+  page.message(old, { source: 'ozwell-chat-widget', type: 'ready', ozwellDocumentId: '11111111111111111111111111111111' });
+  page.host.destroy();
+  const replacement = page.host.mount(WIDGET);
+  page.message(replacement, { source: 'ozwell-chat-widget', type: 'ready', ozwellDocumentId: '22222222222222222222222222222222' });
+  old.listeners.get('load')();
+  old.listeners.get('load')();
+  old.listeners.get('error')();
+  assert.deepEqual(states, [true, false, true]);
+  assert.deepEqual(errors, []);
+  page.host.destroy();
 });
 
 test('toolbar load failures expose a safe direct-frame fallback and notify the host', t => {

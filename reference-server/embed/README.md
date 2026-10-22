@@ -628,11 +628,22 @@ If the page never calls `respond()` or `error()`, the loader returns a normal to
 
 ### Widget → Parent Messages
 
-Messages sent from the widget iframe to the parent page. All messages include `source: 'ozwell-chat-widget'`.
+Lifecycle and event messages sent from the widget iframe to the parent page
+include `source: 'ozwell-chat-widget'`. MCP requests use standalone JSON-RPC
+packets.
+
+Both kinds of packet include `ozwellDocumentId`, a random identifier for the
+current widget document session. Custom hosts can echo this field in responses;
+the widget ignores responses tagged for a different session. Hosts that execute
+page tools should cancel pending requests and invalidate snapshot references on
+`pagehide` or a `ready` message with a new identifier. Ordinary configuration
+refreshes keep the same identifier. A document restored from the back-forward
+cache sends a fresh `ready` handshake with a new identifier.
 
 | Type | Payload | Description |
 |------|---------|-------------|
 | `ready` | — | Widget fully initialized and ready to receive messages |
+| `pagehide` | — | Widget document is leaving; retire its pending tool work |
 | `tool_call` | MCP JSON-RPC 2.0 request | Request parent to execute an MCP tool (use `ozwell-tool-call` DOM event instead) |
 | `assistant_response` | `{ hadToolCalls }` | AI assistant finished responding (signal only, no message content) |
 | `closed` | — | Widget was closed |

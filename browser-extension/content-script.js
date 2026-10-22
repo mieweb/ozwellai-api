@@ -208,9 +208,9 @@
       .header button { border: 0; border-radius: 6px; background: transparent; color: #8793af;
         min-width: 36px; min-height: 36px; font-size: 22px; }
       .header button:hover { background: #eef1fa; color: #101b46; }
-      .status { padding: 20px; color: #8290ab; }
+      .status { padding: 20px; color: #5d6b86; }
       .status p { margin: 0 0 12px; }
-      .status a { color: #009bc9; }
+      .status a { color: #00769b; }
       iframe { width: 100%; flex: 1; min-height: 0; border: 0; background: white; }
     `;
 

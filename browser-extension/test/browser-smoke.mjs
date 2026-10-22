@@ -72,6 +72,11 @@ try {
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
     viewport: { width: 1280, height: 900 },
   });
+  // Test-driven MCP calls share the real widget document's authenticated
+  // envelope; production gets this nonce from WidgetApp's own sender.
+  await context.addInitScript(() => addEventListener('message', event => {
+    if (event.source === parent && typeof event.data?.ozwellDocumentId === 'string') window.__smokeDocumentId = event.data.ozwellDocumentId;
+  }));
   const errors = [];
   context.on('page', page => page.on('pageerror', error => errors.push(error.message)));
   const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
@@ -148,7 +153,7 @@ try {
         };
         const timer = setTimeout(() => { removeEventListener('message', listener); resolve(null); }, timeout);
         addEventListener('message', listener);
-        parent.postMessage({ jsonrpc: '2.0', id, method, params }, parentOrigin);
+        parent.postMessage({ jsonrpc: '2.0', id, method, params, ozwellDocumentId: window.__smokeDocumentId }, parentOrigin);
       }));
     }, { parentOrigin, method, params, timeout, id });
     return id;
@@ -234,7 +239,7 @@ try {
   // Cancel a live cross-origin MCP call during its bounded visual preview.
   state = await snapshot(initialWidget, popupOrigin);
   const cancelledId = await startPreviewedFill(initialWidget, popupOrigin, fillArgs(state, 'must-not-commit-cancelled'), 600);
-  await initialWidget.evaluate(({ parentOrigin, id }) => parent.postMessage({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id } }, parentOrigin), { parentOrigin: popupOrigin, id: cancelledId });
+  await initialWidget.evaluate(({ parentOrigin, id }) => parent.postMessage({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: id }, ozwellDocumentId: window.__smokeDocumentId }, parentOrigin), { parentOrigin: popupOrigin, id: cancelledId });
   assert.equal(await finishMcp(initialWidget, cancelledId), null);
   assert.equal(await page.locator('#page-note').inputValue(), 'ozwell updated this page through local tools.');
   state = await snapshot(initialWidget, popupOrigin);
@@ -361,7 +366,8 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__leakedWidgetMessages), [], 'Widget handshake and tool results never reach the website window.');
   assert.equal(requests.includes('/v1/chat/completions'), false, 'Spoofed website send-message requests must be ignored.');
   await clickShadow('Close ozwell assistant');
-  await widget.waitForFunction(() => window.OzwellDebug.getState().config.tools.length === 0);
+  // Hidden frames can stop animation frames; keep observing the tool update.
+  await widget.waitForFunction(() => window.OzwellDebug.getState().config.tools.length === 0, null, { polling: 50 });
   await clickShadow('Open ozwell assistant');
   await widget.waitForFunction(() => window.OzwellDebug.getState().config.tools.length === 5);
   assert.equal(await widget.locator('textarea').count(), 1, 'Reopening retains the authenticated widget session.');

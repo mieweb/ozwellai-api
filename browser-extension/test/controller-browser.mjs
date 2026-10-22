@@ -35,6 +35,39 @@ const fixture = `<!doctype html><title>MIE controller fixture</title>
 </select></label>
 <div id="hidden-shadow" style="opacity:0"></div>
 <script>document.querySelector('#hidden-shadow').attachShadow({mode:'open'}).innerHTML='<button type="button"><span>hidden-shadow-host-secret</span></button>';</script>
+<button type="button" id="opacity-own" aria-label="own-label-secret" style="opacity:0">own-text-secret</button>
+<div style="opacity:0"><button type="button" id="opacity-ancestor" aria-label="ancestor-label-secret">ancestor-text-secret</button></div>
+<input id="opacity-input" aria-label="input-label-secret" placeholder="input-hint-secret" style="opacity:0">
+<select id="opacity-select" aria-label="select-label-secret" style="opacity:0"><option label="select-option-secret">select-fallback-secret</option></select>
+<div style="content-visibility:hidden"><button type="button" id="content-hidden" aria-label="content-label-secret">content-text-secret</button></div>
+<div style="visibility:hidden"><button type="button" id="restored" style="visibility:visible">Restored button label</button></div>
+<div style="display:contents"><button type="button" id="contents-button">Contents button label</button></div>
+<div id="slot-host"><button slot="hidden" type="button" id="opacity-slot" aria-label="slot-label-secret">slot-text-secret</button><button slot="visible" type="button" id="visible-slot">Visible slotted label</button></div>
+<script>document.querySelector('#slot-host').attachShadow({mode:'open'}).innerHTML='<slot name="hidden" style="opacity:0"></slot><slot name="visible"></slot>';</script>
+<label>Semantic owner <select id="semantic-owner">
+  <option label="Explicit owner" value="explicit">unused-fallback-secret</option>
+  <option label="Label without text" value="empty"></option>
+  <option>Ordinary owner</option>
+  <option hidden label="hidden-label-secret">hidden-label-fallback-secret</option>
+  <option style="display:none" label="display-label-secret">display-label-fallback-secret</option>
+  <option style="opacity:0" label="opacity-label-secret">opacity-label-fallback-secret</option>
+  <optgroup hidden label="Hidden group"><option label="group-label-secret">group-label-fallback-secret</option></optgroup>
+  <optgroup style="opacity:0" label="Transparent group"><option label="transparent-group-secret">transparent-group-fallback-secret</option></optgroup>
+  <optgroup style="content-visibility:hidden" label="Unrendered group"><option label="content-group-secret">content-group-fallback-secret</option></optgroup>
+</select></label>
+<label>Filtered owner <select id="filtered-owner"></select></label>
+<script>
+const filteredOption = document.createElement('option');
+filteredOption.append('Visible filtered owner');
+const privateLabel = document.createElement('span');
+privateLabel.dataset.ozwellPrivate = '';
+privateLabel.textContent = 'private-option-descendant-secret';
+const hiddenLabel = document.createElement('span');
+hiddenLabel.style.display = 'none';
+hiddenLabel.textContent = 'hidden-option-descendant-secret';
+filteredOption.append(privateLabel, hiddenLabel);
+document.querySelector('#filtered-owner').append(filteredOption);
+</script>
 <div class="spacer"></div><p>Visible text below viewport</p>`;
 
 async function fixturePage() {
@@ -66,6 +99,60 @@ try {
         'Visible contents label', 'Visible restored label', 'Visible paragraph',
         'Alex visible option', 'Sam visible option', 'Visible text below viewport']) {
         assert.ok(content.includes(text), `Snapshot lost ${text}: ${content}`);
+      }
+    } finally { await page.close(); }
+  });
+
+  await test('controller excludes invisible control attributes and indices through composed ancestors', async () => {
+    const page = await fixturePage();
+    try {
+      await page.addScriptTag({ content: bundle });
+      const content = await page.evaluate(async () => {
+        const controller = new OzwellPageController.PageController({
+          rootElement: document.body, enableMask: false,
+          highlightOpacity: 0, highlightLabelOpacity: 0,
+          viewportExpansion: -1, keepSemanticTags: true, omitAttributes: ['value'],
+        });
+        return (await controller.getBrowserState()).content;
+      });
+      for (const secret of ['opacity-own', 'own-label-secret', 'own-text-secret', 'opacity-ancestor',
+        'ancestor-label-secret', 'ancestor-text-secret', 'opacity-input', 'input-label-secret',
+        'input-hint-secret', 'opacity-select', 'select-label-secret', 'select-option-secret',
+        'select-fallback-secret', 'content-hidden', 'content-label-secret', 'content-text-secret',
+        'opacity-slot', 'slot-label-secret', 'slot-text-secret']) {
+        assert.ok(!content.includes(secret), `Invisible control disclosed ${secret}: ${content}`);
+      }
+      for (const id of ['restored', 'contents-button', 'visible-slot']) {
+        assert.match(content, new RegExp(`\\[\\d+\\]<button[^\\n]*id=${id}(?: |>)`), `Visible control lost its index: ${id}: ${content}`);
+      }
+      for (const text of ['Restored button label', 'Contents button label', 'Visible slotted label']) {
+        assert.ok(content.includes(text), `Visible control lost its text: ${text}: ${content}`);
+      }
+    } finally { await page.close(); }
+  });
+
+  await test('controller snapshots native option labels without hidden choices or unused fallback text', async () => {
+    const page = await fixturePage();
+    try {
+      await page.addScriptTag({ content: bundle });
+      const content = await page.evaluate(async () => {
+        const controller = new OzwellPageController.PageController({
+          rootElement: document.body, enableMask: false,
+          highlightOpacity: 0, highlightLabelOpacity: 0,
+          viewportExpansion: -1, keepSemanticTags: true, omitAttributes: ['value'],
+          excludeElements: element => element.matches('[data-ozwell-private]'),
+        });
+        return (await controller.getBrowserState()).content;
+      });
+      for (const label of ['Explicit owner', 'Label without text', 'Ordinary owner', 'Visible filtered owner']) {
+        assert.ok(content.includes(label), `Snapshot lost native option label ${label}: ${content}`);
+      }
+      for (const secret of ['unused-fallback-secret', 'hidden-label-secret', 'hidden-label-fallback-secret',
+        'display-label-secret', 'display-label-fallback-secret', 'opacity-label-secret', 'opacity-label-fallback-secret',
+        'group-label-secret', 'group-label-fallback-secret', 'transparent-group-secret', 'transparent-group-fallback-secret',
+        'content-group-secret', 'content-group-fallback-secret', 'private-option-descendant-secret',
+        'hidden-option-descendant-secret']) {
+        assert.ok(!content.includes(secret), `Native option disclosed ${secret}: ${content}`);
       }
     } finally { await page.close(); }
   });

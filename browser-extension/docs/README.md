@@ -61,6 +61,13 @@ Sam through the toolbar widget bridge. The “Activate page control” button is
 test-page control. The fabricated private field and private subtree remain visible
 on the page; the test asserts that their contents are absent from tool snapshots.
 
+Additional browser regressions reload the real widget during a native fill in
+both chat entry points. They verify cancellation before replacement readiness,
+fresh snapshot tokens, reused request IDs, rejection of retired messages, and
+restoration after a back-forward cache lifecycle. Controller and action tests
+also cover invisible controls and visible, enabled native option labels. The
+screenshots include the updated popup text contrast.
+
 The install video predates page-control integration and documents installation,
 branding, and activation. The page-control video shows the current integration;
 the browser checks and screenshots provide the accompanying validation.

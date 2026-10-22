@@ -11,11 +11,18 @@ if (!/^[a-f0-9]{32}$/.test(token || '')) {
 } else {
   let connection;
   const chat = createWidgetHost(container, {
+    onDocumentChange: ({ active }) => {
+      if (!active) { connection?.dispose(); connection = null; }
+      else if (!connection || connection.disposed) connect();
+    },
     getTools: options => connection?.getTools(options) ?? [],
     callTool: (name, args, options) => connection.callTool(name, args, options),
     isAuthorized: () => Boolean(connection && !connection.disposed),
   });
-  connection = createPageHostConnection(token, { onStateChange: () => { void chat.refreshTools(); } });
+  function connect() {
+    connection = createPageHostConnection(token, { onStateChange: () => { void chat.refreshTools(); } });
+  }
+  connect();
   container.textContent = 'Connecting to this page…';
   void connection.getTools().then(() => {
     if (connection.disposed) {
@@ -27,5 +34,5 @@ if (!/^[a-f0-9]{32}$/.test(token || '')) {
     // Both destinations come only from the packaged extension configuration.
     chat.mount(WIDGET);
   });
-  window.addEventListener('pagehide', () => { connection.dispose(); chat.destroy(); });
+  window.addEventListener('pagehide', () => { connection?.dispose(); chat.destroy(); });
 }

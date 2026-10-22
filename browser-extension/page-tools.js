@@ -26,6 +26,21 @@
     return url.href;
   }
 
+  function visibleElement(element, boundsElement = element) {
+    const style = getComputedStyle(element);
+    if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+    // Visibility can be restored by a descendant, but opacity and rendering
+    // suppression apply to the whole composed subtree, including shadow hosts.
+    for (let ancestor = element; ancestor; ancestor = ancestor.assignedSlot || ancestor.parentElement || ancestor.getRootNode()?.host) {
+      const ancestorStyle = getComputedStyle(ancestor);
+      if (ancestorStyle.display === 'none' || ancestorStyle.contentVisibility === 'hidden' || Number(ancestorStyle.opacity) === 0) return false;
+    }
+    // Native options have no rectangle until the menu opens. Their owning
+    // select supplies geometry while the option's ancestry supplies visibility.
+    const rect = boundsElement.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
   globalThis.__ozwellCreatePageTools = ({ root = document.body, isAuthorized = () => true } = {}) => {
     if (!(root instanceof HTMLElement) || root.ownerDocument !== document || !root.isConnected) throw new Error('The page is not ready for page control.');
     const Controller = globalThis.OzwellPageController?.PageController;
@@ -93,9 +108,7 @@
       if (element.closest('a[href],area[href]') || !element.matches('button,input,select,textarea') ||
         (element.matches('button') && element.type !== 'button') ||
         (element.matches('input') && BLOCKED_INPUT.has(element.type))) throw new Error('Links, form submission, and unsupported controls are blocked.');
-      const rect = element.getBoundingClientRect();
-      const style = getComputedStyle(element);
-      if (!rect.width || !rect.height || style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') throw new Error('This element is not visible.');
+      if (!visibleElement(element)) throw new Error('This element is not visible.');
       if (name === 'browser_fill' && (!element.matches('input,textarea') || ['checkbox', 'radio', 'button'].includes(element.type) || element.readOnly)) throw new Error('browser_fill requires an editable text field.');
       if (name === 'browser_select' && !element.matches('select')) throw new Error('browser_select requires a native select control.');
       return element;
@@ -228,8 +241,9 @@
           if (element.isConnected) element.dispatchEvent(new Event('change', { bubbles: true }));
           if (element.value !== args.value) throw new Error('The field did not retain the requested text. Refresh the snapshot.');
         } else {
-          const option = Array.from(element.options).find(value => value.textContent.trim() === args.value.trim());
-          if (!option || option.disabled || option.parentElement?.matches('optgroup:disabled')) throw new Error('The requested option is unavailable.');
+          const option = Array.from(element.options).find(value =>
+            !value.matches(':disabled') && visibleElement(value, element) && value.label.trim() === args.value.trim());
+          if (!option) throw new Error('The requested option is unavailable.');
           const selectedIndex = option.index;
           element.selectedIndex = selectedIndex;
           element.dispatchEvent(new Event('input', { bubbles: true }));

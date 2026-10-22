@@ -1,14 +1,14 @@
 {
   "package": "@mieweb/page-controller",
-  "version": "1.12.4-mie.1",
+  "version": "1.12.4-mie.2",
   "repository": "https://github.com/mieweb/page-agent",
-  "commit": "cf185d55a44ecd46eb38a9feb296dbbc7b3485ce",
+  "commit": "6963ab7a183ce38cce3f1bfc29e5c3ff206a1973",
   "upstreamCommit": "9eb6b6646500264d9034dd466a4270cb9fc1ef1e",
-  "lockIntegrity": "sha512-JUeRHxSyF1aN8i3Zh0xzkTtbj7agCJAT/B6AQJll2p1FQBkKuK0LH6NiYIbMzAouFIRGsVLrD0vcAdH8eJ7fwg==",
+  "lockIntegrity": "sha512-5Y84LcwOf15Z1yz8yQcHacZskwL8b6zkDWvZslNm2Il0FJltwQV9vIJIabrhRewEdWFirtUX2kHLLnbbB1bb9w==",
   "sourceFiles": {
-    "package.json": "69aa430109876ea0d21b54be2e301e314451b2deb4347b8395f6c0dce21d785f",
-    "dist/page-controller.js": "fffc37b74720b5ce4f3363fe99586e47d731596639b60761d1242b88a0bd8ea0",
-    "CONTROLLER-DISTRIBUTION.md": "43ab842e49e43c1eb6ff0ae0346c909b0d84ee637532f1659698fb02bbfcd03b",
+    "package.json": "d38f49de0190f894a8225d93f8d28ad827a4490f22172631be9186f676d24167",
+    "dist/page-controller.js": "13293aa70c99c89e281bdd029593453f3b9a4dfa4a92632c2524fd5f8b55569c",
+    "CONTROLLER-DISTRIBUTION.md": "961b9e18f68ca942d14ec36de34e23bd78cc92730f1ca6baf9e799e0bcf77111",
     "LICENSE": "393ad563ce5dd0bbe283ec40f9f5d631817262bc9bbd5eb17ed038a9d9f44803",
     "THIRD_PARTY_NOTICES.md": "f0b4832cd9b24df11e97f438c7026db73b39dc68040a86cedc678baac52d84d7",
     "licenses/ai-motion-LICENSE": "df71b50b0d46b282e5ed6fe67c1c23874b10b2a1512a4658d3aafa9fb9d23b76"
@@ -22,14 +22,16 @@
     "Disable executeJavascript; no evaluation or dynamic module imports in output.",
     "Forward excludeElements(Element) and prune its matching subtrees before extraction/indexing.",
     "Forward omitAttributes and remove matching attributes from defaults, explicit and wildcard serialization; omit textarea default text when value is omitted.",
-    "Exclude invisible descendant and standalone text; measure rendered text including display:contents and retain nonhidden native option labels for visible select controls.",
+    "Exclude invisible descendant and standalone text; measure rendered text including display:contents and preserve visibility restored on descendants.",
+    "Apply composed ancestor display, content-visibility, and opacity checks before indexing or serializing element attributes, including slots and shadow hosts.",
+    "Serialize explicit visible native option.label values, including labels without text children; implicit labels retain descendant exclusion and visibility checks. Omit unused fallback text and hidden option labels.",
     "Skip invisible highlight DOM while preserving indexed parent grouping.",
     "Export only PageController as globalThis.OzwellPageController.PageController.",
     "Guard the entire generated program before any side effects, preserving one controller export and one set of navigation hooks per document."
   ],
   "bundle": {
     "file": "page-controller.js",
-    "bytes": 55106,
-    "sha256": "b3d1a55ffdc42ca5b001d6179080fa2158b192db0d8e139c42e58c43653eb6f0"
+    "bytes": 55866,
+    "sha256": "5830607e7de72a9ddd81c1a03fb020fb3ab14abf57fc9f6d8b2e8d931874b4c4"
   }
 }

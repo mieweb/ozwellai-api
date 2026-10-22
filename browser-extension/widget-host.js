@@ -15,12 +15,41 @@ export function normalizeWidget(value) {
   return { origin: origin.origin, frameUrl: frameUrl.href, endpoint: endpoint.href };
 }
 
-export function createWidgetHost(container, { onReady = () => {}, onError = () => {}, getTools = async () => [], callTool, isAuthorized = () => true } = {}) {
+export function createWidgetHost(container, { onReady = () => {}, onError = () => {}, onDocumentChange = () => {}, getTools = async () => [], callTool, isAuthorized = () => true } = {}) {
   let widget, frame, loading, fallback, loadTimer, mcp, toolsController;
   let ready = false;
+  let documentId, loadedDocumentId, hasLoaded = false, documentStarted = false;
+  const retiredDocuments = new Set();
 
   function post(message) {
-    frame?.contentWindow?.postMessage(message, widget.origin);
+    const envelope = documentId ? { ...message, ozwellDocumentId: documentId } : message;
+    frame?.contentWindow?.postMessage(envelope, widget.origin);
+  }
+
+  function endDocument() {
+    toolsController?.abort();
+    toolsController = null;
+    mcp?.reset();
+    if (documentId) retiredDocuments.add(documentId);
+    if (!ready) return;
+    ready = false;
+    // Disposing the native page connection also disposes its snapshot factory.
+    // Cancelling only MCP calls would leave old snapshot tokens usable after reload.
+    onDocumentChange({ active: false });
+  }
+
+  function startDocument(nextId) {
+    if (!nextId && (documentId || retiredDocuments.size)) return false;
+    if (nextId && retiredDocuments.has(nextId)) return false;
+    if (ready && documentStarted && documentId === nextId) return true;
+    if (documentStarted) endDocument();
+    documentStarted = true;
+    documentId = nextId;
+    ready = true;
+    // Older deployed widgets remain usable for chat. Without a document nonce
+    // their requests cannot be separated safely across a same-origin reload.
+    onDocumentChange({ active: Boolean(nextId) });
+    return true;
   }
 
   function focus() {
@@ -54,13 +83,31 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
   }
 
   function handleMessage(event) {
-    if (!frame || event.source !== frame.contentWindow || event.origin !== widget.origin) return;
+    if (!frame || event.origin !== widget.origin) return;
     const data = event.data;
     if (!data || typeof data !== 'object') return;
+    if (data.source === 'ozwell-chat-widget' && data.type === 'pagehide') {
+      // Chromium can null a departing document's WindowProxy before delivering
+      // its queued unload notice. Only this teardown notice may use that path,
+      // authenticated by the pinned origin and its current unpredictable nonce.
+      if ((event.source === frame.contentWindow || event.source === null) && documentId && data.ozwellDocumentId === documentId
+        && Object.keys(data).every(key => ['source', 'type', 'ozwellDocumentId'].includes(key))) endDocument();
+      return;
+    }
+    if (event.source !== frame.contentWindow) return;
     if (data.source === 'ozwell-chat-widget') {
+      const nextId = typeof data.ozwellDocumentId === 'string' && /^[a-f0-9-]{32,64}$/.test(data.ozwellDocumentId) ? data.ozwellDocumentId : undefined;
       if (data.type === 'ready' || data.type === 'request-config') {
-        const firstReady = !ready;
-        ready = true;
+        const firstReady = !ready || nextId !== documentId;
+        // Configuration refreshes do not identify a new document. The widget's
+        // per-document nonce survives React renders, but changes on navigation.
+        if (data.type === 'ready') {
+          if (!startDocument(nextId)) return;
+        } else {
+          if (documentId ? nextId !== documentId : nextId) return;
+          if (!ready && !documentStarted && !startDocument(nextId)) return;
+          if (!ready) return;
+        }
         clearTimeout(loadTimer);
         loading.hidden = true;
         frame.hidden = false;
@@ -80,13 +127,16 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
       }
       return;
     }
+    // Once the widget supports document identity, queued messages from a retired
+    // document must not operate on the replacement document's native connection.
+    if (documentId && data.ozwellDocumentId !== documentId) return;
+    if (!ready && documentStarted) return;
     mcp?.handle(data);
   }
 
   function destroy() {
     clearTimeout(loadTimer);
-    toolsController?.abort();
-    toolsController = null;
+    endDocument();
     mcp?.dispose();
     mcp = null;
     window.removeEventListener('message', handleMessage);
@@ -94,6 +144,9 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
     loading?.remove();
     widget = frame = loading = fallback = null;
     ready = false;
+    documentId = loadedDocumentId = undefined;
+    hasLoaded = documentStarted = false;
+    retiredDocuments.clear();
   }
 
   function mount(value) {
@@ -119,8 +172,26 @@ export function createWidgetHost(container, { onReady = () => {}, onError = () =
     frame.title = 'Chat with ozwell';
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
-    frame.addEventListener('error', showError);
-    mcp = globalThis.__ozwellCreateMcpBridge({ getTools, callTool, post, isAuthorized });
+    const mountedFrame = frame;
+    frame.addEventListener('error', () => { if (frame === mountedFrame) showError(); });
+    frame.addEventListener('load', () => {
+      if (frame !== mountedFrame) return;
+      // A WindowProxy survives iframe reloads. For older deployed widgets that
+      // do not send a document nonce/pagehide, load is the fallback boundary.
+      if (hasLoaded && (!documentId || documentId === loadedDocumentId)) {
+        const legacyReady = ready && !documentId;
+        endDocument();
+        if (legacyReady) {
+          startDocument(undefined);
+          void refreshTools();
+        }
+      }
+      hasLoaded = true;
+      loadedDocumentId = documentId;
+    });
+    mcp = globalThis.__ozwellCreateMcpBridge({ getTools, callTool, post,
+      isAuthorized: () => ready && Boolean(documentId) && isAuthorized(),
+    });
     window.addEventListener('message', handleMessage);
     frame.src = widget.frameUrl;
     container.append(loading, frame);

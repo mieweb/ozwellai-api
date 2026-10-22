@@ -17,6 +17,10 @@ const openOzwell = document.querySelector('#open-ozwell');
 const pageControlStatus = document.querySelector('#page-control-status');
 let pageConnection, connectedUrl;
 const chat = createWidgetHost(chatContainer, {
+  onDocumentChange: ({ active }) => {
+    if (!active) disposePageConnection();
+    else if (state) connectPage(state.settings.mode !== 'off');
+  },
   isAuthorized: () => Boolean(pageConnection && !pageConnection.disposed),
   getTools: options => pageConnection?.getTools(options) ?? [],
   callTool: (name, args, options) => {

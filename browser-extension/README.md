@@ -101,7 +101,7 @@ It cannot undo an action that the page has already handled.
 `https://api.ozwell.ai`, the production API and widget origin documented in the
 [project overview](../docs/overview.md). The `ozwell.ai` apex is not the API origin.
 
-Deployment checks on **October 21, 2026** found:
+Deployment checks on **October 22, 2026** found:
 
 - `https://api.ozwell.ai/widget/frame/?ozwellLoader=1` returns **200**, but its
   current `frame-ancestors *` policy blocks extension toolbar popups. Its response
@@ -145,14 +145,21 @@ must be checked after deployment.
 
 All extension scripts, including the controller, are packaged locally. The
 sandboxed remote iframe receives widget configuration, five tool schemas when
-available, and requested tool results. Both message origin and sender frame are
-checked. Popup-to-page ports authenticate the extension popup and pin its original
+available, and requested tool results. Tool requests require the configured
+origin, direct sender frame, and current widget document identity. Unload notices
+also require that document identity; browsers can clear the sender of a departing
+document. Popup-to-page ports authenticate the extension popup and pin its original
 tab, document session, and URL. The page launcher embeds an extension-owned host;
 that host is the remote widget's parent and ignores website window messages.
 An authenticated worker relay derives the host's tab and frame from the browser,
 and the content script checks its per-frame token before exposing tools. Closing
-the panel rotates the tool session while retaining chat. No public page events or
-main-world bridge expose these tools. The extension stores no API keys.
+the panel rotates the tool session while retaining chat. Reloading the remote
+widget cancels its outstanding tool requests and starts a fresh page-tool session;
+old results and snapshot references cannot carry into the replacement document.
+Page control requires the widget's document-session handshake. Older widget
+deployments without it retain chat with no page tools.
+No public page events or main-world bridge expose these tools. The extension stores
+no API keys.
 
 The checked-in controller requires no installation build. Its
 [provenance and rebuild instructions](./vendor/README.md) document the exact

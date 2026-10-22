@@ -22,7 +22,17 @@ const fixture = `<!doctype html><title>MIE page control fixture</title><style>bo
 <label>Owner<select id="owner"><option>Alex</option><option>Sam</option><option disabled>Unavailable</option></select></label>
 <label>Duplicate disabled owner<select id="duplicate-disabled"><option value="shared" disabled>Disabled owner</option><option value="shared">Requested owner</option><option value="initial" selected>Initial owner</option></select></label>
 <label>Duplicate label owner<select id="duplicate-label"><option value="shared">Different owner</option><option value="shared">Requested owner</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Hidden duplicate label<select id="hidden-option"><option value="hidden" hidden>Sam</option><option value="visible">Sam</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Disabled duplicate label<select id="disabled-option"><option value="disabled" disabled>Sam</option><option value="visible">Sam</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Hidden group duplicate label<select id="hidden-group"><optgroup label="Hidden" style="display:none"><option value="hidden">Sam</option></optgroup><option value="visible">Sam</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Disabled group duplicate label<select id="disabled-group"><optgroup label="Disabled" disabled><option value="disabled">Sam</option></optgroup><option value="visible">Sam</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Transparent duplicate label<select id="transparent-option"><option value="hidden" style="opacity:0">Sam</option><option value="visible">Sam</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Explicit option label<select id="explicit-label"><option value="initial" selected>Initial owner</option><option label="Sam" value="visible">internal-owner</option></select></label>
+<label>Unavailable hidden label<select id="hidden-only"><option value="hidden" hidden>Hidden only</option><option value="initial" selected>Initial owner</option></select></label>
 <label>Overridden owner<select id="overridden"><option value="shared">Original owner</option><option value="shared">Requested owner</option></select></label>
+<div style="visibility:hidden"><button type="button" id="restored-visibility" style="visibility:visible">Restored visibility action</button></div>
+<div style="display:contents"><button type="button" id="contents-ancestor">Display contents action</button></div>
+<div id="slotted-host"><button type="button" id="slotted-control" slot="controls">Slotted control</button></div>
 <section id="inert-section" inert><div><label>Inert message<input id="inert-message" value="inert-original"></label><button type="button" id="inert-action">Inert action</button><label>Inert owner<select id="inert-owner"><option>Alex</option><option>Sam</option></select></label></div></section>
 <label>Secret<input id="password" type="password" value="password-must-not-appear"></label>
 <label>API key<input id="api-key" value="key-must-not-appear"></label>
@@ -35,7 +45,7 @@ const fixture = `<!doctype html><title>MIE page control fixture</title><style>bo
 <form><button id="submit">Submit form</button></form>
 <a id="navigation" href="/other">Navigate</a>
 <div class="spacer"></div><button type="button" id="bottom">Bottom control</button>
-<script>document.querySelector('#increment').onclick=()=>document.querySelector('#count').textContent=String(Number(document.querySelector('#count').textContent)+1);</script>`;
+<script>document.querySelector('#increment').onclick=()=>document.querySelector('#count').textContent=String(Number(document.querySelector('#count').textContent)+1);document.querySelector('#slotted-host').attachShadow({mode:'open'}).innerHTML='<div id="slot-ancestor"><slot name="controls"></slot></div>';</script>`;
 
 try {
   await page.route('https://ui.mieweb.org/**', route => route.fulfill({ contentType: 'text/html', body: fixture }));
@@ -82,6 +92,34 @@ try {
     state = read(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, id), value: 'Requested owner' }));
     assert.deepEqual(await page.locator(`#${id}`).evaluate(element => ({ index: element.selectedIndex, label: element.selectedOptions[0].textContent })), { index: 1, label: 'Requested owner' });
   }
+  // Hidden/disabled predecessors must not shadow an available visible label.
+  for (const id of ['hidden-option', 'disabled-option', 'hidden-group', 'disabled-group', 'transparent-option', 'explicit-label']) {
+    state = await snapshot();
+    state = read(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, id), value: 'Sam' }));
+    assert.deepEqual(await page.locator(`#${id}`).evaluate(element => ({ index: element.selectedIndex, label: element.selectedOptions[0].label, value: element.value })), { index: 1, label: 'Sam', value: 'visible' });
+  }
+  state = await snapshot();
+  assert.match(error(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, 'hidden-only'), value: 'Hidden only' })), /unavailable/);
+  assert.equal(await page.locator('#hidden-only').inputValue(), 'initial');
+  // Restored CSS visibility and display:contents ancestors still render controls.
+  await page.evaluate(() => {
+    window.visibleClicks = [];
+    for (const id of ['restored-visibility', 'contents-ancestor']) document.querySelector(`#${id}`).onclick = () => window.visibleClicks.push(id);
+  });
+  for (const id of ['restored-visibility', 'contents-ancestor']) {
+    state = await snapshot();
+    state = read(await call('browser_click', { snapshotId: state.snapshotId, index: index(state, id) }));
+  }
+  assert.deepEqual(await page.evaluate(() => window.visibleClicks), ['restored-visibility', 'contents-ancestor']);
+  // A slot's rendering ancestor lives outside the body's mutation observer.
+  state = await snapshot();
+  const hiddenSlot = await page.evaluate(async args => {
+    const ancestor = document.querySelector('#slotted-host').shadowRoot.querySelector('#slot-ancestor');
+    ancestor.style.opacity = '0';
+    try { return await window.tools.callTool('browser_click', args); }
+    finally { ancestor.style.opacity = ''; }
+  }, { snapshotId: state.snapshotId, index: index(state, 'slotted-control') });
+  assert.match(error(hiddenSlot), /not visible/);
   // Matching values are insufficient evidence that input/change handlers kept the requested option.
   for (const event of ['input', 'change']) {
     await page.locator('#overridden').evaluate((element, event) => {
@@ -122,8 +160,48 @@ try {
   }, { snapshotId: state.snapshotId, index: index(state, 'message'), value: 'must-not-fill-during-inert' });
   assert.match(error(inertDuringPreview), /unavailable|inert/);
   assert.equal(await page.locator('#message').inputValue(), 'A new message');
+  // html is outside the observed body. Its CSS can hide an indexed control
+  // without changing its fingerprint or snapshot revision.
+  for (const [property, value] of [['opacity', '0'], ['display', 'none'], ['contentVisibility', 'hidden']]) {
+    state = await snapshot();
+    const hiddenBeforeAction = await page.evaluate(async ({ args, property, value }) => {
+      const original = document.documentElement.style[property];
+      document.documentElement.style[property] = value;
+      try { return await window.tools.callTool('browser_fill', args); }
+      finally { document.documentElement.style[property] = original; }
+    }, { args: { snapshotId: state.snapshotId, index: index(state, 'message'), value: 'must-not-fill-hidden' }, property, value });
+    assert.match(error(hiddenBeforeAction), /not visible/);
+    assert.equal(await page.locator('#message').inputValue(), 'A new message');
+  }
+  // Recheck composed ancestor visibility after the 150ms action preview for
+  // every mutating control, before any click, focus, input, or change event.
+  await page.evaluate(() => {
+    window.hiddenActionEvents = [];
+    for (const event of ['click', 'focus', 'input', 'change']) document.addEventListener(event, () => window.hiddenActionEvents.push(event), true);
+  });
+  for (const [name, id, value] of [['browser_click', 'increment'], ['browser_fill', 'message', 'must-not-fill-preview'], ['browser_select', 'owner', 'Alex']]) {
+    state = await snapshot();
+    const hiddenDuringPreview = await page.evaluate(async ({ name, args }) => {
+      const previewStarted = new Promise(resolve => {
+        const observer = new MutationObserver(() => {
+          if (document.querySelector('[data-ozwell-owned="action-preview"]')) { observer.disconnect(); resolve(); }
+        });
+        observer.observe(document.documentElement, { childList: true });
+      });
+      const result = window.tools.callTool(name, args);
+      await previewStarted;
+      document.documentElement.style.opacity = '0';
+      try { return await result; }
+      finally { document.documentElement.style.opacity = ''; }
+    }, { name, args: { snapshotId: state.snapshotId, index: index(state, id), ...(value === undefined ? {} : { value }) } });
+    assert.match(error(hiddenDuringPreview), /not visible/);
+  }
+  assert.equal(await page.locator('#count').innerText(), '1');
+  assert.equal(await page.locator('#message').inputValue(), 'A new message');
+  assert.equal(await page.locator('#owner').inputValue(), 'Sam');
+  assert.deepEqual(await page.evaluate(() => window.hiddenActionEvents), []);
   state = await snapshot();
-  assert.ok(!state.content.includes('id=disabled'), 'Disabled controls are not indexed.');
+  assert.doesNotMatch(state.content, /\bid=disabled(?:\s|>)/, 'Disabled controls are not indexed.');
   for (const id of ['readonly', 'submit', 'navigation']) {
     state = await snapshot();
     assert.match(error(await call('browser_click', { snapshotId: state.snapshotId, index: index(state, id) })), /unavailable|blocked/);
@@ -181,5 +259,5 @@ try {
   await page.evaluate(() => history.pushState({}, '', '/changed?private=query'));
   assert.match(error(await call('browser_snapshot')), /page changed/i);
   assert.equal(errors.length, 0, errors.join('\n'));
-  console.log('Page tools passed in actual Chromium: redaction, URL sanitization, click/fill/select/scroll, duplicate option values, selection postconditions, inert ancestors before/during preview, stale references, guards, cancellation, disposal, authorization, navigation.');
+  console.log('Page tools passed in actual Chromium: redaction, URL sanitization, click/fill/select/scroll, visible enabled option labels, duplicate option values, selection postconditions, inert/rendering ancestors before/during preview, restored visibility, stale references, guards, cancellation, disposal, authorization, navigation.');
 } finally { await browser.close(); }
