@@ -129,7 +129,9 @@ export function createBrowserTools(root) {
   // hit-test a descendant after scrolling. Only this controlled sample's
   // explicit controls are supported. This is not a universal navigation sandbox.
   function guardClick(event) {
-    if (!action) return;
+    // Manual interaction remains available in highlight/none modes. The mask
+    // has its own trusted-input blocker; this guard checks generated clicks.
+    if (!action || event.isTrusted) return;
     const target = event.target instanceof Element ? event.target : null;
     if (
       !target ||
@@ -251,12 +253,11 @@ export function createBrowserTools(root) {
         async () => {
           checkAbort(signal);
           checkSnapshot(args.snapshotId);
-          const result = await controller.scroll({
-            down: args.direction === 'down',
-            numPages: 1,
-            pixels: args.amount || 600,
+          window.scrollBy({
+            top: (args.direction === 'down' ? 1 : -1) * (args.amount || 600),
+            left: 0,
+            behavior: 'instant',
           });
-          if (!result.success) throw new Error(result.message);
           return snapshot();
         },
         false,

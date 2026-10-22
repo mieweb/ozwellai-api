@@ -10,7 +10,7 @@
   background: #f3f5f2;
   font-synthesis: none;
   --ink: #203a3c;
-  --muted: #73817e;
+  --muted: #636e6c;
   --line: #e2e7e1;
   --green: #205e50;
   --green-soft: #eaf2e8;
@@ -130,7 +130,7 @@ h1 {
 .page-description {
   font-size: 12px;
   line-height: 1.6;
-  color: #71807a;
+  color: #626e69;
   margin: 11px 0 0;
 }
 .shift-label {
@@ -169,7 +169,7 @@ h1 {
 .sample-notice p {
   font-size: 10px;
   line-height: 1.6;
-  color: #66775e;
+  color: #5e6e57;
   margin: 0;
 }
 .summary-grid {
@@ -187,7 +187,7 @@ h1 {
 .summary-label {
   font-size: 8px;
   letter-spacing: 0.85px;
-  color: #75827b;
+  color: #69756f;
   font-weight: 700;
 }
 .summary-card > div {
@@ -213,7 +213,7 @@ h1 {
 }
 .summary-card p {
   font-size: 9px;
-  color: #8a948d;
+  color: #6c746f;
   margin: 9px 0 0;
 }
 .urgent-card .metric-icon {
@@ -255,7 +255,7 @@ h1 {
 .count-badge {
   display: inline-block;
   background: #f1f4ee;
-  color: #819078;
+  color: #636e5c;
   padding: 3px 6px;
   margin-left: 5px;
   border-radius: 4px;
@@ -265,7 +265,7 @@ h1 {
 }
 .quiet-label {
   font-size: 8px;
-  color: #94a092;
+  color: #6c746a;
   text-align: right;
 }
 .queue-toolbar {
@@ -297,7 +297,7 @@ h1 {
   min-width: 0;
 }
 .search-field input::placeholder {
-  color: #98a397;
+  color: #6d746c;
 }
 .filter-row {
   display: flex;
@@ -306,7 +306,7 @@ h1 {
 }
 .filter-row label {
   font-size: 8px;
-  color: #82907f;
+  color: #697467;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -342,7 +342,7 @@ thead {
   z-index: 1;
 }
 th {
-  color: #95a08f;
+  color: #6a7165;
   font-size: 7px;
   font-weight: 650;
   letter-spacing: 0.55px;
@@ -356,7 +356,7 @@ td {
   padding: 14px 12px;
   border-bottom: 1px solid #eef1eb;
   font-size: 9px;
-  color: #738272;
+  color: #626e61;
 }
 td:first-child {
   padding-left: 18px;
@@ -393,7 +393,7 @@ tr.selected td:first-child {
 .order-site {
   display: block;
   font-size: 8px;
-  color: #98a193;
+  color: #666d63;
   margin-top: 4px;
 }
 .status-pill,
@@ -408,24 +408,24 @@ tr.selected td:first-child {
 }
 .status-new {
   background: #edf1f8;
-  color: #7081a6;
+  color: #5c6988;
 }
 .status-in-progress {
   background: #e8f1e7;
-  color: #61835b;
+  color: #536f4d;
 }
 .status-waiting {
   background: #fbf2df;
-  color: #aa8a45;
+  color: #7f6734;
 }
 .status-resolved {
   background: #edf1ed;
-  color: #879482;
+  color: #626c5f;
 }
 .priority-pill {
   padding: 0;
   font-weight: 500;
-  color: #7a8773;
+  color: #646e5e;
 }
 .priority-pill:before {
   content: '';
@@ -437,7 +437,7 @@ tr.selected td:first-child {
   margin-right: 5px;
 }
 .priority-urgent {
-  color: #b27750;
+  color: #906041;
 }
 .priority-urgent:before {
   background: #cc926c;
@@ -458,7 +458,7 @@ tr.selected td:first-child {
   height: 20px;
   background: #e9eee4;
   border-radius: 50%;
-  color: #7d8d6e;
+  color: #5e6b53;
   font-size: 6px;
   font-weight: 650;
 }
@@ -468,7 +468,7 @@ tr.selected td:first-child {
   gap: 10px;
   padding: 13px 16px;
   font-size: 8px;
-  color: #9aa591;
+  color: #6d7466;
   border-top: 1px solid var(--line);
 }
 .legend-dot {
@@ -482,7 +482,7 @@ tr.selected td:first-child {
 .empty-state {
   padding: 60px 20px;
   text-align: center;
-  color: #84917c;
+  color: #6b7564;
   font-size: 11px;
 }
 .empty-state span {
@@ -497,10 +497,10 @@ tr.selected td:first-child {
 }
 .dirty-indicator {
   font-size: 8px;
-  color: #91a188;
+  color: #6a7563;
 }
 .dirty-indicator.is-dirty {
-  color: #b48d47;
+  color: #8c6d37;
 }
 .detail-scroll {
   overflow: auto;
@@ -515,7 +515,7 @@ tr.selected td:first-child {
   display: flex;
   gap: 5px;
   align-items: center;
-  color: #7e8e73;
+  color: #697660;
   font-size: 9px;
 }
 .location-line > span:first-child {
@@ -531,7 +531,7 @@ tr.selected td:first-child {
 .issue-overview > p {
   font-size: 10px;
   line-height: 1.7;
-  color: #8b9683;
+  color: #6c7566;
   margin: 0;
 }
 .order-metadata {
@@ -543,7 +543,7 @@ tr.selected td:first-child {
   border-bottom: 1px solid #e9eee4;
 }
 .order-metadata dt {
-  color: #9ba68f;
+  color: #6d7464;
   font-size: 8px;
   margin-bottom: 5px;
 }
@@ -561,7 +561,7 @@ tr.selected td:first-child {
   align-items: center;
   font-size: 8px;
   letter-spacing: 0.8px;
-  color: #9ba58f;
+  color: #6d7465;
   font-weight: 700;
   margin: 0 0 16px;
 }
@@ -574,7 +574,7 @@ tr.selected td:first-child {
   display: block;
   font-size: 9px;
   font-weight: 550;
-  color: #6d7e61;
+  color: #67775c;
   margin-bottom: 15px;
 }
 .field-label select,
@@ -595,7 +595,7 @@ tr.selected td:first-child {
   min-height: 88px;
 }
 .field-label textarea::placeholder {
-  color: #a0aa97;
+  color: #6e7467;
 }
 .check-field {
   display: flex;
@@ -614,11 +614,11 @@ tr.selected td:first-child {
   font-size: 9px;
   display: block;
   font-weight: 550;
-  color: #6c7d5f;
+  color: #67775b;
 }
 .check-field small {
   display: block;
-  color: #a0aa93;
+  color: #6e7465;
   font-size: 8px;
   line-height: 1.5;
   margin-top: 5px;
@@ -649,16 +649,16 @@ tr.selected td:first-child {
 .secondary-button {
   background: white;
   border-color: #dce4d7;
-  color: #6f8260;
+  color: #667758;
 }
 .save-line > span {
   font-size: 8px;
-  color: #a1aa96;
+  color: #6e7467;
 }
 .save-status {
   font-size: 9px;
   line-height: 1.6;
-  color: #80916f;
+  color: #69765b;
   min-height: 29px;
   margin: 11px 0 10px;
 }
@@ -682,7 +682,7 @@ tr.selected td:first-child {
   margin-left: 3px;
   font-size: 9px;
   line-height: 1.5;
-  color: #849178;
+  color: #6b7561;
 }
 .activity-history li:before {
   content: '';
@@ -702,14 +702,14 @@ tr.selected td:first-child {
 .activity-history time {
   display: block;
   font-size: 7px;
-  color: #a9b29c;
+  color: #6f7466;
   margin-top: 4px;
 }
 .workspace-footer {
   display: flex;
   justify-content: space-between;
   font-size: 8px;
-  color: #a0aa96;
+  color: #676e61;
   padding: 20px 0 0;
 }
 .demo-banner {
@@ -730,7 +730,7 @@ tr.selected td:first-child {
   min-width: 0;
 }
 .demo-banner-copy .eyebrow {
-  color: #77936b;
+  color: #5f7656;
   font-size: 8px;
   margin-bottom: 7px;
 }
@@ -742,7 +742,7 @@ tr.selected td:first-child {
 }
 .demo-banner-copy > p:last-child {
   margin: 7px 0 0;
-  color: #7c8e73;
+  color: #65745e;
   font-size: 11px;
   line-height: 1.5;
 }
@@ -772,7 +772,7 @@ tr.selected td:first-child {
   align-items: center;
   flex: none;
   gap: 9px;
-  color: #819373;
+  color: #66745b;
   font-size: 9px;
   font-weight: 550;
 }
@@ -788,7 +788,7 @@ tr.selected td:first-child {
 }
 .demo-step-status {
   min-width: 0;
-  color: #90a080;
+  color: #68735c;
   font-size: 9px;
   line-height: 1.7;
   margin: 0;
@@ -801,7 +801,7 @@ tr.selected td:first-child {
 }
 .controller-state {
   font-size: 8px;
-  color: #77926a;
+  color: #607655;
   margin-top: 10px;
   overflow-wrap: anywhere;
 }
@@ -811,7 +811,7 @@ tr.selected td:first-child {
 #demo-details > summary {
   width: fit-content;
   padding: 12px 0;
-  color: #6f8561;
+  color: #627556;
   font-size: 10px;
   line-height: 1.5;
   cursor: pointer;
@@ -836,7 +836,7 @@ tr.selected td:first-child {
   max-width: 540px;
   font-size: 10px;
   line-height: 1.8;
-  color: #829675;
+  color: #65745b;
   margin: 0 0 10px;
 }
 .tool-actions {
@@ -855,14 +855,14 @@ tr.selected td:first-child {
   border: 0;
   padding: 8px 0;
   font-size: 10px;
-  color: #819670;
+  color: #647457;
 }
 #tool-output {
   margin: 0;
   padding: 13px;
   border: 1px solid #e4eadd;
   border-radius: 6px;
-  color: #8fa17f;
+  color: #69765d;
   background: white;
   font:
     10px/1.7 ui-monospace,
@@ -908,7 +908,7 @@ dialog h2 {
 dialog > p:not(.eyebrow) {
   font-size: 11px;
   line-height: 1.7;
-  color: #86977b;
+  color: #697661;
 }
 .confirmation-summary {
   border: 1px solid #e3eadd;
@@ -929,16 +929,16 @@ dialog > p:not(.eyebrow) {
   margin: 0;
 }
 .confirmation-summary dt {
-  color: #96a58a;
+  color: #68725f;
 }
 .confirmation-summary dd {
   margin: 0;
-  color: #677f59;
+  color: #5f7552;
   overflow-wrap: anywhere;
 }
 .dialog-note {
   font-size: 9px !important;
-  color: #a5b09a !important;
+  color: #6d7466 !important;
 }
 .dialog-actions {
   display: flex;
@@ -971,7 +971,7 @@ dialog > p:not(.eyebrow) {
 #tool-output summary {
   cursor: pointer;
   font-weight: 600;
-  color: #69835c;
+  color: #617955;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -981,11 +981,11 @@ dialog > p:not(.eyebrow) {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 9px 0 0;
-  color: #8b9c7c;
+  color: #6a765e;
 }
 .assistant-offline {
   margin: 0 0 15px;
-  color: #8a957e;
+  color: #6a7261;
   font-size: 10px;
   line-height: 1.7;
 }

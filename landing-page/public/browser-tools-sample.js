@@ -53,7 +53,7 @@ const INITIAL_WORK_ORDERS = [
     title: 'Emergency lighting inspection',
     site: 'Cedar Point Center',
     status: 'New',
-    priority: 'Urgent',
+    priority: 'High',
     owner: 'Unassigned',
     window: '11:00 AM–1:00 PM',
     requester: 'Casey Lane · Facilities',
@@ -101,7 +101,7 @@ const INITIAL_WORK_ORDERS = [
     title: 'Access reader diagnostic',
     site: 'Pine Grove Campus',
     status: 'Waiting',
-    priority: 'Urgent',
+    priority: 'High',
     owner: 'Leo Brooks',
     window: '1:00–3:00 PM',
     requester: 'Avery Reed · Security desk',
@@ -165,6 +165,8 @@ const INITIAL_WORK_ORDERS = [
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const editableFields = ['owner', 'status', 'notes', 'urgent'];
+// Urgency promotes the base priority only while the flag is set.
+const priorityLabel = (priority, urgent) => (urgent ? 'Urgent' : priority);
 const statusClass = (status) =>
   `status-${status.toLowerCase().replaceAll(' ', '-')}`;
 const escapeHtml = (value) =>
@@ -237,7 +239,7 @@ export function initSamplePage() {
   function renderQueue() {
     const search = filters.search.toLowerCase().trim();
     const visible = workOrders.filter((order) => {
-      const priority = order.urgent ? 'Urgent' : order.priority;
+      const priority = priorityLabel(order.priority, order.urgent);
       return (
         (!search ||
           `${order.id} ${order.title} ${order.site}`
@@ -250,7 +252,7 @@ export function initSamplePage() {
     });
     rows.innerHTML = visible
       .map((order) => {
-        const priority = order.urgent ? 'Urgent' : order.priority;
+        const priority = priorityLabel(order.priority, order.urgent);
         const initials =
           order.owner === 'Unassigned'
             ? '—'
@@ -371,7 +373,7 @@ export function initSamplePage() {
     element('confirmation-summary').innerHTML = [
       ['Owner', draft.owner],
       ['Status', draft.status],
-      ['Priority', draft.urgent ? 'Urgent' : selectedOrder().priority],
+      ['Priority', priorityLabel(selectedOrder().priority, draft.urgent)],
       ['Notes', draft.notes || 'No dispatch notes'],
     ]
       .map(

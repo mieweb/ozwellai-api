@@ -283,6 +283,194 @@ test('a user edit invalidates previously observed element references', async ({
   expect((await snapshot(page)).snapshotId).not.toBe(before.snapshotId);
 });
 
+for (const id of ['WO-1041', 'WO-1044']) {
+  test(`clearing urgency on ${id} updates its confirmation, queue filters, and metric`, async ({
+    page,
+  }) => {
+    await openDemo(page);
+    await expect(page.locator('#metric-urgent')).toHaveText('2');
+    await page.locator('#priority-filter').selectOption('Urgent');
+    await expect(page.locator('#work-order-rows tr')).toHaveCount(2);
+    await page.getByTestId(`open-${id}`).click();
+    await expect(page.locator('#work-order-urgent')).toBeChecked();
+    await expect(
+      page.locator(`[data-work-order="${id}"] .priority-pill`),
+    ).toHaveText('Urgent');
+
+    await page.locator('#work-order-urgent').uncheck();
+    await page.locator('#save-work-order').click();
+    await expect(page.locator('#confirmation-id')).toHaveText(id);
+    await expect(
+      page
+        .locator('#confirmation-summary dt', { hasText: /^Priority$/ })
+        .locator('..')
+        .locator('dd'),
+    ).toHaveText('High');
+    await page.locator('#confirm-save').click();
+
+    await expect(page.locator('#save-confirmation')).toBeHidden();
+    await expect(page.locator('#metric-urgent')).toHaveText('1');
+    await expect(page.getByTestId(`open-${id}`)).toHaveCount(0);
+    await expect(page.locator('#work-order-rows tr')).toHaveCount(1);
+    await page.locator('#priority-filter').selectOption('High');
+    await expect(
+      page.locator(`[data-work-order="${id}"] .priority-pill`),
+    ).toHaveText('High');
+    await page.getByTestId(`open-${id}`).click();
+    await expect(page.locator('#work-order-urgent')).not.toBeChecked();
+    const order = await page.evaluate(
+      (id) =>
+        (window as any).browserToolsDemo
+          .getState()
+          .workOrders.find((order: any) => order.id === id),
+      id,
+    );
+    expect(order).toMatchObject({ priority: 'High', urgent: false });
+  });
+}
+
+test('a trusted user click works while the controller is moving toward another control', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('none');
+  const before = await snapshot(page);
+  const index = await findIndex(page, '#work-order-notes', before.snapshotId);
+  await page.evaluate(() => {
+    const state = window as any;
+    state.enginePointerStarted = new Promise<void>((resolve) => {
+      window.addEventListener('PageAgent::MovePointerTo', () => resolve(), {
+        once: true,
+      });
+    });
+    document.querySelector('#work-order-urgent')!.addEventListener(
+      'click',
+      (event) => {
+        state.userClickedDuringTool = event.isTrusted && state.toolPending;
+      },
+      { once: true },
+    );
+  });
+  await page.evaluate(
+    ({ snapshotId, index }) => {
+      const state = window as any;
+      state.toolPending = true;
+      state.pendingBrowserToolCall = state.browserToolsDemo
+        .callTool('browser_click', { snapshotId, index })
+        .finally(() => {
+          state.toolPending = false;
+        });
+    },
+    { snapshotId: before.snapshotId, index },
+  );
+  await page.evaluate(() => (window as any).enginePointerStarted);
+  await page.locator('#work-order-urgent').click();
+  readSnapshot(await finishToolCall(page));
+  expect(await page.evaluate(() => (window as any).userClickedDuringTool)).toBe(
+    true,
+  );
+  await expect(page.locator('#work-order-urgent')).toBeChecked();
+  expect(
+    await page.evaluate(
+      () => (window as any).browserToolsDemo.getState().draft.urgent,
+    ),
+  ).toBe(true);
+});
+
+test('Keep editing can cancel a confirmation while its tool click is still finishing', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('none');
+  await page
+    .locator('#work-order-notes')
+    .fill('Review this draft before saving.');
+  const before = await snapshot(page);
+  const index = await findIndex(page, '#save-work-order', before.snapshotId);
+  await page.evaluate(() => {
+    const state = window as any;
+    const dialog = document.querySelector(
+      '#save-confirmation',
+    ) as HTMLDialogElement;
+    state.confirmationOpened = new Promise<void>((resolve) => {
+      const observer = new MutationObserver(() => {
+        if (!dialog.open) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+    });
+    document.querySelector('#cancel-save')!.addEventListener(
+      'click',
+      (event) => {
+        state.cancelledDuringTool = event.isTrusted && state.toolPending;
+      },
+      { once: true },
+    );
+  });
+  await page.evaluate(
+    ({ snapshotId, index }) => {
+      const state = window as any;
+      state.toolPending = true;
+      state.pendingBrowserToolCall = state.browserToolsDemo
+        .callTool('browser_click', { snapshotId, index })
+        .finally(() => {
+          state.toolPending = false;
+        });
+    },
+    { snapshotId: before.snapshotId, index },
+  );
+  await page.evaluate(() => (window as any).confirmationOpened);
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  readSnapshot(await finishToolCall(page));
+  expect(await page.evaluate(() => (window as any).cancelledDuringTool)).toBe(
+    true,
+  );
+  await expect(page.locator('#save-confirmation')).toBeHidden();
+  const state = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  expect(state.pendingChanges).toBeNull();
+  expect(state.draft.notes).toBe('Review this draft before saving.');
+  expect(
+    state.workOrders.find((order: any) => order.id === state.selectedId).notes,
+  ).not.toBe(state.draft.notes);
+});
+
+test('browser_scroll moves the host page even when the overflowing tool log has focus', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await expandDemoDetails(page);
+  await page.locator('#visual-mode').selectOption('none');
+  await page.addStyleTag({ content: 'html { scroll-behavior: smooth; }' });
+  const before = await snapshot(page);
+  expect(
+    await page
+      .locator('#tool-output')
+      .evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true);
+  await page.evaluate(() => {
+    const output = document.querySelector('#tool-output') as HTMLElement;
+    output.scrollTop = 0;
+    output.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  });
+  await expect(page.locator('#tool-output')).toBeFocused();
+  const after = readSnapshot(
+    await callTool(page, 'browser_scroll', {
+      snapshotId: before.snapshotId,
+      direction: 'down',
+      amount: 320,
+    }),
+  );
+  expect(after.snapshotId).not.toBe(before.snapshotId);
+  expect(await page.evaluate(() => window.scrollY)).toBe(320);
+  expect(
+    await page.locator('#tool-output').evaluate((element) => element.scrollTop),
+  ).toBe(0);
+});
+
 test('link actions cannot navigate away from the host page', async ({
   page,
   context,
@@ -540,6 +728,54 @@ test('step mode performs one action at a time, refreshes after manual edits, and
     }
   }
 });
+
+for (const when of ['between steps', 'during the action preview']) {
+  test(`the guided demo stops if the user selects another record ${when}`, async ({
+    page,
+  }) => {
+    await openDemo(page);
+    await page.locator('#visual-mode').selectOption('none');
+    const step = page.locator('#step-demo');
+    await step.click();
+    await expect(step).toBeEnabled({ timeout: 15_000 });
+    await expect(page.locator('#detail-id')).toHaveText('WO-1042');
+    const before = await page.evaluate(() =>
+      (window as any).browserToolsDemo.getState(),
+    );
+
+    if (when === 'during the action preview') {
+      await expandDemoDetails(page);
+      await page.locator('#run-speed').selectOption('slow');
+      await page.locator('#visual-mode').selectOption('highlight');
+      await step.click();
+      await expect(page.locator(highlightSelector)).toBeVisible();
+      await expect(page.locator(highlightSelector)).toContainText(/owner/i);
+    }
+    await page.getByTestId('open-WO-1044').click();
+    if (when === 'between steps') await step.click();
+
+    await expect(step).toBeEnabled({ timeout: 15_000 });
+    await expect(step).toHaveText('Step through');
+    await expect(page.locator('#controller-status')).toContainText(
+      when === 'between steps'
+        ? /Guided demo stopped: WO-1042 is no longer selected/
+        : /Stale snapshot/i,
+    );
+    await expect(page.locator('#demo-step-status')).toContainText(
+      'Run stopped',
+    );
+    await expectOverlaysReleased(page);
+    const after = await page.evaluate(() =>
+      (window as any).browserToolsDemo.getState(),
+    );
+    expect(after.selectedId).toBe('WO-1044');
+    expect(after.workOrders).toEqual(before.workOrders);
+    expect(after.activity).toEqual(before.activity);
+    expect(after.pendingChanges).toBeNull();
+    expect(after.draft.owner).toBe('Leo Brooks');
+    await expect(page.locator('#work-order-owner')).toHaveValue('Leo Brooks');
+  });
+}
 
 test('a rejected action releases both visual layers and leaves the page usable', async ({
   page,

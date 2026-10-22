@@ -125,6 +125,11 @@ async function performStep(index) {
   // Each click in step mode starts with a fresh observation, including any
   // manual edits made while the overlay was released between actions.
   const state = await readResult('browser_snapshot', {});
+  if (index > 0 && sample.getState().selectedId !== 'WO-1042') {
+    throw new Error(
+      'Guided demo stopped: WO-1042 is no longer selected. Start the demo again to continue.',
+    );
+  }
   const args = {
     snapshotId: state.snapshotId,
     index: browser.findIndex(selector, state.snapshotId),
