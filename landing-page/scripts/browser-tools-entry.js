@@ -125,11 +125,14 @@ async function performStep(index) {
   // Each click in step mode starts with a fresh observation, including any
   // manual edits made while the overlay was released between actions.
   const state = await readResult('browser_snapshot', {});
-  if (index > 0 && sample.getState().selectedId !== 'WO-1042') {
+  const observed = sample.getState();
+  if (index > 0 && observed.selectedId !== 'WO-1042') {
     throw new Error(
       'Guided demo stopped: WO-1042 is no longer selected. Start the demo again to continue.',
     );
   }
+  // A user may already have marked it urgent while the step runner paused.
+  if (selector === '#work-order-urgent' && observed.draft.urgent) return;
   const args = {
     snapshotId: state.snapshotId,
     index: browser.findIndex(selector, state.snapshotId),

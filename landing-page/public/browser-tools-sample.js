@@ -207,10 +207,11 @@ export function initSamplePage() {
   }
   function updateDirtyIndicator() {
     const dirty = isDirty();
-    element('dirty-indicator').textContent = dirty
-      ? 'Unsaved changes'
-      : 'Saved';
-    element('dirty-indicator').classList.toggle('is-dirty', dirty);
+    const indicator = element('dirty-indicator');
+    const label = dirty ? 'Unsaved changes' : 'Saved';
+    if (indicator.textContent !== label) indicator.textContent = label;
+    if (indicator.classList.contains('is-dirty') !== dirty)
+      indicator.classList.toggle('is-dirty', dirty);
   }
   function readDraft() {
     draft = {

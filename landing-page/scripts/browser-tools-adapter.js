@@ -20,9 +20,29 @@ export function createBrowserTools(root) {
   let references = new Map();
   let queue = Promise.resolve();
   let action;
+  const controlValues = new WeakMap();
+  const controlValue = (element) =>
+    JSON.stringify([element.value, element.checked]);
   const changed = () => {
     revision += 1;
   };
+  function fieldChanged(event) {
+    const element = event.target;
+    if (
+      !(element instanceof Element) ||
+      !element.matches('input,select,textarea')
+    ) {
+      changed();
+      return;
+    }
+    const value = controlValue(element);
+    // Native blur can emit change after an already-observed input. It must
+    // not invalidate a fresh snapshot when the field value stayed the same.
+    if (controlValues.get(element) !== value) {
+      controlValues.set(element, value);
+      changed();
+    }
+  }
   const observer = new MutationObserver(changed);
   observer.observe(root, {
     subtree: true,
@@ -30,8 +50,8 @@ export function createBrowserTools(root) {
     characterData: true,
     attributes: true,
   });
-  root.addEventListener('input', changed, true);
-  root.addEventListener('change', changed, true);
+  root.addEventListener('input', fieldChanged, true);
+  root.addEventListener('change', fieldChanged, true);
 
   function flushChanges() {
     if (observer.takeRecords().length) changed();
@@ -68,6 +88,8 @@ export function createBrowserTools(root) {
       }
     }
     references = next;
+    for (const element of root.querySelectorAll('input,select,textarea'))
+      controlValues.set(element, controlValue(element));
     snapshotRevision = revision;
     snapshotId = `page-${++sequence}-${revision}`;
     return {
@@ -78,15 +100,15 @@ export function createBrowserTools(root) {
     };
   }
 
-  async function resolve(args, operation) {
+  function validateReference(args, operation, element) {
     checkSnapshot(args.snapshotId);
     if (!Number.isSafeInteger(args.index) || args.index < 0)
       throw new Error('Invalid element index.');
     const reference = references.get(args.index);
-    const element = await controller.resolveElement(args.index);
     if (
       !reference ||
       reference.element !== element ||
+      !element.isConnected ||
       !root.contains(element) ||
       reference.fingerprint !== fingerprint(element)
     ) {
@@ -123,6 +145,17 @@ export function createBrowserTools(root) {
       throw new Error('browser_select requires a native select control.');
     }
     return element;
+  }
+
+  async function resolve(args, operation) {
+    checkSnapshot(args.snapshotId);
+    if (!Number.isSafeInteger(args.index) || args.index < 0)
+      throw new Error('Invalid element index.');
+    return validateReference(
+      args,
+      operation,
+      await controller.resolveElement(args.index),
+    );
   }
 
   // Check the actual event target too: the upstream click implementation can
@@ -290,14 +323,26 @@ export function createBrowserTools(root) {
         checkAbort(signal);
         await resolve(args, name);
         checkAbort(signal);
+        const options = {
+          // The controller yields while moving and after clicking. Check
+          // synchronously at the actual dispatch/write boundaries too.
+          beforeDispatch() {
+            checkAbort(signal);
+            validateReference(args, name, element);
+          },
+        };
         action = { element };
         try {
           const result =
             name === 'browser_click'
-              ? await controller.clickElement(args.index)
+              ? await controller.clickElement(args.index, options)
               : name === 'browser_fill'
-                ? await controller.inputText(args.index, args.value)
-                : await controller.selectOption(args.index, args.value);
+                ? await controller.inputText(args.index, args.value, options)
+                : await controller.selectOption(
+                    args.index,
+                    args.value,
+                    options,
+                  );
           if (action.blocked) throw action.blocked;
           if (!result.success) throw new Error(result.message);
         } finally {
@@ -349,8 +394,8 @@ export function createBrowserTools(root) {
     },
     dispose() {
       observer.disconnect();
-      root.removeEventListener('input', changed, true);
-      root.removeEventListener('change', changed, true);
+      root.removeEventListener('input', fieldChanged, true);
+      root.removeEventListener('change', fieldChanged, true);
       document.removeEventListener('click', guardClick, true);
       document.removeEventListener('submit', guardSubmit, true);
       visuals.dispose();

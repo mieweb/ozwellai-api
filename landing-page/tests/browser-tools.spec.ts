@@ -329,7 +329,7 @@ for (const id of ['WO-1041', 'WO-1044']) {
   });
 }
 
-test('a trusted user click works while the controller is moving toward another control', async ({
+test('a trusted user click works and invalidates the controller action that is still moving', async ({
   page,
 }) => {
   await openDemo(page);
@@ -365,7 +365,9 @@ test('a trusted user click works while the controller is moving toward another c
   );
   await page.evaluate(() => (window as any).enginePointerStarted);
   await page.locator('#work-order-urgent').click();
-  readSnapshot(await finishToolCall(page));
+  const result = await finishToolCall(page);
+  expect(result.isError).toBe(true);
+  expect(result.content[0].text).toMatch(/stale/i);
   expect(await page.evaluate(() => (window as any).userClickedDuringTool)).toBe(
     true,
   );
@@ -375,6 +377,166 @@ test('a trusted user click works while the controller is moving toward another c
       () => (window as any).browserToolsDemo.getState().draft.urgent,
     ),
   ).toBe(true);
+});
+
+for (const boundary of [
+  'pointer movement',
+  'after the generated textarea click',
+]) {
+  test(`a live fill rejects a record change during ${boundary}`, async ({
+    page,
+  }) => {
+    // Keep both controls in view so the trusted record switch fits inside the
+    // controller's existing movement/post-click waits without extra scrolling.
+    await page.setViewportSize({ width: 1440, height: 1600 });
+    await openDemo(page);
+    await page.locator('#visual-mode').selectOption('none');
+    await page.getByTestId('open-WO-1042').click();
+    const alternateOrder = page.getByTestId('open-WO-1044');
+    await alternateOrder.scrollIntoViewIfNeeded();
+    const beforeState = await page.evaluate(() =>
+      (window as any).browserToolsDemo.getState(),
+    );
+    const before = await snapshot(page);
+    const index = await findIndex(page, '#work-order-notes', before.snapshotId);
+
+    await page.evaluate((boundary) => {
+      const state = window as any;
+      const notes = document.querySelector('#work-order-notes')!;
+      state.fillInputSeen = false;
+      notes.addEventListener('input', () => {
+        state.fillInputSeen = true;
+      });
+      state.engineFillBoundary = new Promise<void>((resolve) => {
+        const reached = () => {
+          state.engineFillBoundaryReached = true;
+          resolve();
+        };
+        if (boundary === 'pointer movement') {
+          // None mode emits no adapter preview movement: this event comes
+          // from the underlying controller after its action has begun.
+          window.addEventListener('PageAgent::MovePointerTo', reached, {
+            once: true,
+          });
+        } else {
+          notes.addEventListener(
+            'click',
+            (event) => {
+              if (!event.isTrusted) reached();
+            },
+            { once: true },
+          );
+        }
+      });
+      document.querySelector('[data-testid="open-WO-1044"]')!.addEventListener(
+        'click',
+        (event) => {
+          state.switchedBeforeFill =
+            event.isTrusted &&
+            state.toolPending &&
+            state.engineFillBoundaryReached &&
+            !state.fillInputSeen;
+        },
+        { once: true },
+      );
+    }, boundary);
+    await page.evaluate(
+      ({ snapshotId, index }) => {
+        const state = window as any;
+        state.toolPending = true;
+        state.pendingBrowserToolCall = state.browserToolsDemo
+          .callTool('browser_fill', {
+            snapshotId,
+            index,
+            value: 'This fill belongs only to WO-1042 and must be rejected.',
+          })
+          .finally(() => {
+            state.toolPending = false;
+          });
+      },
+      { snapshotId: before.snapshotId, index },
+    );
+    await page.evaluate(() => (window as any).engineFillBoundary);
+    await alternateOrder.click();
+
+    const result = await finishToolCall(page);
+    expect(await page.evaluate(() => (window as any).switchedBeforeFill)).toBe(
+      true,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/stale/i);
+    expect(await page.evaluate(() => (window as any).fillInputSeen)).toBe(
+      false,
+    );
+    const afterState = await page.evaluate(() =>
+      (window as any).browserToolsDemo.getState(),
+    );
+    const alternate = beforeState.workOrders.find(
+      (order: any) => order.id === 'WO-1044',
+    );
+    expect(afterState.selectedId).toBe('WO-1044');
+    expect(afterState.draft.notes).toBe(alternate.notes);
+    expect(afterState.workOrders).toEqual(beforeState.workOrders);
+    expect(afterState.activity).toEqual(beforeState.activity);
+    expect(afterState.pendingChanges).toBeNull();
+    await expect(page.locator('#work-order-notes')).toHaveValue(
+      alternate.notes,
+    );
+    await expectOverlaysReleased(page);
+  });
+}
+
+test('a fresh snapshot permits filling notes after the observed search field loses focus', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('none');
+  const search = page.locator('#work-order-search');
+  await search.fill('WO-1038');
+  await expect(search).toBeFocused();
+  await expect(page.locator('#work-order-rows tr')).toHaveCount(1);
+  await page.evaluate(() => {
+    document.querySelector('#work-order-search')!.addEventListener(
+      'change',
+      (event) => {
+        (window as any).observedSearchBlur = {
+          trusted: event.isTrusted,
+          value: (event.target as HTMLInputElement).value,
+        };
+      },
+      { once: true },
+    );
+  });
+  // Reading the snapshot and resolving its index do not move browser focus.
+  // The later native change event reports a value the snapshot already saw.
+  const before = await snapshot(page);
+  const index = await findIndex(page, '#work-order-notes', before.snapshotId);
+  await expect(search).toBeFocused();
+  const result = await callTool(page, 'browser_fill', {
+    snapshotId: before.snapshotId,
+    index,
+    value: 'Legitimate notes after observing the search value.',
+  });
+  readSnapshot(result);
+  expect(await page.evaluate(() => (window as any).observedSearchBlur)).toEqual(
+    {
+      trusted: true,
+      value: 'WO-1038',
+    },
+  );
+  await expect(page.locator('#work-order-notes')).toHaveValue(
+    'Legitimate notes after observing the search value.',
+  );
+  const state = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  expect(state.selectedId).toBe('WO-1038');
+  expect(state.filters.search).toBe('WO-1038');
+  expect(state.pendingChanges).toBeNull();
+  expect(
+    state.workOrders.find((order: any) => order.id === 'WO-1038').notes,
+  ).not.toBe(state.draft.notes);
+  await expectOverlaysReleased(page);
 });
 
 test('Keep editing can cancel a confirmation while its tool click is still finishing', async ({
@@ -727,6 +889,51 @@ test('step mode performs one action at a time, refreshes after manual edits, and
       await expect(page.locator('#save-confirmation')).toBeHidden();
     }
   }
+});
+
+test('the urgent step preserves a checkbox already checked manually between steps', async ({
+  page,
+}) => {
+  await openDemo(page);
+  await page.locator('#visual-mode').selectOption('none');
+  const step = page.locator('#step-demo');
+  for (let number = 1; number <= 4; number += 1) {
+    await step.click();
+    await expect(step).toBeEnabled({ timeout: 15_000 });
+    await expect(page.locator('#demo-step-status')).toContainText(
+      new RegExp(`\\b${number}\\s*/\\s*7\\b`),
+    );
+  }
+  await expect(page.locator('#detail-id')).toHaveText('WO-1042');
+  await page.locator('#work-order-urgent').check();
+  await step.click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(page.locator('#demo-step-status')).toContainText(
+    /\b5\s*\/\s*7\b/,
+  );
+  await expect(page.locator('#work-order-urgent')).toBeChecked();
+
+  await step.click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(page.locator('#save-confirmation')).toBeVisible();
+  await page.locator('#dialog-next-action').click();
+  await expect(step).toBeEnabled({ timeout: 15_000 });
+  await expect(page.locator('#save-confirmation')).toBeHidden();
+  await expect(page.locator('#work-order-urgent')).toBeChecked();
+  await expect(page.locator('#metric-urgent')).toHaveText('3');
+  const state = await page.evaluate(() =>
+    (window as any).browserToolsDemo.getState(),
+  );
+  expect(
+    state.workOrders.find((order: any) => order.id === 'WO-1042'),
+  ).toMatchObject({
+    owner: 'Maya Chen',
+    status: 'In progress',
+    notes: savedNotes,
+    urgent: true,
+  });
+  expect(state.pendingChanges).toBeNull();
+  await expectOverlaysReleased(page);
 });
 
 for (const when of ['between steps', 'during the action preview']) {

@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@fastify/swagger-ui": "^2.1.0",
-    "@mieweb/page-controller": "git+https://github.com/mieweb/page-agent.git#cf185d55a44ecd46eb38a9feb296dbbc7b3485ce",
+    "@mieweb/page-controller": "git+https://github.com/mieweb/page-agent.git#6963ab7a183ce38cce3f1bfc29e5c3ff206a1973",
     "dotenv": "^17.2.3",
     "express": "^4.22.1"
   },

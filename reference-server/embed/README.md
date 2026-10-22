@@ -800,6 +800,10 @@ where supported; normal iframe tool calls do not require WebMCP support.
 Each action requires the current `snapshotId` and returns a fresh snapshot.
 User edits invalidate older references. Assistant and tool-console content is
 outside the controller's root.
+The fork rechecks the reference immediately before generated clicks and value
+writes, after cursor movement and other delays, so switching records during an
+action stops the stale operation. The guided urgency step keeps an already
+checked urgent flag enabled.
 
 Cancelled tool requests are skipped while queued or previewing an action.
 Cancellation does not undo page events that have already started.
