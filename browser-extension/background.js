@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, normalizeSettings, patternsForSettings, pageInfo, isEnabled } from './policy.js';
 import { WIDGET } from './config.js';
+import { installPageHostRelay } from './page-host-relay.js';
 
 const SCRIPT_ID = 'ozwell';
 const LEGACY_SCRIPT_IDS = ['ozwell-minimal'];
@@ -133,6 +134,7 @@ export function createController(api) {
 }
 
 if (globalThis.chrome?.runtime?.id) {
+  installPageHostRelay(chrome);
   const controller = createController(chrome);
   const report = error => console.error('[Ozwell]', error);
   chrome.runtime.onInstalled.addListener(() => controller.refresh().catch(report));

@@ -127,7 +127,7 @@ manifest = json.loads((destination / 'manifest.json').read_text())
 if manifest.get('name') != 'ozwell':
     raise SystemExit('Rename manifest.name to "ozwell" before packaging the branded app.')
 # Keep the complete toolbar chat surface and branding in the self-contained app.
-required = ('background.js', 'config.js', 'content-script.js', 'policy.js', 'popup.html', 'popup.js', 'popup.css', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'assets/ozwell-512.png', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', *sorted(vendor_notices))
+required = ('background.js', 'config.js', 'content-script.js', 'policy.js', 'popup.html', 'popup.js', 'popup.css', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'page-host.html', 'page-host.css', 'page-host.js', 'page-host-relay.js', 'assets/ozwell-512.png', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', *sorted(vendor_notices))
 for name in required:
     if not (destination / name).is_file():
         raise SystemExit(f'Required runtime resource is missing: {name}')
@@ -314,7 +314,7 @@ if manifest.get('name') != 'ozwell':
     raise SystemExit('Built extension has an unexpected name')
 if manifest.get('background', {}).get('type'):
     raise SystemExit('Safari worker must be bundled as a classic script')
-for name in ('popup.js', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', 'vendor/LICENSE', 'vendor/THIRD_PARTY_NOTICES.md', 'vendor/ai-motion-LICENSE', 'assets/ozwell-512.png'):
+for name in ('popup.js', 'widget-host.js', 'page-connection.js', 'page-tools.js', 'mcp-bridge.js', 'page-host.html', 'page-host.css', 'page-host.js', 'page-host-relay.js', 'vendor/page-controller.js', 'vendor/PROVENANCE.json', 'vendor/LICENSE', 'vendor/THIRD_PARTY_NOTICES.md', 'vendor/ai-motion-LICENSE', 'assets/ozwell-512.png'):
     if not (resources / name).is_file():
         raise SystemExit(f'Built app is missing a runtime resource: {name}')
 PY

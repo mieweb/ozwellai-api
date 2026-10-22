@@ -1,61 +1,29 @@
-/* The extension owns only this shell. ozwell serves the widget and sign-in UI. */
+/* The website gets only an extension-owned frame; chat trusts that frame. */
 (() => {
-  if (globalThis.__ozwellExtension) {
-    globalThis.__ozwellExtension.refresh();
-    return;
-  }
-
-  let host, launcher, panel, frame, status, fallback, widget, loadTimer;
-  let ready = false;
-  let revision = 0;
-  let powered = false, launcherEnabled = false, pageTools, pageHref, pageMcp, navigationTimer;
+  if (globalThis.__ozwellExtension) { globalThis.__ozwellExtension.refresh(); return; }
+  let host, launcher, panel, frame, status, fallback, widget, loadTimer, hostToken;
+  let revision = 0, powered = false, launcherEnabled = false, navigationTimer;
   const ports = new Set();
   const currentUrl = () => globalThis.location?.href || window.location?.href || '';
+  const token = () => [...crypto.getRandomValues(new Uint32Array(4))].map(value => value.toString(16).padStart(8, '0')).join('');
   let observedUrl = currentUrl();
 
   function stopWatching() {
-    if (ports.size || pageTools) return;
+    if (ports.size) return;
     globalThis.clearInterval?.(navigationTimer);
     navigationTimer = null;
   }
-
   function checkNavigation() {
-    const url = currentUrl();
-    if (url === observedUrl) return;
-    observedUrl = url;
+    if (currentUrl() === observedUrl) return;
+    observedUrl = currentUrl();
     resetConnections();
-    if (panel && !panel.hidden) close();
-    else resetPageTools();
+    teardown();
     void refresh();
   }
-
   function watchNavigation() {
     observedUrl = currentUrl();
     if (!navigationTimer && globalThis.setInterval) navigationTimer = setInterval(checkNavigation, 250);
   }
-
-  function pageAuthorized() {
-    return Boolean(powered && launcherEnabled && frame && panel && !panel.hidden && pageHref === currentUrl());
-  }
-
-  function resetPageTools() {
-    pageMcp?.reset();
-    pageTools?.dispose();
-    pageTools = pageHref = null;
-    stopWatching();
-  }
-
-  function ensurePageTools() {
-    if (pageTools && pageHref === currentUrl()) return pageTools;
-    resetPageTools();
-    if (!globalThis.__ozwellCreatePageTools) return null;
-    pageHref = currentUrl();
-    try { pageTools = globalThis.__ozwellCreatePageTools({ root: document.body, isAuthorized: pageAuthorized }); }
-    catch { pageTools = pageHref = null; return null; }
-    watchNavigation();
-    return pageTools;
-  }
-
   async function authorized(url, requireLauncher) {
     if (currentUrl() !== url) return false;
     const stamp = revision;
@@ -64,58 +32,76 @@
     return powered && state?.settings?.mode !== 'off' && state?.tab?.url === url
       && currentUrl() === url && (!requireLauncher || (launcherEnabled && state?.tab?.enabled));
   }
+  function resetConnections() { for (const connection of [...ports]) connection.dispose(); }
+  function hostedOpen() { return Boolean(powered && launcherEnabled && frame && panel && !panel.hidden && hostToken); }
 
-  function resetConnections() {
-    for (const connection of [...ports]) connection.dispose();
-  }
-
-  chrome.runtime.onConnect?.addListener((port) => {
-    if (port.name !== 'ozwell:page-tools' || port.sender?.id !== chrome.runtime.id
-      || port.sender?.url !== chrome.runtime.getURL('popup.html')) {
-      port.disconnect();
-      return;
-    }
-    const connection = { active: true, pending: new Map(), factory: null, session: null, url: currentUrl(), dispose };
+  chrome.runtime.onConnect?.addListener(port => {
+    const popup = port.name === 'ozwell:page-tools' && port.sender?.id === chrome.runtime.id
+      && port.sender?.url === chrome.runtime.getURL('popup.html');
+    const hosted = port.name === 'ozwell:hosted-page-tools' && port.sender?.id === chrome.runtime.id
+      && !port.sender?.tab && (!port.sender?.url || port.sender.url === chrome.runtime.getURL('background.js'));
+    if (!popup && !hosted) { port.disconnect(); return; }
+    const connection = { active: true, authenticated: false, hosted, pending: new Map(), factory: null, session: null, url: currentUrl(), epoch: 0, dispose, suspend, resume };
     ports.add(connection);
     watchNavigation();
+    const allowed = () => connection.active && powered && currentUrl() === connection.url && (!hosted || hostedOpen());
+    const send = message => { if (connection.active) try { port.postMessage(message); } catch { dispose(); } };
+    function stopWork() {
+      connection.epoch++;
+      for (const request of connection.pending.values()) { clearTimeout(request.timer); request.controller.abort(); }
+      connection.pending.clear();
+      connection.factory?.dispose();
+      connection.factory = null;
+    }
     function dispose() {
       if (!connection.active) return;
       connection.active = false;
-      for (const request of connection.pending.values()) {
-        clearTimeout(request.timer);
-        request.controller.abort();
-      }
-      connection.pending.clear();
-      connection.factory?.dispose();
+      stopWork();
       ports.delete(connection);
       try { port.disconnect(); } catch { /* Already disconnected. */ }
       stopWatching();
     }
-    const allowed = () => connection.active && powered && currentUrl() === connection.url;
-    const send = message => { if (connection.active) try { port.postMessage(message); } catch { dispose(); } };
+    function sendReady() {
+      send({ type: 'ready', session: connection.session, url: connection.url, tools: connection.factory?.tools || [] });
+    }
+    function suspend() {
+      if (!connection.active || !connection.authenticated) return;
+      stopWork();
+      connection.session = token();
+      sendReady();
+    }
+    async function resume() {
+      if (!connection.active || !connection.authenticated) return;
+      stopWork();
+      const epoch = connection.epoch;
+      connection.session = token();
+      if (!allowed()) { sendReady(); return; }
+      try {
+        if (!await authorized(connection.url, hosted) || !allowed() || epoch !== connection.epoch) return;
+        connection.factory = globalThis.__ozwellCreatePageTools?.({ root: document.body, isAuthorized: allowed });
+      } catch { /* Ordinary chat remains available if page tools cannot start. */ }
+      if (connection.active && epoch === connection.epoch) sendReady();
+    }
     port.onDisconnect.addListener(dispose);
-    port.onMessage.addListener(async (message) => {
+    port.onMessage.addListener(async message => {
       if (!connection.active || !message || typeof message !== 'object') return;
       if (message.type === 'hello' && !connection.session) {
-        if (message.url !== connection.url) return dispose();
+        if (popup ? message.url !== connection.url : !hostToken || message.token !== hostToken || !Number.isInteger(message.frameId) || message.frameId < 1) return dispose();
+        connection.authenticated = true;
         connection.session = 'initializing';
+        if (hosted) return resume();
         try {
           if (!await authorized(connection.url, false) || !allowed() || !globalThis.__ozwellCreatePageTools) return dispose();
           connection.factory = globalThis.__ozwellCreatePageTools({ root: document.body, isAuthorized: allowed });
-          connection.session = [...crypto.getRandomValues(new Uint32Array(4))]
-            .map(value => value.toString(16).padStart(8, '0')).join('');
-          send({ type: 'ready', session: connection.session, url: connection.url, tools: connection.factory.tools });
+          connection.session = token();
+          sendReady();
         } catch { dispose(); }
         return;
       }
       if (!connection.factory || message.session !== connection.session || !Number.isInteger(message.id)) return;
       if (message.type === 'cancel') {
         const request = connection.pending.get(message.id);
-        if (request) {
-          clearTimeout(request.timer);
-          request.controller.abort();
-          connection.pending.delete(message.id);
-        }
+        if (request) { clearTimeout(request.timer); request.controller.abort(); connection.pending.delete(message.id); }
         return;
       }
       if (message.type !== 'call' || connection.pending.has(message.id)) return;
@@ -128,19 +114,15 @@
         send({ type: error ? 'error' : 'result', session: connection.session, id: message.id,
           ...(error ? { error: { message: error.message || 'Page tool failed.' } } : { result }) });
       };
-      request.timer = setTimeout(() => {
-        finish(null, new Error('Page tool timed out.'));
-        request.controller.abort();
-      }, 29000);
+      request.timer = setTimeout(() => { finish(null, new Error('Page tool timed out.')); request.controller.abort(); }, 29000);
       try {
-        if (!await authorized(connection.url, false) || !allowed()) throw new Error('Page access ended.');
+        if (!await authorized(connection.url, hosted) || !allowed()) throw new Error('Page access ended.');
         if (request.controller.signal.aborted) return;
         const result = await connection.factory.callTool(message.name, message.args, { signal: request.controller.signal });
         if (allowed()) finish(result);
       } catch (error) { finish(null, error); }
     });
   });
-
   window.addEventListener('popstate', checkNavigation);
   window.addEventListener('hashchange', checkNavigation);
 
@@ -149,93 +131,53 @@
       const origin = new URL(value.origin);
       const local = origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
       if (origin.origin !== value.origin || (origin.protocol !== 'https:' && !local)) return null;
-      const frameUrl = new URL(value.frameUrl);
-      const endpoint = new URL(value.endpoint);
+      const frameUrl = new URL(value.frameUrl), endpoint = new URL(value.endpoint);
       if (frameUrl.origin !== origin.origin || endpoint.origin !== origin.origin) return null;
       return { origin: origin.origin, frameUrl: frameUrl.href, endpoint: endpoint.href };
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
-
   function teardown() {
-    resetPageTools();
-    pageMcp?.dispose();
-    pageMcp = null;
+    for (const connection of [...ports]) if (connection.hosted) connection.dispose();
     clearTimeout(loadTimer);
     host?.remove();
-    host = launcher = panel = frame = status = fallback = null;
-    ready = false;
+    host = launcher = panel = frame = status = fallback = hostToken = null;
   }
-
-  function post(message) {
-    frame?.contentWindow?.postMessage(message, widget.origin);
-  }
-
-  function sendConfig() {
-    post({
-      source: 'ozwell-chat-parent',
-      type: 'config',
-      payload: {
-        config: {
-          endpoint: widget.endpoint,
-          title: 'ozwell',
-          thinkingEnabled: false,
-          tools: (pageAuthorized() ? pageTools?.tools || [] : []).map(tool => ({
-            type: 'function', function: { name: `postMessage_${tool.name}`, description: tool.description || '', parameters: tool.inputSchema || { type: 'object', properties: {} } },
-          })),
-        },
-      },
-    });
-  }
-
   function close() {
     if (!panel) return;
     panel.hidden = true;
-    resetPageTools();
-    if (ready) sendConfig();
+    for (const connection of ports) if (connection.hosted) connection.suspend();
     launcher.setAttribute('aria-expanded', 'false');
     launcher.setAttribute('aria-label', 'Open ozwell assistant');
     launcher.focus();
   }
-
   function showLoadError() {
-    if (!status || ready) return;
+    if (!status || frame && !frame.hidden) return;
     status.firstElementChild.textContent = 'ozwell could not load here. Try opening it directly.';
     fallback.hidden = false;
   }
-
   function open() {
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
     launcher.setAttribute('aria-label', 'Close ozwell assistant');
     panel.querySelector('button').focus();
-    if (frame) { ensurePageTools(); if (ready) sendConfig(); return; }
-
+    if (frame) { for (const connection of ports) if (connection.hosted) void connection.resume(); return; }
+    hostToken = token();
     frame = document.createElement('iframe');
     frame.title = 'ozwell assistant';
     frame.hidden = true;
     frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.addEventListener('error', showLoadError);
-    ensurePageTools();
-    pageMcp = globalThis.__ozwellCreateMcpBridge?.({
-      post,
-      isAuthorized: pageAuthorized,
-      getTools: async ({ signal }) => {
-        if (!pageAuthorized() || !await authorized(pageHref, true) || signal.aborted) return [];
-        return pageTools?.tools || [];
-      },
-      callTool: async (name, args, { signal }) => {
-        if (!pageAuthorized() || !await authorized(pageHref, true) || signal.aborted) throw new Error('Page access ended.');
-        return pageTools.callTool(name, args, { signal });
-      },
+    const target = frame;
+    frame.addEventListener('load', () => {
+      if (frame !== target) return;
+      clearTimeout(loadTimer);
+      status.hidden = true;
+      frame.hidden = false;
     });
-    frame.src = widget.frameUrl;
+    frame.src = `${chrome.runtime.getURL('page-host.html')}#token=${hostToken}`;
     panel.appendChild(frame);
-    // A blocked frame or a server 404 may still fire `load`. Require widget ready.
     loadTimer = setTimeout(showLoadError, 12000);
   }
-
   function render() {
     host = document.createElement('div');
     host.id = 'ozwell-extension-root';
@@ -335,39 +277,15 @@
   function update(enabled, value, isPowered = true, resetTools = false) {
     powered = Boolean(isPowered);
     launcherEnabled = Boolean(enabled && powered);
-    if (!powered || resetTools) {
-      resetConnections();
-      if (panel && !panel.hidden) close();
-      else resetPageTools();
-    }
+    if (!powered || resetTools) { resetConnections(); teardown(); }
     const nextWidget = pinnedWidget(value);
-    if (!launcherEnabled || !nextWidget) {
-      teardown();
-      widget = null;
-      return;
-    }
+    if (!launcherEnabled || !nextWidget) { teardown(); widget = null; return; }
     if (widget && (widget.origin !== nextWidget.origin || widget.frameUrl !== nextWidget.frameUrl || widget.endpoint !== nextWidget.endpoint)) teardown();
     widget = nextWidget;
     if (!host) render();
   }
-
-  window.addEventListener('message', (event) => {
-    if (!frame || event.source !== frame.contentWindow || event.origin !== widget.origin) return;
-    const data = event.data;
-    if (!data || typeof data !== 'object') return;
-    if (data.source === 'ozwell-chat-widget') {
-      if (data.type === 'ready' || data.type === 'request-config') {
-        ready = true;
-        clearTimeout(loadTimer);
-        status.hidden = true;
-        frame.hidden = false;
-        sendConfig();
-      } else if (data.type === 'closed') close();
-      return;
-    }
-    pageMcp?.handle(data);
-  });
-
+  // No website-window message channel: only authenticated extension ports can
+  // reach the local host, and only that host is the remote widget's parent.
   async function refresh() {
     const requestedRevision = ++revision;
     try {
@@ -377,10 +295,8 @@
       if (requestedRevision === revision) { powered = false; resetConnections(); teardown(); }
     }
   }
-
   chrome.runtime.onMessage.addListener((message, sender) => {
-    if (sender && sender.id !== chrome.runtime.id) return;
-    if (message?.type !== 'ozwell:sync') return;
+    if (sender?.id !== chrome.runtime.id || message?.type !== 'ozwell:sync') return;
     revision++;
     update(message.enabled, message.widget, message.powered ?? powered, message.resetTools);
   });

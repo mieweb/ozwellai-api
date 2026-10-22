@@ -89,7 +89,7 @@
       const reference = references.get(args.index);
       const element = reference?.element;
       if (!element || !element.isConnected || !root.contains(element) || privateElement(element) || reference.fingerprint !== fingerprint(element)) throw new Error('Stale or private element. Refresh the snapshot.');
-      if (element.matches(':disabled,[aria-disabled="true"]') || element.readOnly) throw new Error('This element is unavailable for actions.');
+      if (element.closest('[inert]') || element.matches(':disabled,[aria-disabled="true"]') || element.readOnly) throw new Error('This element is unavailable for actions.');
       if (element.closest('a[href],area[href]') || !element.matches('button,input,select,textarea') ||
         (element.matches('button') && element.type !== 'button') ||
         (element.matches('input') && BLOCKED_INPUT.has(element.type))) throw new Error('Links, form submission, and unsupported controls are blocked.');
@@ -230,10 +230,12 @@
         } else {
           const option = Array.from(element.options).find(value => value.textContent.trim() === args.value.trim());
           if (!option || option.disabled || option.parentElement?.matches('optgroup:disabled')) throw new Error('The requested option is unavailable.');
-          element.value = option.value;
+          const selectedIndex = option.index;
+          element.selectedIndex = selectedIndex;
           element.dispatchEvent(new Event('input', { bubbles: true }));
           assertAccess(signal);
           if (element.isConnected) element.dispatchEvent(new Event('change', { bubbles: true }));
+          if (!element.isConnected || element.selectedIndex !== selectedIndex || element.options[selectedIndex] !== option || !option.selected) throw new Error('The field did not retain the requested option. Refresh the snapshot.');
         }
         if (action.error) throw action.error;
       } finally { action = undefined; }

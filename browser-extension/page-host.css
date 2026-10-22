@@ -1,0 +1,7 @@
+:root { color-scheme: light; font: 13px/1.5 system-ui, sans-serif; color: #101b46; background: white; }
+* { box-sizing: border-box; }
+html, body, main { width: 100%; height: 100%; margin: 0; }
+iframe { display: block; width: 100%; height: 100%; border: 0; background: white; }
+.chat-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 24px; text-align: center; color: #71809c; }
+.chat-empty a { color: #0099c7; }
+[hidden] { display: none !important; }

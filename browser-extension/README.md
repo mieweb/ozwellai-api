@@ -147,8 +147,12 @@ All extension scripts, including the controller, are packaged locally. The
 sandboxed remote iframe receives widget configuration, five tool schemas when
 available, and requested tool results. Both message origin and sender frame are
 checked. Popup-to-page ports authenticate the extension popup and pin its original
-tab, document session, and URL. No public page events or main-world bridge expose
-these tools. The extension stores no API keys.
+tab, document session, and URL. The page launcher embeds an extension-owned host;
+that host is the remote widget's parent and ignores website window messages.
+An authenticated worker relay derives the host's tab and frame from the browser,
+and the content script checks its per-frame token before exposing tools. Closing
+the panel rotates the tool session while retaining chat. No public page events or
+main-world bridge expose these tools. The extension stores no API keys.
 
 The checked-in controller requires no installation build. Its
 [provenance and rebuild instructions](./vendor/README.md) document the exact

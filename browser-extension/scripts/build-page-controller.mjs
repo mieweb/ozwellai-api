@@ -102,6 +102,61 @@ patch(
   '      if (elementNode.children && !(omittedAttrs.has("value") && elementNode.tagName === "textarea")) {\n        for (const childId of elementNode.children) {',
   'omit textarea default-value text when values are omitted',
 );
+// The pinned serializer aggregates descendant text for indexed controls. Its
+// visibility flags must be enforced there and for standalone text, too. Range
+// geometry retains rendered display:contents text; native option labels are
+// semantic control data even while the select's popup is closed.
+const textVisibilityStart = '  function isTextNodeVisible(textNode) {';
+const textVisibilityEnd = '  function isElementAccepted(element) {';
+if (source.split(textVisibilityStart).length !== 2 || source.split(textVisibilityEnd).length !== 2) {
+  throw new Error('Expected one pinned text visibility function.');
+}
+patch(
+  source.slice(source.indexOf(textVisibilityStart), source.indexOf(textVisibilityEnd)),
+  `  function isTextNodeVisible(textNode) {
+    try {
+      const parent = textNode.parentElement;
+      if (!parent) return false;
+      const textStyle = getCachedComputedStyle(parent);
+      if (!textStyle || textStyle.visibility === "hidden" || textStyle.visibility === "collapse") return false;
+      for (let ancestor = parent; ancestor; ancestor = ancestor.parentElement || ancestor.getRootNode()?.host) {
+        const style = getCachedComputedStyle(ancestor);
+        if (!style || style.display === "none" || style.contentVisibility === "hidden" || Number(style.opacity) === 0) return false;
+      }
+      const option = parent.closest("option");
+      const select = option?.closest("select");
+      let rects;
+      if (select) {
+        // Unopened native option lists have no text rectangles. Expose their
+        // labels only when their owning select and the option's ancestry render.
+        rects = [getCachedBoundingRect(select)];
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(textNode);
+        rects = range.getClientRects();
+      }
+      for (const rect of rects) {
+        if (!rect || rect.width <= 0 || rect.height <= 0) continue;
+        if (viewportExpansion === -1 || !(rect.bottom < -viewportExpansion || rect.top > window.innerHeight + viewportExpansion || rect.right < -viewportExpansion || rect.left > window.innerWidth + viewportExpansion)) return true;
+      }
+      return false;
+    } catch (error) {
+      return false;
+    }
+  }
+`,
+  'measure rendered text and preserve visible native option semantics',
+);
+patch(
+  '    if (currentNode.type === "text" && currentNode.text) {',
+  '    if (currentNode.type === "text" && currentNode.isVisible && currentNode.text) {',
+  'exclude invisible descendants from indexed control descriptions',
+);
+patch(
+  '      if (hasParentWithHighlightIndex(node)) {',
+  '      if (!node.isVisible || hasParentWithHighlightIndex(node)) {',
+  'exclude invisible standalone text',
+);
 patch(
   '      this.config.includeAttributes,\n      this.config.keepSemanticTags\n    );',
   '      this.config.includeAttributes,\n      this.config.keepSemanticTags,\n      this.config.omitAttributes\n    );',
@@ -131,8 +186,10 @@ const result = await esbuild.build({
   minify: true,
   legalComments: 'eof',
   write: false,
-  banner: { js: `/*! @mieweb/page-controller 1.12.4-mie.1; ${commit}; MIT. See vendor/LICENSE and vendor/THIRD_PARTY_NOTICES.md. */` },
-  footer: { js: 'globalThis.OzwellPageController = Object.freeze(OzwellPageController);' },
+  // Wrap the complete compiled program: checking only at export time still
+  // duplicates the pinned module's navigation listeners and interval fallback.
+  banner: { js: `/*! @mieweb/page-controller 1.12.4-mie.1; ${commit}; MIT. See vendor/LICENSE and vendor/THIRD_PARTY_NOTICES.md. */\n(() => { if (globalThis.OzwellPageController?.PageController) return;` },
+  footer: { js: 'globalThis.OzwellPageController = Object.freeze(OzwellPageController); })();' },
 });
 const bundle = result.outputFiles[0].text;
 if (/\beval\s*\(|\bnew\s+Function\b|\bFunction\s*\(/.test(bundle)) {
@@ -156,8 +213,10 @@ await writeFile(join(destination, 'PROVENANCE.json'), JSON.stringify({
     'Disable executeJavascript; no evaluation or dynamic module imports in output.',
     'Forward excludeElements(Element) and prune its matching subtrees before extraction/indexing.',
     'Forward omitAttributes and remove matching attributes from defaults, explicit and wildcard serialization; omit textarea default text when value is omitted.',
+    'Exclude invisible descendant and standalone text; measure rendered text including display:contents and retain nonhidden native option labels for visible select controls.',
     'Skip invisible highlight DOM while preserving indexed parent grouping.',
     'Export only PageController as globalThis.OzwellPageController.PageController.',
+    'Guard the entire generated program before any side effects, preserving one controller export and one set of navigation hooks per document.',
   ],
   bundle: { file: 'page-controller.js', bytes: Buffer.byteLength(bundle), sha256: sha256(bundle) },
 }, null, 2) + '\n');

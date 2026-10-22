@@ -33,6 +33,10 @@ serialized snapshot even when requested through a wildcard.
 `omitAttributes: ['value']` also suppresses textarea default-value text while
 retaining the indexed textarea control. With both highlight
 opacities set to zero, indexing works without creating upstream highlight DOM.
+Hidden descendant and standalone text are excluded, while visible native option
+labels and rendered `display:contents` text remain available. The complete bundle
+has a document initialization guard, so repeated injections retain the same
+controller export and do not add navigation listeners or polling intervals.
 
 Only `globalThis.OzwellPageController.PageController` is exported. The extension's
 adapter owns tool exposure, authorization, stale-reference checks, exclusions,

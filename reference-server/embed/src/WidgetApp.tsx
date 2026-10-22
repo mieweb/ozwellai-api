@@ -376,6 +376,7 @@ export function WidgetApp() {
   const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
+  const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
 
   // A toolbar popup is already an explicit user action. Focus its composer
   // (or sign-in input) after configuration/authentication has rendered it.
@@ -388,8 +389,8 @@ export function WidgetApp() {
   }, []);
 
   useEffect(() => {
-    if (config.autoFocus && initialConfigReady) focusInput();
-  }, [config.autoFocus, initialConfigReady, userCredential, focusInput]);
+    if (config.autoFocus && initialConfigReady && !needsAuthentication) focusInput();
+  }, [config.autoFocus, initialConfigReady, needsAuthentication, focusInput]);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
@@ -1145,10 +1146,11 @@ export function WidgetApp() {
 
   if (!initialConfigReady) return null;
 
-  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
+  if (needsAuthentication) {
     return (
       <AuthGate
         apiOrigin={apiOriginFor(config.endpoint)}
+        autoFocus={config.autoFocus}
         onAuthenticated={handleAuthenticated}
       />
     );

@@ -22,12 +22,14 @@
     "Disable executeJavascript; no evaluation or dynamic module imports in output.",
     "Forward excludeElements(Element) and prune its matching subtrees before extraction/indexing.",
     "Forward omitAttributes and remove matching attributes from defaults, explicit and wildcard serialization; omit textarea default text when value is omitted.",
+    "Exclude invisible descendant and standalone text; measure rendered text including display:contents and retain nonhidden native option labels for visible select controls.",
     "Skip invisible highlight DOM while preserving indexed parent grouping.",
-    "Export only PageController as globalThis.OzwellPageController.PageController."
+    "Export only PageController as globalThis.OzwellPageController.PageController.",
+    "Guard the entire generated program before any side effects, preserving one controller export and one set of navigation hooks per document."
   ],
   "bundle": {
     "file": "page-controller.js",
-    "bytes": 55213,
-    "sha256": "739c45b66e1b1bb65ecdbd38fd9a4e55ec418621f72fed5c5599d560958f0e36"
+    "bytes": 55106,
+    "sha256": "b3d1a55ffdc42ca5b001d6179080fa2158b192db0d8e139c42e58c43653eb6f0"
   }
 }

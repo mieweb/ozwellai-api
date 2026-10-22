@@ -20,6 +20,10 @@ const fixture = `<!doctype html><title>MIE page control fixture</title><style>bo
 <label>Message<input id="message" value="ordinary-value-not-shared"></label>
 <label>Notes<textarea id="notes">ordinary-notes-not-shared</textarea></label>
 <label>Owner<select id="owner"><option>Alex</option><option>Sam</option><option disabled>Unavailable</option></select></label>
+<label>Duplicate disabled owner<select id="duplicate-disabled"><option value="shared" disabled>Disabled owner</option><option value="shared">Requested owner</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Duplicate label owner<select id="duplicate-label"><option value="shared">Different owner</option><option value="shared">Requested owner</option><option value="initial" selected>Initial owner</option></select></label>
+<label>Overridden owner<select id="overridden"><option value="shared">Original owner</option><option value="shared">Requested owner</option></select></label>
+<section id="inert-section" inert><div><label>Inert message<input id="inert-message" value="inert-original"></label><button type="button" id="inert-action">Inert action</button><label>Inert owner<select id="inert-owner"><option>Alex</option><option>Sam</option></select></label></div></section>
 <label>Secret<input id="password" type="password" value="password-must-not-appear"></label>
 <label>API key<input id="api-key" value="key-must-not-appear"></label>
 <label>Code<input id="otp" autocomplete="one-time-code" value="123456-secret-code"></label>
@@ -72,6 +76,53 @@ try {
   state = read(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, 'owner'), value: 'Sam' }));
   assert.equal(await page.locator('#owner').inputValue(), 'Sam');
   assert.match(error(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, 'owner'), value: 'Unavailable' })), /unavailable/);
+  // Visible labels identify an option even when its value matches another option.
+  for (const id of ['duplicate-disabled', 'duplicate-label']) {
+    state = await snapshot();
+    state = read(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, id), value: 'Requested owner' }));
+    assert.deepEqual(await page.locator(`#${id}`).evaluate(element => ({ index: element.selectedIndex, label: element.selectedOptions[0].textContent })), { index: 1, label: 'Requested owner' });
+  }
+  // Matching values are insufficient evidence that input/change handlers kept the requested option.
+  for (const event of ['input', 'change']) {
+    await page.locator('#overridden').evaluate((element, event) => {
+      element.oninput = element.onchange = null;
+      element.selectedIndex = 0;
+      element[`on${event}`] = () => { element.selectedIndex = 0; };
+    }, event);
+    state = await snapshot();
+    assert.match(error(await call('browser_select', { snapshotId: state.snapshotId, index: index(state, 'overridden'), value: 'Requested owner' })), /did not retain the requested option/);
+    assert.equal(await page.locator('#overridden').evaluate(element => element.selectedIndex), 0);
+  }
+  // Native programmatic APIs can mutate inert descendants, so the action guard must reject them.
+  await page.evaluate(() => {
+    window.inertEvents = [];
+    for (const event of ['click', 'focus', 'input', 'change']) document.querySelector('#inert-section').addEventListener(event, () => window.inertEvents.push(event), true);
+  });
+  for (const [name, id, value] of [['browser_fill', 'inert-message', 'must-not-fill'], ['browser_click', 'inert-action'], ['browser_select', 'inert-owner', 'Sam']]) {
+    state = await snapshot();
+    assert.match(error(await call(name, { snapshotId: state.snapshotId, index: index(state, id), ...(value === undefined ? {} : { value }) })), /unavailable|inert/);
+  }
+  assert.equal(await page.locator('#inert-message').inputValue(), 'inert-original');
+  assert.equal(await page.locator('#inert-owner').inputValue(), 'Alex');
+  assert.deepEqual(await page.evaluate(() => window.inertEvents), []);
+  // The document ancestor lies outside the observed body; changing it during preview must still revoke the action.
+  state = await snapshot();
+  const inertDuringPreview = await page.evaluate(async args => {
+    const previewStarted = new Promise(resolve => {
+      const observer = new MutationObserver(() => {
+        if (document.querySelector('[data-ozwell-owned="action-preview"]')) { observer.disconnect(); resolve(); }
+      });
+      observer.observe(document.documentElement, { childList: true });
+    });
+    const result = window.tools.callTool('browser_fill', args);
+    await previewStarted;
+    document.documentElement.inert = true;
+    try { return await result; }
+    finally { document.documentElement.inert = false; }
+  }, { snapshotId: state.snapshotId, index: index(state, 'message'), value: 'must-not-fill-during-inert' });
+  assert.match(error(inertDuringPreview), /unavailable|inert/);
+  assert.equal(await page.locator('#message').inputValue(), 'A new message');
+  state = await snapshot();
   assert.ok(!state.content.includes('id=disabled'), 'Disabled controls are not indexed.');
   for (const id of ['readonly', 'submit', 'navigation']) {
     state = await snapshot();
@@ -130,5 +181,5 @@ try {
   await page.evaluate(() => history.pushState({}, '', '/changed?private=query'));
   assert.match(error(await call('browser_snapshot')), /page changed/i);
   assert.equal(errors.length, 0, errors.join('\n'));
-  console.log('Page tools passed in actual Chromium: redaction, URL sanitization, click/fill/select/scroll, stale references, guards, cancellation, disposal, authorization, navigation.');
+  console.log('Page tools passed in actual Chromium: redaction, URL sanitization, click/fill/select/scroll, duplicate option values, selection postconditions, inert ancestors before/during preview, stale references, guards, cancellation, disposal, authorization, navigation.');
 } finally { await browser.close(); }
