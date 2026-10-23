@@ -73,6 +73,10 @@ app.get('/signin.html', (req, res) => {
   res.type('html').send(renderHtml('signin.html'));
 });
 
+app.get('/browser-tools.html', (req, res) => {
+  res.type('html').send(renderHtml('browser-tools.html'));
+});
+
 // register.html was retired; agent management moved to Ozwell Manager.
 // Keep old bookmarks/inbound links working with a permanent redirect.
 app.get('/register.html', (req, res) => {

@@ -9,8 +9,10 @@ description: Welcome to the Ozwell API documentation - privacy-first AI integrat
 
 Welcome to the Ozwell API documentation. This guide will help you integrate Ozwell's AI capabilities into your applications, whether you're embedding a chat interface into your website or building custom backend workflows.
 
-:::note Current Demo Environment
-The production API and widget share `https://api.ozwell.ai`; load the widget from `https://api.ozwell.ai/widget`. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, console at `https://ozwellconsole.os.mieweb.org`, and loader at `https://ozwellapi.os.mieweb.org/widget`.
+For production, load the widget from `https://api.ozwell.ai/widget`. The production API base URL is `https://api.ozwell.ai`.
+
+:::note Development Environment
+The [development demo](https://ozwelldemo.os.mieweb.org/) uses the API at `https://ozwellapi.os.mieweb.org` and console at `https://ozwellconsole.os.mieweb.org`. These development URLs are separate from the production widget endpoint.
 :::
 
 ## Privacy First
@@ -200,9 +202,11 @@ Backend integrations use **general-purpose API keys** with broader access to Ozw
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 ✅ Result: Ozwell's chat button appears. Users click and chat.
+
+For the proposed in-page MCP bridge scenario, see [Proposed page control](./frontend/cdn-embed.md#proposed-page-control-option-not-implemented). The proposed `pageControl` option is not implemented and is not a supported widget setting.
 
 **Option 2: Custom Frontend + Your Backend**
 ```javascript
@@ -336,15 +340,13 @@ If you're unsure whether your use case complies with our trademark policy, pleas
 
 ## Next Steps
 
-1. **See it in action?** Try the [live demo](https://ozwelldemo.os.mieweb.org/) to experience Ozwell's chat widget.
-
-   Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint. For now, use the dev-container demo at `https://ozwelldemo.os.mieweb.org`, API at `https://ozwellapi.os.mieweb.org`, and console at `https://ozwellconsole.os.mieweb.org`.
+1. **See it in action?** Try the [development demo](https://ozwelldemo.os.mieweb.org/) to experience Ozwell's chat widget. Use `https://api.ozwell.ai/widget` when embedding the production widget on your site.
 
 2. **New to Ozwell?** Start with the [CDN integration](./frontend/cdn-embed.md) for the fastest path to a working demo.
 
-2. **Building a production app?** Check the [Framework guides](./frontend/overview.md) for React, Vue, Svelte, and more.
+3. **Building a production app?** Check the [Framework guides](./frontend/overview.md) for React, Vue, Svelte, and more.
 
-3. **Need programmatic access?** Dive into the [Backend API reference](./backend/api-endpoints.md).
+4. **Need programmatic access?** Dive into the [Backend API reference](./backend/api-endpoints.md).
 
 ---
 

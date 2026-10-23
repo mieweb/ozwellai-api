@@ -22,6 +22,10 @@ import type {
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
 const MCP_TOOL_TIMEOUT_MS = 30000;
+// A frame's WindowProxy survives reloads. This identity belongs to the loaded
+// document, so hosts can retire its tool requests before accepting a new one.
+const newWidgetDocumentId = () => [...crypto.getRandomValues(new Uint32Array(4))].map(value => value.toString(16).padStart(8, '0')).join('');
+let widgetDocumentId = newWidgetDocumentId();
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
 
 type ProviderModelOption = {
@@ -376,6 +380,21 @@ export function WidgetApp() {
   const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
+  const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
+
+  // A toolbar popup is already an explicit user action. Focus its composer
+  // (or sign-in input) after configuration/authentication has rendered it.
+  const focusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)') ||
+        document.querySelector<HTMLInputElement>('input:not(:disabled):not([type="hidden"]):not([type="checkbox"])');
+      input?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (config.autoFocus && initialConfigReady && !needsAuthentication) focusInput();
+  }, [config.autoFocus, initialConfigReady, needsAuthentication, focusInput]);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
@@ -461,7 +480,7 @@ export function WidgetApp() {
   }, [config.provider, config.model, effectiveModels]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
-    window.parent.postMessage(message, parentOriginRef.current || '*');
+    window.parent.postMessage({ ...message, ozwellDocumentId: widgetDocumentId }, parentOriginRef.current || '*');
   }, []);
 
   // Bring host-selected content (e.g. an E-Chart selection) into the composer
@@ -480,22 +499,22 @@ export function WidgetApp() {
 
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       id: id,
       method: method,
       params: params || {},
-    }, parentOriginRef.current || '*');
+    });
     return id;
-  }, []);
+  }, [postToParent]);
 
   const mcpNotify = useCallback((method: string, params?: Record<string, unknown>) => {
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       method,
       params: params || {},
-    }, parentOriginRef.current || '*');
-  }, []);
+    });
+  }, [postToParent]);
 
   const showToast = useCallback((message: string) => {
     if (fallbackToastShownRef.current) return;
@@ -975,7 +994,8 @@ export function WidgetApp() {
       return event.source === window.parent
         && event.origin !== 'null'
         && !!event.origin
-        && (!parentOriginRef.current || event.origin === parentOriginRef.current);
+        && (!parentOriginRef.current || event.origin === parentOriginRef.current)
+        && (!event.data?.ozwellDocumentId || event.data.ozwellDocumentId === widgetDocumentId);
     }
 
     let onToolsResponse: ((event: MessageEvent) => void) | undefined;
@@ -1022,6 +1042,8 @@ export function WidgetApp() {
         applyConfig(data.payload.config);
       }
 
+      if (data.type === 'focus') focusInput();
+
       if (data.type === 'close') {
         postToParent({
           source: 'ozwell-chat-widget',
@@ -1031,13 +1053,20 @@ export function WidgetApp() {
     }
 
     window.addEventListener('message', handleParentMessage);
-    postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
-
-    const initReqId = mcpSend('initialize', {
-      protocolVersion: '2025-11-25',
-      capabilities: {},
-      clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
-    });
+    const endDocument = () => postToParent({ source: 'ozwell-chat-widget', type: 'pagehide' });
+    window.addEventListener('pagehide', endDocument);
+    let initReqId: string | number;
+    function initializeParent() {
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
+      window.removeEventListener('message', onInitResponse);
+      postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
+      initReqId = mcpSend('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
+      });
+      window.addEventListener('message', onInitResponse);
+    }
 
     function onInitResponse(event: MessageEvent) {
       if (!isParentMessage(event)) return;
@@ -1070,10 +1099,20 @@ export function WidgetApp() {
       window.removeEventListener('message', onInitResponse);
     }
 
-    window.addEventListener('message', onInitResponse);
+    // BFCache restores the same JavaScript document without rerunning effects.
+    // Its old identity was retired by pagehide, so start a fresh tool session.
+    const restoreDocument = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      widgetDocumentId = newWidgetDocumentId();
+      initializeParent();
+    };
+    window.addEventListener('pageshow', restoreDocument);
+    initializeParent();
 
     return () => {
       window.removeEventListener('message', handleParentMessage);
+      window.removeEventListener('pagehide', endDocument);
+      window.removeEventListener('pageshow', restoreDocument);
       window.removeEventListener('message', onInitResponse);
       if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
     };
@@ -1129,10 +1168,11 @@ export function WidgetApp() {
 
   if (!initialConfigReady) return null;
 
-  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
+  if (needsAuthentication) {
     return (
       <AuthGate
         apiOrigin={apiOriginFor(config.endpoint)}
+        autoFocus={config.autoFocus}
         onAuthenticated={handleAuthenticated}
       />
     );

@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Service operations desk · Ozwell browser tools</title>
+    <link rel="stylesheet" href="/assets/browser-tools-bundle.css" />
+    <link rel="stylesheet" href="/assets/browser-tools.css" />
+  </head>
+  <body data-reference-base="__REFERENCE_BASE_URL__">
+    <div class="workspace-layout">
+      <section
+        id="tool-console"
+        class="demo-banner"
+        data-page-agent-ignore="true"
+        aria-labelledby="tool-console-heading"
+      >
+        <div class="demo-banner-main">
+          <div class="demo-banner-copy">
+            <p class="eyebrow">OZWELL / IN-PAGE BROWSER TOOLS</p>
+            <h2 id="tool-console-heading">Let the page do the work.</h2>
+            <p>Try a guided work order update. No sign-in needed.</p>
+          </div>
+          <div class="demo-banner-actions">
+            <div class="demo-action-buttons">
+              <button id="step-demo" type="button" class="secondary-button">
+                Step through
+              </button>
+              <button id="run-demo" type="button" class="primary-button">
+                Run guided demo <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <div class="controller-state">
+              <span class="live-dot" aria-hidden="true"></span
+              ><span id="controller-status" role="status"
+                >Starting page controller…</span
+              >
+            </div>
+          </div>
+        </div>
+        <div class="demo-options-row">
+          <label class="demo-option-control" for="visual-mode">
+            Show actions
+            <select id="visual-mode">
+              <option value="mask" selected>Animated mask</option>
+              <option value="highlight">Target highlight</option>
+              <option value="both">Mask + highlight</option>
+              <option value="none">No overlay</option>
+            </select>
+          </label>
+          <p
+            id="demo-step-status"
+            class="demo-step-status"
+            role="status"
+            aria-live="polite"
+          >
+            Run the full workflow or step through one action at a time.
+          </p>
+        </div>
+        <details id="demo-details">
+          <summary>Demo details and tool activity</summary>
+          <div class="demo-detail-content">
+            <div class="demo-instructions">
+              <h3>A complete dispatch update</h3>
+              <p>
+                The guided run opens WO-1042, assigns Maya Chen, changes its
+                status to In progress, adds dispatch notes, marks it urgent, and
+                confirms the update. Follow each tool call in the activity log.
+              </p>
+              <p>
+                Run guided demo completes the workflow continuously. Step
+                through performs one action per click. Choose the run speed
+                below to follow along at your own pace.
+              </p>
+              <p>
+                Modes with a mask temporarily block the page while actions run.
+                Target highlight leaves the page interactive. Your display
+                choice also applies to live agent actions.
+              </p>
+              <p>
+                Use the floating Ozwell button to chat with the page. Sign in
+                there to use natural language, or explore the sample by hand.
+              </p>
+              <div class="tool-actions">
+                <button id="read-page" type="button" class="secondary-button">
+                  Read page
+                </button>
+                <button id="reset-demo" type="button" class="text-button">
+                  Reset sample
+                </button>
+                <label class="demo-option-control" for="run-speed">
+                  Run speed
+                  <select id="run-speed">
+                    <option value="normal" selected>Normal</option>
+                    <option value="slow">Slow</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div
+              id="tool-output"
+              tabindex="0"
+              role="log"
+              aria-label="Browser tool output"
+              aria-live="polite"
+            >
+              Tool results will appear here.
+            </div>
+          </div>
+        </details>
+      </section>
+      <main id="operations-app" class="operations-app">
+        <header class="workspace-header">
+          <div class="brand-line">
+            <span class="brand-mark" aria-hidden="true">O</span
+            ><span>FIELDWORK<span class="brand-divider">/</span>OPERATIONS</span
+            ><span class="sample-badge">Synthetic sample</span>
+          </div>
+          <div class="heading-line">
+            <div>
+              <p class="eyebrow">SERVICE DELIVERY / CENTRAL REGION</p>
+              <h1>Service operations desk</h1>
+              <p class="page-description">
+                A working queue for the people keeping every service visit on
+                track.
+              </p>
+            </div>
+            <div class="shift-label">
+              <span class="live-dot" aria-hidden="true"></span>Wednesday
+              shift<span>October 21 · 8:00 AM–5:00 PM</span>
+            </div>
+          </div>
+          <div class="sample-notice">
+            <span aria-hidden="true">◈</span>
+            <p>
+              Explore this fictional service desk by hand or through the
+              assistant. Records are synthetic, changes stay in this browser
+              session, and no messages are sent.
+            </p>
+          </div>
+        </header>
+
+        <section class="summary-grid" aria-label="Queue summary">
+          <article class="summary-card">
+            <span class="summary-label">OPEN WORK ORDERS</span>
+            <div>
+              <strong id="metric-open">0</strong
+              ><span class="metric-icon" aria-hidden="true">▤</span>
+            </div>
+            <p>Across the central region</p>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">IN PROGRESS</span>
+            <div>
+              <strong id="metric-progress">0</strong
+              ><span class="metric-icon" aria-hidden="true">↗</span>
+            </div>
+            <p>Assigned and moving forward</p>
+          </article>
+          <article class="summary-card urgent-card">
+            <span class="summary-label">NEEDS ATTENTION</span>
+            <div>
+              <strong id="metric-urgent">0</strong
+              ><span class="metric-icon" aria-hidden="true">!</span>
+            </div>
+            <p>Urgent work awaiting resolution</p>
+          </article>
+          <article class="summary-card">
+            <span class="summary-label">RESOLVED TODAY</span>
+            <div>
+              <strong id="metric-resolved">0</strong
+              ><span class="metric-icon" aria-hidden="true">✓</span>
+            </div>
+            <p>Ready for the next shift</p>
+          </article>
+        </section>
+
+        <div class="desk-grid">
+          <section class="panel queue-panel" aria-labelledby="queue-heading">
+            <header class="panel-header">
+              <div>
+                <p class="eyebrow">LIVE QUEUE</p>
+                <h2 id="queue-heading">
+                  Work orders
+                  <span id="queue-total" class="count-badge">10</span>
+                </h2>
+              </div>
+              <span class="quiet-label">All changes are local</span>
+            </header>
+            <div class="queue-toolbar">
+              <label class="search-field" for="work-order-search"
+                ><span class="sr-only">Search work orders</span
+                ><span aria-hidden="true">⌕</span
+                ><input
+                  id="work-order-search"
+                  data-testid="work-order-search"
+                  type="search"
+                  placeholder="Search ID, site, or issue…"
+                  autocomplete="off"
+              /></label>
+              <div class="filter-row">
+                <label for="status-filter"
+                  >Status<select id="status-filter">
+                    <option value="all">All statuses</option>
+                    <option>New</option>
+                    <option>In progress</option>
+                    <option>Waiting</option>
+                    <option>Resolved</option>
+                  </select></label
+                ><label for="priority-filter"
+                  >Priority<select id="priority-filter">
+                    <option value="all">All priorities</option>
+                    <option>Urgent</option>
+                    <option>High</option>
+                    <option>Normal</option>
+                  </select></label
+                ><label for="owner-filter"
+                  >Owner<select id="owner-filter">
+                    <option value="all">Anyone</option>
+                    <option>Maya Chen</option>
+                    <option>Leo Brooks</option>
+                    <option>Nia Patel</option>
+                    <option>Owen Rivera</option>
+                    <option>Unassigned</option>
+                  </select></label
+                >
+              </div>
+            </div>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              aria-label="Scrollable work order queue"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">WORK ORDER / ISSUE</th>
+                    <th scope="col">STATUS</th>
+                    <th scope="col">PRIORITY</th>
+                    <th scope="col">OWNER</th>
+                    <th scope="col">WINDOW</th>
+                  </tr>
+                </thead>
+                <tbody id="work-order-rows"></tbody>
+              </table>
+              <div id="queue-empty" class="empty-state" hidden>
+                <strong>No work orders match.</strong
+                ><span>Try a different search or filter.</span>
+              </div>
+            </div>
+            <footer class="queue-footer">
+              <span id="queue-count">Showing 10 of 10 work orders</span
+              ><span
+                ><span class="legend-dot" aria-hidden="true"></span> Select an
+                ID to review its details</span
+              >
+            </footer>
+          </section>
+
+          <section class="panel detail-panel" aria-labelledby="detail-heading">
+            <header class="panel-header">
+              <div>
+                <p class="eyebrow">WORK ORDER DETAILS</p>
+                <h2 id="detail-heading">
+                  <span id="detail-id">WO-1038</span>
+                  <span id="detail-status" class="status-pill">New</span>
+                </h2>
+              </div>
+              <span id="dirty-indicator" class="dirty-indicator">Saved</span>
+            </header>
+            <div
+              class="detail-scroll"
+              tabindex="0"
+              aria-label="Scrollable work order details"
+            >
+              <section class="issue-overview">
+                <div class="location-line">
+                  <span aria-hidden="true">⌖</span
+                  ><span id="detail-site"></span>
+                </div>
+                <h3 id="detail-title"></h3>
+                <p id="detail-description"></p>
+                <dl class="order-metadata">
+                  <div>
+                    <dt>Service window</dt>
+                    <dd id="detail-window"></dd>
+                  </div>
+                  <div>
+                    <dt>Requested by</dt>
+                    <dd id="detail-requester"></dd>
+                  </div>
+                  <div>
+                    <dt>Category</dt>
+                    <dd id="detail-category"></dd>
+                  </div>
+                  <div>
+                    <dt>Asset</dt>
+                    <dd id="detail-asset"></dd>
+                  </div>
+                </dl>
+              </section>
+              <form id="work-order-form">
+                <div class="section-label">
+                  <span>ASSIGNMENT & DISPATCH</span
+                  ><span aria-hidden="true">01</span>
+                </div>
+                <label class="field-label" for="work-order-owner"
+                  >Assigned owner<select
+                    id="work-order-owner"
+                    data-testid="work-order-owner"
+                  >
+                    <option>Maya Chen</option>
+                    <option>Leo Brooks</option>
+                    <option>Nia Patel</option>
+                    <option>Owen Rivera</option>
+                    <option>Unassigned</option>
+                  </select></label
+                >
+                <label class="field-label" for="work-order-status"
+                  >Work order status<select
+                    id="work-order-status"
+                    data-testid="work-order-status"
+                  >
+                    <option>New</option>
+                    <option>In progress</option>
+                    <option>Waiting</option>
+                    <option>Resolved</option>
+                  </select></label
+                >
+                <label class="field-label" for="work-order-notes"
+                  >Dispatch notes<textarea
+                    id="work-order-notes"
+                    data-testid="work-order-notes"
+                    rows="4"
+                    placeholder="Add handoff details for the next person…"
+                  ></textarea>
+                </label>
+                <label class="check-field" for="work-order-urgent"
+                  ><input
+                    id="work-order-urgent"
+                    data-testid="work-order-urgent"
+                    type="checkbox"
+                  /><span
+                    ><strong>Mark as urgent</strong
+                    ><small
+                      >Keep this work order visible in the attention
+                      queue.</small
+                    ></span
+                  ></label
+                >
+                <div class="save-line">
+                  <button
+                    id="save-work-order"
+                    data-testid="save-work-order"
+                    class="primary-button"
+                    type="button"
+                  >
+                    Save changes <span aria-hidden="true">↗</span></button
+                  ><span>Review before applying</span>
+                </div>
+                <p
+                  id="save-status"
+                  class="save-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  Select a work order to review or update.
+                </p>
+              </form>
+              <section
+                class="activity-section"
+                aria-labelledby="activity-heading"
+              >
+                <div class="section-label">
+                  <h3 id="activity-heading">ACTIVITY HISTORY</h3>
+                  <span aria-hidden="true">02</span>
+                </div>
+                <ol id="activity-history" class="activity-history"></ol>
+              </section>
+            </div>
+          </section>
+        </div>
+        <footer class="workspace-footer">
+          <span>FIELDWORK · Service delivery workspace</span
+          ><span>10 fictional sites. One shared queue.</span>
+        </footer>
+
+        <dialog
+          id="save-confirmation"
+          aria-labelledby="confirmation-heading"
+          aria-describedby="confirmation-description"
+        >
+          <div class="dialog-icon" aria-hidden="true">✓</div>
+          <p class="eyebrow">REVIEW UPDATE</p>
+          <h2 id="confirmation-heading">Apply these changes?</h2>
+          <p id="confirmation-description">
+            Update <strong id="confirmation-id">WO-1042</strong> in the local
+            sample queue.
+          </p>
+          <dl id="confirmation-summary" class="confirmation-summary"></dl>
+          <p class="dialog-note">
+            This is a synthetic record. Nothing is sent to a service team.
+          </p>
+          <div class="dialog-actions">
+            <button id="cancel-save" type="button" class="secondary-button">
+              Keep editing</button
+            ><button
+              id="confirm-save"
+              data-testid="confirm-save"
+              type="button"
+              class="primary-button"
+            >
+              Confirm changes
+            </button>
+          </div>
+        </dialog>
+      </main>
+    </div>
+    <script type="module" src="/assets/browser-tools-bundle.js"></script>
+  </body>
+</html>

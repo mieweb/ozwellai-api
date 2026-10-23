@@ -2,9 +2,22 @@
 
 Integrate Ozwell into your Next.js application with proper handling for SSR and the App Router.
 
-:::note Current Demo Environment
-The production widget and API share `https://api.ozwell.ai`. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/widget` and API at `https://ozwellapi.os.mieweb.org`.
+:::note Production widget
+The examples explicitly set `widgetUrl="https://api.ozwell.ai/widget/frame/"`.
+This selects the production loader, iframe, and default API endpoint. The current
+React wrapper still defaults to the development host when this prop is omitted.
 :::
+
+| Environment | `widgetUrl` |
+|-------------|-------------|
+| Production | `https://api.ozwell.ai/widget/frame/` |
+| Development | `https://ozwellapi.os.mieweb.org/widget/frame/` |
+| Local reference server | `http://localhost:3000/widget/frame/` |
+
+The [proposed page-control option](cdn-embed.md#proposed-page-control-option-not-implemented)
+is a future plain-loader `OzwellChatConfig` setting. It is not implemented and is
+not a React prop. Current page interactions require explicit `tools` and
+`onToolCall` handlers; see [React tool handling](react.md#tool-handling-with-ontoolcall).
 
 ## Installation
 
@@ -30,9 +43,9 @@ import { OzwellChat } from '@ozwell/react';
 
 export function OzwellWidget() {
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
     />
   );
 }
@@ -77,9 +90,9 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Component {...pageProps} />
-      <OzwellChat 
-        apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-        agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
+      <OzwellChat
+        widgetUrl="https://api.ozwell.ai/widget/frame/"
+        apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
       />
     </>
   );
@@ -90,14 +103,16 @@ export default function App({ Component, pageProps }: AppProps) {
 
 ## Environment Variables
 
-Create a `.env.local` file:
+For an agent-configured widget, create a `.env.local` file with an agent key from
+the selected deployment:
 
 ```bash
-NEXT_PUBLIC_OZWELL_API_KEY=ozw_scoped_xxxxxxxx
-NEXT_PUBLIC_OZWELL_AGENT_ID=agent_xxxxxxxx
+NEXT_PUBLIC_OZWELL_AGENT_KEY=agnt_key-your-agent-key
 ```
 
-> ⚠️ Only use `NEXT_PUBLIC_` prefix for **scoped** API keys that are safe for client-side use.
+`NEXT_PUBLIC_` values are exposed to the browser. Use only an agent key approved
+for that site. The key selects the agent; `agentId` is reserved and currently
+ignored. Omit `apiKey` when using visitor sign-in on a deployment that enables it.
 
 ---
 
@@ -109,17 +124,16 @@ The Ozwell widget uses browser APIs (DOM, PostMessage) and must render client-si
 
 ### Hydration Safety
 
-The widget is rendered inside an iframe, so hydration mismatches are not a concern. However, if you're passing dynamic props:
+The widget is rendered inside an iframe. If you need to defer configuration until
+the component mounts:
 
 ```tsx
 'use client';
 
 import { OzwellChat } from '@ozwell/react';
-import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 export function OzwellWidget() {
-  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   
   useEffect(() => {
@@ -129,10 +143,9 @@ export function OzwellWidget() {
   if (!mounted) return null;
   
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
-      context={{ page: pathname }}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
     />
   );
 }
@@ -144,33 +157,9 @@ export function OzwellWidget() {
 
 ### With Authentication Context
 
-Pass user data from your auth provider:
-
-```tsx
-// components/OzwellWidget.tsx
-'use client';
-
-import { OzwellChat } from '@ozwell/react';
-import { useSession } from 'next-auth/react';
-import { usePathname } from 'next/navigation';
-
-export function OzwellWidget() {
-  const { data: session } = useSession();
-  const pathname = usePathname();
-  
-  return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
-      context={{
-        userId: session?.user?.id,
-        email: session?.user?.email,
-        page: pathname,
-      }}
-    />
-  );
-}
-```
+The React wrapper does not implement a `context` prop. Expose only the required
+session or page data through an explicit read-only tool and `onToolCall` handler;
+see [React tool handling](react.md#tool-handling-with-ontoolcall).
 
 ### Route-Based Agent Selection
 
@@ -184,22 +173,22 @@ import { OzwellChat } from '@ozwell/react';
 import { usePathname } from 'next/navigation';
 
 const AGENTS = {
-  '/docs': 'agent_docs_xxxxxxxx',
-  '/support': 'agent_support_xxxxxxxx',
-  default: 'agent_general_xxxxxxxx',
+  '/docs': 'agnt_key-docs-agent-key',
+  '/support': 'agnt_key-support-agent-key',
+  default: 'agnt_key-general-agent-key',
 };
 
 export function OzwellWidget() {
   const pathname = usePathname();
   
-  const agentId = Object.entries(AGENTS).find(
+  const apiKey = Object.entries(AGENTS).find(
     ([path]) => pathname.startsWith(path)
   )?.[1] ?? AGENTS.default;
   
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={agentId}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={apiKey}
     />
   );
 }
@@ -226,9 +215,9 @@ export function OzwellWidget() {
   if (isHidden) return null;
   
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
     />
   );
 }
@@ -247,9 +236,9 @@ import { track } from '@vercel/analytics';
 
 export function OzwellWidget() {
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
       onOpen={() => track('chat_opened')}
       onClose={() => track('chat_closed')}
       onUserShare={(data) => {
@@ -280,7 +269,7 @@ export function middleware(request: NextRequest) {
   // Allow Ozwell iframe
   response.headers.set(
     'Content-Security-Policy',
-    "frame-src 'self' https://ozwellapi.os.mieweb.org"
+    "frame-src 'self' https://api.ozwell.ai"
   );
   
   return response;
@@ -303,9 +292,9 @@ const ozwellConfig: Partial<OzwellChatProps> = {
 
 export function OzwellWidget() {
   return (
-    <OzwellChat 
-      apiKey={process.env.NEXT_PUBLIC_OZWELL_API_KEY!}
-      agentId={process.env.NEXT_PUBLIC_OZWELL_AGENT_ID!}
+    <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
+      apiKey={process.env.NEXT_PUBLIC_OZWELL_AGENT_KEY!}
       {...ozwellConfig}
     />
   );
@@ -345,9 +334,9 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      frame-src 'self' https://ozwellapi.os.mieweb.org;
-      connect-src 'self' https://ozwellapi.os.mieweb.org;
+      script-src 'self' https://api.ozwell.ai 'unsafe-eval' 'unsafe-inline';
+      frame-src 'self' https://api.ozwell.ai;
+      connect-src 'self' https://api.ozwell.ai;
     `.replace(/\s{2,}/g, ' ').trim()
   }
 ];

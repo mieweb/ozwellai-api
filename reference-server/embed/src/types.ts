@@ -16,6 +16,7 @@ export interface OzwellConfig {
   welcomeMessage?: string;
   thinkingEnabled?: boolean;
   thinkingDefaultMode?: ThinkingMode;
+  autoFocus?: boolean;
   headers?: Record<string, string>;
 }
 

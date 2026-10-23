@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ozwell</title>
+    <link rel="stylesheet" href="popup.css">
+    <script type="module" src="popup.js"></script>
+  </head>
+  <body>
+    <main>
+      <header class="popup-header">
+        <div class="brand">
+          <img class="mascot" src="assets/ozwell-128.png" width="46" height="46" alt="">
+          <div><h1>ozwell</h1><p>A little help, right here.</p></div>
+        </div>
+        <button id="power-button" class="power-button" type="button" aria-pressed="true" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9M6.1 5.8a8.5 8.5 0 1 0 11.8 0"></path></svg>
+          <span id="power-label">Turn ozwell off</span>
+        </button>
+      </header>
+
+      <div class="page-context">
+        <span class="page-dot" aria-hidden="true"></span>
+        <p id="current-site" class="site">Checking this page…</p>
+        <a id="open-ozwell" class="open-ozwell" target="_blank" rel="noopener noreferrer" aria-label="Open ozwell in a new tab" title="Open ozwell in a new tab for sign-in or longer conversations" hidden>Open ozwell ↗</a>
+      </div>
+
+      <p id="page-control-status" class="page-control-status" role="status">Connecting to this page…</p>
+
+      <section id="chat-shell" class="chat-shell" aria-label="Chat with ozwell">
+        <div id="chat-container" class="chat-container"></div>
+        <div id="chat-empty" class="chat-empty" hidden>
+          <img src="assets/ozwell-128.png" width="84" height="84" alt="">
+          <h2>Here when you need me.</h2>
+          <p>Turn ozwell on to start a conversation.</p>
+        </div>
+      </section>
+
+      <details id="settings-details" class="settings-details">
+        <summary>Page settings<span class="settings-chevron" aria-hidden="true">⌄</span></summary>
+        <form id="settings-form">
+          <p id="mode-heading" class="field-label">Show ozwell on pages</p>
+          <div class="mode-options" role="group" aria-labelledby="mode-heading" aria-describedby="mode-description">
+            <button type="button" data-mode="manual" aria-pressed="true" disabled>On demand</button>
+            <button type="button" data-mode="allowlist" aria-pressed="false" disabled>Selected sites</button>
+            <button type="button" data-mode="always" aria-pressed="false" disabled>All sites</button>
+          </div>
+          <p id="mode-description" class="help">Show the page launcher when you choose it.</p>
+
+          <div id="domains-field" hidden>
+            <div class="field-heading">
+              <label for="domains">Selected domains</label>
+              <button id="add-current-site" class="text-button" type="button" disabled>Add current site</button>
+            </div>
+            <textarea id="domains" name="domains" rows="3" placeholder="ui.mieweb.org" spellcheck="false" autocapitalize="none" aria-describedby="domains-help"></textarea>
+            <p id="domains-help" class="help">One exact domain per line. Add subdomains separately.</p>
+          </div>
+
+          <div class="settings-actions">
+            <button id="toggle-tab" class="secondary-button" type="button" disabled>Show page launcher</button>
+            <button id="save" class="primary" type="submit" disabled>Save settings</button>
+          </div>
+        </form>
+      </details>
+
+      <p id="status" class="feedback" role="status" aria-live="polite"></p>
+      <p id="error" class="feedback error" role="alert" hidden></p>
+    </main>
+  </body>
+</html>

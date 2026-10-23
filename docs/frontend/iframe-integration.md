@@ -2,8 +2,8 @@
 
 This guide covers the iframe-based architecture used by all Ozwell frontend integrations, including security considerations, communication patterns, and custom implementation details.
 
-:::note Current Demo Environment
-The production loader is `https://api.ozwell.ai/widget`. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/widget`; its iframe and API both use `https://ozwellapi.os.mieweb.org`.
+:::note Environments
+The production loader is `https://api.ozwell.ai/widget`; its iframe and API use `https://api.ozwell.ai`. The loader at `https://ozwellapi.os.mieweb.org/widget` is for development.
 :::
 
 ## How It Works
@@ -18,13 +18,13 @@ graph TB
     end
     
     subgraph "Ozwell Iframe (Isolated)"
-        Iframe[iframe src ozwellapi.os.mieweb.org/widget/frame/]
+        Iframe[iframe src api.ozwell.ai/widget/frame/]
         UI[Chat UI]
         State[Conversation State]
     end
     
     subgraph "Ozwell API"
-        API[ozwellapi.os.mieweb.org]
+        API[api.ozwell.ai]
     end
     
     Parent --> Container
@@ -51,7 +51,7 @@ The host site cannot see, intercept, or log what is said in the chat. This creat
 
 ### Origin Isolation
 
-The loader creates an iframe whose page is served from the Ozwell API origin (`https://ozwellapi.os.mieweb.org/widget/frame/` in the current demo environment). Its API calls are therefore same-origin with the Ozwell API, while the host page remains isolated.
+The loader creates an iframe whose page is served from the Ozwell API origin (`https://api.ozwell.ai/widget/frame/` in production). Its API calls are therefore same-origin with the Ozwell API, while the host page remains isolated.
 
 - ❌ Cannot access parent page DOM
 - ❌ Cannot read parent page cookies/storage
@@ -65,7 +65,7 @@ The iframe includes restrictive sandbox attributes:
 
 ```html
 <iframe 
-  src="https://ozwellapi.os.mieweb.org/widget/frame/"
+  src="https://api.ozwell.ai/widget/frame/"
   sandbox="allow-scripts allow-same-origin allow-forms"
 ></iframe>
 ```
@@ -92,6 +92,8 @@ Content-Security-Policy:
 The host page and iframe communicate via the [PostMessage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage), implementing an *inverted* MCP postMessage transport pattern. See [MCP postMessage Standard](./mcp-postmessage-standard.md) for the community proposals that inspired this design.
 
 The loader can also expose an explicit subset of the host's page tools through the native WebMCP API, reusing the same handlers. The embedded assistant continues using `postMessage`. See [Optional WebMCP Exposure](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed#optional-webmcp-exposure) for setup, browser requirements, and exposure controls.
+
+For the proposed loader-managed controller using this same iframe transport, see [Proposed page control option (not implemented)](./cdn-embed.md#proposed-page-control-option-not-implemented). The current proof of concept wires the controller explicitly.
 
 ### Message Format
 
@@ -228,7 +230,7 @@ If you need full control, you can implement the iframe integration manually.
   <button id="ozwell-trigger">Chat</button>
   <iframe 
     id="ozwell-iframe"
-    src="https://ozwellapi.os.mieweb.org/widget/frame/"
+    src="https://api.ozwell.ai/widget/frame/"
     style="display: none; width: 400px; height: 600px; border: none;"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     allow="clipboard-write"
@@ -254,7 +256,7 @@ iframe.addEventListener('load', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://ozwellapi.os.mieweb.org');
+  }, 'https://api.ozwell.ai');
 });
 
 // Toggle visibility
@@ -266,13 +268,13 @@ trigger.addEventListener('click', () => {
     type: isHidden ? 'ozwell:open' : 'ozwell:close',
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://ozwellapi.os.mieweb.org');
+  }, 'https://api.ozwell.ai');
 });
 
 // Listen for messages from iframe
 window.addEventListener('message', (event) => {
   // Verify origin
-  if (event.origin !== 'https://ozwellapi.os.mieweb.org') return;
+  if (event.origin !== 'https://api.ozwell.ai') return;
   
   const { type, payload } = event.data;
   
@@ -363,7 +365,7 @@ window.addEventListener('popstate', () => {
     },
     timestamp: Date.now(),
     id: crypto.randomUUID()
-  }, 'https://ozwellapi.os.mieweb.org');
+  }, 'https://api.ozwell.ai');
 });
 ```
 
