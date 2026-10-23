@@ -162,18 +162,19 @@ Create a new agent with a YAML configuration wrapped in JSON.
 
 ```yaml
 mcp_servers:
-  - name: webchart                      # [a-zA-Z0-9_-], unique per agent
-    url: https://example.com/webchart.cgi/mcp
+  - name: notes                         # [a-zA-Z0-9_-], unique per agent
+    url: https://example.com/mcp
     auth:                               # type: none | bearer (token) | header (name, value)
       type: bearer
-      token: ${{ secrets.WEBCHART_TOKEN }}
+      token: ${{ secrets.NOTES_TOKEN }}
     tools:                              # allowlist; omitted or empty = no tools enabled
-      - json_post_inject
+      - create_note
 ```
 
-- Credentials must be secret references. Send values in a `secrets` object next to `yaml` on create/update (`{ "yaml": "...", "secrets": { "WEBCHART_TOKEN": "..." } }`). Omitted secrets are kept; `null` deletes one. Values are never returned — responses only list `secret_names`. Secrets are removed when the agent is deleted.
+- Credentials must be secret references. Send values in a `secrets` object next to `yaml` on create/update (`{ "yaml": "...", "secrets": { "NOTES_TOKEN": "..." } }`). Omitted secrets are kept; `null` deletes one. Values are never returned — responses only list `secret_names`. Secrets are removed when the agent is deleted.
 - Only allowlisted tools are offered to the LLM (as `mcp__<server>__<tool>`), alongside page tools. Calls run server-side with a timeout (`MCP_TIMEOUT_MS`, default 15000) and an iteration cap (`MCP_MAX_TOOL_ITERATIONS`, default 5). If the model calls a page tool in the same turn, the page tool calls are returned to the client as usual.
 - `POST /v1/mcp/discover` (parent key) or `POST /v1/manager/mcp/discover` returns a server's `tools/list` for building the allowlist. Body: `{ "server": { name, url, auth }, "secrets"?: {...}, "agent_id"?: "..." }` — `agent_id` reuses that agent's stored secrets.
+- Outbound policy: `MCP_ALLOWED_HOSTS` (comma-separated) restricts which hosts may be contacted. Loopback, private, and link-local addresses are refused unless `MCP_ALLOW_PRIVATE_NETWORKS=true`. Redirects are not followed.
 
 Provider/model policy is stored separately from YAML so agent behavior remains provider-agnostic. Existing YAML with `model` still works as legacy fallback, but new saves should use `GET`/`PUT /v1/manager/agents/{agent_id}/model-policy` for fallback provider/model and allowed-model restrictions.
 

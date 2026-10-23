@@ -945,31 +945,62 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return null;
     };
 
-    type CompleteFn = (msgs: NonNullableMessage[], tools: ToolDef[] | undefined) => Promise<LoopResponse>;
+    type CompleteFn = (msgs: NonNullableMessage[], tools: ToolDef[] | undefined, m: string) => Promise<LoopResponse>;
 
     // Runs the model, executes MCP tool calls server-side, and repeats until the model answers,
-    // asks for a page tool (client round-trip), or the iteration cap is hit. Page tool calls and
-    // the final answer are returned to the client in the normal OpenAI shape.
+    // asks only for page tools (client round-trip), or the iteration cap is hit.
     const respondWithMcp = async (session: McpSession, complete: CompleteFn) => {
       const pageTools = (filteredTools as ToolDef[] | undefined) ?? [];
       const allTools = [...pageTools, ...session.tools] as ToolDef[];
       const loopMessages = [...normalizedMessages];
       const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
       const sse = stream ? startSse(reply, request.headers.origin) : null;
+      let activeModel = model;
+      let warning: ReturnType<typeof buildFallbackWarning> | null = null;
+
+      const completeWithFallback = async (tools: ToolDef[] | undefined) => {
+        try {
+          return await complete(loopMessages, tools, activeModel);
+        } catch (err) {
+          if (!isModelNotFoundError(err) || !fallbackRetryModel || activeModel === fallbackRetryModel) throw err;
+          request.log.info({ originalModel: activeModel, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+          warning = buildFallbackWarning(activeModel, fallbackRetryModel);
+          sse?.writeEvent('warning', warning);
+          activeModel = fallbackRetryModel;
+          return complete(loopMessages, tools, activeModel);
+        }
+      };
+
       try {
         let response!: LoopResponse;
         for (let i = 0; i <= MCP_MAX_TOOL_ITERATIONS; i++) {
+          if (i > 0 && usageContext) {
+            // Usage from earlier rounds is not recorded yet, so it is added to this round's estimate.
+            const nextEstimate = usage.total_tokens + estimateChatTokens(loopMessages as unknown as Message[], max_tokens);
+            if (agentStore.getQuotaBlocks(usageContext.parentKeyId, usageContext.agentId, nextEstimate).length > 0) {
+              recordUsage(activeModel, 429, { usage }, provider);
+              const quotaErr = createError('Monthly token quota exceeded during tool use', 'rate_limit_error', null, 'quota_exceeded');
+              if (sse) {
+                sse.writeEvent('error', quotaErr);
+                sse.end();
+                return;
+              }
+              reply.code(429);
+              return quotaErr;
+            }
+          }
           // Final round offers no MCP tools so the model must answer.
           const lastRound = i === MCP_MAX_TOOL_ITERATIONS;
-          response = await complete(loopMessages, lastRound ? (pageTools.length ? pageTools : undefined) : allTools);
+          response = await completeWithFallback(lastRound ? (pageTools.length ? pageTools : undefined) : allTools);
           usage.prompt_tokens += response.usage?.prompt_tokens ?? 0;
           usage.completion_tokens += response.usage?.completion_tokens ?? 0;
           usage.total_tokens += response.usage?.total_tokens ?? 0;
           const calls = response.choices[0].message.tool_calls ?? [];
           const mcpCalls = calls.filter(c => session.isMcpTool(c.function.name));
-          if (lastRound || mcpCalls.length === 0 || mcpCalls.length !== calls.length) break;
-          loopMessages.push({ role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: calls });
-          for (const call of calls) {
+          if (lastRound || mcpCalls.length === 0) break;
+          // Page calls in a mixed turn are dropped here; the model re-issues them after seeing the MCP results.
+          loopMessages.push({ role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls });
+          for (const call of mcpCalls) {
             const result = await session.call(call.function.name, call.function.arguments);
             loopMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
           }
@@ -986,8 +1017,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
         }
 
-        recordUsage(model, 200, { usage }, provider);
-        if (!sse) return { ...response, usage };
+        recordUsage(activeModel, 200, { usage }, provider);
+        const fallbackWarning = warning as ReturnType<typeof buildFallbackWarning> | null;
+        if (!sse) return { ...response, usage, ...(fallbackWarning ? { warning: fallbackWarning } : {}) };
 
         const base = { id: response.id, object: 'chat.completion.chunk', created: response.created, model: response.model };
         sse.writeData({ ...base, choices: [{ index: 0, delta: { role: 'assistant', ...(msg.thinking && { thinking: msg.thinking }), ...(msg.content && { content: msg.content }) }, finish_reason: null }] });
@@ -999,7 +1031,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return;
       } catch (err) {
         request.log.error({ err, backend, provider }, 'LLM request failed during MCP tool loop');
-        recordUsage(model, 502, { usage }, provider);
+        recordUsage(activeModel, 502, { usage }, provider);
         if (sse) {
           sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
           sse.end();
@@ -1060,17 +1092,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
       const directMcp = await openAgentMcp();
       if (directMcp) {
-        return respondWithMcp(directMcp, async (msgs, loopTools) => {
+        return respondWithMcp(directMcp, async (msgs, loopTools, m) => {
           const conv = toResponsesInput(msgs as ChatInputMessage[]);
           const loopHarnessTools = toResponsesTools(loopTools as ChatToolDef[] | undefined);
-          const params: CompletionParams = { ...buildParams(model), instructions: conv.instructions, input: conv.input };
+          const params: CompletionParams = { ...buildParams(m), instructions: conv.instructions, input: conv.input };
           delete params.tools;
           if (loopHarnessTools) params.tools = loopHarnessTools;
           const collected = await collectCompletionStream(await createAICompletion(params));
           if (collected.status === 'failed' || collected.status === 'error') {
             throw new Error(collected.reason || `Provider returned ${collected.status}`);
           }
-          const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model, created: Math.floor(Date.now() / 1000) }) as unknown as LoopResponse;
+          const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model: m, created: Math.floor(Date.now() / 1000) }) as unknown as LoopResponse;
           const msg = response.choices[0].message;
           normalizeMessageThinking(msg as Record<string, unknown>);
           if (!msg.tool_calls && typeof msg.content === 'string') {
@@ -1196,12 +1228,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // --- Gateway (LLM_BASE_URL) ---
       const gatewayMcp = await openAgentMcp();
       if (gatewayMcp) {
-        return respondWithMcp(gatewayMcp, async (msgs, loopTools) => {
+        return respondWithMcp(gatewayMcp, async (msgs, loopTools, m) => {
           const response = await createLlmClient(provider).createChatCompletion({
-            model,
+            model: m,
             messages: msgs,
-            ...tokenParamFor(model),
-            ...temperatureParamFor(model),
+            ...tokenParamFor(m),
+            ...temperatureParamFor(m),
             ...(response_format && { response_format }),
             ...(loopTools && loopTools.length > 0 && { tools: loopTools }),
             stream: false,

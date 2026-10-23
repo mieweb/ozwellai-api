@@ -1,5 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 // Remote MCP servers attached to an agent via `mcp_servers` in the agent YAML.
 // Credentials live in the per-agent secret store and are referenced as ${{ secrets.NAME }}.
@@ -155,6 +157,7 @@ function buildHeaders(server: McpServerConfig, secrets: Record<string, string>):
 }
 
 function describeError(err: unknown): string {
+    if (err instanceof McpDestinationError) return err.message;
     const code = (err as { code?: unknown })?.code;
     if (typeof code === 'number' && code === -32001) return 'request timed out';
     const status = (err as { status?: unknown })?.status;
@@ -167,6 +170,57 @@ function describeError(err: unknown): string {
     return 'request failed';
 }
 
+class McpDestinationError extends Error {}
+
+function envList(name: string): string[] {
+    return (process.env[name] || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+}
+
+function isPrivateAddress(ip: string): boolean {
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    if (isIP(ip) === 4) {
+        const [a, b] = ip.split('.').map(Number);
+        return a === 0 || a === 10 || a === 127 || a >= 224
+            || (a === 100 && b >= 64 && b <= 127)
+            || (a === 169 && b === 254)
+            || (a === 172 && b >= 16 && b <= 31)
+            || (a === 192 && b === 168)
+            || (a === 198 && (b === 18 || b === 19));
+    }
+    const v6 = ip.toLowerCase();
+    return v6 === '::' || v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith('ff');
+}
+
+/**
+ * Operator policy for outbound MCP requests. MCP_ALLOWED_HOSTS (comma list) restricts
+ * hostnames; private/loopback/link-local targets need MCP_ALLOW_PRIVATE_NETWORKS=true.
+ */
+async function assertAllowedDestination(url: URL): Promise<void> {
+    const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const allowedHosts = envList('MCP_ALLOWED_HOSTS');
+    if (allowedHosts.length && !allowedHosts.includes(host)) {
+        throw new McpDestinationError(`destination host '${host}' is not allowed`);
+    }
+    if (process.env.MCP_ALLOW_PRIVATE_NETWORKS === 'true') return;
+    let addresses: string[];
+    try {
+        addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map(a => a.address);
+    } catch {
+        throw new McpDestinationError('server unreachable');
+    }
+    if (addresses.length === 0 || addresses.some(isPrivateAddress)) {
+        throw new McpDestinationError(`destination host '${host}' resolves to a private network address`);
+    }
+}
+
+// Every transport request (including redirects, which are refused) is checked against the policy.
+const guardedFetch: typeof fetch = async (input, init) => {
+    const target = input instanceof Request ? input.url : String(input);
+    await assertAllowedDestination(new URL(target));
+    return fetch(input, { ...init, redirect: 'error' });
+};
+
 export interface McpConnection {
     listTools(): Promise<McpToolInfo[]>;
     callTool(name: string, args: Record<string, unknown>): Promise<{ text: string; isError: boolean }>;
@@ -175,7 +229,12 @@ export interface McpConnection {
 
 export async function connectMcpServer(server: McpServerConfig, secrets: Record<string, string>): Promise<McpConnection> {
     const headers = buildHeaders(server, secrets);
-    const transport = new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } });
+    try {
+        await assertAllowedDestination(new URL(server.url));
+    } catch (err) {
+        throw new McpError(`MCP server '${server.name}' connection failed: ${describeError(err)}`, server.name);
+    }
+    const transport = new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers }, fetch: guardedFetch });
     const client = new Client({ name: 'ozwell-reference-server', version: '1.0.0' });
     try {
         await client.connect(transport, { timeout: MCP_TIMEOUT_MS });

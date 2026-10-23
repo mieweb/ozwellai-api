@@ -18,7 +18,11 @@ const Database = require('better-sqlite3');
 
 const PORT = 3361;
 const BASE = `http://localhost:${PORT}`;
-const SECRET = 'wc-super-secret-token';
+const SECRET = 'test-secret-token';
+const SERVER = 'notes';
+const TOOL = 'create_note';
+const EXPOSED = `mcp__${SERVER}__${TOOL}`;
+const SECRET_REF = '${{ secrets.NOTES_TOKEN }}';
 const HEADERS = {
     'x-user': 'mcp-user',
     'x-email': 'mcp-user@example.test',
@@ -55,10 +59,10 @@ function fakeMcp() {
             res.writeHead(401).end();
             return;
         }
-        const server = new McpServer({ name: 'fake-webchart', version: '1.0.0' });
-        server.tool('json_post_inject', 'Inject a JSON payload', async () => {
-            calls.push('json_post_inject');
-            return { content: [{ type: 'text', text: 'injected-ok' }] };
+        const server = new McpServer({ name: 'fake-mcp', version: '1.0.0' });
+        server.tool(TOOL, 'Allowlisted tool', async () => {
+            calls.push(TOOL);
+            return { content: [{ type: 'text', text: 'tool-ok' }] };
         });
         server.tool('delete_everything', 'Must never be exposed', async () => {
             calls.push('delete_everything');
@@ -87,7 +91,10 @@ function fakeGateway() {
             : {
                 role: 'assistant',
                 content: null,
-                tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'mcp__webchart__json_post_inject', arguments: '{"a":1}' } }],
+                tool_calls: [
+                    { id: 'call_1', type: 'function', function: { name: EXPOSED, arguments: '{"a":1}' } },
+                    { id: 'call_2', type: 'function', function: { name: 'postMessage_highlight', arguments: '{}' } },
+                ],
             };
         json(res, 200, {
             id: 'chatcmpl_gw', object: 'chat.completion', created: 1, model: body.model,
@@ -156,17 +163,19 @@ test('remote MCP servers — allowlist, write-only secrets, discovery, server-si
         LLM_BASE_URL: gateway.baseURL,
         LLM_API_KEY: 'gw-key',
         LLM_MODEL: 'gpt-4o-mini',
+        MCP_ALLOW_PRIVATE_NETWORKS: 'true',
+        MCP_ALLOWED_HOSTS: '127.0.0.1',
     });
     const yamlWith = (auth) => `name: MCP Agent
 instructions: Use tools.
 mcp_servers:
-  - name: webchart
+  - name: ${SERVER}
     url: ${mcp.baseURL}/mcp
     auth: ${auth}
     tools:
-      - json_post_inject
+      - ${TOOL}
 `;
-    const refAuth = '{ type: bearer, token: "${{ secrets.WEBCHART_TOKEN }}" }';
+    const refAuth = `{ type: bearer, token: "${SECRET_REF}" }`;
     try {
         await waitForReady();
         assert.equal((await api('GET', '/v1/manager/me')).status, 200);
@@ -180,7 +189,7 @@ mcp_servers:
         assert.equal(res.status, 400);
         assert.equal((await res.json()).error.code, 'missing_secrets');
 
-        res = await api('POST', '/v1/manager/agents', { yaml: yamlWith(refAuth), secrets: { WEBCHART_TOKEN: SECRET } });
+        res = await api('POST', '/v1/manager/agents', { yaml: yamlWith(refAuth), secrets: { NOTES_TOKEN: SECRET } });
         assert.equal(res.status, 201);
         const created = await res.json();
 
@@ -188,7 +197,7 @@ mcp_servers:
         res = await api('GET', `/v1/manager/agents/${created.agent_id}`);
         const viewText = await res.text();
         assert.ok(!viewText.includes(SECRET));
-        assert.deepEqual(JSON.parse(viewText).secret_names, ['WEBCHART_TOKEN']);
+        assert.deepEqual(JSON.parse(viewText).secret_names, ['NOTES_TOKEN']);
 
         // Updating without re-sending the secret keeps the stored one.
         res = await api('PUT', `/v1/manager/agents/${created.agent_id}`, { yaml: yamlWith(refAuth) });
@@ -197,23 +206,30 @@ mcp_servers:
         // Discovery using the agent's stored secret lists every server tool.
         res = await api('POST', '/v1/manager/mcp/discover', {
             agent_id: created.agent_id,
-            server: { name: 'webchart', url: `${mcp.baseURL}/mcp`, auth: { type: 'bearer', token: '${{ secrets.WEBCHART_TOKEN }}' } },
+            server: { name: SERVER, url: `${mcp.baseURL}/mcp`, auth: { type: 'bearer', token: SECRET_REF } },
         });
         assert.equal(res.status, 200);
-        assert.deepEqual((await res.json()).data.map(t => t.name).sort(), ['delete_everything', 'json_post_inject']);
+        assert.deepEqual((await res.json()).data.map(t => t.name).sort(), [TOOL, 'delete_everything']);
 
         // Discovery errors are clear and credential-free.
         res = await api('POST', '/v1/manager/mcp/discover', {
-            server: { name: 'webchart', url: `${mcp.baseURL}/mcp`, auth: { type: 'bearer', token: 'wrong' } },
+            server: { name: SERVER, url: `${mcp.baseURL}/mcp`, auth: { type: 'bearer', token: 'wrong' } },
         });
         assert.equal(res.status, 502);
         const discoverErr = await res.text();
-        assert.match(discoverErr, /webchart/);
+        assert.ok(discoverErr.includes(SERVER));
         assert.ok(!discoverErr.includes('wrong'));
+
+        // Hosts outside MCP_ALLOWED_HOSTS are refused before any request is made.
+        res = await api('POST', '/v1/manager/mcp/discover', {
+            server: { name: SERVER, url: mcp.baseURL.replace('127.0.0.1', 'localhost') + '/mcp' },
+        });
+        assert.equal(res.status, 502);
+        assert.match(await res.text(), /not allowed/);
 
         // Chat: only the allowlisted MCP tool is offered; page tools stay; the call runs server-side.
         const pageTool = { type: 'function', function: { name: 'postMessage_highlight', parameters: { type: 'object', properties: {} } } };
-        const spoofed = { type: 'function', function: { name: 'mcp__webchart__delete_everything', parameters: { type: 'object', properties: {} } } };
+        const spoofed = { type: 'function', function: { name: `mcp__${SERVER}__delete_everything`, parameters: { type: 'object', properties: {} } } };
         res = await fetch(`${BASE}/v1/chat/completions`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${created.agent_key}` },
@@ -221,14 +237,14 @@ mcp_servers:
         });
         assert.equal(res.status, 200, logs());
         const completion = await res.json();
-        assert.equal(completion.choices[0].message.content, 'done: injected-ok');
+        assert.equal(completion.choices[0].message.content, 'done: tool-ok');
         assert.equal(completion.usage.total_tokens, 10);
 
         const llmCalls = gateway.requests.filter(r => r.url === '/v1/chat/completions');
         assert.equal(llmCalls.length, 2);
         const offered = llmCalls[0].body.tools.map(t => t.function.name).sort();
-        assert.deepEqual(offered, ['mcp__webchart__json_post_inject', 'postMessage_highlight']);
-        assert.deepEqual(mcp.calls, ['json_post_inject']);
+        assert.deepEqual(offered, [EXPOSED, 'postMessage_highlight']);
+        assert.deepEqual(mcp.calls, [TOOL]);
         assert.ok(!logs().includes(SECRET), 'secret leaked to logs');
 
         // Deleting the agent removes its secrets.
