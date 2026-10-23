@@ -12,6 +12,7 @@ import { quotaExceededError, resolveRouteUsageContext } from './quota';
 import { ensureProvidersConfigured, isDirectProviderConfigured, resolveChatTransport } from '../llm/providers';
 import { convertTiffParts, TiffConversionError } from '../llm/tiff';
 import { capabilitiesFor, createChunkTranslator, toChatCompletion, toChatUsage, toResponsesInput, toResponsesTools, usesReasoningTokenParam, type ChatInputMessage, type ChatToolDef } from '../llm/harness-adapter';
+import { MCP_MAX_TOOL_ITERATIONS, MCP_TOOL_PREFIX, openMcpSession, parseMcpServers, type McpServerConfig, type McpSession } from '../mcp/remote';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -82,6 +83,15 @@ type UsageContext = {
   authType: 'parent' | 'agent';
   parentKeyId: string | null;
   agentId: string | null;
+};
+
+// Minimal non-streaming completion shape shared by the direct and gateway transports.
+type LoopResponse = {
+  id: string;
+  created: number;
+  model: string;
+  choices: Array<{ index: number; message: ChatMessage & { thinking?: string }; finish_reason: string | null }>;
+  usage?: TokenUsage;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -624,7 +634,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null; mcpServers: McpServerConfig[] } | null = null;
 
     if (tokenIsAgentKey) {
       if (!resolvedUsageContext.agent || !resolvedUsageContext.parentKey) {
@@ -670,6 +680,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const tools = parsed.tools;
+      let mcpServers: McpServerConfig[] = [];
+      try {
+        mcpServers = parseMcpServers(parsed.mcp_servers);
+      } catch (err) {
+        request.log.warn({ agentId: agent.id, reason: err instanceof Error ? err.message : 'invalid' }, 'Ignoring invalid mcp_servers');
+      }
       agentConfig = {
         systemPrompt,
         allowedTools: Array.isArray(tools) && tools.length > 0
@@ -679,6 +695,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         modelPolicy: agentStore.getAgentModelPolicy(agent.id, agent.yaml),
         temperature: (parsed.temperature as number | undefined) ?? null,
         type: parsed.type === 'mock' ? 'mock' : null,
+        mcpServers,
       };
     } else {
       usageContext = {
@@ -885,6 +902,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       filteredTools = tools.filter((t) => {
         if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
         const name = t.function.name;
+        // The mcp__ namespace is reserved for server-executed tools.
+        if (name.startsWith(MCP_TOOL_PREFIX)) return false;
 
         const pagePrefix = PM_PREFIXES.find((prefix) => name.startsWith(prefix));
         if (pagePrefix) {
@@ -912,6 +931,86 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       recordUsage(model, reply.statusCode, response, provider);
       return response;
     }
+
+    // --- Agent: remote MCP tools (allowlisted, executed server-side) ---
+    const openAgentMcp = async (): Promise<McpSession | null> => {
+      if (!agentConfig?.mcpServers.length || !usageContext?.agentId) return null;
+      const session = await openMcpSession(
+        agentConfig.mcpServers,
+        agentStore.getAgentSecrets(usageContext.agentId),
+        (err) => request.log.warn({ agentId: usageContext?.agentId, server: err.server }, err.message),
+      );
+      if (session.tools.length > 0) return session;
+      await session.close();
+      return null;
+    };
+
+    type CompleteFn = (msgs: NonNullableMessage[], tools: ToolDef[] | undefined) => Promise<LoopResponse>;
+
+    // Runs the model, executes MCP tool calls server-side, and repeats until the model answers,
+    // asks for a page tool (client round-trip), or the iteration cap is hit. Page tool calls and
+    // the final answer are returned to the client in the normal OpenAI shape.
+    const respondWithMcp = async (session: McpSession, complete: CompleteFn) => {
+      const pageTools = (filteredTools as ToolDef[] | undefined) ?? [];
+      const allTools = [...pageTools, ...session.tools] as ToolDef[];
+      const loopMessages = [...normalizedMessages];
+      const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+      const sse = stream ? startSse(reply, request.headers.origin) : null;
+      try {
+        let response!: LoopResponse;
+        for (let i = 0; i <= MCP_MAX_TOOL_ITERATIONS; i++) {
+          // Final round offers no MCP tools so the model must answer.
+          const lastRound = i === MCP_MAX_TOOL_ITERATIONS;
+          response = await complete(loopMessages, lastRound ? (pageTools.length ? pageTools : undefined) : allTools);
+          usage.prompt_tokens += response.usage?.prompt_tokens ?? 0;
+          usage.completion_tokens += response.usage?.completion_tokens ?? 0;
+          usage.total_tokens += response.usage?.total_tokens ?? 0;
+          const calls = response.choices[0].message.tool_calls ?? [];
+          const mcpCalls = calls.filter(c => session.isMcpTool(c.function.name));
+          if (lastRound || mcpCalls.length === 0 || mcpCalls.length !== calls.length) break;
+          loopMessages.push({ role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: calls });
+          for (const call of calls) {
+            const result = await session.call(call.function.name, call.function.arguments);
+            loopMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+          }
+        }
+
+        const choice = response.choices[0];
+        const msg = choice.message;
+        const clientCalls = (msg.tool_calls ?? []).filter(c => !session.isMcpTool(c.function.name));
+        if (clientCalls.length) {
+          msg.tool_calls = clientCalls;
+          choice.finish_reason = 'tool_calls';
+        } else {
+          delete msg.tool_calls;
+          if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
+        }
+
+        recordUsage(model, 200, { usage }, provider);
+        if (!sse) return { ...response, usage };
+
+        const base = { id: response.id, object: 'chat.completion.chunk', created: response.created, model: response.model };
+        sse.writeData({ ...base, choices: [{ index: 0, delta: { role: 'assistant', ...(msg.thinking && { thinking: msg.thinking }), ...(msg.content && { content: msg.content }) }, finish_reason: null }] });
+        if (clientCalls.length) {
+          sse.writeData({ ...base, choices: [{ index: 0, delta: { tool_calls: clientCalls.map((tc, index) => ({ index, ...tc })) }, finish_reason: null }] });
+        }
+        sse.writeData({ ...base, choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason }], usage });
+        sse.end();
+        return;
+      } catch (err) {
+        request.log.error({ err, backend, provider }, 'LLM request failed during MCP tool loop');
+        recordUsage(model, 502, { usage }, provider);
+        if (sse) {
+          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          sse.end();
+          return;
+        }
+        reply.code(502);
+        return createError('Upstream provider request failed', 'server_error');
+      } finally {
+        await session.close();
+      }
+    };
 
     // --- Direct providers via harness-core ---
     if (backend === 'direct') {
@@ -959,6 +1058,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const canRetryWithFallback = (error: unknown, m: string) =>
         isModelNotFoundError(error) && Boolean(fallbackRetryModel) && m !== fallbackRetryModel;
 
+      const directMcp = await openAgentMcp();
+      if (directMcp) {
+        return respondWithMcp(directMcp, async (msgs, loopTools) => {
+          const conv = toResponsesInput(msgs as ChatInputMessage[]);
+          const loopHarnessTools = toResponsesTools(loopTools as ChatToolDef[] | undefined);
+          const params: CompletionParams = { ...buildParams(model), instructions: conv.instructions, input: conv.input };
+          delete params.tools;
+          if (loopHarnessTools) params.tools = loopHarnessTools;
+          const collected = await collectCompletionStream(await createAICompletion(params));
+          if (collected.status === 'failed' || collected.status === 'error') {
+            throw new Error(collected.reason || `Provider returned ${collected.status}`);
+          }
+          const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model, created: Math.floor(Date.now() / 1000) }) as unknown as LoopResponse;
+          const msg = response.choices[0].message;
+          normalizeMessageThinking(msg as Record<string, unknown>);
+          if (!msg.tool_calls && typeof msg.content === 'string') {
+            const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
+            if (extracted && extracted.length > 0) msg.tool_calls = extracted;
+          }
+          return response;
+        });
+      }
       if (stream) {
         const sse = startSse(reply, request.headers.origin);
 
@@ -1073,6 +1194,28 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       // Fall through to the llm_error mock/503 below.
     } else {
     // --- Gateway (LLM_BASE_URL) ---
+      const gatewayMcp = await openAgentMcp();
+      if (gatewayMcp) {
+        return respondWithMcp(gatewayMcp, async (msgs, loopTools) => {
+          const response = await createLlmClient(provider).createChatCompletion({
+            model,
+            messages: msgs,
+            ...tokenParamFor(model),
+            ...temperatureParamFor(model),
+            ...(response_format && { response_format }),
+            ...(loopTools && loopTools.length > 0 && { tools: loopTools }),
+            stream: false,
+          } as unknown as ClientChatCompletionRequest) as unknown as LoopResponse;
+          const msg = response.choices?.[0]?.message;
+          if (!msg) throw new Error('Gateway returned no choices');
+          normalizeMessageThinking(msg as Record<string, unknown>);
+          if (!msg.tool_calls && typeof msg.content === 'string') {
+            const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
+            if (extracted && extracted.length > 0) msg.tool_calls = extracted;
+          }
+          return response;
+        });
+      }
       try {
         const client = createLlmClient(provider);
 

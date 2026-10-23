@@ -405,6 +405,15 @@ export class AgentStore {
       CREATE INDEX IF NOT EXISTS idx_agents_agent_key ON agents(agent_key);
       CREATE INDEX IF NOT EXISTS idx_agents_parent_key ON agents(parent_key);
 
+      -- Write-only credentials referenced from agent YAML as secrets.NAME. Never returned by the API.
+      CREATE TABLE IF NOT EXISTS agent_secrets (
+        agent_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (agent_id, name)
+      );
+
       CREATE TABLE IF NOT EXISTS provider_models (
         provider TEXT NOT NULL,
         model TEXT NOT NULL,
@@ -1578,8 +1587,38 @@ export class AgentStore {
 
     /** Delete agent only if owned by parentKey. Returns true if deleted. */
     deleteAgent(agentId: string, parentKey: string): boolean {
-        const result = this.stmtDeleteOwned.run(agentId, parentKey);
-        return result.changes > 0;
+        return this.db.transaction(() => {
+            const result = this.stmtDeleteOwned.run(agentId, parentKey);
+            if (result.changes === 0) return false;
+            this.db.prepare('DELETE FROM agent_secrets WHERE agent_id = ?').run(agentId);
+            return true;
+        })();
+    }
+
+    /** Upsert secrets for an agent; a null value deletes that secret. */
+    setAgentSecrets(agentId: string, secrets: Record<string, string | null>): void {
+        const upsert = this.db.prepare(`
+          INSERT INTO agent_secrets (agent_id, name, value, updated_at)
+          VALUES (?, ?, ?, datetime('now'))
+          ON CONFLICT(agent_id, name) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        `);
+        const remove = this.db.prepare('DELETE FROM agent_secrets WHERE agent_id = ? AND name = ?');
+        this.db.transaction(() => {
+            for (const [name, value] of Object.entries(secrets)) {
+                if (value === null) remove.run(agentId, name);
+                else upsert.run(agentId, name, value);
+            }
+        })();
+    }
+
+    getAgentSecrets(agentId: string): Record<string, string> {
+        const rows = this.db.prepare('SELECT name, value FROM agent_secrets WHERE agent_id = ?').all(agentId) as { name: string; value: string }[];
+        return Object.fromEntries(rows.map(r => [r.name, r.value]));
+    }
+
+    listAgentSecretNames(agentId: string): string[] {
+        const rows = this.db.prepare('SELECT name FROM agent_secrets WHERE agent_id = ? ORDER BY name').all(agentId) as { name: string }[];
+        return rows.map(r => r.name);
     }
 }
 
