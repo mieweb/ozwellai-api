@@ -273,3 +273,76 @@ export const AudioTranscriptionResponseSchema = z.object({
 
 export type AudioTranscriptionRequest = z.infer<typeof AudioTranscriptionRequestSchema>;
 export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponseSchema>;
+
+// Ozwell authentication extensions. These describe the wire contract; account,
+// registration, callback and cryptographic checks remain server-side decisions.
+export const AccountIdentitySchema = z.object({ email: z.string(), user_id: z.string() });
+export const ApiKeyIdentityRequestSchema = z.object({ email: z.string().max(254) })
+  .describe('POST /auth/api-key/identity: verify the supplied email using the original bearer API or agent key.');
+export const ApiKeyIdentityResponseSchema = AccountIdentitySchema
+  .describe('The existing key owner; no new credential or additional authority is issued.');
+export const ApiKeyIdentityErrorSchema = z.object({ error: z.object({
+  message: z.string(), type: z.literal('authentication_error'),
+  param: z.null(), code: z.literal('invalid_key_identity'),
+}) });
+
+export const DesktopAuthorizeQuerySchema = z.object({
+  response_type: z.literal('code'), client_id: z.string().max(100),
+  redirect_uri: z.string().max(2048), state: z.string().min(32).max(256),
+  code_challenge: z.string().length(43), code_challenge_method: z.literal('S256'),
+}).describe('GET /auth/desktop/authorize: registered public client with S256 PKCE and browser-bound state.');
+export const DesktopAuthorizePageSchema = z.string().describe('Hosted sign-in HTML; the flow cookie is HttpOnly and the page has a restrictive CSP.');
+export const DesktopCompleteRequestSchema = z.object({ flow_id: z.string().max(100) })
+  .describe('POST /auth/desktop/complete: same-origin browser session and authorize-flow cookie required.');
+export const DesktopCompleteResponseSchema = z.object({ redirect_uri: z.string() });
+export const DesktopTokenRequestSchema = z.object({
+  // Unsupported grants intentionally reach the handler's invalid_grant response.
+  grant_type: z.string(), client_id: z.string().max(100), redirect_uri: z.string().max(2048),
+  code: z.string().max(100), code_verifier: z.string().max(128),
+}).describe('POST /auth/desktop/token: exchange a one-use authorization code and its PKCE verifier.');
+export const DesktopSessionResponseSchema = z.object({ session_token: z.string(), email: z.string() });
+export const DesktopAttestationRequiredResponseSchema = z.object({
+  attestation_required: z.literal(true), login_id: z.string(), account: AccountIdentitySchema,
+});
+export const DesktopTokenResponseSchema = z.union([DesktopSessionResponseSchema, DesktopAttestationRequiredResponseSchema]);
+export const DesktopAttestationChallengeRequestSchema = z.object({ login_id: z.string().max(100), key_id: z.string().max(100) })
+  .describe('POST /auth/desktop/attestation/challenge: request enrollment or a sign-in assertion challenge.');
+export const DesktopAttestationChallengeResponseSchema = z.object({ challenge: z.string(), proof_kind: z.enum(['attestation', 'assertion']) });
+export const DesktopAttestationVerifyRequestSchema = z.object({
+  login_id: z.string().max(100), key_id: z.string().max(100), proof: z.string().max(180_000),
+}).describe('POST /auth/desktop/attestation/verify: verify Apple application proof and issue a bound session.');
+export const DesktopRequestChallengeRequestSchema = z.object({
+  method: z.enum(['GET', 'POST']), path: z.string().max(2048), body_hash: z.string().regex(/^[a-f0-9]{64}$/),
+}).describe('POST /auth/desktop/challenge: one-use challenge bound to the exact method, request path and SHA-256 body hash.');
+export const DesktopRequestChallengeResponseSchema = z.object({ challenge_id: z.string(), challenge: z.string() });
+export const DesktopOAuthErrorSchema = z.object({
+  error: z.enum(['invalid_request', 'invalid_grant', 'invalid_token', 'temporarily_unavailable']),
+  error_description: z.string(),
+});
+export const DesktopProofErrorSchema = z.object({ error: z.object({
+  message: z.string(), type: z.literal('authentication_error'), code: z.literal('invalid_desktop_proof'),
+}) }).describe('The shared authorization hook rejects a missing, invalid or replayed bound-session proof.');
+// Retain Fastify's existing validation envelope, and support hosts that install
+// a shared OpenAI-style error handler before registering these routes.
+export const HttpValidationErrorSchema = z.object({
+  statusCode: z.number(), code: z.string().optional(), error: z.string(), message: z.string(),
+});
+export const AuthenticationBadRequestSchema = z.union([DesktopOAuthErrorSchema, ErrorSchema, HttpValidationErrorSchema]);
+export const DesktopUnauthorizedResponseSchema = z.union([DesktopOAuthErrorSchema, DesktopProofErrorSchema]);
+export const ApiKeyIdentityUnauthorizedResponseSchema = z.union([ApiKeyIdentityErrorSchema, DesktopProofErrorSchema]);
+
+export type AccountIdentity = z.infer<typeof AccountIdentitySchema>;
+export type ApiKeyIdentityRequest = z.infer<typeof ApiKeyIdentityRequestSchema>;
+export type ApiKeyIdentityResponse = z.infer<typeof ApiKeyIdentityResponseSchema>;
+export type DesktopAuthorizeQuery = z.infer<typeof DesktopAuthorizeQuerySchema>;
+export type DesktopCompleteRequest = z.infer<typeof DesktopCompleteRequestSchema>;
+export type DesktopCompleteResponse = z.infer<typeof DesktopCompleteResponseSchema>;
+export type DesktopTokenRequest = z.infer<typeof DesktopTokenRequestSchema>;
+export type DesktopTokenResponse = z.infer<typeof DesktopTokenResponseSchema>;
+export type DesktopSessionResponse = z.infer<typeof DesktopSessionResponseSchema>;
+export type DesktopAttestationChallengeRequest = z.infer<typeof DesktopAttestationChallengeRequestSchema>;
+export type DesktopAttestationChallengeResponse = z.infer<typeof DesktopAttestationChallengeResponseSchema>;
+export type DesktopAttestationVerifyRequest = z.infer<typeof DesktopAttestationVerifyRequestSchema>;
+export type DesktopRequestChallengeRequest = z.infer<typeof DesktopRequestChallengeRequestSchema>;
+export type DesktopRequestChallengeResponse = z.infer<typeof DesktopRequestChallengeResponseSchema>;
+export type DesktopOAuthError = z.infer<typeof DesktopOAuthErrorSchema>;

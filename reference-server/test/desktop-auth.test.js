@@ -13,6 +13,7 @@ process.env.WIDGET_SIGNUP_POLICY = 'open';
 process.env.OZWELL_DESKTOP_CLIENTS = JSON.stringify({ 'ozwell-desktop': { name: 'Ozwell Desktop', redirect_uris: ['http://127.0.0.1/oauth/callback', 'https://desktop.example.test/oauth/callback'] } });
 const { DesktopAuthorizationStore, DesktopAuthError, desktopLoginAvailable } = await import('../dist/reference-server/src/storage/desktop-auth.js');
 const { createSessionForIdentity, destroySession } = await import('../dist/reference-server/src/storage/sessions.js');
+const { getDatabase } = await import('../dist/reference-server/src/storage/agents.js');
 const { default: desktopModule } = await import('../dist/reference-server/src/routes/desktop-auth.js');
 const { default: authModule } = await import('../dist/reference-server/src/routes/auth.js');
 const verifier = randomBytes(32).toString('base64url');
@@ -28,7 +29,11 @@ before(async () => {
   await app.register(authModule.default ?? authModule);
   await app.ready();
 });
-after(async () => { await app.close(); rmSync(temp, { recursive: true, force: true }); });
+after(async () => {
+  await app.close();
+  getDatabase().close();
+  rmSync(temp, { recursive: true, force: true });
+});
 function authorizeUrl(overrides = {}) {
   return '/auth/desktop/authorize?' + new URLSearchParams({ response_type: 'code', client_id: input.clientId, redirect_uri: input.redirectUri, state, code_challenge: challenge, code_challenge_method: 'S256', ...overrides });
 }

@@ -84,7 +84,7 @@ The user should start sign-in from their own app and check the displayed client.
    `Cache-Control: no-store`. The code expires after 60 seconds, is single use,
    and is bound to the client, callback, and challenge. It cannot be redeemed
    after its session, backing key, user, or registration becomes invalid.
-6. Desktop uses the session for `/auth/session`, `/v1/models/effective`, and
+6. Desktop uses the session for `/auth/session`, `/v1/models/effective`, `/v1/agents`, and
    `/v1/chat/completions`, and calls `POST /auth/logout` with the same bearer
    session on sign-out. Existing session scope and expiry rules still apply.
 

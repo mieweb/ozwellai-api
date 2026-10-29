@@ -1,24 +1,22 @@
 import { FastifyInstance } from 'fastify';
 import { agentStore } from '../storage/agents';
 import { createError, extractToken } from '../util';
+import type { ApiKeyIdentityRequest } from '../../../spec';
+import { registerAuthenticationSchemas } from '../util/authentication-schemas';
 
 /** Describe a key's existing account; callers keep the original key and its scope. */
 export default async function apiKeyIdentityRoute(fastify: FastifyInstance) {
-  fastify.post<{ Body: { email: string } }>('/auth/api-key/identity', {
+  const $ref = registerAuthenticationSchemas(fastify);
+  fastify.post<{ Body: ApiKeyIdentityRequest }>('/auth/api-key/identity', {
     schema: {
       tags: ['Auth'],
       summary: 'Verify an API key belongs to the supplied account email',
-      body: {
-        type: 'object',
-        required: ['email'],
-        properties: { email: { type: 'string', maxLength: 254 } },
-      },
+      security: [{ bearerAuth: [] }],
+      body: $ref('ApiKeyIdentityRequest'),
       response: {
-        200: {
-          type: 'object',
-          properties: { email: { type: 'string' }, user_id: { type: 'string' } },
-          required: ['email', 'user_id'],
-        },
+        200: $ref('ApiKeyIdentityResponse'),
+        400: $ref('AuthenticationBadRequest'),
+        401: $ref('ApiKeyIdentityUnauthorizedResponse'),
       },
     },
   }, async (request, reply) => {

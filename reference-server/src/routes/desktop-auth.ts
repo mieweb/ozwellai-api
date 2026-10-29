@@ -5,6 +5,11 @@ import { validateSession, allowOidcStart } from '../storage/sessions';
 import { desktopAttestation, type DesktopAttestationService } from '../storage/desktop-attestation';
 import { extractToken } from '../util';
 import { publicOrigin } from '../util/oidc';
+import type {
+  DesktopAuthorizeQuery, DesktopCompleteRequest, DesktopTokenRequest,
+  DesktopAttestationChallengeRequest, DesktopAttestationVerifyRequest, DesktopRequestChallengeRequest,
+} from '../../../spec';
+import { registerAuthenticationSchemas } from '../util/authentication-schemas';
 
 function noStore(reply: FastifyReply): void {
   reply.header('Cache-Control', 'no-store');
@@ -26,24 +31,25 @@ function text(value: unknown): string { return typeof value === 'string' && valu
 
 export default async function desktopAuthRoute(fastify: FastifyInstance, options: { attestationService?: DesktopAttestationService } = {}) {
   const attestation = options.attestationService ?? desktopAttestation;
+  const $ref = registerAuthenticationSchemas(fastify);
+  const errors = {
+    400: $ref('AuthenticationBadRequest'),
+    401: $ref('DesktopUnauthorizedResponse'),
+    429: $ref('DesktopOAuthError'),
+  };
   fastify.addHook('onRequest', async (_request, reply) => { noStore(reply); });
-  fastify.get('/auth/desktop/authorize', {
+  fastify.get<{ Querystring: DesktopAuthorizeQuery }>('/auth/desktop/authorize', {
     schema: {
       tags: ['Auth'], summary: 'Authorize a registered desktop public client using hosted sign-in',
-      querystring: {
-        type: 'object', required: ['response_type', 'client_id', 'redirect_uri', 'state', 'code_challenge', 'code_challenge_method'],
-        properties: {
-          response_type: { type: 'string', enum: ['code'] }, client_id: { type: 'string', maxLength: 100 },
-          redirect_uri: { type: 'string', maxLength: 2048 }, state: { type: 'string', minLength: 32, maxLength: 256 },
-          code_challenge: { type: 'string', minLength: 43, maxLength: 43 }, code_challenge_method: { type: 'string', enum: ['S256'] },
-        },
-      },
+      security: [],
+      querystring: $ref('DesktopAuthorizeQuery'),
+      response: { ...errors, 200: { content: { 'text/html': { schema: $ref('DesktopAuthorizePage') } } } },
     },
   }, async (request, reply) => {
     reply.header('X-Frame-Options', 'DENY');
     try {
       if (!allowOidcStart(request.ip)) throw new DesktopAuthError('temporarily_unavailable');
-      const query = request.query as Record<string, unknown>;
+      const query = request.query;
       const flow = desktopAuthorizations.begin({
         clientId: text(query.client_id), redirectUri: text(query.redirect_uri), state: text(query.state), challenge: text(query.code_challenge),
       }, query.code_challenge_method, query.response_type);
@@ -55,12 +61,12 @@ export default async function desktopAuthRoute(fastify: FastifyInstance, options
     } catch (error) { return errorReply(reply, error); }
   });
 
-  fastify.post('/auth/desktop/complete', {
+  fastify.post<{ Body: DesktopCompleteRequest }>('/auth/desktop/complete', {
     bodyLimit: 8192,
     schema: {
       tags: ['Auth'], summary: 'Finish a browser-bound desktop authorization',
-      body: { type: 'object', required: ['flow_id'], properties: { flow_id: { type: 'string', maxLength: 100 } } },
-      response: { 200: { type: 'object', required: ['redirect_uri'], properties: { redirect_uri: { type: 'string' } } } },
+      body: $ref('DesktopCompleteRequest'),
+      response: { ...errors, 200: $ref('DesktopCompleteResponse'), 403: $ref('DesktopOAuthError') },
     },
   }, async (request, reply) => {
     // Cookie proves this browser opened authorize; Origin and bearer prevent cross-site completion.
@@ -68,29 +74,25 @@ export default async function desktopAuthRoute(fastify: FastifyInstance, options
     const token = extractToken(request.headers.authorization);
     if (!attestation.activeSession(token) || validateSession(token)?.desktopAttestation) return reply.code(401).send({ error: 'invalid_token', error_description: 'Sign in to Ozwell again.' });
     try {
-      const body = request.body as { flow_id: string };
+      const body = request.body;
       const redirectUri = desktopAuthorizations.complete(body.flow_id, flowCookie(request.headers.cookie), token);
       reply.header('Set-Cookie', cookieHeader('', 0));
       return { redirect_uri: redirectUri };
     } catch (error) { return errorReply(reply, error); }
   });
 
-  fastify.post('/auth/desktop/token', {
+  fastify.post<{ Body: DesktopTokenRequest }>('/auth/desktop/token', {
     bodyLimit: 8192,
     schema: {
       tags: ['Auth'], summary: 'Exchange a desktop authorization code with its S256 PKCE verifier',
-      body: { type: 'object', required: ['grant_type', 'client_id', 'redirect_uri', 'code', 'code_verifier'], properties: {
-        grant_type: { type: 'string' }, client_id: { type: 'string', maxLength: 100 }, redirect_uri: { type: 'string', maxLength: 2048 }, code: { type: 'string', maxLength: 100 }, code_verifier: { type: 'string', maxLength: 128 },
-      } },
-      response: { 200: { anyOf: [
-        { type: 'object', required: ['session_token', 'email'], properties: { session_token: { type: 'string' }, email: { type: 'string' } } },
-        { type: 'object', required: ['attestation_required', 'login_id', 'account'], properties: { attestation_required: { type: 'boolean', const: true }, login_id: { type: 'string' }, account: { type: 'object', required: ['email', 'user_id'], properties: { email: { type: 'string' }, user_id: { type: 'string' } } } } },
-      ] } },
+      security: [],
+      body: $ref('DesktopTokenRequest'),
+      response: { ...errors, 200: $ref('DesktopTokenResponse') },
     },
   }, async (request, reply) => {
     // No browser cookies or shared client secret are used to authorize this exchange.
     try {
-      const body = request.body as Record<string, unknown>;
+      const body = request.body;
       const token = desktopAuthorizations.redeem({ clientId: text(body.client_id), redirectUri: text(body.redirect_uri), code: text(body.code), verifier: text(body.code_verifier), grantType: body.grant_type });
       const session = attestation.activeSession(token);
       if (!session || session.desktopAttestation) throw new DesktopAuthError('invalid_grant');
@@ -99,36 +101,38 @@ export default async function desktopAuthRoute(fastify: FastifyInstance, options
     } catch (error) { return errorReply(reply, error); }
   });
 
-  fastify.post('/auth/desktop/attestation/challenge', {
+  fastify.post<{ Body: DesktopAttestationChallengeRequest }>('/auth/desktop/attestation/challenge', {
     bodyLimit: 8192,
     schema: { tags: ['Auth'], summary: 'Request an Apple App Attest enrollment or sign-in assertion challenge',
-      body: { type: 'object', required: ['login_id', 'key_id'], properties: { login_id: { type: 'string', maxLength: 100 }, key_id: { type: 'string', maxLength: 100 } } } },
+      security: [], body: $ref('DesktopAttestationChallengeRequest'),
+      response: { ...errors, 200: $ref('DesktopAttestationChallengeResponse') } },
   }, async (request, reply) => {
     try {
-      const body = request.body as { login_id: string; key_id: string };
+      const body = request.body;
       return attestation.loginChallenge(body.login_id, body.key_id);
     } catch (error) { return errorReply(reply, error); }
   });
 
-  fastify.post('/auth/desktop/attestation/verify', {
+  fastify.post<{ Body: DesktopAttestationVerifyRequest }>('/auth/desktop/attestation/verify', {
     bodyLimit: 192_000,
     schema: { tags: ['Auth'], summary: 'Verify Apple application proof and issue a bound desktop session',
-      body: { type: 'object', required: ['login_id', 'key_id', 'proof'], properties: { login_id: { type: 'string', maxLength: 100 }, key_id: { type: 'string', maxLength: 100 }, proof: { type: 'string', maxLength: 180_000 } } },
-      response: { 200: { type: 'object', required: ['session_token', 'email'], properties: { session_token: { type: 'string' }, email: { type: 'string' } } } } },
+      security: [], body: $ref('DesktopAttestationVerifyRequest'),
+      response: { ...errors, 200: $ref('DesktopSessionResponse') } },
   }, async (request, reply) => {
     try {
-      const body = request.body as { login_id: string; key_id: string; proof: string };
+      const body = request.body;
       return await attestation.verifyLogin(body.login_id, body.key_id, body.proof);
     } catch (error) { return errorReply(reply, error); }
   });
 
-  fastify.post('/auth/desktop/challenge', {
+  fastify.post<{ Body: DesktopRequestChallengeRequest }>('/auth/desktop/challenge', {
     bodyLimit: 8192,
     schema: { tags: ['Auth'], summary: 'Request a one-use challenge for an exact desktop API request',
-      body: { type: 'object', required: ['method', 'path', 'body_hash'], properties: { method: { type: 'string', enum: ['GET', 'POST'] }, path: { type: 'string', maxLength: 2048 }, body_hash: { type: 'string', pattern: '^[a-f0-9]{64}$' } } } },
+      security: [{ bearerAuth: [] }], body: $ref('DesktopRequestChallengeRequest'),
+      response: { ...errors, 200: $ref('DesktopRequestChallengeResponse') } },
   }, async (request, reply) => {
     try {
-      const body = request.body as { method: string; path: string; body_hash: string };
+      const body = request.body;
       return attestation.requestChallenge(extractToken(request.headers.authorization), body.method, body.path, body.body_hash);
     } catch (error) { return errorReply(reply, error); }
   });

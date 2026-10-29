@@ -1,10 +1,10 @@
 {
   "_generated": {
-    "message": "This file is auto-generated from ZOD schemas in /spec. DO NOT EDIT MANUALLY.\n See: https://github.com/mieweb/ozwellai-api/blob/main/spec/index.ts\n\nGit commit: fd37eb43ceaf9a2f41713ee9cfe9b1f5f0903e99\n\n",
+    "message": "This file is auto-generated from ZOD schemas in /spec. DO NOT EDIT MANUALLY.\n See: https://github.com/mieweb/ozwellai-api/blob/main/spec/index.ts\n\nGit commit: 7f5e032830ce696f43e4ebeef9672de468931ae7\n\n",
     "source": "../../spec/index.ts",
     "generator": "write-spec.js",
-    "generatedAt": "2025-09-25T00:41:38.605Z",
-    "gitHead": "fd37eb43ceaf9a2f41713ee9cfe9b1f5f0903e99"
+    "generatedAt": "2026-10-29T05:19:37.052Z",
+    "gitHead": "7f5e032830ce696f43e4ebeef9672de468931ae7"
   },
   "openapi": "3.1.0",
   "info": {
@@ -25,7 +25,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "API Key (ozw_... for management, agnt_key-... for chat)"
       }
     },
     "schemas": {
@@ -248,6 +248,560 @@
           "vendor": "zod"
         },
         "_cached": null
+      },
+      "AudioTranscriptionRequest": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "AudioTranscriptionResponse": {
+        "_def": {
+          "unknownKeys": "strip",
+          "catchall": {
+            "_def": {
+              "typeName": "ZodNever"
+            },
+            "~standard": {
+              "version": 1,
+              "vendor": "zod"
+            }
+          },
+          "typeName": "ZodObject"
+        },
+        "~standard": {
+          "version": 1,
+          "vendor": "zod"
+        },
+        "_cached": null
+      },
+      "def-0": {
+        "type": "object",
+        "properties": {
+          "ApiKeyIdentityRequest": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string",
+                "maxLength": 254
+              }
+            },
+            "required": [
+              "email"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/api-key/identity: verify the supplied email using the original bearer API or agent key."
+          },
+          "ApiKeyIdentityResponse": {
+            "type": "object",
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "user_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "email",
+              "user_id"
+            ],
+            "additionalProperties": false,
+            "description": "The existing key owner; no new credential or additional authority is issued."
+          },
+          "ApiKeyIdentityUnauthorizedResponse": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "authentication_error"
+                        ]
+                      },
+                      "param": {
+                        "type": "null"
+                      },
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "invalid_key_identity"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "message",
+                      "type",
+                      "param",
+                      "code"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "error"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "authentication_error"
+                        ]
+                      },
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "invalid_desktop_proof"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "message",
+                      "type",
+                      "code"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "error"
+                ],
+                "additionalProperties": false,
+                "description": "The shared authorization hook rejects a missing, invalid or replayed bound-session proof."
+              }
+            ]
+          },
+          "DesktopAuthorizeQuery": {
+            "type": "object",
+            "properties": {
+              "response_type": {
+                "type": "string",
+                "enum": [
+                  "code"
+                ]
+              },
+              "client_id": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "redirect_uri": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "state": {
+                "type": "string",
+                "minLength": 32,
+                "maxLength": 256
+              },
+              "code_challenge": {
+                "type": "string",
+                "minLength": 43,
+                "maxLength": 43
+              },
+              "code_challenge_method": {
+                "type": "string",
+                "enum": [
+                  "S256"
+                ]
+              }
+            },
+            "required": [
+              "response_type",
+              "client_id",
+              "redirect_uri",
+              "state",
+              "code_challenge",
+              "code_challenge_method"
+            ],
+            "additionalProperties": false,
+            "description": "GET /auth/desktop/authorize: registered public client with S256 PKCE and browser-bound state."
+          },
+          "DesktopAuthorizePage": {
+            "type": "string",
+            "description": "Hosted sign-in HTML; the flow cookie is HttpOnly and the page has a restrictive CSP."
+          },
+          "DesktopCompleteRequest": {
+            "type": "object",
+            "properties": {
+              "flow_id": {
+                "type": "string",
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "flow_id"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/desktop/complete: same-origin browser session and authorize-flow cookie required."
+          },
+          "DesktopCompleteResponse": {
+            "type": "object",
+            "properties": {
+              "redirect_uri": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "redirect_uri"
+            ],
+            "additionalProperties": false
+          },
+          "DesktopTokenRequest": {
+            "type": "object",
+            "properties": {
+              "grant_type": {
+                "type": "string"
+              },
+              "client_id": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "redirect_uri": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "code": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "code_verifier": {
+                "type": "string",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "grant_type",
+              "client_id",
+              "redirect_uri",
+              "code",
+              "code_verifier"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/desktop/token: exchange a one-use authorization code and its PKCE verifier."
+          },
+          "DesktopTokenResponse": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "session_token": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "session_token",
+                  "email"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "attestation_required": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "login_id": {
+                    "type": "string"
+                  },
+                  "account": {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityResponse/properties/email"
+                      },
+                      "user_id": {
+                        "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityResponse/properties/user_id"
+                      }
+                    },
+                    "required": [
+                      "email",
+                      "user_id"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "attestation_required",
+                  "login_id",
+                  "account"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "DesktopSessionResponse": {
+            "$ref": "#/components/schemas/def-0/properties/DesktopTokenResponse/anyOf/0"
+          },
+          "DesktopAttestationChallengeRequest": {
+            "type": "object",
+            "properties": {
+              "login_id": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "key_id": {
+                "type": "string",
+                "maxLength": 100
+              }
+            },
+            "required": [
+              "login_id",
+              "key_id"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/desktop/attestation/challenge: request enrollment or a sign-in assertion challenge."
+          },
+          "DesktopAttestationChallengeResponse": {
+            "type": "object",
+            "properties": {
+              "challenge": {
+                "type": "string"
+              },
+              "proof_kind": {
+                "type": "string",
+                "enum": [
+                  "attestation",
+                  "assertion"
+                ]
+              }
+            },
+            "required": [
+              "challenge",
+              "proof_kind"
+            ],
+            "additionalProperties": false
+          },
+          "DesktopAttestationVerifyRequest": {
+            "type": "object",
+            "properties": {
+              "login_id": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "key_id": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "proof": {
+                "type": "string",
+                "maxLength": 180000
+              }
+            },
+            "required": [
+              "login_id",
+              "key_id",
+              "proof"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/desktop/attestation/verify: verify Apple application proof and issue a bound session."
+          },
+          "DesktopRequestChallengeRequest": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": [
+                  "GET",
+                  "POST"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "body_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            },
+            "required": [
+              "method",
+              "path",
+              "body_hash"
+            ],
+            "additionalProperties": false,
+            "description": "POST /auth/desktop/challenge: one-use challenge bound to the exact method, request path and SHA-256 body hash."
+          },
+          "DesktopRequestChallengeResponse": {
+            "type": "object",
+            "properties": {
+              "challenge_id": {
+                "type": "string"
+              },
+              "challenge": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "challenge_id",
+              "challenge"
+            ],
+            "additionalProperties": false
+          },
+          "HttpValidationError": {
+            "type": "object",
+            "properties": {
+              "statusCode": {
+                "type": "number"
+              },
+              "code": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "statusCode",
+              "error",
+              "message"
+            ]
+          },
+          "AuthenticationBadRequest": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "string",
+                    "enum": [
+                      "invalid_request",
+                      "invalid_grant",
+                      "invalid_token",
+                      "temporarily_unavailable"
+                    ]
+                  },
+                  "error_description": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "error",
+                  "error_description"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "message": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "param": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "code": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "message",
+                      "type",
+                      "param",
+                      "code"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "error"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "$ref": "#/components/schemas/def-0/properties/HttpValidationError"
+              }
+            ]
+          },
+          "DesktopOAuthError": {
+            "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest/anyOf/0"
+          },
+          "DesktopUnauthorizedResponse": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest/anyOf/0"
+              },
+              {
+                "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityUnauthorizedResponse/anyOf/1"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ApiKeyIdentityRequest",
+          "ApiKeyIdentityResponse",
+          "ApiKeyIdentityUnauthorizedResponse",
+          "DesktopAuthorizeQuery",
+          "DesktopAuthorizePage",
+          "DesktopCompleteRequest",
+          "DesktopCompleteResponse",
+          "DesktopTokenRequest",
+          "DesktopTokenResponse",
+          "DesktopSessionResponse",
+          "DesktopAttestationChallengeRequest",
+          "DesktopAttestationChallengeResponse",
+          "DesktopAttestationVerifyRequest",
+          "DesktopRequestChallengeRequest",
+          "DesktopRequestChallengeResponse",
+          "HttpValidationError",
+          "AuthenticationBadRequest",
+          "DesktopOAuthError",
+          "DesktopUnauthorizedResponse"
+        ],
+        "additionalProperties": false,
+        "title": "OzwellAuthentication"
       }
     }
   },
@@ -270,53 +824,641 @@
         }
       }
     },
-    "/v1/models": {
+    "/auth/desktop/authorize": {
       "get": {
+        "summary": "Authorize a registered desktop public client using hosted sign-in",
+        "tags": [
+          "Auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "code"
+              ]
+            },
+            "in": "query",
+            "name": "response_type",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "in": "query",
+            "name": "client_id",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "in": "query",
+            "name": "redirect_uri",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 32,
+              "maxLength": 256
+            },
+            "in": "query",
+            "name": "state",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43
+            },
+            "in": "query",
+            "name": "code_challenge",
+            "required": true
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "S256"
+              ]
+            },
+            "in": "query",
+            "name": "code_challenge_method",
+            "required": true
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopAuthorizePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/desktop/complete": {
+      "post": {
+        "summary": "Finish a browser-bound desktop authorization",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/DesktopCompleteRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Default Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "object": {
-                      "type": "string"
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string"
-                          },
-                          "object": {
-                            "type": "string"
-                          },
-                          "created": {
-                            "type": "number"
-                          },
-                          "owned_by": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "id",
-                          "object",
-                          "created",
-                          "owned_by"
-                        ]
-                      }
-                    }
-                  },
-                  "required": [
-                    "object",
-                    "data"
-                  ]
+                  "$ref": "#/components/schemas/def-0/properties/DesktopCompleteResponse"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/desktop/token": {
+      "post": {
+        "summary": "Exchange a desktop authorization code with its S256 PKCE verifier",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/DesktopTokenRequest"
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/desktop/attestation/challenge": {
+      "post": {
+        "summary": "Request an Apple App Attest enrollment or sign-in assertion challenge",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/DesktopAttestationChallengeRequest"
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopAttestationChallengeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/desktop/attestation/verify": {
+      "post": {
+        "summary": "Verify Apple application proof and issue a bound desktop session",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/DesktopAttestationVerifyRequest"
+              }
+            }
+          }
+        },
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/desktop/challenge": {
+      "post": {
+        "summary": "Request a one-use challenge for an exact desktop API request",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/DesktopRequestChallengeRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopRequestChallengeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopUnauthorizedResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/DesktopOAuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/api-key/identity": {
+      "post": {
+        "summary": "Verify an API key belongs to the supplied account email",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/AuthenticationBadRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/def-0/properties/ApiKeyIdentityUnauthorizedResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/otp/request": {
+      "post": {
+        "summary": "Request an email one-time code for widget sign-in",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/otp/verify": {
+      "post": {
+        "summary": "Exchange an email one-time code for a widget session token",
+        "tags": [
+          "Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "challenge_id",
+                  "code"
+                ],
+                "properties": {
+                  "challenge_id": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "summary": "Describe the current widget session",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/methods": {
+      "get": {
+        "summary": "List sign-in methods this server offers",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Destroy the current widget session",
+        "tags": [
+          "Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/oidc/google/start": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/oidc/google/callback": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/oidc/apple/start": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/oidc/apple/callback": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models/effective": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
           }
         }
       }
@@ -329,6 +1471,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "provider": {
+                    "type": "string"
+                  },
                   "model": {
                     "type": "string"
                   },
@@ -336,18 +1481,47 @@
                     "type": "array",
                     "items": {
                       "type": "object",
+                      "additionalProperties": true,
                       "properties": {
                         "role": {
                           "type": "string"
                         },
-                        "content": {
+                        "content": {},
+                        "tool_calls": {
+                          "type": "array"
+                        },
+                        "tool_call_id": {
                           "type": "string"
                         }
                       },
                       "required": [
-                        "role",
-                        "content"
+                        "role"
                       ]
+                    }
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "function": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "parameters": {
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
                     }
                   },
                   "stream": {
@@ -358,10 +1532,13 @@
                   },
                   "temperature": {
                     "type": "number"
+                  },
+                  "response_format": {
+                    "type": "object",
+                    "additionalProperties": true
                   }
                 },
                 "required": [
-                  "model",
                   "messages"
                 ]
               }
@@ -418,6 +1595,11 @@
     },
     "/v1/embeddings": {
       "post": {
+        "summary": "Create embeddings",
+        "tags": [
+          "Embeddings"
+        ],
+        "description": "Creates an embedding vector representing the input text. Routes to a configured OpenAI-compatible backend (LLM_BASE_URL) or a local Ollama instance, falling back to deterministic mock vectors when ALLOW_MOCK is enabled. Accepts a single string or an array of strings.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -428,10 +1610,30 @@
                     "type": "string"
                   },
                   "input": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
                   },
                   "dimensions": {
                     "type": "number"
+                  },
+                  "encoding_format": {
+                    "type": "string",
+                    "enum": [
+                      "float",
+                      "base64"
+                    ]
+                  },
+                  "user": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -520,12 +1722,1193 @@
           }
         }
       }
+    },
+    "/v1/manager/me": {
+      "get": {
+        "summary": "Get manager-console authenticated user status",
+        "tags": [
+          "Manager Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/models": {
+      "get": {
+        "summary": "List models for manager-console authenticated UI",
+        "tags": [
+          "Manager Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/summary": {
+      "get": {
+        "summary": "Get admin console summary metrics",
+        "tags": [
+          "Manager Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/users": {
+      "get": {
+        "summary": "List manager users",
+        "tags": [
+          "Manager Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/users/{user_id}": {
+      "get": {
+        "summary": "Get manager user detail",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "user_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/quotas/users/{user_id}": {
+      "get": {
+        "summary": "Get user monthly token quota",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "user_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Set user monthly token quota",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "monthly_token_limit": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "user_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/quotas/agents/{agent_id}": {
+      "get": {
+        "summary": "Get agent monthly token quota",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Set agent monthly token quota",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "monthly_token_limit": {
+                    "type": "number"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "disabled"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/users/{user_id}/promote": {
+      "post": {
+        "summary": "Promote user to manager admin",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "user_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/users/{user_id}/demote": {
+      "post": {
+        "summary": "Demote manager admin user",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "user_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/parent-keys/{key_id}/revoke": {
+      "post": {
+        "summary": "Revoke a parent key",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "key_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/agents/{agent_id}/transfer": {
+      "post": {
+        "summary": "Transfer an agent to another manager user",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "destination_user_id": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "destination_user_id"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/model-restrictions": {
+      "get": {
+        "summary": "Get server-wide provider/model restrictions",
+        "tags": [
+          "Manager Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update server-wide provider/model restrictions",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allowed_models": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "provider"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/default-model": {
+      "get": {
+        "summary": "Get the server-wide fallback model",
+        "tags": [
+          "Manager Admin"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Set or clear the server-wide fallback model",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/admin/parent-keys/{key_id}/model-restrictions": {
+      "get": {
+        "summary": "Get parent-key provider/model restrictions",
+        "tags": [
+          "Manager Admin"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "key_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update parent-key provider/model restrictions",
+        "tags": [
+          "Manager Admin"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "allowed_models": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "provider": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "provider"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "key_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/parent-key/reveal": {
+      "post": {
+        "summary": "Reveal active manager parent key",
+        "tags": [
+          "Manager Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/claim-key": {
+      "post": {
+        "summary": "Claim an existing parent key for the manager-console user",
+        "tags": [
+          "Manager Auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "parent_key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "parent_key"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/notifications": {
+      "get": {
+        "summary": "List manager-console notifications",
+        "tags": [
+          "Manager Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/notifications/read-all": {
+      "post": {
+        "summary": "Mark manager-console notifications read",
+        "tags": [
+          "Manager Auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/notifications/{notification_id}/read": {
+      "post": {
+        "summary": "Mark one manager-console notification read",
+        "tags": [
+          "Manager Auth"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "notification_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/keys/validate": {
+      "get": {
+        "summary": "Validate an API key (parent or agent)",
+        "tags": [
+          "Keys"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "valid"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents": {
+      "post": {
+        "summary": "Create a new agent",
+        "tags": [
+          "Agents"
+        ],
+        "requestBody": {
+          "content": {
+            "application/yaml": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Raw YAML agent definition (application/yaml)"
+                  },
+                  {
+                    "type": "object",
+                    "description": "JSON wrapper with yaml field (application/json)",
+                    "properties": {
+                      "yaml": {
+                        "type": "string",
+                        "description": "YAML agent definition string"
+                      },
+                      "secrets": {
+                        "type": "object",
+                        "description": "Write-only secret values referenced from YAML as ${{ secrets.NAME }}",
+                        "additionalProperties": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "yaml"
+                    ]
+                  }
+                ]
+              }
+            },
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Raw YAML agent definition (application/yaml)"
+                  },
+                  {
+                    "type": "object",
+                    "description": "JSON wrapper with yaml field (application/json)",
+                    "properties": {
+                      "yaml": {
+                        "type": "string",
+                        "description": "YAML agent definition string"
+                      },
+                      "secrets": {
+                        "type": "object",
+                        "description": "Write-only secret values referenced from YAML as ${{ secrets.NAME }}",
+                        "additionalProperties": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "yaml"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "summary": "List all agents",
+        "tags": [
+          "Agents"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/agents/me": {
+      "get": {
+        "summary": "Get own agent config (agent key auth)",
+        "tags": [
+          "Agents"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/agents": {
+      "get": {
+        "summary": "List manager-authenticated user agents",
+        "tags": [
+          "Manager Agents"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create manager-authenticated user agent",
+        "tags": [
+          "Manager Agents"
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/agents/{agent_id}/model-policy": {
+      "get": {
+        "summary": "Get agent provider/model policy",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update agent provider/model policy",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/agents/{agent_id}": {
+      "get": {
+        "summary": "Get manager-authenticated user agent details",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update manager-authenticated user agent",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete manager-authenticated user agent",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/agents/{agent_id}/reveal-key": {
+      "post": {
+        "summary": "Reveal manager-authenticated user agent key",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/agents/{agent_id}/rotate-key": {
+      "post": {
+        "summary": "Rotate manager-authenticated user agent key",
+        "tags": [
+          "Manager Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/agents/{agent_id}": {
+      "get": {
+        "summary": "Get agent details",
+        "tags": [
+          "Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update an agent",
+        "tags": [
+          "Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete an agent",
+        "tags": [
+          "Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/agents/{agent_id}/reveal-key": {
+      "post": {
+        "summary": "Reveal full agent key (parent key auth required)",
+        "tags": [
+          "Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/agents/{agent_id}/rotate-key": {
+      "post": {
+        "summary": "Rotate agent key (invalidates old key)",
+        "tags": [
+          "Agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/mcp/discover": {
+      "post": {
+        "summary": "List a remote MCP server's tools",
+        "tags": [
+          "MCP"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "server": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "secrets": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "agent_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/manager/mcp/discover": {
+      "post": {
+        "summary": "List a remote MCP server's tools",
+        "tags": [
+          "Manager Agents"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "server": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "secrets": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "agent_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/audio/transcriptions": {
+      "post": {
+        "summary": "Transcribe audio to text",
+        "tags": [
+          "Audio"
+        ],
+        "description": "Transcribes audio into text using the specified model. Accepts multipart/form-data with fields: file (required, audio binary), model (required, e.g. \"whisper-1\"), response_format (json|text|srt|verbose_json|vtt), language (ISO-639-1), temperature (0-1), timestamp_granularities (word|segment).",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/auth/desktop/login.js": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/widget": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/widget/ozwell.js": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/widget/ozwell-icon.png": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/widget/frame/": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/embed/ozwell-loader.js": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
     }
   },
   "servers": [
     {
       "url": "http://localhost:3000",
-      "description": "Development server"
+      "description": "Local development"
+    },
+    {
+      "url": "https://ozwellapi.os.mieweb.org",
+      "description": "Current dev-container API server"
     }
   ],
   "security": [

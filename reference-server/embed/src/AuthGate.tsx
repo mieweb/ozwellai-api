@@ -43,6 +43,9 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
           setAppleEnabled(!!methods?.apple);
           setEmailEnabled(!!methods?.email_otp);
           if (!methods?.email_otp && allowUserKey) setMode('key');
+          if (!allowUserKey && !methods?.google && !methods?.apple && !methods?.email_otp) {
+            setError('Sign-in methods are unavailable. Try again shortly.');
+          }
         }
       })
       .catch(() => { if (!cancelled) { if (allowUserKey) setMode('key'); else setError('Sign-in methods are unavailable. Try again shortly.'); } });
