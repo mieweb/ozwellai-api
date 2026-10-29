@@ -50,6 +50,10 @@ for candidate in "$PROJECT_ROOT/reference-server/node_modules/@mieweb/harness-co
         break
     fi
 done
+if [[ ! -f "$DEPLOY_DIR/vendor-deps/harness-core/package.json" ]]; then
+    echo "❌ @mieweb/harness-core not found in node_modules; run npm ci before packaging" >&2
+    exit 1
+fi
 
 # Create tarball
 TARBALL="$PROJECT_ROOT/reference-server-build.tar.gz"
