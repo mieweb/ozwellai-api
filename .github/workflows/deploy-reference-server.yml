@@ -270,6 +270,9 @@ jobs:
             tar -xzf /tmp/reference-server-build.tar.gz
 
             npm pkg set "dependencies.@mieweb/harness-core=file:../vendor-deps/harness-core" -w reference-server
+            # Drop every recorded git source for harness-core so npm never tries to reach GitHub.
+            rm -rf node_modules/@mieweb/harness-core reference-server/node_modules/@mieweb/harness-core node_modules/.package-lock.json
+            node -e 'const fs=require("fs");const l=JSON.parse(fs.readFileSync("package-lock.json"));for(const k of Object.keys(l.packages))if(k.endsWith("node_modules/@mieweb/harness-core"))delete l.packages[k];fs.writeFileSync("package-lock.json",JSON.stringify(l,null,2)+"\n")'
             npm install --omit=dev -w reference-server --include-workspace-root=false --no-audit --no-fund --install-links
 
             cd reference-server
