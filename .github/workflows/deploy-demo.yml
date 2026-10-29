@@ -121,22 +121,22 @@ jobs:
         env:
           DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
           DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
-          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'rgara' }}
         run: rsync -e "ssh -p $DEPLOY_PORT" -av --progress landing-page-build.tar.gz "$DEPLOY_USER@$DEPLOY_HOSTNAME:/tmp/"
 
       - name: Extract and restart dev2 landing
         env:
           DEPLOY_HOSTNAME: ${{ vars.OZWELL_DEV2_HOST || 'ozwell-dev2.os.mieweb.org' }}
           DEPLOY_PORT: ${{ vars.OZWELL_DEV2_PORT || '2029' }}
-          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'adamerla' }}
-          DEPLOY_PATH: ${{ vars.OZWELL_DEV2_DEPLOY_PATH || '/home/adamerla/ozwellai-api' }}
+          DEPLOY_USER: ${{ vars.OZWELL_DEV2_USER || 'rgara' }}
+          DEPLOY_PATH: ${{ vars.OZWELL_DEV2_DEPLOY_PATH || '/home/rgara/ozwellai-api' }}
           DEV_MANAGER_URL: ${{ vars.OZWELL_DEV2_MANAGER_URL || 'https://ozwellconsole.os.mieweb.org' }}
         run: |
           set -euo pipefail
           ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOSTNAME" "DEPLOY_PATH='$DEPLOY_PATH' DEV_MANAGER_URL='$DEV_MANAGER_URL' bash -s" <<'REMOTE'
             set -euo pipefail
 
-            deploy_path="${DEPLOY_PATH:-/home/adamerla/ozwellai-api}"
+            deploy_path="${DEPLOY_PATH:-/home/rgara/ozwellai-api}"
             dev_manager_url="${DEV_MANAGER_URL:-https://ozwellconsole.os.mieweb.org}"
             cd "$deploy_path"
 
