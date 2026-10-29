@@ -236,11 +236,11 @@ jobs:
             deploy_path="${DEPLOY_PATH:-/home/rgara/ozwellai-api}"
             cd "$deploy_path"
 
-            rm -rf reference-server/dist clients/typescript/dist spec/dist
+            rm -rf reference-server/dist clients/typescript/dist spec/dist vendor-deps
             tar -xzf /tmp/reference-server-build.tar.gz
 
-            # dev2 cannot reach GitHub over SSH, so use the harness-core checkout next to the app.
-            npm pkg set "dependencies.@mieweb/harness-core=file:../../harness-core" -w reference-server
+            # dev2 cannot reach GitHub over SSH; install the harness-core CI shipped in the package.
+            npm pkg set "dependencies.@mieweb/harness-core=file:../vendor-deps/harness-core" -w reference-server
             npm install --omit=dev -w reference-server --include-workspace-root=false --no-audit --no-fund
 
             cd reference-server
