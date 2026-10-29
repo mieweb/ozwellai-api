@@ -14,6 +14,7 @@ process.env.WIDGET_SIGNUP_POLICY = 'open';
 process.env.MODEL_DISCOVERY_REFRESH_MS = '0';
 process.env.OZWELL_DESKTOP_CLIENTS = JSON.stringify({ desktop: { name: 'Desktop', redirect_uris: ['http://127.0.0.1/oauth/callback'] } });
 const spec = await import('../dist/spec/index.js');
+const { getDatabase } = await import('../dist/reference-server/src/storage/agents.js');
 const { default: keyModule } = await import('../dist/reference-server/src/routes/api-key-identity.js');
 const { default: desktopModule } = await import('../dist/reference-server/src/routes/desktop-auth.js');
 const app = Fastify();
@@ -21,7 +22,11 @@ await app.register(swagger, { openapi: { info: { title: 'Contract test', version
 await app.register(keyModule.default ?? keyModule);
 await app.register(desktopModule.default ?? desktopModule);
 await app.ready();
-after(async () => { await app.close(); rmSync(temp, { recursive: true, force: true }); });
+after(async () => {
+  await app.close();
+  getDatabase().close();
+  rmSync(temp, { recursive: true, force: true });
+});
 
 test('canonical authentication schemas describe both desktop token outcomes and bounded requests', () => {
   assert.ok(spec.ApiKeyIdentityRequestSchema, 'API-key identity must have a canonical /spec request');
