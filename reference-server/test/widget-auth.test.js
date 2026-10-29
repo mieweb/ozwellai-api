@@ -76,6 +76,19 @@ function startServer(port, dbPath, extraEnv = {}) {
             GOOGLE_CLIENT_SECRET: '',
             APPLE_CLIENT_ID: '',
             SMTP_URL: '',
+            OPENAI_API_KEY: '',
+            OPENAI_BASE_URL: '',
+            ANTHROPIC_API_KEY: '',
+            ANTHROPIC_BASE_URL: '',
+            LLM_BASE_URL: '',
+            LLM_API_KEY: '',
+            LLM_TRANSPORT: '',
+            LLM_PROVIDER: '',
+            LLM_MODEL: '',
+            DEFAULT_MODEL: '',
+            OLLAMA_BASE_URL: '',
+            OLLAMA_API_KEY: '',
+            OLLAMA_MODEL: '',
             ...extraEnv,
         },
     });
@@ -578,21 +591,26 @@ test('SMTP delivery sends a usable code without exposing it in the API or logs',
 // --- session-to-key rewrite hook ---
 
 test('session token authorizes chat; bogus session token does not', async () => {
-    const sessionToken = await signIn('sess-chat@example.test');
+    const email = 'sess-chat@example.test';
+    const sessionToken = await signIn(email);
+    // This tests session authority, independently of the background model
+    // catalog refresh. A mock agent belongs to this exact signed-in account.
+    const agentId = await createMockAgent(parentKeyFor(email), 'Session authorization fixture', 'session-auth-fixture');
 
     const chat = await postJson('/v1/chat/completions', { messages: [{ role: 'user', content: 'hello' }] });
     assert.equal(chat.status, 401, 'no credential at all is still rejected');
 
     const authed = await fetch(`${BASE}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}`, 'X-Ozwell-Agent-Id': agentId },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
     });
     assert.equal(authed.status, 200);
+    assert.equal((await authed.json()).warning?.reason, 'mock_agent');
 
     const bogus = await fetch(`${BASE}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer sess_bogus' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer sess_bogus', 'X-Ozwell-Agent-Id': agentId },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
     });
     assert.equal(bogus.status, 401);
