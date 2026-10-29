@@ -230,7 +230,7 @@ jobs:
           DEPLOY_PATH: ${{ vars.OZWELL_DEV2_DEPLOY_PATH || '/home/rgara/ozwellai-api' }}
         run: |
           set -euo pipefail
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOSTNAME" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOSTNAME" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
             set -euo pipefail
 
             deploy_path="${DEPLOY_PATH:-/home/rgara/ozwellai-api}"
@@ -239,7 +239,9 @@ jobs:
             rm -rf reference-server/dist clients/typescript/dist spec/dist
             tar -xzf /tmp/reference-server-build.tar.gz
 
-            npm ci --omit=dev --workspace reference-server --include-workspace-root=false
+            # dev2 cannot reach GitHub over SSH, so use the harness-core checkout next to the app.
+            npm pkg set "dependencies.@mieweb/harness-core=file:../../harness-core" -w reference-server
+            npm install --omit=dev -w reference-server --include-workspace-root=false --no-audit --no-fund
 
             cd reference-server
             pm2 stop refserver || true
