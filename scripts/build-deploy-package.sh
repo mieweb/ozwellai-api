@@ -41,20 +41,6 @@ if [[ -d "$PROJECT_ROOT/reference-server/embed" ]]; then
     cp -r "$PROJECT_ROOT/reference-server/embed" "$DEPLOY_DIR/reference-server/"
 fi
 
-# Ship the exact harness-core CI installed, for hosts that cannot fetch it from GitHub.
-for candidate in "$PROJECT_ROOT/reference-server/node_modules/@mieweb/harness-core" "$PROJECT_ROOT/node_modules/@mieweb/harness-core"; do
-    if [[ -f "$candidate/package.json" ]]; then
-        echo "  Copying harness-core from $candidate..."
-        mkdir -p "$DEPLOY_DIR/vendor-deps"
-        rsync -a --exclude node_modules "$candidate/" "$DEPLOY_DIR/vendor-deps/harness-core/"
-        break
-    fi
-done
-if [[ ! -f "$DEPLOY_DIR/vendor-deps/harness-core/package.json" ]]; then
-    echo "❌ @mieweb/harness-core not found in node_modules; run npm ci before packaging" >&2
-    exit 1
-fi
-
 # Create tarball
 TARBALL="$PROJECT_ROOT/reference-server-build.tar.gz"
 echo "  Creating tarball..."
