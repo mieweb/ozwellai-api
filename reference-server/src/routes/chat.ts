@@ -953,6 +953,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const pageTools = (filteredTools as ToolDef[] | undefined) ?? [];
       const allTools = [...pageTools, ...session.tools] as ToolDef[];
       const loopMessages = [...normalizedMessages];
+      loopMessages.unshift({
+        role: 'system',
+        content: 'Earlier tool calls and their results in this conversation are still valid. Reuse them instead of calling the same tool again with the same arguments, unless the user asks to refresh or check again.',
+      });
+      // Messages added by this loop; streamed back so the client keeps them for follow-up turns.
+      const toolHistory: NonNullableMessage[] = [];
+      const callCache = new Map<string, string>();
+      let disconnected = false;
+      // request.raw.destroyed is already true once the body is read, so watch the response socket instead.
+      reply.raw.once('close', () => { if (!reply.raw.writableFinished) disconnected = true; });
+      const clientGone = () => disconnected;
       const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
       const sse = stream ? startSse(reply, request.headers.origin) : null;
       let activeModel = model;
@@ -998,11 +1009,31 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           const calls = response.choices[0].message.tool_calls ?? [];
           const mcpCalls = calls.filter(c => session.isMcpTool(c.function.name));
           if (lastRound || mcpCalls.length === 0) break;
+          if (clientGone()) {
+            request.log.info('Client disconnected during MCP tool loop; stopping');
+            return;
+          }
           // Page calls in a mixed turn are dropped here; the model re-issues them after seeing the MCP results.
-          loopMessages.push({ role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls });
+          const assistantTurn = { role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls } as NonNullableMessage;
+          loopMessages.push(assistantTurn);
+          toolHistory.push(assistantTurn);
           for (const call of mcpCalls) {
-            const result = await session.call(call.function.name, call.function.arguments);
-            loopMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+            const { server, tool } = session.describe(call.function.name) ?? { server: '', tool: call.function.name };
+            let args: unknown = {};
+            try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* shown as empty */ }
+            const startedAt = Date.now();
+            sse?.writeEvent('tool_status', { id: call.id, server, tool, arguments: args, status: 'running' });
+            const cacheKey = `${call.function.name}\u0000${call.function.arguments || '{}'}`;
+            const cached = callCache.get(cacheKey);
+            const result = cached ?? await session.call(call.function.name, call.function.arguments);
+            let error: string | undefined;
+            try { error = (JSON.parse(result) as { error?: string })?.error; } catch { /* plain-text result */ }
+            // Only successful results are reused; a failed call may succeed on retry.
+            if (!error) callCache.set(cacheKey, result);
+            sse?.writeEvent('tool_status', { id: call.id, status: error ? 'error' : 'success', duration: Date.now() - startedAt, ...(error && { error }) });
+            const toolTurn = { role: 'tool', tool_call_id: call.id, content: result } as NonNullableMessage;
+            loopMessages.push(toolTurn);
+            toolHistory.push(toolTurn);
           }
         }
 
@@ -1016,11 +1047,16 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           delete msg.tool_calls;
           if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
         }
+        if (!msg.content && !msg.tool_calls && toolHistory.length) {
+          // The model hit the iteration cap still asking for MCP tools; don't end with an empty turn.
+          msg.content = 'I ran out of tool calls before finishing. Ask me to continue and I will pick up from these results.';
+        }
 
         recordUsage(activeModel, 200, { usage }, provider);
         const fallbackWarning = warning as ReturnType<typeof buildFallbackWarning> | null;
         if (!sse) return { ...response, usage, ...(fallbackWarning ? { warning: fallbackWarning } : {}) };
 
+        if (toolHistory.length) sse.writeEvent('tool_history', { messages: toolHistory });
         const base = { id: response.id, object: 'chat.completion.chunk', created: response.created, model: response.model };
         sse.writeData({ ...base, choices: [{ index: 0, delta: { role: 'assistant', ...(msg.thinking && { thinking: msg.thinking }), ...(msg.content && { content: msg.content }) }, finish_reason: null }] });
         if (clientCalls.length) {

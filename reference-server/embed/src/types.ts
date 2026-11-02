@@ -47,7 +47,7 @@ export interface OpenAIToolCall {
 
 export interface WidgetMessage extends AIMessage {
   metadata?: {
-    source?: 'welcome' | 'debug-tool' | 'queued';
+    source?: 'welcome' | 'tool' | 'queued';
     toolCallId?: string | number;
   } & Record<string, unknown>;
 }

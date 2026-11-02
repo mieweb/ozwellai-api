@@ -311,10 +311,40 @@ function resolveToolCallIndex(toolCallDelta: { index?: unknown; id?: unknown }, 
   return Math.max(accumulated.length - 1, 0);
 }
 
-function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status']): MCPToolCall {
+const PAGE_TOOL_PREFIX = /^postMessage[_:]/;
+
+// The UI kit uses toolName as the pill text, so it carries the source and short failure reason.
+function toolLabel(rawName: string, server?: string, error?: string): string {
+  const isPageTool = PAGE_TOOL_PREFIX.test(rawName);
+  const name = rawName.replace(PAGE_TOOL_PREFIX, '').replace(/_/g, ' ');
+  const source = server ? server.charAt(0).toUpperCase() + server.slice(1) : isPageTool ? 'Page' : '';
+  const label = source ? `${name} · ${source}` : name;
+  return error ? `${label} — ${shortError(error)}` : label;
+}
+
+function shortError(error: string): string {
+  // Server errors look like "MCP tool 'x' on 'y' failed: request timed out"; keep the reason.
+  const reason = /failed: (.+)$/.exec(error)?.[1] ?? error;
+  return reason.length > 60 ? `${reason.slice(0, 57)}…` : reason;
+}
+
+function withLiveDuration(toolCall: MCPToolCall): MCPToolCall {
+  if (toolCall.status !== 'running') return toolCall;
+  // Whole seconds so the pill ticks once per second instead of jittering.
+  const elapsed = Math.floor((Date.now() - new Date(toolCall.startedAt).getTime()) / 1000) * 1000;
+  return { ...toolCall, duration: elapsed };
+}
+
+// The UI kit auto-expands finished cards; outside debug, drop the box content so they stay a one-line pill.
+function compactFinishedTool(toolCall: MCPToolCall, debug: boolean | undefined): MCPToolCall {
+  if (debug || toolCall.status === 'running') return toolCall;
+  return { ...toolCall, parameters: [], error: undefined, result: undefined };
+}
+
+function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status'], server?: string): MCPToolCall {
   return {
     id: String(toolCall.id || createMessageId('tool')),
-    toolName: toolCall.function?.name || 'unknown',
+    toolName: toolLabel(toolCall.function?.name || 'unknown', server),
     parameters: Object.entries(args).map(([name, value]) => ({
       name,
       type: typeof value,
@@ -700,25 +730,22 @@ export function WidgetApp() {
       const args = parseToolArgs(toolCall.function?.arguments);
       const toolCallId = ensureToolCallId(toolCall, () => ++mcpRequestIdRef.current);
 
-      if (configRef.current.debug) {
-        const displayToolCall = createToolDisplay(toolCall, args, 'running');
-        toolExecutionsRef.current.push({
-          toolCallId,
-          toolName,
-          arguments: args,
-          result: null,
-          timestamp: Date.now(),
-          completedAt: null,
-        });
-        appendDisplay({
-          id: createMessageId('tool'),
-          role: 'tool',
-          content: [{ type: 'tool_use', toolCall: displayToolCall }],
-          timestamp: new Date(),
-          status: 'complete',
-          metadata: { source: 'debug-tool', toolCallId },
-        });
-      }
+      toolExecutionsRef.current.push({
+        toolCallId,
+        toolName,
+        arguments: args,
+        result: null,
+        timestamp: Date.now(),
+        completedAt: null,
+      });
+      appendDisplay({
+        id: createMessageId('tool'),
+        role: 'tool',
+        content: [{ type: 'tool_use', toolCall: createToolDisplay(toolCall, args, 'running') }],
+        timestamp: new Date(),
+        status: 'complete',
+        metadata: { source: 'tool', toolCallId },
+      });
 
       activeToolCallsRef.current[toolName] = toolCallId;
       trackPendingToolCall(toolCallId);
@@ -788,6 +815,12 @@ export function WidgetApp() {
       let fullThinking = '';
       let sawThinking = false;
       const accumulatedToolCalls: OpenAIToolCall[] = [];
+      const serverTools: MCPToolCall[] = [];
+      const serverToolNames = new Map<string, { tool: string; server?: string }>();
+      const withServerTools = (blocks: WidgetMessage['content']): WidgetMessage['content'] => [
+        ...serverTools.map((toolCall) => ({ type: 'tool_use' as const, toolCall: compactFinishedTool(withLiveDuration(toolCall), configRef.current.debug) })),
+        ...blocks,
+      ];
       const modeAtStart = (configRef.current.thinkingDefaultMode ?? thinkingMode) as ThinkingMode;
 
       assistantMessageId = createMessageId('assistant');
@@ -838,6 +871,50 @@ export function WidgetApp() {
             currentEventType = null;
             continue;
           }
+          if (currentEventType === 'tool_history') {
+            try {
+              const { messages } = JSON.parse(data) as { messages?: ChatHistoryMessage[] };
+              if (Array.isArray(messages)) {
+                for (const message of messages) {
+                  if (message && (message.role === 'assistant' || message.role === 'tool')) appendHistory(message);
+                }
+              }
+            } catch {
+              // Ignore malformed tool history events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'tool_status') {
+            try {
+              const event = JSON.parse(data);
+              const id = String(event.id ?? '');
+              const existing = serverTools.find((tool) => tool.id === id);
+              if (existing) {
+                existing.status = event.status;
+                existing.completedAt = new Date();
+                if (typeof event.duration === 'number') existing.duration = event.duration;
+                if (typeof event.error === 'string') {
+                  const names = serverToolNames.get(id);
+                  existing.error = event.error;
+                  if (names) existing.toolName = toolLabel(names.tool, names.server, event.error);
+                }
+              } else if (typeof event.tool === 'string') {
+                const args = event.arguments && typeof event.arguments === 'object' ? event.arguments as Record<string, unknown> : {};
+                const server = typeof event.server === 'string' && event.server ? event.server : undefined;
+                serverToolNames.set(id, { tool: event.tool, server });
+                serverTools.push(createToolDisplay({ id, type: 'function', function: { name: event.tool, arguments: '' } }, args, 'running', server));
+              }
+              updateDisplayMessage(assistantMessageId, (message) => ({
+                ...message,
+                content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
+              }));
+            } catch {
+              // Ignore malformed tool status events.
+            }
+            currentEventType = null;
+            continue;
+          }
           currentEventType = null;
 
           if (configRef.current.debug) rawChunks.push(data);
@@ -881,7 +958,7 @@ export function WidgetApp() {
 
             updateDisplayMessage(assistantMessageId, (message) => ({
               ...message,
-              content: assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content,
+              content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
@@ -944,7 +1021,7 @@ export function WidgetApp() {
           });
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+            content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -1051,34 +1128,62 @@ export function WidgetApp() {
   }, []);
 
   const updateToolExecutionResult = useCallback((toolCallId: string | number, result: unknown) => {
-    if (!configRef.current.debug) return;
     const execution = toolExecutionsRef.current.find((item) => item.toolCallId === toolCallId);
     if (execution) {
       execution.result = result;
       execution.completedAt = Date.now();
     }
+    const error = (result as { error?: unknown } | null)?.error;
+    const errorText = error ? String(typeof error === 'string' ? error : JSON.stringify(error)) : undefined;
     setDisplayMessages((current) => current.map((message) => {
       if (message.metadata?.toolCallId !== toolCallId) return message;
       const content = message.content[0];
       if (content?.type !== 'tool_use' || !content.toolCall) return message;
+      const startedAt = new Date(content.toolCall.startedAt).getTime();
+      const rawName = execution?.toolName;
       return {
         ...message,
         content: [{
           type: 'tool_use',
-          toolCall: {
+          toolCall: compactFinishedTool({
             ...content.toolCall,
-            status: (result as any)?.error ? 'error' : 'success',
+            ...(errorText && rawName && { toolName: toolLabel(rawName, undefined, errorText) }),
+            status: errorText ? 'error' : 'success',
             completedAt: new Date(),
-            result: {
-              type: (result as any)?.error ? 'error' : 'json',
-              data: result,
-              summary: (result as any)?.error || 'Tool completed',
-            },
-          },
+            duration: Date.now() - startedAt,
+            ...(errorText && { error: errorText }),
+            ...(configRef.current.debug && {
+              result: {
+                type: errorText ? 'error' : 'json',
+                data: result,
+                summary: errorText || 'Tool completed',
+              },
+            }),
+          }, configRef.current.debug),
         }],
       };
     }));
   }, []);
+
+  const hasRunningTool = displayMessages.some((message) => message.content.some(
+    (block) => block.type === 'tool_use' && block.toolCall?.status === 'running',
+  ));
+  useEffect(() => {
+    if (!hasRunningTool) return;
+    const timer = window.setInterval(() => {
+      setDisplayMessages((current) => current.map((message) => (
+        message.content.some((block) => block.type === 'tool_use' && block.toolCall?.status === 'running')
+          ? {
+            ...message,
+            content: message.content.map((block) => (
+              block.type === 'tool_use' && block.toolCall ? { ...block, toolCall: withLiveDuration(block.toolCall) } : block
+            )),
+          }
+          : message
+      )));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningTool]);
 
   useEffect(() => {
     window.OzwellDebug = {
