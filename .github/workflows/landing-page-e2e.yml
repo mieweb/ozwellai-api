@@ -35,7 +35,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        # Pinned: ubuntu-latest is 26.04, which Playwright cannot install browser deps for yet.
+        os: [ubuntu-24.04]
         # Only run on Ubuntu for now since Playwright browser deps are easier to manage
 
     steps:
