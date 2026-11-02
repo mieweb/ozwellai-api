@@ -1035,6 +1035,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             loopMessages.push(toolTurn);
             toolHistory.push(toolTurn);
           }
+          // Sent per batch so a later model failure can't make the client forget actions that already ran.
+          sse?.writeEvent('tool_history', { messages: [assistantTurn, ...loopMessages.slice(-mcpCalls.length)] });
         }
 
         const choice = response.choices[0];
@@ -1056,7 +1058,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const fallbackWarning = warning as ReturnType<typeof buildFallbackWarning> | null;
         if (!sse) return { ...response, usage, ...(fallbackWarning ? { warning: fallbackWarning } : {}) };
 
-        if (toolHistory.length) sse.writeEvent('tool_history', { messages: toolHistory });
         const base = { id: response.id, object: 'chat.completion.chunk', created: response.created, model: response.model };
         sse.writeData({ ...base, choices: [{ index: 0, delta: { role: 'assistant', ...(msg.thinking && { thinking: msg.thinking }), ...(msg.content && { content: msg.content }) }, finish_reason: null }] });
         if (clientCalls.length) {
