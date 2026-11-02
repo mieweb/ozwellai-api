@@ -16,7 +16,8 @@ async function readWidgetSource() {
 }
 
 async function readWidgetAppSource() {
-  return readFile(WIDGET_APP_PATH, 'utf8');
+  // Windows checkouts may use CRLF; source regexes below anchor on \n.
+  return (await readFile(WIDGET_APP_PATH, 'utf8')).replace(/\r\n/g, '\n');
 }
 
 async function readWidgetTypesSource() {

@@ -662,7 +662,7 @@ test('the real iframe loader discovers and invokes scoped browser tools across o
   page,
 }) => {
   await openDemo(page);
-  const launcher = page.getByRole('button', { name: 'Open chat', exact: true });
+  const launcher = page.getByRole('button', { name: /^Open chat\b/ });
   const chat = page.locator('#ozwell-chat-wrapper');
   await expect(launcher).toBeVisible();
   await expect(chat).toHaveClass(/hidden/);
