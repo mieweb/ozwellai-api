@@ -10,6 +10,8 @@ import {
 } from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
+import { buildSystemPrompt, getAuthKey } from './system-prompt';
+import { createToolResultMessage } from './tool-results';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -22,9 +24,11 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
-const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
-const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
+// A frame's WindowProxy survives reloads. This identity belongs to the loaded
+// document, so hosts can retire its tool requests before accepting a new one.
+const newWidgetDocumentId = () => [...crypto.getRandomValues(new Uint32Array(4))].map(value => value.toString(16).padStart(8, '0')).join('');
+let widgetDocumentId = newWidgetDocumentId();
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
 const USER_PARTICIPANT = 'user';
 const ASSISTANT_PARTICIPANT = 'ozwell';
@@ -87,36 +91,12 @@ function ensureToolCallId(toolCall: OpenAIToolCall, nextId: () => number) {
   return toolCall.id;
 }
 
-function serializeToolResult(result: unknown) {
-  if (typeof result === 'string') return result;
-  const serialized = JSON.stringify(result);
-  return serialized === undefined ? 'null' : serialized;
-}
-
 function getContentText(message: ChatHistoryMessage) {
   return typeof message.content === 'string' ? message.content : '';
 }
 
 function historyToRequestMessages(messages: ChatHistoryMessage[]) {
   return messages.map(({ thinking, ...rest }) => rest);
-}
-
-function isAgentKeyConfigured(config: OzwellConfig) {
-  return getAuthKey(config).startsWith('agnt_key-');
-}
-
-function getAuthKey(config: OzwellConfig) {
-  return config.apiKey || config.openaiApiKey || '';
-}
-
-function buildSystemPrompt(config: OzwellConfig) {
-  if (isAgentKeyConfigured(config)) return '';
-  if (config.system) return config.system;
-  let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;
-  if (config.tools && config.tools.length > 0) {
-    systemPrompt += ` ${DEFAULT_PARENT_TOOL_HINT}`;
-  }
-  return systemPrompt;
 }
 
 function requestHeaders(config: OzwellConfig) {
@@ -443,6 +423,21 @@ export function WidgetApp() {
   const queuedIsDraftRef = useRef(false);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
+  const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
+
+  // A toolbar popup is already an explicit user action. Focus its composer
+  // (or sign-in input) after configuration/authentication has rendered it.
+  const focusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)') ||
+        document.querySelector<HTMLInputElement>('input:not(:disabled):not([type="hidden"]):not([type="checkbox"])');
+      input?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (config.autoFocus && initialConfigReady && !needsAuthentication) focusInput();
+  }, [config.autoFocus, initialConfigReady, needsAuthentication, focusInput]);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
@@ -599,7 +594,7 @@ export function WidgetApp() {
   }, [config.provider, config.model, effectiveModels]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
-    window.parent.postMessage(message, parentOriginRef.current || '*');
+    window.parent.postMessage({ ...message, ozwellDocumentId: widgetDocumentId }, parentOriginRef.current || '*');
   }, []);
 
   // Bring host-selected content (e.g. an E-Chart selection) into the composer
@@ -618,22 +613,22 @@ export function WidgetApp() {
 
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       id: id,
       method: method,
       params: params || {},
-    }, parentOriginRef.current || '*');
+    });
     return id;
-  }, []);
+  }, [postToParent]);
 
   const mcpNotify = useCallback((method: string, params?: Record<string, unknown>) => {
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       method,
       params: params || {},
-    }, parentOriginRef.current || '*');
-  }, []);
+    });
+  }, [postToParent]);
 
   const showToast = useCallback((message: string) => {
     if (fallbackToastShownRef.current) return;
@@ -986,11 +981,7 @@ export function WidgetApp() {
     delete pendingToolCallsRef.current[String(toolCallId)];
     const wasAwaiting = awaitingToolResultsRef.current.has(String(toolCallId));
     updateToolExecutionResult(toolCallId, result);
-    appendHistory({
-      role: 'tool',
-      tool_call_id: toolCallId,
-      content: serializeToolResult(result),
-    });
+    appendHistory(createToolResultMessage(toolCallId, result));
     awaitingToolResultsRef.current.delete(String(toolCallId));
     // Only continue the turn once every parallel tool call has a result.
     if (wasAwaiting && awaitingToolResultsRef.current.size === 0) {
@@ -1116,8 +1107,20 @@ export function WidgetApp() {
   }, [clearHistory, displayMessages]);
 
   useEffect(() => {
+    // Every MCP listener shares the same parent identity checks. Once the
+    // handshake pins an origin, navigation must not silently change that peer.
+    function isParentMessage(event: MessageEvent) {
+      return event.source === window.parent
+        && event.origin !== 'null'
+        && !!event.origin
+        && (!parentOriginRef.current || event.origin === parentOriginRef.current)
+        && (!event.data?.ozwellDocumentId || event.data.ozwellDocumentId === widgetDocumentId);
+    }
+
+    let onToolsResponse: ((event: MessageEvent) => void) | undefined;
+
     function handleParentMessage(event: MessageEvent) {
-      if (event.source !== window.parent) return;
+      if (!isParentMessage(event)) return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
 
@@ -1158,6 +1161,8 @@ export function WidgetApp() {
         applyConfig(data.payload.config);
       }
 
+      if (data.type === 'focus') focusInput();
+
       if (data.type === 'close') {
         postToParent({
           source: 'ozwell-chat-widget',
@@ -1167,24 +1172,34 @@ export function WidgetApp() {
     }
 
     window.addEventListener('message', handleParentMessage);
-    postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
-
-    const initReqId = mcpSend('initialize', {
-      protocolVersion: '2025-11-25',
-      capabilities: {},
-      clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
-    });
+    const endDocument = () => postToParent({ source: 'ozwell-chat-widget', type: 'pagehide' });
+    window.addEventListener('pagehide', endDocument);
+    let initReqId: string | number;
+    function initializeParent() {
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
+      window.removeEventListener('message', onInitResponse);
+      postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
+      initReqId = mcpSend('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
+      });
+      window.addEventListener('message', onInitResponse);
+    }
 
     function onInitResponse(event: MessageEvent) {
+      if (!isParentMessage(event)) return;
       const data = event.data;
-      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId) return;
+      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId || !data.result) return;
+      parentOriginRef.current = event.origin;
       mcpNotify('notifications/initialized');
       const toolsReqId = mcpSend('tools/list');
 
-      function onToolsResponse(event2: MessageEvent) {
+      onToolsResponse = (event2: MessageEvent) => {
+        if (!isParentMessage(event2)) return;
         const d = event2.data;
         if (!d || d.jsonrpc !== '2.0' || d.id !== toolsReqId) return;
-        window.removeEventListener('message', onToolsResponse);
+        window.removeEventListener('message', onToolsResponse!);
         const mcpTools = (d.result && d.result.tools) || [];
         setConfig((current) => ({
           ...current,
@@ -1197,17 +1212,28 @@ export function WidgetApp() {
             },
           })),
         }));
-      }
+      };
 
       window.addEventListener('message', onToolsResponse);
       window.removeEventListener('message', onInitResponse);
     }
 
-    window.addEventListener('message', onInitResponse);
+    // BFCache restores the same JavaScript document without rerunning effects.
+    // Its old identity was retired by pagehide, so start a fresh tool session.
+    const restoreDocument = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      widgetDocumentId = newWidgetDocumentId();
+      initializeParent();
+    };
+    window.addEventListener('pageshow', restoreDocument);
+    initializeParent();
 
     return () => {
       window.removeEventListener('message', handleParentMessage);
+      window.removeEventListener('pagehide', endDocument);
+      window.removeEventListener('pageshow', restoreDocument);
       window.removeEventListener('message', onInitResponse);
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
@@ -1280,10 +1306,11 @@ export function WidgetApp() {
 
   if (!initialConfigReady) return null;
 
-  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
+  if (needsAuthentication) {
     return (
       <AuthGate
         apiOrigin={apiOriginFor(config.endpoint)}
+        autoFocus={config.autoFocus}
         onAuthenticated={handleAuthenticated}
       />
     );

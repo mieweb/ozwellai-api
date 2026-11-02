@@ -32,7 +32,7 @@ graph TB
     
     %% Reusable Test Workflows
     TSClientTest["🔧 test-typescript-client.yml<br/>• Node.js 18/20/22<br/>• Deno v1.x<br/>• Ubuntu/Win/macOS<br/>• Calls ./scripts/test-client.sh"]
-    RefServerTest["🔧 test-reference-server.yml<br/>• Node.js 18/20/22<br/>• Ubuntu/Win/macOS<br/>• Calls ./scripts/test-server.sh"]
+    RefServerTest["🔧 test-reference-server.yml<br/>• Node.js 20/22<br/>• Ubuntu/Win/macOS<br/>• ALLOW_MOCK=true npm test<br/>• Test failures block CI"]
     
     %% Reusable workflow usage
     TSClientCI -.-> TSClientTest
@@ -143,6 +143,17 @@ jobs:
 ```
 
 ## 🧪 Local Testing
+
+The reusable reference-server workflow runs `ALLOW_MOCK=true npm test`; test
+failures fail the matrix job. Run the same command from `reference-server` after
+building the spec, client, and pinned UI. Widget prompt and tool-result tests
+execute shared TypeScript helpers with local identifiers minified, so ordinary
+bundler renaming does not invalidate the assertions.
+
+Server integration tests run at most two test files concurrently to limit
+simultaneous server startups on constrained runners. Their shared readiness
+helper allows up to 30 seconds, bounds each health probe, and includes captured
+child-process output when startup fails.
 
 Test any workflow locally by running its scripts:
 

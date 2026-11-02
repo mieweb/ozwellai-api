@@ -10,10 +10,16 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test:debug": "playwright test --debug",
+    "build:browser-tools": "esbuild scripts/browser-tools-entry.js --bundle --format=esm --target=es2022 --outfile=public/browser-tools-bundle.js",
+    "predev": "npm run build:browser-tools",
+    "prestart": "npm run build:browser-tools",
+    "pretest": "npm run build:browser-tools",
+    "test:browser-tools": "npm run build:browser-tools && playwright test --config playwright.browser-tools.config.ts"
   },
   "dependencies": {
     "@fastify/swagger-ui": "^2.1.0",
+    "@mieweb/page-controller": "git+https://github.com/mieweb/page-agent.git#6963ab7a183ce38cce3f1bfc29e5c3ff206a1973",
     "dotenv": "^17.2.3",
     "express": "^4.22.1"
   },

@@ -2,34 +2,25 @@
 
 The fastest way to add Ozwell to any website. No build step, no framework required — just a single script tag.
 
-The widget sends requests to the reference server, which routes them to whichever AI backend is configured (LLM gateway, Ollama, or mock). No backend configuration is needed in the embed code itself.
+The widget sends requests to the Ozwell API, which routes them to whichever AI backend is configured (LLM gateway, Ollama, or mock). No backend configuration is needed in the embed code itself.
+
+Use `https://api.ozwell.ai/widget` for production embeds. The loader at `https://ozwellapi.os.mieweb.org/widget` is for development.
 
 ## Quick Start
-
-:::info Getting a Key
-Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials). Ozwell automatically provisions your `ozw_` parent key, then lets you create agents with `agnt_key-` agent keys.
-:::
 
 Add this snippet to your HTML, just before the closing `</body>` tag:
 
 ```html
-<!-- Current recommended environment -->
-<script>
-  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
-</script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
-
+<!-- Production loader -->
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 That's it! A chat widget will appear in the bottom-right corner of your page.
 
-### Alternative: Let Visitors Sign In
+### Let Visitors Sign In
 
-On a deployment with widget authentication enabled, omit the host key:
-
-```html
-<script src="https://your-ozwell-host/widget"></script>
-```
+The basic embed omits a host key. On a deployment with widget authentication
+enabled, visitors sign in through the widget.
 
 Opening chat offers the methods configured by that deployment: Google, Apple,
 email one-time code, or the visitor's own agent/parent key. Google and Apple use
@@ -50,15 +41,31 @@ Operators must configure credentials, email delivery, and account admission befo
 enabling this mode. See the [widget authentication deployment guide](../backend/widget-authentication.md).
 The hosted environment may not offer these methods until that rollout is complete.
 
+### Optional: Configure an Agent
+
+To select an agent for the host page, configure an agent key issued by the same
+deployment as the loader. Define the configuration before loading the script:
+
+```html
+<script>
+  window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
+</script>
+<script src="https://api.ozwell.ai/widget"></script>
+```
+
 ---
 
 ## Getting Your Credentials
+
+Use the Manager for the same deployment as your loader. The Manager at
+`https://ozwellconsole.os.mieweb.org` is the development environment; its keys
+are for the development loader at `https://ozwellapi.os.mieweb.org/widget`.
 
 ### Option A: Agent Key
 
 Agent keys connect to a server-side agent definition that manages the system prompt, model, temperature, and allowed tools. This is the recommended embed path.
 
-1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials).
+1. Log in to the Manager for your selected deployment. For development, use [development Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials).
 2. Ozwell automatically provisions your `ozw_` parent key if you do not already have one.
 3. Create an agent in the manager UI.
 4. Copy the **Agent Key** from the response (starts with `agnt_key-`).
@@ -68,7 +75,7 @@ Agent keys connect to a server-side agent definition that manages the system pro
 
 Parent keys give you raw chat-completions access. Use this when the page provides the model, system prompt, and tools inline in `window.OzwellChatConfig`.
 
-1. Log in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials).
+1. Log in to the Manager for your selected deployment. For development, use [development Ozwell Manager](https://ozwellconsole.os.mieweb.org) with MIE auth (`manager.os.mieweb.org` credentials).
 2. Use **Show key** to copy your parent key (starts with `ozw_`).
 3. Put the parent key, model, system prompt, and any page tools in `window.OzwellChatConfig`.
 
@@ -88,7 +95,7 @@ Configure the loader before loading the script:
     thinkingEnabled: true
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### Available Options
@@ -104,6 +111,39 @@ Configure the loader before loading the script:
 | `thinkingDefaultMode` | `0` to `3` | `0` hidden, `1` collapsed, `2` auto, `3` expanded |
 | `defaultUI` | boolean | Set `false` when mounting into your own container |
 | `containerId` | string | Element ID for a custom mount target |
+
+## Proposed page control option (not implemented)
+
+The following `pageControl` setting is a proposal. It is **not implemented in the current or released loader**: adding this configuration alone does not activate page control.
+
+For a host application whose root element is `#app`, the proposed setup would be:
+
+```html
+<script>
+  window.OzwellChatConfig = {
+    pageControl: { root: '#app', visual: 'mask' }
+  };
+</script>
+<script src="https://api.ozwell.ai/widget"></script>
+```
+
+With that proposed configuration, loading `/widget` would:
+
+1. Load the page controller and its styles on demand.
+2. Scope the controller to `#app` and register `browser_snapshot`, `browser_click`, `browser_fill`, `browser_select`, and `browser_scroll` with the existing iframe MCP bridge.
+3. Make those tools available to the assistant using the selected visual feedback. The loader would handle registration and dispatch alongside existing custom page tools.
+
+| Proposed setting | Default | Choices |
+|------------------|---------|---------|
+| `pageControl` | Omitted (off) | Supply the object to opt in. |
+| `root` | Required | Selector for one application container, with the widget outside it. |
+| `visual` | `'mask'` | `'mask'`, `'highlight'`, `'both'`, or `'none'`. |
+
+Mask would show the moving cursor and temporarily block manual input. Highlight
+would mark the target while leaving the page interactive. Both would combine
+these effects; none would hide them.
+
+The current proof of concept, [`browser-tools.html`](https://github.com/mieweb/ozwellai-api/blob/main/landing-page/public/browser-tools.html), wires the controller explicitly. Its guided run, step-through controls, and speed selector remain demo features. See the canonical [Proposed page control option](https://github.com/mieweb/ozwellai-api/blob/main/reference-server/embed/README.md#proposed-page-control-option) for the design.
 
 ---
 
@@ -220,7 +260,7 @@ Your agent definition (created via the [Agent Registration API](../backend/agent
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 That's the same script tag from [Quick Start](#quick-start). If your agent has tools defined, they just work — the widget discovers them during its MCP handshake with the server.
@@ -296,7 +336,7 @@ Use the agent key generated by Ozwell Manager, then add page-side tools directly
     }]
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 `tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
@@ -328,7 +368,7 @@ Parent keys (`ozw_...`) can be used directly for chat completions when the page 
     }]
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 `tools[].function` is the OpenAI-style tool schema: name, description, and JSON-schema parameters. Do not put executable JavaScript functions there. You still handle actual execution with `ozwell-tool-call` — the event listener code doesn't change.
@@ -363,10 +403,11 @@ For the full postMessage protocol details (useful if you're building a custom in
 ## Examples
 
 :::note Widget URLs
-The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://api.ozwell.ai/widget` once production migration completes):
+Use the production API origin for the loader, iframe, and API requests:
 
-- **Current recommended loader:** `https://ozwellapi.os.mieweb.org/widget`
-- **Hosted iframe page:** `https://ozwellapi.os.mieweb.org/widget/frame/`
+- **Production loader:** `https://api.ozwell.ai/widget`
+- **Hosted iframe page:** `https://api.ozwell.ai/widget/frame/`
+- **Development loader:** `https://ozwellapi.os.mieweb.org/widget`
 :::
 
 ### Basic Embed
@@ -385,7 +426,7 @@ The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://
   <script>
     window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
   </script>
-  <script src="https://ozwellapi.os.mieweb.org/widget"></script>
+  <script src="https://api.ozwell.ai/widget"></script>
 </body>
 </html>
 ```
@@ -400,7 +441,7 @@ The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://
     welcomeMessage: 'What would you like to know?'
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### Enable Thinking Controls
@@ -413,7 +454,7 @@ The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://
     thinkingDefaultMode: 2
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### Triggered by Button Click
@@ -424,7 +465,7 @@ The current widget loader is `https://ozwellapi.os.mieweb.org/widget` (`https://
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### Complete Page with Tool Calling
@@ -453,7 +494,7 @@ A full working example — an AI assistant that can read and update form fields 
       debug: true  // shows tool pills in chat — turn off in production
     };
   </script>
-  <script src="https://ozwellapi.os.mieweb.org/widget"></script>
+  <script src="https://api.ozwell.ai/widget"></script>
 
   <!-- 2. Handle tool calls -->
   <script>
@@ -522,9 +563,9 @@ If your site uses CSP headers, add Ozwell's domains:
 
 ```
 Content-Security-Policy: 
-  script-src 'self' https://ozwellapi.os.mieweb.org https://cdn.ozwell.ai;
-  frame-src 'self' https://ozwellapi.os.mieweb.org;
-  connect-src 'self' https://ozwellapi.os.mieweb.org;
+  script-src 'self' https://api.ozwell.ai https://cdn.ozwell.ai;
+  frame-src 'self' https://api.ozwell.ai;
+  connect-src 'self' https://api.ozwell.ai;
 ```
 
 ---
