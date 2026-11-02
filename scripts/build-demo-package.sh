@@ -9,6 +9,18 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Building demo site package..."
 
+# The build host needs Node.js 20+, npm, and Git for the pinned controller package.
+# Include dev dependencies even on production hosts: esbuild generates assets
+# that are intentionally not checked into Git or rebuilt by the deployed server.
+npm --prefix "$PROJECT_ROOT/landing-page" ci --include=dev
+npm --prefix "$PROJECT_ROOT/landing-page" run build:browser-tools
+for ASSET in browser-tools-bundle.js browser-tools-bundle.css; do
+  if [[ ! -s "$PROJECT_ROOT/landing-page/public/$ASSET" ]]; then
+    echo "Missing browser tools asset after build: $ASSET" >&2
+    exit 1
+  fi
+done
+
 DEPLOY_DIR="$PROJECT_ROOT/deploy-package-demo"
 rm -rf "$DEPLOY_DIR"
 mkdir -p "$DEPLOY_DIR/landing-page/public"

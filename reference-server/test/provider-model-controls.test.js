@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { setTimeout as delay } from 'node:timers/promises';
+import { waitForServer } from './helpers/wait-for-server.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -23,17 +23,6 @@ const HEADERS = {
 };
 const H_JSON = { 'Content-Type': 'application/json', ...HEADERS };
 const H_YAML = { 'Content-Type': 'application/yaml', ...HEADERS };
-
-async function waitForReady(maxMs = 30_000) {
-    const start = Date.now();
-    while (Date.now() - start < maxMs) {
-        try {
-            if ((await fetch(`${BASE}/health`)).status === 200) return;
-        } catch { /* not ready */ }
-        await delay(200);
-    }
-    throw new Error('server never became ready');
-}
 
 function startServer({ admin = false, extraEnv = {} } = {}) {
     const tmp = mkdtempSync(path.join(tmpdir(), 'ozwell-provider-model-test-'));
@@ -154,7 +143,7 @@ test('provider models — discovery populates provider-aware registry and effect
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
 
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
@@ -184,7 +173,7 @@ test('provider models — discovery populates provider-aware registry and effect
 test('provider models — parent and agent restrictions narrow consumer choices', async () => {
     const { server, tmp, dbPath } = startServer({ admin: true });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
 
@@ -254,7 +243,7 @@ test('provider models — chat enforces allowed provider/model before gateway ca
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
 
@@ -310,7 +299,7 @@ test('provider models — anthropic chat requests include default max_tokens', a
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         assert.equal(models.status, 200);
@@ -349,7 +338,7 @@ test('provider models — anthropic agent temperature is not forwarded', async (
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         assert.equal(models.status, 200);
@@ -401,7 +390,7 @@ test('provider models — ambiguous legacy model-only request requires provider'
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         assert.equal(models.status, 200);
@@ -437,7 +426,7 @@ test('provider models — unavailable agent default returns configured-model err
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         assert.equal(models.status, 200);
@@ -482,7 +471,7 @@ test('provider models — unavailable provider/model agent default returns confi
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const models = await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         assert.equal(models.status, 200);
@@ -532,7 +521,7 @@ test('provider models — server-wide policy narrows listings and stacks with pa
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
         const allDiscovered = ['openai/gpt-4o', 'openai/gpt-4o-mini', 'anthropic/claude-sonnet-4-6'];
@@ -653,7 +642,7 @@ test('provider models — server-wide policy blocks chat before upstream dispatc
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
 
@@ -706,7 +695,7 @@ test('provider models — narrowing server-wide policy notifies affected keys, a
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
 
@@ -753,7 +742,7 @@ test('provider models — narrowing server-wide policy notifies affected keys, a
 test('provider models — server-wide policy endpoints are admin only', async () => {
     const { server, tmp } = startServer({ admin: false });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
 
         const read = await fetch(`${BASE}/v1/manager/admin/model-restrictions`, { headers: HEADERS });
@@ -797,7 +786,7 @@ test('provider models — model-only request resolves past the agent default pro
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
 
@@ -859,7 +848,7 @@ test('provider models — unusable fallback names the real cause, not provider_r
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         const key = activeKey(dbPath);
@@ -904,7 +893,7 @@ test('provider models — a named model that matches nothing is not allowed, not
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         const key = activeKey(dbPath);
@@ -954,7 +943,7 @@ test('provider models — stored fallback beats the env value, live, and clearin
         return gateway.getLastBody().model;
     };
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
 
@@ -1013,7 +1002,7 @@ test('provider models — allow-list cannot be narrowed past the stored fallback
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
         await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
@@ -1070,7 +1059,7 @@ test('provider models — fallback must be a pair the server can serve, unrestri
     });
     const putDefault = (body) => fetch(`${BASE}/v1/manager/admin/default-model`, { method: 'PUT', headers: H_JSON, body: JSON.stringify(body) });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         const key = activeKey(dbPath);
         await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
@@ -1145,7 +1134,7 @@ test('provider models — env fallback provider resolves an ambiguous default mo
         },
     });
     try {
-        await waitForReady();
+        await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
         await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
         const key = activeKey(dbPath);

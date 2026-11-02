@@ -15,6 +15,7 @@ const { DesktopAuthorizationStore, DesktopAuthError, desktopLoginAvailable } = a
 const { createSessionForIdentity, destroySession } = await import('../dist/reference-server/src/storage/sessions.js');
 const { default: desktopModule } = await import('../dist/reference-server/src/routes/desktop-auth.js');
 const { default: authModule } = await import('../dist/reference-server/src/routes/auth.js');
+const { getDatabase } = await import('../dist/reference-server/src/storage/agents.js');
 const verifier = randomBytes(32).toString('base64url');
 const challenge = createHash('sha256').update(verifier).digest('base64url');
 const state = randomBytes(32).toString('base64url');
@@ -28,7 +29,12 @@ before(async () => {
   await app.register(authModule.default ?? authModule);
   await app.ready();
 });
-after(async () => { await app.close(); rmSync(temp, { recursive: true, force: true }); });
+after(async () => {
+  await app.close();
+  // Windows cannot unlink the unit-test database while SQLite holds it open.
+  getDatabase().close();
+  rmSync(temp, { recursive: true, force: true });
+});
 function authorizeUrl(overrides = {}) {
   return '/auth/desktop/authorize?' + new URLSearchParams({ response_type: 'code', client_id: input.clientId, redirect_uri: input.redirectUri, state, code_challenge: challenge, code_challenge_method: 'S256', ...overrides });
 }

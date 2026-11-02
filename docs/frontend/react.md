@@ -2,6 +2,16 @@
 
 Integrate Ozwell into your React application with a simple component wrapper around the iframe-based widget.
 
+For production, explicitly set `widgetUrl="https://api.ozwell.ai/widget/frame/"` as
+shown below. The current React wrapper defaults to the development host, so
+omitting this prop does not select production.
+
+| Environment | `widgetUrl` |
+|-------------|-------------|
+| Production | `https://api.ozwell.ai/widget/frame/` |
+| Development | `https://ozwellapi.os.mieweb.org/widget/frame/` |
+| Local reference server | `http://localhost:3000/widget/frame/` |
+
 ## Installation
 
 ```bash
@@ -14,10 +24,12 @@ pnpm add @ozwell/react
 
 ## Quick Start
 
-Sign in to [Ozwell Manager](https://ozwellconsole.os.mieweb.org) with your MIE account,
-create an agent, and copy its `agnt_key-` key. See [credential setup](cdn-embed.md#getting-your-credentials).
-OIDC is used for Manager sign-in; do not pass an OIDC client secret, login token, or parent
-`ozw_` key to the widget. The agent key selects the agent, so a separate `agentId` is not needed.
+Use an `agnt_key-` key issued by the selected Ozwell deployment. For development,
+sign in to the [development Ozwell Manager](https://ozwellconsole.os.mieweb.org)
+with your MIE account, create an agent, and copy its key. See
+[credential setup](cdn-embed.md#getting-your-credentials).
+OIDC is used for Manager sign-in; do not pass an OIDC client secret or login token
+to the widget. The agent key selects the agent, so a separate `agentId` is not needed.
 
 ```tsx
 import { OzwellChat } from '@ozwell/react';
@@ -27,6 +39,7 @@ function App() {
     <div>
       <h1>My App</h1>
       <OzwellChat
+        widgetUrl="https://api.ozwell.ai/widget/frame/"
         apiKey="agnt_key-your-agent-key"
       />
     </div>
@@ -34,12 +47,21 @@ function App() {
 }
 ```
 
-The component loads the current hosted widget from `https://ozwellapi.os.mieweb.org`.
-Your Vite app does not need to serve `/widget` or `/v1/chat/completions` itself.
+The production examples load the loader, iframe, and default API endpoint from
+`https://api.ozwell.ai`. Your Vite app does not need to serve `/widget` or
+`/v1/chat/completions` itself.
 For a different deployment, set `widgetUrl="https://your-ozwell-host/widget/frame/"`;
 the loader and default API endpoint use that host. For local development, use
 `widgetUrl="http://localhost:3000/widget/frame/"` with the reference server running.
 An `endpoint` override changes chat requests only, not where the widget is loaded.
+
+Omit `apiKey` when using visitor sign-in on a deployment that enables it; see
+[visitor sign-in](cdn-embed.md#let-visitors-sign-in).
+
+The [proposed page-control option](cdn-embed.md#proposed-page-control-option-not-implemented)
+describes a future plain-loader `OzwellChatConfig` setting. It is not implemented
+and is not a React prop. Today, provide explicit `tools` and `onToolCall` handlers
+for page interactions, as shown below.
 
 ### Vite + MIE UI: Click Hello World
 
@@ -79,6 +101,7 @@ export default function App() {
       </Button>
       <output aria-live="polite">Clicks: {clicks}</output>
       <OzwellChat
+        widgetUrl="https://api.ozwell.ai/widget/frame/"
         apiKey={import.meta.env.VITE_OZWELL_AGENT_KEY}
         tools={tools}
         onToolCall={(name, _args, respond) => {
@@ -130,6 +153,7 @@ The main chat widget component.
 import { OzwellChat } from '@ozwell/react';
 
 <OzwellChat
+  widgetUrl="https://api.ozwell.ai/widget/frame/"
   apiKey="agnt_key-your-agent-key"
   theme="auto"
   position="bottom-right"
@@ -168,7 +192,7 @@ import { OzwellChat } from '@ozwell/react';
 | `debug` | `boolean` | `false` | Enable debug mode |
 | `openaiApiKey` | `string` | — | OpenAI API key (for direct OpenAI endpoint) |
 | `headers` | `Record<string, string>` | — | Custom HTTP headers |
-| `widgetUrl` | `string` | `https://ozwellapi.os.mieweb.org/widget/frame/` | Widget frame URL; also selects the loader host |
+| `widgetUrl` | `string` | `https://ozwellapi.os.mieweb.org/widget/frame/` (development) | Widget frame URL; also selects the loader host. Set `https://api.ozwell.ai/widget/frame/` explicitly for production. |
 | `defaultUI` | `boolean` | `true` | Enable default floating button UI |
 | `onReady` | `() => void` | — | Widget ready callback |
 | `onOpen` | `() => void` | — | Chat opened callback |
@@ -205,7 +229,10 @@ function App() {
   return (
     <>
       {/* OzwellChat can be anywhere - useOzwell works after it mounts */}
-      <OzwellChat endpoint="/v1/chat/completions" />
+      <OzwellChat
+        widgetUrl="https://api.ozwell.ai/widget/frame/"
+        endpoint="/v1/chat/completions"
+      />
       <ChatControls />
     </>
   );
@@ -265,6 +292,7 @@ function App() {
   return (
     <>
       <OzwellChat
+        widgetUrl="https://api.ozwell.ai/widget/frame/"
         apiKey="agnt_key-your-agent-key"
         defaultUI={false}
       />
@@ -285,6 +313,7 @@ import { analytics } from './analytics';
 function App() {
   return (
     <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
       apiKey="agnt_key-your-agent-key"
       onOpen={() => {
         analytics.track('Chat Opened');
@@ -317,7 +346,10 @@ function App() {
     <div>
       {/* App content */}
       {showChat && (
-        <OzwellChat endpoint="/v1/chat/completions" />
+        <OzwellChat
+          widgetUrl="https://api.ozwell.ai/widget/frame/"
+          endpoint="/v1/chat/completions"
+        />
       )}
     </div>
   );
@@ -380,6 +412,7 @@ const toolHandlers: Record<string, (args: Record<string, unknown>) => unknown> =
 function App() {
   return (
     <OzwellChat
+      widgetUrl="https://api.ozwell.ai/widget/frame/"
       endpoint="/v1/chat/completions"
       tools={tools}
       onToolCall={(tool, args, sendResult) => {
@@ -414,6 +447,7 @@ The package includes full TypeScript definitions:
 import type { OzwellChatProps, OzwellError } from '@ozwell/react';
 
 const config: OzwellChatProps = {
+  widgetUrl: 'https://api.ozwell.ai/widget/frame/',
   apiKey: 'agnt_key-your-agent-key',
   // theme: 'dark',                  // Coming soon
   onUserShare: (data: unknown) => {
@@ -450,6 +484,7 @@ If you pass inline functions as callbacks, they create new references on each re
 ```tsx
 // Creates new function on every render
 <OzwellChat
+  widgetUrl="https://api.ozwell.ai/widget/frame/"
   endpoint="/v1/chat/completions"
   onReady={() => console.log('ready')}
 />
@@ -460,6 +495,7 @@ const handleReady = useCallback(() => {
 }, []);
 
 <OzwellChat
+  widgetUrl="https://api.ozwell.ai/widget/frame/"
   endpoint="/v1/chat/completions"
   onReady={handleReady}
 />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type WidgetCredential = { key: string; source: 'session' | 'user-key' };
 
@@ -8,8 +8,9 @@ export const REMEMBERED_KEY_STORAGE = 'ozwell.widget.userKey';
  * Shown only when the embedding page supplies no key. Offers email sign-in
  * (one-time code) or entry of the user's own agent/parent key.
  */
-export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
+export function AuthGate({ apiOrigin, autoFocus = false, onAuthenticated, allowUserKey = true }: {
   apiOrigin: string;
+  autoFocus?: boolean;
   onAuthenticated: (credential: WidgetCredential) => void;
   /** Desktop key sign-in preserves the original key through its separate native flow. */
   allowUserKey?: boolean;
@@ -26,8 +27,33 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
   const [appleEnabled, setAppleEnabled] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const popupCleanup = useRef<() => void>(() => {});
+  const gateRef = useRef<HTMLDivElement>(null);
+  const focusFrameRef = useRef<number | null>(null);
+
+  // Sign-in methods arrive asynchronously, so the selected field can mount
+  // after WidgetApp's initial focus request. A stable ref runs on field changes,
+  // rather than every keystroke or unrelated authentication state update.
+  const focusSelectedInput = useCallback((input: HTMLInputElement | null) => {
+    if (focusFrameRef.current !== null) cancelAnimationFrame(focusFrameRef.current);
+    focusFrameRef.current = null;
+    if (!autoFocus || !input) return;
+    focusFrameRef.current = requestAnimationFrame(() => {
+      focusFrameRef.current = null;
+      if (!input.isConnected || input.disabled) return;
+      const active = document.activeElement;
+      const selectedTab = gateRef.current?.contains(active) &&
+        active?.matches('[role="tab"][aria-selected="true"]');
+      // A late response must respect focus the user has moved elsewhere.
+      if (active && active !== document.body && active !== document.documentElement &&
+          active !== input && !selectedTab) return;
+      input.focus();
+    });
+  }, [autoFocus]);
 
   useEffect(() => () => popupCleanup.current(), []);
+  useEffect(() => () => {
+    if (focusFrameRef.current !== null) cancelAnimationFrame(focusFrameRef.current);
+  }, []);
 
   // Only offer Google when the server has credentials configured.
   useEffect(() => {
@@ -166,7 +192,7 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
   }
 
   return (
-    <div className="ozwell-auth-gate">
+    <div className="ozwell-auth-gate" ref={gateRef}>
       <div className="ozwell-auth-card">
         <h2 className="ozwell-auth-title">Sign in to Ozwell</h2>
         <p className="ozwell-auth-subtitle">{allowUserKey ? 'Use your email, or bring your own Ozwell key.' : 'Choose how to sign in to your Ozwell account.'}</p>
@@ -221,6 +247,7 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
         {mode === 'email' && emailEnabled && (challengeId === null ? (
           <div className="ozwell-auth-fields">
             <input
+              ref={focusSelectedInput}
               className="ozwell-auth-input"
               type="email"
               aria-label="Email address"
@@ -243,6 +270,7 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
           <div className="ozwell-auth-fields">
             <p className="ozwell-auth-hint">We sent a 6-digit code to {email}.</p>
             <input
+              ref={focusSelectedInput}
               className="ozwell-auth-input"
               inputMode="numeric"
               aria-label="One-time code"
@@ -273,6 +301,7 @@ export function AuthGate({ apiOrigin, onAuthenticated, allowUserKey = true }: {
         {allowUserKey && mode === 'key' && (
           <div className="ozwell-auth-fields">
             <input
+              ref={focusSelectedInput}
               className="ozwell-auth-input"
               type="password"
               aria-label="Ozwell API key"

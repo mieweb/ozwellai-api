@@ -37,6 +37,7 @@ export function OzwellChat(props: OzwellChatProps) {
     placeholder,
     title,
     tools,
+    webMCP,
     debug,
     openaiApiKey,
     headers,
@@ -154,7 +155,8 @@ export function OzwellChat(props: OzwellChatProps) {
       welcomeMessage,
       placeholder,
       title,
-      tools,
+      tools: tools ?? [],
+      webMCP: webMCP ?? false,
       debug,
       openaiApiKey,
       headers,
@@ -225,7 +227,6 @@ export function OzwellChat(props: OzwellChatProps) {
       });
     }
 
-    // Note: No cleanup needed - vanilla widget handles its own lifecycle
   }, [
     scriptStatus,
     endpoint,
@@ -235,6 +236,7 @@ export function OzwellChat(props: OzwellChatProps) {
     placeholder,
     title,
     tools,
+    webMCP,
     debug,
     openaiApiKey,
     headers,
@@ -249,6 +251,14 @@ export function OzwellChat(props: OzwellChatProps) {
     onReady,
     onError,
   ]);
+
+  // Keep registrations only while this component owns the page-tool handler.
+  // A separate effect avoids revoking them on ordinary configuration updates.
+  useEffect(() => {
+    if (scriptStatus !== 'ready') return;
+    const widget = window.OzwellChat;
+    return () => widget?.configure({ webMCP: false });
+  }, [scriptStatus]);
 
   // Listen for widget events via postMessage (single listener for all events)
   useEffect(() => {

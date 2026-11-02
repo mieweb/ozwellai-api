@@ -1,0 +1,12 @@
+{
+  "name": "ozwell-browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:controller": "node scripts/build-page-controller.mjs",
+    "test": "node --test test/*.test.js",
+    "test:page-tools": "node test/page-tools-browser.mjs",
+    "test:browser": "node test/controller-browser.mjs && node test/page-tools-browser.mjs && node test/widget-autofocus-browser.mjs && node test/widget-reload-browser.mjs && node test/browser-smoke.mjs"
+  }
+}

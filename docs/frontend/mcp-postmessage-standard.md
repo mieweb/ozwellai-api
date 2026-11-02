@@ -57,7 +57,7 @@ MCP servers distributed as URLs eliminate installation friction. Users don't nee
 
 #### Origin-Based Security
 
-The transport relies on the browser's built-in `event.origin` validation rather than custom authentication schemes, providing tamper-proof message delivery between frames.
+The receiver must validate both `event.origin` and `event.source`, and send replies to the expected origin. These checks identify the connected frame; the host still authorizes each tool operation. Neither this transport nor WebMCP is inherently safer than the other.
 
 ### Proposal Status
 
@@ -79,22 +79,30 @@ The MCP maintainers also pointed to [WebMCP](https://github.com/webmachinelearni
 Where the postMessage transport proposal defines an *MCP wire protocol over postMessage*, WebMCP proposes a **browser-native JavaScript API** for tool registration:
 
 ```javascript
-// WebMCP: page registers tools via browser API
-navigator.ai.registerTool({
+// WebMCP: page registers tools via the native browser API
+await document.modelContext.registerTool({
   name: "get_weather",
   description: "Get current weather for a location",
-  parameters: { location: { type: "string" } },
-  handler: async ({ location }) => {
+  inputSchema: {
+    type: "object",
+    properties: { location: { type: "string" } },
+    required: ["location"]
+  },
+  execute: async ({ location }) => {
     return await fetchWeather(location);
   }
 });
 ```
 
-WebMCP is designed for a future where browsers have built-in AI agents that can discover and invoke tools declared by web pages. It focuses on:
+WebMCP allows browser agents and in-page agents to discover and invoke registered tools. It focuses on:
 
 - **Human-in-the-loop workflows** — users and agents collaborate on the same page
 - **Accessibility** — tools provide structured actions beyond what the DOM/accessibility tree offers
 - **Code reuse** — web developers reuse existing frontend JavaScript as tool implementations
+
+The [current draft](https://webmachinelearning.github.io/webmcp/) supports cross-origin documents through explicit tool exposure (`exposedTo`), discovery (`fromOrigins`), and Permissions Policy. Origin exposure controls access by web documents; it does not restrict tools exclusively to Ozwell or prevent browser agents from seeing them. Chrome's [imperative API](https://developer.chrome.com/docs/ai/webmcp/imperative-api) is in an origin trial as of October 2026, so availability must be detected.
+
+Ozwell keeps its iframe's MCP JSON-RPC over `postMessage` and offers an optional WebMCP adapter for selected host-page tools. Both paths use the same tool schemas and `ozwell-tool-call` handlers. See [Optional WebMCP Exposure](https://github.com/mieweb/ozwellai-api/tree/main/reference-server/embed#optional-webmcp-exposure) for configuration and limitations.
 
 ### Related: MCP-B
 

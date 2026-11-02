@@ -80,7 +80,28 @@ export function extractToolResult(messages: ChatMessage[]): Record<string, unkno
   }
 }
 
-export function generateMockResponse(userMessage: string, hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
+export function generateMockResponse(
+  userMessage: string,
+  hasToolResult: boolean,
+  toolResult: Record<string, unknown> | null,
+  availableToolNames?: readonly string[],
+): { role: string; content: string; tool_calls?: ToolCall[] } {
+  const response = generateMockResponseForMessage(userMessage, hasToolResult, toolResult);
+  // Older clients omit tools and expect the original bare names. When the
+  // request advertises tools, use only those names, including page namespaces.
+  if (availableToolNames === undefined || !response.tool_calls) return response;
+  for (const call of response.tool_calls) {
+    const name = [call.function.name, `postMessage_${call.function.name}`, `postMessage:${call.function.name}`]
+      .find((candidate) => availableToolNames.includes(candidate));
+    if (!name) {
+      return { role: 'assistant', content: 'I do not have an available tool for that request.' };
+    }
+    call.function.name = name;
+  }
+  return response;
+}
+
+function generateMockResponseForMessage(userMessage: string, hasToolResult: boolean, toolResult: Record<string, unknown> | null): { role: string; content: string; tool_calls?: ToolCall[] } {
   const msg = userMessage.toLowerCase();
 
   // If this is the second round (after tool execution), generate final response

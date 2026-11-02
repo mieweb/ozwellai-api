@@ -55,6 +55,12 @@ kill_port() {
     fi
 }
 
+# Build generated landing-page assets before stopping or starting servers.
+echo -e "${GREEN}Installing and building landing page in $PROJECT_ROOT/landing-page ...${NC}"
+cd "$PROJECT_ROOT/landing-page"
+npm install
+npm run build:browser-tools
+
 # Kill existing processes on both ports
 kill_port $REFERENCE_PORT
 kill_port $LANDING_PORT
@@ -79,7 +85,6 @@ sleep 2
 # Start landing page server
 echo -e "${GREEN}Starting landing page server on port $LANDING_PORT...${NC}"
 cd "$PROJECT_ROOT/landing-page"
-npm install
 REFERENCE_SERVER_URL="http://localhost:$REFERENCE_PORT" node server.js &
 LANDING_PID=$!
 
