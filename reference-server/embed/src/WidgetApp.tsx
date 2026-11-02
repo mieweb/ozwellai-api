@@ -821,6 +821,16 @@ export function WidgetApp() {
         ...serverTools.map((toolCall) => ({ type: 'tool_use' as const, toolCall: compactFinishedTool(withLiveDuration(toolCall), configRef.current.debug) })),
         ...blocks,
       ];
+      // A bubble with no text still keeps any MCP tool cards it showed.
+      const dropAssistantBubble = () => {
+        const id = assistantMessageId;
+        if (!id) return;
+        if (serverTools.length) {
+          updateDisplayMessage(id, (message) => ({ ...message, content: withServerTools([]), status: 'complete' }));
+        } else {
+          setDisplayMessages((current) => current.filter((message) => message.id !== id));
+        }
+      };
       const modeAtStart = (configRef.current.thinkingDefaultMode ?? thinkingMode) as ThinkingMode;
 
       assistantMessageId = createMessageId('assistant');
@@ -833,6 +843,8 @@ export function WidgetApp() {
         metadata: { agentId: turn.agentId },
       }]);
 
+      // Outlives a single read: an `event:` line and its `data:` line can arrive in different chunks.
+      let currentEventType: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -840,7 +852,6 @@ export function WidgetApp() {
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        let currentEventType: string | null = null;
 
         for (const line of lines) {
           if (line.trim() === '') {
@@ -983,13 +994,13 @@ export function WidgetApp() {
           tool_calls: toolCalls,
         });
         if (shouldHideContent && !hasVisibleThinking) {
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
         } else {
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: shouldHideContent
+            content: withServerTools(shouldHideContent
               ? assistantDisplayMessage('', fullThinking, modeAtStart).content
-              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -1002,14 +1013,14 @@ export function WidgetApp() {
           const MAX_THINKING_RETRIES = 3;
           if (thinkingRetryCount < MAX_THINKING_RETRIES) {
             needsThinkingRetry = true;
-            setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+            dropAssistantBubble();
           } else {
             const fallback = 'The model is not responding right now. Please try again or refresh the page.';
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
           // Empty turn: drop the streaming bubble rather than rendering a placeholder.
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
