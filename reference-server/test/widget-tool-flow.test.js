@@ -243,7 +243,12 @@ test('widget drops empty assistant turns instead of rendering "(no response)"', 
   assert.doesNotMatch(bundleSource, /\(no response\)/);
   assert.match(
     appSource,
-    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== assistantMessageId\)\);/
+    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*dropAssistantBubble\(\);/
+  );
+  // The bubble is removed only when it has no MCP tool cards; otherwise the cards stay.
+  assert.match(
+    appSource,
+    /const dropAssistantBubble = \(\) => \{[\s\S]*?if \(serverTools\.length\) \{\s*updateDisplayMessage\(id, \(message\) => \(\{ \.\.\.message, content: withServerTools\(\[\]\), status: 'complete' \}\)\);\s*\} else \{\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== id\)\);/
   );
   assert.match(appSource, /Empty assistant turn[^']*Raw chunks:', rawChunks\)/);
 });
