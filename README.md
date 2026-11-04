@@ -15,12 +15,16 @@
 
 **Try it now:** [https://ozwelldemo.os.mieweb.org](https://ozwelldemo.os.mieweb.org)
 
-Current public URLs:
-- **Live demo:** <https://ozwelldemo.os.mieweb.org>
+**Production widget:** <https://api.ozwell.ai/widget> — see the
+[embedding instructions](reference-server/embed/README.md#basic-usage) and
+[proposed page-control option](reference-server/embed/README.md#proposed-page-control-option)
+(not implemented in the loader yet).
+
+Development environment:
+
+- **Demo:** <https://ozwelldemo.os.mieweb.org>
 - **API:** <https://ozwellapi.os.mieweb.org>
 - **Console:** <https://ozwellconsole.os.mieweb.org>
-
-Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint, so they are not advertised as the active path here.
 
 **Watch demo:** [YouTube Short](https://youtube.com/shorts/mqcoEoQzQMM?si=FLa_dq_4y2TeO_48)
 
@@ -29,6 +33,10 @@ Experience the Ozwell AI chat widget with:
 - MCP tool calling via [inverted postMessage transport](docs/frontend/mcp-postmessage-standard.md)
 - Interactive demo with live event logging
 - Secure iframe isolation
+
+For a Chrome/Safari extension with toolbar chat, current-page control, and
+on-demand, whitelist, always-on, and off modes, see the
+[ozwell browser extension](browser-extension/README.md).
 
 ---
 

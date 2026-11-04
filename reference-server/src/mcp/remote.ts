@@ -11,7 +11,13 @@ export const MCP_MAX_TOOL_ITERATIONS = Number(process.env.MCP_MAX_TOOL_ITERATION
 const MAX_RESULT_CHARS = 32_000;
 
 export const MCP_TOOL_PREFIX = 'mcp__';
-const SERVER_NAME_RE = /^[a-zA-Z0-9_-]{1,32}$/;
+// Display names may contain single spaces; tool names sent to the model use serverSlug().
+const SERVER_NAME_RE = /^[a-zA-Z0-9_-]+(?: [a-zA-Z0-9_-]+)*$/;
+const SERVER_NAME_MAX = 32;
+
+function serverSlug(name: string): string {
+    return name.replace(/ /g, '_');
+}
 export const SECRET_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const SECRET_REF_RE = /^\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]{0,63})\s*\}\}$/;
 const HEADER_NAME_RE = /^[A-Za-z0-9-]{1,64}$/;
@@ -82,15 +88,17 @@ function validateAuth(raw: unknown, where: string): McpAuth {
 export function parseMcpServer(raw: unknown, where = 'mcp_server'): McpServerConfig {
     if (!raw || typeof raw !== 'object') throw new McpConfigError(`${where} must be an object`);
     const s = raw as Record<string, unknown>;
-    if (typeof s.name !== 'string' || !SERVER_NAME_RE.test(s.name)) {
-        throw new McpConfigError(`${where}.name must match ${SERVER_NAME_RE.source}`);
+    if (typeof s.name !== 'string') throw new McpConfigError(`${where}.name is required`);
+    const name = s.name.trim();
+    if (!name || name.length > SERVER_NAME_MAX || !SERVER_NAME_RE.test(name)) {
+        throw new McpConfigError(`${where}.name must be 1-${SERVER_NAME_MAX} characters: letters, numbers, spaces, '-' or '_'`);
     }
     const tools = s.tools ?? [];
     if (!Array.isArray(tools) || tools.some(t => typeof t !== 'string' || !t)) {
         throw new McpConfigError(`${where}.tools must be a list of tool names`);
     }
     return {
-        name: s.name,
+        name,
         url: validateUrl(s.url, where),
         auth: validateAuth(s.auth, where),
         tools: [...new Set(tools as string[])],
@@ -104,8 +112,10 @@ export function parseMcpServers(raw: unknown): McpServerConfig[] {
     const servers = raw.map((s, i) => parseMcpServer(s, `mcp_servers[${i}]`));
     const names = new Set<string>();
     for (const s of servers) {
-        if (names.has(s.name)) throw new McpConfigError(`mcp_servers: duplicate server name '${s.name}'`);
-        names.add(s.name);
+        // 'webchart mcp' and 'webchart_mcp' would produce the same tool names.
+        const key = serverSlug(s.name).toLowerCase();
+        if (names.has(key)) throw new McpConfigError(`mcp_servers: duplicate server name '${s.name}'`);
+        names.add(key);
     }
     return servers;
 }
@@ -297,12 +307,13 @@ type ChatTool = { type: 'function'; function: { name: string; description?: stri
 export interface McpSession {
     tools: ChatTool[];
     isMcpTool(name: string): boolean;
+    describe(exposedName: string): { server: string; tool: string } | null;
     call(exposedName: string, rawArgs: string): Promise<string>;
     close(): Promise<void>;
 }
 
 function exposedToolName(server: string, tool: string, taken: Set<string>): string {
-    const base = `${MCP_TOOL_PREFIX}${server}__${tool.replace(/[^a-zA-Z0-9_-]/g, '_')}`.slice(0, 64);
+    const base = `${MCP_TOOL_PREFIX}${serverSlug(server)}__${tool.replace(/[^a-zA-Z0-9_-]/g, '_')}`.slice(0, 64);
     let name = base;
     for (let i = 2; taken.has(name); i++) name = `${base.slice(0, 60)}_${i}`;
     taken.add(name);
@@ -320,7 +331,7 @@ export async function openMcpSession(
     onError: (err: McpError) => void,
 ): Promise<McpSession> {
     const connections: McpConnection[] = [];
-    const routes = new Map<string, { conn: McpConnection; tool: string }>();
+    const routes = new Map<string, { conn: McpConnection; tool: string; server: string }>();
     const tools: ChatTool[] = [];
     const taken = new Set<string>();
 
@@ -338,7 +349,7 @@ export async function openMcpSession(
             for (const t of await conn.listTools()) {
                 if (!allow.has(t.name)) continue;
                 const exposed = exposedToolName(server.name, t.name, taken);
-                routes.set(exposed, { conn, tool: t.name });
+                routes.set(exposed, { conn, tool: t.name, server: server.name });
                 tools.push({
                     type: 'function',
                     function: {
@@ -356,6 +367,10 @@ export async function openMcpSession(
     return {
         tools,
         isMcpTool: (name) => routes.has(name),
+        describe: (name) => {
+            const route = routes.get(name);
+            return route ? { server: route.server, tool: route.tool } : null;
+        },
         async call(exposedName, rawArgs) {
             const route = routes.get(exposedName);
             if (!route) return JSON.stringify({ error: `Tool '${exposedName}' is not available` });

@@ -10,6 +10,8 @@ import {
 } from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
+import { buildSystemPrompt, getAuthKey } from './system-prompt';
+import { createToolResultMessage } from './tool-results';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -22,9 +24,11 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
-const DEFAULT_PARENT_SYSTEM_PROMPT = 'You are a helpful assistant. Answer clearly and concisely.';
-const DEFAULT_PARENT_TOOL_HINT = 'Use the available tools when they are helpful for answering the user or performing a requested action.';
 const MCP_TOOL_TIMEOUT_MS = 30000;
+// A frame's WindowProxy survives reloads. This identity belongs to the loaded
+// document, so hosts can retire its tool requests before accepting a new one.
+const newWidgetDocumentId = () => [...crypto.getRandomValues(new Uint32Array(4))].map(value => value.toString(16).padStart(8, '0')).join('');
+let widgetDocumentId = newWidgetDocumentId();
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
 const USER_PARTICIPANT = 'user';
 const ASSISTANT_PARTICIPANT = 'ozwell';
@@ -87,36 +91,12 @@ function ensureToolCallId(toolCall: OpenAIToolCall, nextId: () => number) {
   return toolCall.id;
 }
 
-function serializeToolResult(result: unknown) {
-  if (typeof result === 'string') return result;
-  const serialized = JSON.stringify(result);
-  return serialized === undefined ? 'null' : serialized;
-}
-
 function getContentText(message: ChatHistoryMessage) {
   return typeof message.content === 'string' ? message.content : '';
 }
 
 function historyToRequestMessages(messages: ChatHistoryMessage[]) {
   return messages.map(({ thinking, ...rest }) => rest);
-}
-
-function isAgentKeyConfigured(config: OzwellConfig) {
-  return getAuthKey(config).startsWith('agnt_key-');
-}
-
-function getAuthKey(config: OzwellConfig) {
-  return config.apiKey || config.openaiApiKey || '';
-}
-
-function buildSystemPrompt(config: OzwellConfig) {
-  if (isAgentKeyConfigured(config)) return '';
-  if (config.system) return config.system;
-  let systemPrompt = DEFAULT_PARENT_SYSTEM_PROMPT;
-  if (config.tools && config.tools.length > 0) {
-    systemPrompt += ` ${DEFAULT_PARENT_TOOL_HINT}`;
-  }
-  return systemPrompt;
 }
 
 function requestHeaders(config: OzwellConfig) {
@@ -311,10 +291,40 @@ function resolveToolCallIndex(toolCallDelta: { index?: unknown; id?: unknown }, 
   return Math.max(accumulated.length - 1, 0);
 }
 
-function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status']): MCPToolCall {
+const PAGE_TOOL_PREFIX = /^postMessage[_:]/;
+
+// The UI kit uses toolName as the pill text, so it carries the source and short failure reason.
+function toolLabel(rawName: string, server?: string, error?: string): string {
+  const isPageTool = PAGE_TOOL_PREFIX.test(rawName);
+  const name = rawName.replace(PAGE_TOOL_PREFIX, '').replace(/_/g, ' ');
+  const source = server ? server.charAt(0).toUpperCase() + server.slice(1) : isPageTool ? 'Page' : '';
+  const label = source ? `${name} · ${source}` : name;
+  return error ? `${label} — ${shortError(error)}` : label;
+}
+
+function shortError(error: string): string {
+  // Server errors look like "MCP tool 'x' on 'y' failed: request timed out"; keep the reason.
+  const reason = /failed: (.+)$/.exec(error)?.[1] ?? error;
+  return reason.length > 60 ? `${reason.slice(0, 57)}…` : reason;
+}
+
+function withLiveDuration(toolCall: MCPToolCall): MCPToolCall {
+  if (toolCall.status !== 'running') return toolCall;
+  // Whole seconds so the pill ticks once per second instead of jittering.
+  const elapsed = Math.floor((Date.now() - new Date(toolCall.startedAt).getTime()) / 1000) * 1000;
+  return { ...toolCall, duration: elapsed };
+}
+
+// The UI kit auto-expands finished cards; outside debug, drop the box content so they stay a one-line pill.
+function compactFinishedTool(toolCall: MCPToolCall, debug: boolean | undefined): MCPToolCall {
+  if (debug || toolCall.status === 'running') return toolCall;
+  return { ...toolCall, parameters: [], error: undefined, result: undefined };
+}
+
+function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status'], server?: string): MCPToolCall {
   return {
     id: String(toolCall.id || createMessageId('tool')),
-    toolName: toolCall.function?.name || 'unknown',
+    toolName: toolLabel(toolCall.function?.name || 'unknown', server),
     parameters: Object.entries(args).map(([name, value]) => ({
       name,
       type: typeof value,
@@ -446,6 +456,21 @@ export function WidgetApp() {
   const [conversationEpoch, setConversationEpoch] = useState(0);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
+  const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
+
+  // A toolbar popup is already an explicit user action. Focus its composer
+  // (or sign-in input) after configuration/authentication has rendered it.
+  const focusInput = useCallback(() => {
+    requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)') ||
+        document.querySelector<HTMLInputElement>('input:not(:disabled):not([type="hidden"]):not([type="checkbox"])');
+      input?.focus();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (config.autoFocus && initialConfigReady && !needsAuthentication) focusInput();
+  }, [config.autoFocus, initialConfigReady, needsAuthentication, focusInput]);
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
@@ -603,7 +628,7 @@ export function WidgetApp() {
   }, [config.provider, config.model, effectiveModels]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
-    window.parent.postMessage(message, parentOriginRef.current || '*');
+    window.parent.postMessage({ ...message, ozwellDocumentId: widgetDocumentId }, parentOriginRef.current || '*');
   }, []);
 
   // Bring host-selected content (e.g. an E-Chart selection) into the composer
@@ -622,22 +647,22 @@ export function WidgetApp() {
 
   const mcpSend = useCallback((method: string, params?: Record<string, unknown>, explicitId?: string | number) => {
     const id = explicitId != null ? explicitId : ++mcpRequestIdRef.current;
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       id: id,
       method: method,
       params: params || {},
-    }, parentOriginRef.current || '*');
+    });
     return id;
-  }, []);
+  }, [postToParent]);
 
   const mcpNotify = useCallback((method: string, params?: Record<string, unknown>) => {
-    window.parent.postMessage({
+    postToParent({
       jsonrpc: '2.0',
       method,
       params: params || {},
-    }, parentOriginRef.current || '*');
-  }, []);
+    });
+  }, [postToParent]);
 
   const showToast = useCallback((message: string) => {
     if (fallbackToastShownRef.current) return;
@@ -704,25 +729,22 @@ export function WidgetApp() {
       const args = parseToolArgs(toolCall.function?.arguments);
       const toolCallId = ensureToolCallId(toolCall, () => ++mcpRequestIdRef.current);
 
-      if (configRef.current.debug) {
-        const displayToolCall = createToolDisplay(toolCall, args, 'running');
-        toolExecutionsRef.current.push({
-          toolCallId,
-          toolName,
-          arguments: args,
-          result: null,
-          timestamp: Date.now(),
-          completedAt: null,
-        });
-        appendDisplay({
-          id: createMessageId('tool'),
-          role: 'tool',
-          content: [{ type: 'tool_use', toolCall: displayToolCall }],
-          timestamp: new Date(),
-          status: 'complete',
-          metadata: { source: 'debug-tool', toolCallId },
-        });
-      }
+      toolExecutionsRef.current.push({
+        toolCallId,
+        toolName,
+        arguments: args,
+        result: null,
+        timestamp: Date.now(),
+        completedAt: null,
+      });
+      appendDisplay({
+        id: createMessageId('tool'),
+        role: 'tool',
+        content: [{ type: 'tool_use', toolCall: createToolDisplay(toolCall, args, 'running') }],
+        timestamp: new Date(),
+        status: 'complete',
+        metadata: { source: 'tool', toolCallId },
+      });
 
       activeToolCallsRef.current[toolName] = toolCallId;
       trackPendingToolCall(toolCallId);
@@ -792,6 +814,22 @@ export function WidgetApp() {
       let fullThinking = '';
       let sawThinking = false;
       const accumulatedToolCalls: OpenAIToolCall[] = [];
+      const serverTools: MCPToolCall[] = [];
+      const serverToolNames = new Map<string, { tool: string; server?: string }>();
+      const withServerTools = (blocks: WidgetMessage['content']): WidgetMessage['content'] => [
+        ...serverTools.map((toolCall) => ({ type: 'tool_use' as const, toolCall: compactFinishedTool(withLiveDuration(toolCall), configRef.current.debug) })),
+        ...blocks,
+      ];
+      // A bubble with no text still keeps any MCP tool cards it showed.
+      const dropAssistantBubble = () => {
+        const id = assistantMessageId;
+        if (!id) return;
+        if (serverTools.length) {
+          updateDisplayMessage(id, (message) => ({ ...message, content: withServerTools([]), status: 'complete' }));
+        } else {
+          setDisplayMessages((current) => current.filter((message) => message.id !== id));
+        }
+      };
       const modeAtStart = (configRef.current.thinkingDefaultMode ?? thinkingMode) as ThinkingMode;
 
       assistantMessageId = createMessageId('assistant');
@@ -804,6 +842,8 @@ export function WidgetApp() {
         metadata: { agentId: turn.agentId },
       }]);
 
+      // Outlives a single read: an `event:` line and its `data:` line can arrive in different chunks.
+      let currentEventType: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -811,7 +851,6 @@ export function WidgetApp() {
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        let currentEventType: string | null = null;
 
         for (const line of lines) {
           if (line.trim() === '') {
@@ -838,6 +877,50 @@ export function WidgetApp() {
               }
             } catch {
               // Ignore malformed warning events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'tool_history') {
+            try {
+              const { messages } = JSON.parse(data) as { messages?: ChatHistoryMessage[] };
+              if (Array.isArray(messages)) {
+                for (const message of messages) {
+                  if (message && (message.role === 'assistant' || message.role === 'tool')) appendHistory(message);
+                }
+              }
+            } catch {
+              // Ignore malformed tool history events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'tool_status') {
+            try {
+              const event = JSON.parse(data);
+              const id = String(event.id ?? '');
+              const existing = serverTools.find((tool) => tool.id === id);
+              if (existing) {
+                existing.status = event.status;
+                existing.completedAt = new Date();
+                if (typeof event.duration === 'number') existing.duration = event.duration;
+                if (typeof event.error === 'string') {
+                  const names = serverToolNames.get(id);
+                  existing.error = event.error;
+                  if (names) existing.toolName = toolLabel(names.tool, names.server, event.error);
+                }
+              } else if (typeof event.tool === 'string') {
+                const args = event.arguments && typeof event.arguments === 'object' ? event.arguments as Record<string, unknown> : {};
+                const server = typeof event.server === 'string' && event.server ? event.server : undefined;
+                serverToolNames.set(id, { tool: event.tool, server });
+                serverTools.push(createToolDisplay({ id, type: 'function', function: { name: event.tool, arguments: '' } }, args, 'running', server));
+              }
+              updateDisplayMessage(assistantMessageId, (message) => ({
+                ...message,
+                content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
+              }));
+            } catch {
+              // Ignore malformed tool status events.
             }
             currentEventType = null;
             continue;
@@ -885,7 +968,7 @@ export function WidgetApp() {
 
             updateDisplayMessage(assistantMessageId, (message) => ({
               ...message,
-              content: assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content,
+              content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
@@ -910,13 +993,13 @@ export function WidgetApp() {
           tool_calls: toolCalls,
         });
         if (shouldHideContent && !hasVisibleThinking) {
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
         } else {
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: shouldHideContent
+            content: withServerTools(shouldHideContent
               ? assistantDisplayMessage('', fullThinking, modeAtStart).content
-              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -929,14 +1012,14 @@ export function WidgetApp() {
           const MAX_THINKING_RETRIES = 3;
           if (thinkingRetryCount < MAX_THINKING_RETRIES) {
             needsThinkingRetry = true;
-            setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+            dropAssistantBubble();
           } else {
             const fallback = 'The model is not responding right now. Please try again or refresh the page.';
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
           // Empty turn: drop the streaming bubble rather than rendering a placeholder.
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
@@ -948,7 +1031,7 @@ export function WidgetApp() {
           });
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+            content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -990,11 +1073,7 @@ export function WidgetApp() {
     delete pendingToolCallsRef.current[String(toolCallId)];
     const wasAwaiting = awaitingToolResultsRef.current.has(String(toolCallId));
     updateToolExecutionResult(toolCallId, result);
-    appendHistory({
-      role: 'tool',
-      tool_call_id: toolCallId,
-      content: serializeToolResult(result),
-    });
+    appendHistory(createToolResultMessage(toolCallId, result));
     awaitingToolResultsRef.current.delete(String(toolCallId));
     // Only continue the turn once every parallel tool call has a result.
     if (wasAwaiting && awaitingToolResultsRef.current.size === 0) {
@@ -1055,34 +1134,62 @@ export function WidgetApp() {
   }, []);
 
   const updateToolExecutionResult = useCallback((toolCallId: string | number, result: unknown) => {
-    if (!configRef.current.debug) return;
     const execution = toolExecutionsRef.current.find((item) => item.toolCallId === toolCallId);
     if (execution) {
       execution.result = result;
       execution.completedAt = Date.now();
     }
+    const error = (result as { error?: unknown } | null)?.error;
+    const errorText = error ? String(typeof error === 'string' ? error : JSON.stringify(error)) : undefined;
     setDisplayMessages((current) => current.map((message) => {
       if (message.metadata?.toolCallId !== toolCallId) return message;
       const content = message.content[0];
       if (content?.type !== 'tool_use' || !content.toolCall) return message;
+      const startedAt = new Date(content.toolCall.startedAt).getTime();
+      const rawName = execution?.toolName;
       return {
         ...message,
         content: [{
           type: 'tool_use',
-          toolCall: {
+          toolCall: compactFinishedTool({
             ...content.toolCall,
-            status: (result as any)?.error ? 'error' : 'success',
+            ...(errorText && rawName && { toolName: toolLabel(rawName, undefined, errorText) }),
+            status: errorText ? 'error' : 'success',
             completedAt: new Date(),
-            result: {
-              type: (result as any)?.error ? 'error' : 'json',
-              data: result,
-              summary: (result as any)?.error || 'Tool completed',
-            },
-          },
+            duration: Date.now() - startedAt,
+            ...(errorText && { error: errorText }),
+            ...(configRef.current.debug && {
+              result: {
+                type: errorText ? 'error' : 'json',
+                data: result,
+                summary: errorText || 'Tool completed',
+              },
+            }),
+          }, configRef.current.debug),
         }],
       };
     }));
   }, []);
+
+  const hasRunningTool = displayMessages.some((message) => message.content.some(
+    (block) => block.type === 'tool_use' && block.toolCall?.status === 'running',
+  ));
+  useEffect(() => {
+    if (!hasRunningTool) return;
+    const timer = window.setInterval(() => {
+      setDisplayMessages((current) => current.map((message) => (
+        message.content.some((block) => block.type === 'tool_use' && block.toolCall?.status === 'running')
+          ? {
+            ...message,
+            content: message.content.map((block) => (
+              block.type === 'tool_use' && block.toolCall ? { ...block, toolCall: withLiveDuration(block.toolCall) } : block
+            )),
+          }
+          : message
+      )));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningTool]);
 
   useEffect(() => {
     window.OzwellDebug = {
@@ -1121,8 +1228,20 @@ export function WidgetApp() {
   }, [clearHistory, displayMessages]);
 
   useEffect(() => {
+    // Every MCP listener shares the same parent identity checks. Once the
+    // handshake pins an origin, navigation must not silently change that peer.
+    function isParentMessage(event: MessageEvent) {
+      return event.source === window.parent
+        && event.origin !== 'null'
+        && !!event.origin
+        && (!parentOriginRef.current || event.origin === parentOriginRef.current)
+        && (!event.data?.ozwellDocumentId || event.data.ozwellDocumentId === widgetDocumentId);
+    }
+
+    let onToolsResponse: ((event: MessageEvent) => void) | undefined;
+
     function handleParentMessage(event: MessageEvent) {
-      if (event.source !== window.parent) return;
+      if (!isParentMessage(event)) return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
 
@@ -1165,6 +1284,8 @@ export function WidgetApp() {
 
       if (data.type === 'open') setWidgetOpen(true);
 
+      if (data.type === 'focus') focusInput();
+
       if (data.type === 'close') {
         setWidgetOpen(false);
         postToParent({
@@ -1175,24 +1296,34 @@ export function WidgetApp() {
     }
 
     window.addEventListener('message', handleParentMessage);
-    postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
-
-    const initReqId = mcpSend('initialize', {
-      protocolVersion: '2025-11-25',
-      capabilities: {},
-      clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
-    });
+    const endDocument = () => postToParent({ source: 'ozwell-chat-widget', type: 'pagehide' });
+    window.addEventListener('pagehide', endDocument);
+    let initReqId: string | number;
+    function initializeParent() {
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
+      window.removeEventListener('message', onInitResponse);
+      postToParent({ source: 'ozwell-chat-widget', type: 'ready' });
+      initReqId = mcpSend('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'ozwell-chat-widget', version: '1.0.0' },
+      });
+      window.addEventListener('message', onInitResponse);
+    }
 
     function onInitResponse(event: MessageEvent) {
+      if (!isParentMessage(event)) return;
       const data = event.data;
-      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId) return;
+      if (!data || data.jsonrpc !== '2.0' || data.id !== initReqId || !data.result) return;
+      parentOriginRef.current = event.origin;
       mcpNotify('notifications/initialized');
       const toolsReqId = mcpSend('tools/list');
 
-      function onToolsResponse(event2: MessageEvent) {
+      onToolsResponse = (event2: MessageEvent) => {
+        if (!isParentMessage(event2)) return;
         const d = event2.data;
         if (!d || d.jsonrpc !== '2.0' || d.id !== toolsReqId) return;
-        window.removeEventListener('message', onToolsResponse);
+        window.removeEventListener('message', onToolsResponse!);
         const mcpTools = (d.result && d.result.tools) || [];
         setConfig((current) => ({
           ...current,
@@ -1205,17 +1336,28 @@ export function WidgetApp() {
             },
           })),
         }));
-      }
+      };
 
       window.addEventListener('message', onToolsResponse);
       window.removeEventListener('message', onInitResponse);
     }
 
-    window.addEventListener('message', onInitResponse);
+    // BFCache restores the same JavaScript document without rerunning effects.
+    // Its old identity was retired by pagehide, so start a fresh tool session.
+    const restoreDocument = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      widgetDocumentId = newWidgetDocumentId();
+      initializeParent();
+    };
+    window.addEventListener('pageshow', restoreDocument);
+    initializeParent();
 
     return () => {
       window.removeEventListener('message', handleParentMessage);
+      window.removeEventListener('pagehide', endDocument);
+      window.removeEventListener('pageshow', restoreDocument);
       window.removeEventListener('message', onInitResponse);
+      if (onToolsResponse) window.removeEventListener('message', onToolsResponse);
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
@@ -1307,10 +1449,11 @@ export function WidgetApp() {
 
   if (!initialConfigReady) return null;
 
-  if (!getAuthKey(config) && !userCredential && credentialSource !== 'host') {
+  if (needsAuthentication) {
     return (
       <AuthGate
         apiOrigin={apiOriginFor(config.endpoint)}
+        autoFocus={config.autoFocus}
         onAuthenticated={handleAuthenticated}
       />
     );

@@ -2,8 +2,8 @@
 
 Integrate Ozwell into any website using plain JavaScript, without any framework dependencies.
 
-:::note Current Demo Environment
-Use `https://api.ozwell.ai/widget` in production. For now, use the dev-container loader at `https://ozwellapi.os.mieweb.org/widget`.
+:::note Environments
+Use `https://api.ozwell.ai/widget` in production. The loader at `https://ozwellapi.os.mieweb.org/widget` is for development.
 :::
 
 ## Quick Start
@@ -16,10 +16,12 @@ The simplest approach — add a single script tag:
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 See the [CDN documentation](./cdn-embed.md) for full details.
+
+For the proposed loader-managed page control setting, see [Proposed page control option (not implemented)](./cdn-embed.md#proposed-page-control-option-not-implemented). This is separate from the wrapper APIs below.
 
 ### ES Module Import
 

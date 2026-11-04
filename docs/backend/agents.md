@@ -162,7 +162,7 @@ Create a new agent with a YAML configuration wrapped in JSON.
 
 ```yaml
 mcp_servers:
-  - name: notes                         # [a-zA-Z0-9_-], unique per agent
+  - name: notes                         # letters, numbers, spaces, - or _ (max 32), unique per agent
     url: https://example.com/mcp
     auth:                               # type: none | bearer (token) | header (name, value)
       type: bearer
@@ -172,7 +172,7 @@ mcp_servers:
 ```
 
 - Credentials must be secret references. Send values in a `secrets` object next to `yaml` on create/update (`{ "yaml": "...", "secrets": { "NOTES_TOKEN": "..." } }`). Omitted secrets are kept; `null` deletes one. Values are never returned — responses only list `secret_names`. Secrets are removed when the agent is deleted.
-- Only allowlisted tools are offered to the LLM (as `mcp__<server>__<tool>`), alongside page tools. Calls run server-side with a timeout (`MCP_TIMEOUT_MS`, default 15000) and an iteration cap (`MCP_MAX_TOOL_ITERATIONS`, default 5). If the model calls a page tool in the same turn, the page tool calls are returned to the client as usual.
+- Only allowlisted tools are offered to the LLM (as `mcp__<server>__<tool>`, with spaces in the server name replaced by `_`), alongside page tools. Calls run server-side with a timeout (`MCP_TIMEOUT_MS`, default 15000) and an iteration cap (`MCP_MAX_TOOL_ITERATIONS`, default 5). If the model calls a page tool in the same turn, the page tool calls are returned to the client as usual.
 - `POST /v1/mcp/discover` (parent key) or `POST /v1/manager/mcp/discover` returns a server's `tools/list` for building the allowlist. Body: `{ "server": { name, url, auth }, "secrets"?: {...}, "agent_id"?: "..." }` — `agent_id` reuses that agent's stored secrets.
 - Outbound policy: `MCP_ALLOWED_HOSTS` (comma-separated) restricts which hosts may be contacted. Loopback, private, and link-local addresses are refused unless `MCP_ALLOW_PRIVATE_NETWORKS=true`. Redirects are not followed.
 

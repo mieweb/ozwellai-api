@@ -16,6 +16,7 @@ export interface OzwellConfig {
   welcomeMessage?: string;
   thinkingEnabled?: boolean;
   thinkingDefaultMode?: ThinkingMode;
+  autoFocus?: boolean;
   headers?: Record<string, string>;
 }
 
@@ -47,7 +48,7 @@ export interface OpenAIToolCall {
 
 export interface WidgetMessage extends AIMessage {
   metadata?: {
-    source?: 'welcome' | 'debug-tool' | 'queued';
+    source?: 'welcome' | 'tool' | 'queued';
     toolCallId?: string | number;
   } & Record<string, unknown>;
 }

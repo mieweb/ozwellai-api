@@ -415,11 +415,13 @@ function startSse(reply: FastifyReply, origin: string | undefined) {
 
 type MockWarning = ReturnType<typeof buildMockWarning>;
 
-function buildMockAssistant(messages: NonNullableMessage[]) {
+function buildMockAssistant(messages: NonNullableMessage[], tools?: ToolDef[]) {
   const userMsg = extractUserMessage(messages as MockChatMessage[]);
   const hasResult = hasToolResult(messages as MockChatMessage[]);
   const toolResult = hasResult ? extractToolResult(messages as MockChatMessage[]) : null;
-  const assistantMsg = generateMockResponse(userMsg, hasResult, toolResult);
+  const toolNames = tools?.flatMap((tool) =>
+    tool?.type === 'function' && typeof tool.function?.name === 'string' ? [tool.function.name] : []);
+  const assistantMsg = generateMockResponse(userMsg, hasResult, toolResult, toolNames);
   const finishReason = assistantMsg.tool_calls?.length ? 'tool_calls' : 'stop';
   return { assistantMsg, finishReason };
 }
@@ -427,8 +429,9 @@ function buildMockAssistant(messages: NonNullableMessage[]) {
 function dispatchMockNonStream(
   messages: NonNullableMessage[],
   warning: MockWarning,
+  tools?: ToolDef[],
 ) {
-  const { assistantMsg, finishReason } = buildMockAssistant(messages);
+  const { assistantMsg, finishReason } = buildMockAssistant(messages, tools);
   const promptText = messages.map((m) => contentToText(m.content)).join(' ');
   const completionText = assistantMsg.content || JSON.stringify(assistantMsg.tool_calls || []);
   const promptTokens = countTokens(promptText);
@@ -453,8 +456,9 @@ function dispatchMockStream(
   reply: FastifyReply,
   origin: string | undefined,
   warning: MockWarning,
+  tools?: ToolDef[],
 ): void {
-  const { assistantMsg, finishReason } = buildMockAssistant(messages);
+  const { assistantMsg, finishReason } = buildMockAssistant(messages, tools);
   const id = generateId('chatcmpl');
   const created = Math.floor(Date.now() / 1000);
 
@@ -507,14 +511,15 @@ function respondMockOrError(
   stream: boolean,
   reply: FastifyReply,
   origin: string | undefined,
+  tools?: ToolDef[],
 ) {
   const warning = buildMockWarning(reason, model);
   if (reason === 'mock_agent') {
     if (stream) {
-      dispatchMockStream(messages, reply, origin, warning);
+      dispatchMockStream(messages, reply, origin, warning, tools);
       return undefined;
     }
-    return dispatchMockNonStream(messages, warning);
+    return dispatchMockNonStream(messages, warning, tools);
   }
 
   if (!MOCK_ENABLED) {
@@ -525,10 +530,10 @@ function respondMockOrError(
     );
   }
   if (stream) {
-    dispatchMockStream(messages, reply, origin, warning);
+    dispatchMockStream(messages, reply, origin, warning, tools);
     return undefined;
   }
-  return dispatchMockNonStream(messages, warning);
+  return dispatchMockNonStream(messages, warning, tools);
 }
 
 const chatRoute: FastifyPluginAsync = async (fastify) => {
@@ -752,6 +757,47 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
     };
 
+    const { tools } = body as ChatCompletionRequestWithTools;
+    // --- Agent: filter tools ---
+    // Tools arriving from the widget use two namespaces:
+    //   • bare names       — server-side tools (defined in the agent's tools array)
+    //   • postMessage_name — page-provided tools (prefixed by the loader)
+    //   • postMessage:name — legacy page tools from cached loaders during deploys
+    //
+    // allowedTools (from agent.tools) gates bare-name tools.
+    // pageTools policy gates prefixed page tools.
+    const PM_PREFIXES = ['postMessage_', 'postMessage:'];
+    let filteredTools = tools;
+    if (agentConfig !== null && tools) {
+      const allowed = agentConfig.allowedTools;          // null = no server tools defined
+      const pagePolicy = agentConfig.pageTools;          // 'all' | { restricted: [...] } | { blocked: [...] }
+
+      filteredTools = tools.filter((t) => {
+        if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
+        const name = t.function.name;
+        // The mcp__ namespace is reserved for server-executed tools.
+        if (name.startsWith(MCP_TOOL_PREFIX)) return false;
+
+        const pagePrefix = PM_PREFIXES.find((prefix) => name.startsWith(prefix));
+        if (pagePrefix) {
+          // Page tool — apply pageTools policy
+          const bare = name.slice(pagePrefix.length);
+          if (pagePolicy === 'all') return true;
+          if (typeof pagePolicy === 'object' && 'restricted' in pagePolicy) {
+            return pagePolicy.restricted.includes(bare);
+          }
+          if (typeof pagePolicy === 'object' && 'blocked' in pagePolicy) {
+            return !pagePolicy.blocked.includes(bare);
+          }
+          return true;  // unrecognized policy → allow
+        } else {
+          // Server-side tool — apply allowedTools allowlist
+          if (allowed === null) return true;    // no allowlist → pass all
+          return allowed.includes(name);
+        }
+      });
+    }
+
     // Early exit for mock-type agents — skip backend probing entirely (no LLM ever called).
     if (agentConfig?.type === 'mock') {
       const { messages: rawMessages, stream = false, max_tokens } = body as ChatCompletionRequestWithTools;
@@ -768,7 +814,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         mockMessages.unshift({ role: 'system', content: agentConfig.systemPrompt });
       }
       const mockModel = agentConfig.modelPolicy.default_model || 'mock';
-      const response = respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin);
+      const response = respondMockOrError('mock_agent', mockModel, mockMessages, stream, reply, request.headers.origin, filteredTools);
       recordUsage(mockModel, reply.statusCode, response);
       return response;
     }
@@ -788,7 +834,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const fallbackDefault = serverDefault ?? envFallbackModel(llmConfigured, ollamaAvailable);
     const DEFAULT_MODEL = fallbackDefault.model;
 
-    const { provider: requestedProvider, model: requestedModel, messages, tools, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
+    const { provider: requestedProvider, model: requestedModel, messages, stream = false, max_tokens, temperature: requestedTemperature = 0.7, response_format } = body as ChatCompletionRequestWithTools;
     getCachedModelsList();
     const effectiveModels = agentConfig && usageContext?.parentKeyId && usageContext.agentId
       ? agentStore.listEffectiveProviderModelsForAgent(usageContext.parentKeyId, usageContext.agentId)
@@ -885,49 +931,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     const imageError = await tiffError(normalizedMessages);
     if (imageError) return imageError;
 
-    // --- Agent: filter tools ---
-    // Tools arriving from the widget use two namespaces:
-    //   • bare names       — server-side tools (defined in the agent's tools array)
-    //   • postMessage_name — page-provided tools (prefixed by the loader)
-    //   • postMessage:name — legacy page tools from cached loaders during deploys
-    //
-    // allowedTools (from agent.tools) gates bare-name tools.
-    // pageTools policy gates prefixed page tools.
-    const PM_PREFIXES = ['postMessage_', 'postMessage:'];
-    let filteredTools = tools;
-    if (agentConfig !== null && tools) {
-      const allowed = agentConfig.allowedTools;          // null = no server tools defined
-      const pagePolicy = agentConfig.pageTools;          // 'all' | { restricted: [...] } | { blocked: [...] }
-
-      filteredTools = tools.filter((t) => {
-        if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
-        const name = t.function.name;
-        // The mcp__ namespace is reserved for server-executed tools.
-        if (name.startsWith(MCP_TOOL_PREFIX)) return false;
-
-        const pagePrefix = PM_PREFIXES.find((prefix) => name.startsWith(prefix));
-        if (pagePrefix) {
-          // Page tool — apply pageTools policy
-          const bare = name.slice(pagePrefix.length);
-          if (pagePolicy === 'all') return true;
-          if (typeof pagePolicy === 'object' && 'restricted' in pagePolicy) {
-            return pagePolicy.restricted.includes(bare);
-          }
-          if (typeof pagePolicy === 'object' && 'blocked' in pagePolicy) {
-            return !pagePolicy.blocked.includes(bare);
-          }
-          return true;  // unrecognized policy → allow
-        } else {
-          // Server-side tool — apply allowedTools allowlist
-          if (allowed === null) return true;    // no allowlist → pass all
-          return allowed.includes(name);
-        }
-      });
-    }
-
     // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
-      const response = respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin);
+      const response = respondMockOrError('no_backend', model, normalizedMessages, stream, reply, request.headers.origin, filteredTools);
       recordUsage(model, reply.statusCode, response, provider);
       return response;
     }
@@ -953,10 +959,27 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const pageTools = (filteredTools as ToolDef[] | undefined) ?? [];
       const allTools = [...pageTools, ...session.tools] as ToolDef[];
       const loopMessages = [...normalizedMessages];
+      loopMessages.unshift({
+        role: 'system',
+        content: 'Earlier tool calls and their results in this conversation are still valid. Reuse them instead of calling the same tool again with the same arguments, unless the user asks to refresh or check again.',
+      });
+      // Messages added by this loop; streamed back so the client keeps them for follow-up turns.
+      const toolHistory: NonNullableMessage[] = [];
+      let disconnected = false;
+      // request.raw.destroyed is already true once the body is read, so watch the response socket instead.
+      reply.raw.once('close', () => { if (!reply.raw.writableFinished) disconnected = true; });
       const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
       const sse = stream ? startSse(reply, request.headers.origin) : null;
       let activeModel = model;
       let warning: ReturnType<typeof buildFallbackWarning> | null = null;
+      // Tokens already spent still count toward quota, and ending the stream stops the heartbeat.
+      const stopIfDisconnected = () => {
+        if (!disconnected) return false;
+        request.log.info('Client disconnected during MCP tool loop; stopping');
+        recordUsage(activeModel, 499, { usage }, provider);
+        try { sse?.end(); } catch { /* socket already closed */ }
+        return true;
+      };
 
       const completeWithFallback = async (tools: ToolDef[] | undefined) => {
         try {
@@ -974,6 +997,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       try {
         let response!: LoopResponse;
         for (let i = 0; i <= MCP_MAX_TOOL_ITERATIONS; i++) {
+          if (stopIfDisconnected()) return;
           if (i > 0 && usageContext) {
             // Usage from earlier rounds is not recorded yet, so it is added to this round's estimate.
             const nextEstimate = usage.total_tokens + estimateChatTokens(loopMessages as unknown as Message[], max_tokens);
@@ -999,11 +1023,26 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           const mcpCalls = calls.filter(c => session.isMcpTool(c.function.name));
           if (lastRound || mcpCalls.length === 0) break;
           // Page calls in a mixed turn are dropped here; the model re-issues them after seeing the MCP results.
-          loopMessages.push({ role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls });
+          const assistantTurn = { role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls } as NonNullableMessage;
+          loopMessages.push(assistantTurn);
+          toolHistory.push(assistantTurn);
           for (const call of mcpCalls) {
+            if (stopIfDisconnected()) return;
+            const { server, tool } = session.describe(call.function.name) ?? { server: '', tool: call.function.name };
+            let args: unknown = {};
+            try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* shown as empty */ }
+            const startedAt = Date.now();
+            sse?.writeEvent('tool_status', { id: call.id, server, tool, arguments: args, status: 'running' });
             const result = await session.call(call.function.name, call.function.arguments);
-            loopMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+            let error: string | undefined;
+            try { error = (JSON.parse(result) as { error?: string })?.error; } catch { /* plain-text result */ }
+            sse?.writeEvent('tool_status', { id: call.id, status: error ? 'error' : 'success', duration: Date.now() - startedAt, ...(error && { error }) });
+            const toolTurn = { role: 'tool', tool_call_id: call.id, content: result } as NonNullableMessage;
+            loopMessages.push(toolTurn);
+            toolHistory.push(toolTurn);
           }
+          // Sent per batch so a later model failure can't make the client forget actions that already ran.
+          sse?.writeEvent('tool_history', { messages: [assistantTurn, ...loopMessages.slice(-mcpCalls.length)] });
         }
 
         const choice = response.choices[0];
@@ -1015,6 +1054,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         } else {
           delete msg.tool_calls;
           if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
+        }
+        if (!msg.content && !msg.tool_calls && toolHistory.length) {
+          // The model hit the iteration cap still asking for MCP tools; don't end with an empty turn.
+          msg.content = 'I ran out of tool calls before finishing. Ask me to continue and I will pick up from these results.';
         }
 
         recordUsage(activeModel, 200, { usage }, provider);
@@ -1507,7 +1550,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
 
     // LLM error final fallback: deterministic mock (if enabled), else a real 503.
     // Reached only from the non-stream path — streaming failures end the stream above.
-    const response = respondMockOrError('llm_error', model, normalizedMessages, stream, reply, request.headers.origin);
+    const response = respondMockOrError('llm_error', model, normalizedMessages, stream, reply, request.headers.origin, filteredTools);
     recordUsage(model, reply.statusCode, response, provider);
     return response;
   });

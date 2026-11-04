@@ -8,13 +8,9 @@ description: Integrate Ozwell's privacy-first AI chat into your website or web a
 
 Ozwell is an embeddable AI assistant that runs inside an iframe on your website. Users chat with it. The AI can call **tools you define** — JavaScript functions that read from or write to your page. Conversations are private by default; your page only sees tool calls and lifecycle events, never message content.
 
-> **Try it live:** See Ozwell in action at the [demo site](https://ozwelldemo.os.mieweb.org/).
->
-> **Recommended API for current Ozwell Manager experience:** `https://ozwellapi.os.mieweb.org`
->
-> **Console:** `https://ozwellconsole.os.mieweb.org`
->
-> Production demo/API endpoints are temporarily unavailable while production migrates to the future `api.ozwell.ai` endpoint, so the current docs use the dev-container demo, API, and console URLs.
+For production, load the widget from `https://api.ozwell.ai/widget` as shown below.
+
+> **Development environment:** Try the [development demo](https://ozwelldemo.os.mieweb.org/). Its API is `https://ozwellapi.os.mieweb.org` and its console is `https://ozwellconsole.os.mieweb.org`. These development URLs are separate from the production widget endpoint.
 
 ## What You're Building
 
@@ -56,7 +52,7 @@ Here's a page that exposes two tools: one that reads the current email (get) and
     ]
   };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ### 2. Handle Tool Calls
@@ -160,10 +156,12 @@ Add Ozwell to any website with a single script tag. No build step required. Supp
 <script>
   window.OzwellChatConfig = { apiKey: 'agnt_key-your-agent-key' };
 </script>
-<script src="https://ozwellapi.os.mieweb.org/widget"></script>
+<script src="https://api.ozwell.ai/widget"></script>
 ```
 
 ➡️ [Full CDN documentation with tool calling tutorial](./cdn-embed.md)
+
+For a scenario showing the proposed in-page MCP bridge, see [Proposed page control](./cdn-embed.md#proposed-page-control-option-not-implemented). The proposed `pageControl` option is not implemented and is not a supported widget setting.
 
 ---
 
