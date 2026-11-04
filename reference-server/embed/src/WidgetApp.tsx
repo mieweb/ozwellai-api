@@ -1241,6 +1241,25 @@ export function WidgetApp() {
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
 
+  // Server-side transcription keeps the widget bundle small (no on-device Whisper download).
+  const transcribe = useCallback(async (audio: Blob, signal: AbortSignal) => {
+    const { 'Content-Type': _json, ...headers } = requestHeaders(requestConfig());
+    const type = audio.type.split(';')[0] || 'audio/webm';
+    const form = new FormData();
+    form.append('file', new File([audio], `dictation.${type.split('/')[1] || 'webm'}`, { type }));
+    form.append('model', 'whisper-1');
+    const response = await fetch(`${apiOriginFor(configRef.current.endpoint)}/v1/audio/transcriptions`, {
+      method: 'POST',
+      headers,
+      body: form,
+      signal,
+    });
+    if (!response.ok) throw new Error(`Transcription failed (${response.status})`);
+    const payload = await response.json() as { text?: string };
+    return payload.text ?? '';
+  }, [requestConfig]);
+  const dictation = useMemo(() => ({ transcribe }), [transcribe]);
+
   const conversation = useMemo<SuperChatConversation>(() => {
     const assistantName = config.title || DEFAULT_CONFIG.title;
     const participants: Participant[] = [
@@ -1355,6 +1374,7 @@ export function WidgetApp() {
       placeholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       renderTextContent={renderTextContent}
       onMessageSent={(message) => { void sendMessage(message); }}
+      dictation={dictation}
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
       onAgentChange={selectAgent}

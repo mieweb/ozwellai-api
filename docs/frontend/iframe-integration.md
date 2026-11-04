@@ -67,6 +67,7 @@ The iframe includes restrictive sandbox attributes:
 <iframe 
   src="https://ozwellapi.os.mieweb.org/widget/frame/"
   sandbox="allow-scripts allow-same-origin allow-forms"
+  allow="microphone"
 ></iframe>
 ```
 
@@ -75,6 +76,7 @@ The iframe includes restrictive sandbox attributes:
 | `allow-scripts` | Required for chat functionality |
 | `allow-same-origin` | Required for API calls from iframe |
 | `allow-forms` | Enables form submission (file uploads) |
+| `allow="microphone"` | Enables the dictation button. The browser still asks the user for permission; audio is sent only to Ozwell's `/v1/audio/transcriptions` and the transcript lands in the editable draft (never auto-sent or shared with the host). Omit it to disable dictation; typed chat keeps working. If your site sends a `Permissions-Policy` header, it must also allow `microphone` for the widget origin. |
 
 ### Embedding Policy
 
@@ -229,7 +231,7 @@ If you need full control, you can implement the iframe integration manually.
     src="https://ozwellapi.os.mieweb.org/widget/frame/"
     style="display: none; width: 400px; height: 600px; border: none;"
     sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-    allow="clipboard-write"
+    allow="clipboard-write; microphone"
   ></iframe>
 </div>
 

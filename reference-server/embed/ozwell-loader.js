@@ -176,6 +176,8 @@
     // their consent screen in an iframe, so it opens in its own window.
     // allow-popups-to-escape-sandbox keeps that window out of this sandbox.
     iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox');
+    // Dictation needs mic access delegated to the cross-origin widget frame.
+    iframe.setAttribute('allow', 'microphone');
 
     container.appendChild(iframe);
     state.iframe = iframe;
