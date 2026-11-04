@@ -110,12 +110,12 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     const allowedMimeTypes = [
       'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/mpga',
       'audio/m4a', 'audio/wav', 'audio/webm', 'audio/x-m4a',
-      'audio/x-wav', 'video/mp4', 'video/webm',
+      'audio/x-wav', 'audio/ogg', 'video/mp4', 'video/webm',
     ];
     if (fileMimetype && !allowedMimeTypes.includes(fileMimetype)) {
       reply.code(400);
       return createError(
-        `Invalid file format. Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm`,
+        `Invalid file format. Supported formats: mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm`,
         'invalid_request_error',
         'file',
       );

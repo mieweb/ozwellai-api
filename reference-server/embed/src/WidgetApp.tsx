@@ -441,6 +441,9 @@ export function WidgetApp() {
   // True while `queuedMessage` holds host-composed content the user has not yet
   // confirmed, so the completion follow-up never auto-sends it.
   const queuedIsDraftRef = useRef(false);
+  const [widgetOpen, setWidgetOpen] = useState(true);
+  // Bumped on reset so SuperChat drops any in-flight dictation for the old conversation.
+  const [conversationEpoch, setConversationEpoch] = useState(0);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
 
@@ -463,6 +466,7 @@ export function WidgetApp() {
     setQueuedMessage(null);
     setHistoryMessages([]);
     setDisplayMessages([]);
+    setConversationEpoch((epoch) => epoch + 1);
     setEffectiveModels([]);
     setActiveModel(null);
     setAgents([]);
@@ -1105,6 +1109,7 @@ export function WidgetApp() {
       clearMessages: () => {
         clearHistory();
         setDisplayMessages(configRef.current.welcomeMessage ? [assistantDisplayMessage(configRef.current.welcomeMessage)] : []);
+        setConversationEpoch((epoch) => epoch + 1);
         fallbackToastShownRef.current = false;
       },
       reset: () => {
@@ -1158,7 +1163,10 @@ export function WidgetApp() {
         applyConfig(data.payload.config);
       }
 
+      if (data.type === 'open') setWidgetOpen(true);
+
       if (data.type === 'close') {
+        setWidgetOpen(false);
         postToParent({
           source: 'ozwell-chat-widget',
           type: 'closed',
@@ -1258,7 +1266,7 @@ export function WidgetApp() {
     const payload = await response.json() as { text?: string };
     return payload.text ?? '';
   }, [requestConfig]);
-  const dictation = useMemo(() => ({ transcribe }), [transcribe]);
+  const dictation = useMemo(() => ({ transcribe, disabled: !widgetOpen }), [transcribe, widgetOpen]);
 
   const conversation = useMemo<SuperChatConversation>(() => {
     const assistantName = config.title || DEFAULT_CONFIG.title;
@@ -1294,8 +1302,8 @@ export function WidgetApp() {
           status: message.status,
         };
       });
-    return { id: 'ozwell-widget', title: assistantName, participants, thread };
-  }, [agents, config.title, displayMessages, thinkingMode]);
+    return { id: `ozwell-widget-${conversationEpoch}`, title: assistantName, participants, thread };
+  }, [agents, config.title, conversationEpoch, displayMessages, thinkingMode]);
 
   if (!initialConfigReady) return null;
 
