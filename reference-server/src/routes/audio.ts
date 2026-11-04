@@ -146,7 +146,8 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
       const headers: Record<string, string> = {
         'Authorization': `Bearer ${LLM_API_KEY}`,
       };
-      if (LLM_PROVIDER) headers['x-portkey-provider'] = LLM_PROVIDER;
+      // whisper-1 is an OpenAI model; multi-provider gateways need it named.
+      headers['x-portkey-provider'] = LLM_PROVIDER || 'openai';
 
       const upstreamResp = await fetch(`${LLM_BASE_URL}/v1/audio/transcriptions`, {
         method: 'POST',
