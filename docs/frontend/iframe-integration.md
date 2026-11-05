@@ -266,10 +266,10 @@ trigger.addEventListener('click', () => {
   const isHidden = iframe.style.display === 'none';
   iframe.style.display = isHidden ? 'block' : 'none';
   
+  // Lets the widget stop any in-progress dictation while hidden.
   iframe.contentWindow.postMessage({
-    type: isHidden ? 'ozwell:open' : 'ozwell:close',
-    timestamp: Date.now(),
-    id: crypto.randomUUID()
+    source: 'ozwell-chat-parent',
+    type: isHidden ? 'open' : 'close',
   }, 'https://api.ozwell.ai');
 });
 

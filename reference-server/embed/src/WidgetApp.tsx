@@ -1393,7 +1393,9 @@ export function WidgetApp() {
 
   // Server-side transcription keeps the widget bundle small (no on-device Whisper download).
   const transcribe = useCallback(async (audio: Blob, signal: AbortSignal) => {
-    const { 'Content-Type': _json, ...headers } = requestHeaders(requestConfig());
+    const headers = new Headers(requestHeaders(requestConfig()));
+    // Let fetch set the multipart boundary.
+    headers.delete('content-type');
     const type = audio.type.split(';')[0] || 'audio/webm';
     const form = new FormData();
     form.append('file', new File([audio], `dictation.${type.split('/')[1] || 'webm'}`, { type }));

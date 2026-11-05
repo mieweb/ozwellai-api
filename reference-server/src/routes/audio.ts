@@ -6,6 +6,26 @@ const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 
+// Mirrors resolveChatTransport() so transcription goes wherever chat goes.
+function transcriptionUpstream(): { url: string; headers: Record<string, string> } | 'unavailable' | null {
+  const openaiKey = (process.env.OPENAI_API_KEY || '').trim();
+  const gatewayForced = process.env.LLM_TRANSPORT === 'gateway' && isLLMBackendConfigured();
+  if (openaiKey && !gatewayForced) {
+    const base = (process.env.OPENAI_BASE_URL || '').trim() || 'https://api.openai.com/v1';
+    return { url: `${base.replace(/\/+$/, '')}/audio/transcriptions`, headers: { Authorization: `Bearer ${openaiKey}` } };
+  }
+  if (isLLMBackendConfigured() && (gatewayForced || !process.env.ANTHROPIC_API_KEY?.trim())) {
+    return {
+      url: `${LLM_BASE_URL}/v1/audio/transcriptions`,
+      // whisper-1 is an OpenAI model; multi-provider gateways need it named.
+      headers: { Authorization: `Bearer ${LLM_API_KEY}`, 'x-portkey-provider': LLM_PROVIDER || 'openai' },
+    };
+  }
+  // A real chat provider without speech-to-text must not get mock transcripts.
+  if (process.env.ANTHROPIC_API_KEY?.trim()) return 'unavailable';
+  return null;
+}
+
 const audioRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/audio/transcriptions
   fastify.post('/v1/audio/transcriptions', {
@@ -129,7 +149,12 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // Forward to real backend if configured, otherwise return mock
-    if (isLLMBackendConfigured()) {
+    const upstream = transcriptionUpstream();
+    if (upstream === 'unavailable') {
+      reply.code(503);
+      return createError('Audio transcription is not available on this server', 'server_error');
+    }
+    if (upstream) {
       const upstreamForm = new FormData();
       upstreamForm.append('file', new Blob([Buffer.concat(chunks)], { type: fileMimetype }), filename);
       upstreamForm.append('model', model);
@@ -143,15 +168,9 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${LLM_API_KEY}`,
-      };
-      // whisper-1 is an OpenAI model; multi-provider gateways need it named.
-      headers['x-portkey-provider'] = LLM_PROVIDER || 'openai';
-
-      const upstreamResp = await fetch(`${LLM_BASE_URL}/v1/audio/transcriptions`, {
+      const upstreamResp = await fetch(upstream.url, {
         method: 'POST',
-        headers,
+        headers: upstream.headers,
         body: upstreamForm,
       });
 
