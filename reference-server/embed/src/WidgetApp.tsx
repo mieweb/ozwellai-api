@@ -1522,7 +1522,7 @@ export function WidgetApp() {
       dictation={dictation}
       composerSelectorsEndSlot={(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) ? (
         <label className="ozwell-thinking-control">
-          Thinking
+          <span aria-hidden="true">Thinking:</span>
           <select
             aria-label="Show thinking"
             value={thinkingMode}
@@ -1537,6 +1537,7 @@ export function WidgetApp() {
             <option value={THINKING.SMART}>Auto</option>
             <option value={THINKING.EXPANDED}>Expanded</option>
           </select>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
         </label>
       ) : undefined}
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}

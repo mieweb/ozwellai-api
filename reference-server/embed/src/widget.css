@@ -739,28 +739,38 @@ body {
   padding: 6px;
 }
 
+/* Mirrors the composer's ghost model-selector trigger so the row reads as one set of controls. */
 .ozwell-thinking-control {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #63717b;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.ozwell-thinking-control select {
-  min-height: 24px;
-  padding: 1px 4px;
-  border: 1px solid transparent;
+  padding: 4px 8px;
   border-radius: 6px;
-  background: transparent;
-  color: #334155;
-  font: inherit;
+  color: #525252;
+  font-size: 0.75rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.ozwell-thinking-control select:hover,
-.ozwell-thinking-control select:focus-visible {
-  border-color: #d8e0ec;
-  background: #ffffff;
+.ozwell-thinking-control:hover {
+  background: #f5f5f5;
+  color: #171717;
+}
+
+.ozwell-thinking-control:focus-within {
+  outline: 2px solid #0f7495;
+  outline-offset: 1px;
+}
+
+.ozwell-thinking-control select {
+  appearance: none;
+  field-sizing: content;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
