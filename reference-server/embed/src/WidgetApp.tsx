@@ -1492,27 +1492,6 @@ export function WidgetApp() {
         <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
       </div>
     )}
-    {(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) && (
-      <div className="ozwell-thinking-bar">
-        <label>
-          Show thinking
-          <select
-            aria-label="Show thinking"
-            value={thinkingMode}
-            onChange={(event) => {
-              const mode = Number(event.target.value) as ThinkingMode;
-              setThinkingMode(mode);
-              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
-            }}
-          >
-            <option value={THINKING.NONE}>Never</option>
-            <option value={THINKING.PEEK}>Collapsed</option>
-            <option value={THINKING.SMART}>Auto</option>
-            <option value={THINKING.EXPANDED}>Expanded</option>
-          </select>
-        </label>
-      </div>
-    )}
     {queuedMessage !== null && (
       <div className="ozwell-queued" role="group" aria-label="Queued message">
         <textarea
@@ -1541,6 +1520,25 @@ export function WidgetApp() {
       renderTextContent={renderTextContent}
       onMessageSent={(message) => { void sendMessage(message); }}
       dictation={dictation}
+      composerSelectorsEndSlot={(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) ? (
+        <label className="ozwell-thinking-control">
+          Thinking
+          <select
+            aria-label="Show thinking"
+            value={thinkingMode}
+            onChange={(event) => {
+              const mode = Number(event.target.value) as ThinkingMode;
+              setThinkingMode(mode);
+              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
+            }}
+          >
+            <option value={THINKING.NONE}>Never</option>
+            <option value={THINKING.PEEK}>Collapsed</option>
+            <option value={THINKING.SMART}>Auto</option>
+            <option value={THINKING.EXPANDED}>Expanded</option>
+          </select>
+        </label>
+      ) : undefined}
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
       onAgentChange={selectAgent}
