@@ -1,28 +1,28 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, extractToken, isLLMBackendConfigured } from '../util';
+import { validateAuth, createError, extractToken, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import { agentStore } from '../storage/agents';
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 
-// Mirrors resolveChatTransport() so transcription goes wherever chat goes.
-function transcriptionUpstream(): { url: string; headers: Record<string, string> } | 'unavailable' | null {
+// Prefer direct OpenAI like chat does, else any configured gateway; mock only when no real backend exists.
+async function transcriptionUpstream(): Promise<{ url: string; headers: Record<string, string> } | 'unavailable' | null> {
   const openaiKey = (process.env.OPENAI_API_KEY || '').trim();
   const gatewayForced = process.env.LLM_TRANSPORT === 'gateway' && isLLMBackendConfigured();
   if (openaiKey && !gatewayForced) {
     const base = (process.env.OPENAI_BASE_URL || '').trim() || 'https://api.openai.com/v1';
     return { url: `${base.replace(/\/+$/, '')}/audio/transcriptions`, headers: { Authorization: `Bearer ${openaiKey}` } };
   }
-  if (isLLMBackendConfigured() && (gatewayForced || !process.env.ANTHROPIC_API_KEY?.trim())) {
+  if (isLLMBackendConfigured()) {
     return {
       url: `${LLM_BASE_URL}/v1/audio/transcriptions`,
       // whisper-1 is an OpenAI model; multi-provider gateways need it named.
       headers: { Authorization: `Bearer ${LLM_API_KEY}`, 'x-portkey-provider': LLM_PROVIDER || 'openai' },
     };
   }
-  // A real chat provider without speech-to-text must not get mock transcripts.
-  if (process.env.ANTHROPIC_API_KEY?.trim()) return 'unavailable';
+  // Real chat backends without speech-to-text must not get mock transcripts.
+  if (process.env.ANTHROPIC_API_KEY?.trim() || await isOllamaAvailable()) return 'unavailable';
   return null;
 }
 
@@ -149,7 +149,7 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // Forward to real backend if configured, otherwise return mock
-    const upstream = transcriptionUpstream();
+    const upstream = await transcriptionUpstream();
     if (upstream === 'unavailable') {
       reply.code(503);
       return createError('Audio transcription is not available on this server', 'server_error');

@@ -1406,11 +1406,24 @@ export function WidgetApp() {
       body: form,
       signal,
     });
+    if (response.status === 503) throw new Error('Voice input is not available on this server.');
     if (!response.ok) throw new Error(`Transcription failed (${response.status})`);
     const payload = await response.json() as { text?: string };
     return payload.text ?? '';
   }, [requestConfig]);
-  const dictation = useMemo(() => ({ transcribe, disabled: !widgetOpen }), [transcribe, widgetOpen]);
+  // The button's own caption is generic; explain cases a retry cannot fix.
+  const onDictationError = useCallback((error: Error) => {
+    const message = error.name === 'NotFoundError'
+      ? 'No microphone was found. Connect one, or type your message instead.'
+      : /not available/i.test(error.message) || error.name === 'NotSupportedError'
+        ? 'Voice input is not available here. You can still type your message.'
+        : null;
+    if (message) setToast(message);
+  }, []);
+  const dictation = useMemo(
+    () => ({ transcribe, onError: onDictationError, disabled: !widgetOpen }),
+    [transcribe, onDictationError, widgetOpen],
+  );
 
   const conversation = useMemo<SuperChatConversation>(() => {
     const assistantName = config.title || DEFAULT_CONFIG.title;
