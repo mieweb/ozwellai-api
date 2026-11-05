@@ -4,7 +4,6 @@ import { agentStore } from '../storage/agents';
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
-const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
 
 // Prefer direct OpenAI like chat does, else any configured gateway; mock only when no real backend exists.
 async function transcriptionUpstream(): Promise<{ url: string; headers: Record<string, string> } | 'unavailable' | null> {
@@ -17,8 +16,8 @@ async function transcriptionUpstream(): Promise<{ url: string; headers: Record<s
   if (isLLMBackendConfigured()) {
     return {
       url: `${LLM_BASE_URL}/v1/audio/transcriptions`,
-      // whisper-1 is an OpenAI model; multi-provider gateways need it named.
-      headers: { Authorization: `Bearer ${LLM_API_KEY}`, 'x-portkey-provider': LLM_PROVIDER || 'openai' },
+      // whisper-1 is an OpenAI model regardless of the chat provider (LLM_PROVIDER).
+      headers: { Authorization: `Bearer ${LLM_API_KEY}`, 'x-portkey-provider': 'openai' },
     };
   }
   // Real chat backends without speech-to-text must not get mock transcripts.
