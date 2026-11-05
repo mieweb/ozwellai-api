@@ -24,6 +24,8 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
+const THINKING_LABELS: Record<ThinkingMode, string> = { 0: 'Never', 1: 'Collapsed', 2: 'Auto', 3: 'Expanded' };
+const THINKING_OPTIONS: ThinkingMode[] = [THINKING.NONE, THINKING.PEEK, THINKING.SMART, THINKING.EXPANDED];
 const MCP_TOOL_TIMEOUT_MS = 30000;
 // A frame's WindowProxy survives reloads. This identity belongs to the loaded
 // document, so hosts can retire its tool requests before accepting a new one.
@@ -1521,8 +1523,10 @@ export function WidgetApp() {
       onMessageSent={(message) => { void sendMessage(message); }}
       dictation={dictation}
       composerSelectorsEndSlot={(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) ? (
-        <label className="ozwell-thinking-control">
-          <span aria-hidden="true">Thinking:</span>
+        <div className="ozwell-thinking-control">
+          <span aria-hidden="true">Thinking: {THINKING_LABELS[thinkingMode]}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+          {/* Invisible native select covers the whole control so any click opens it. */}
           <select
             aria-label="Show thinking"
             value={thinkingMode}
@@ -1532,13 +1536,11 @@ export function WidgetApp() {
               setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
             }}
           >
-            <option value={THINKING.NONE}>Never</option>
-            <option value={THINKING.PEEK}>Collapsed</option>
-            <option value={THINKING.SMART}>Auto</option>
-            <option value={THINKING.EXPANDED}>Expanded</option>
+            {THINKING_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>{THINKING_LABELS[mode]}</option>
+            ))}
           </select>
-          <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
-        </label>
+        </div>
       ) : undefined}
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
