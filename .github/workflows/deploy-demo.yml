@@ -36,10 +36,10 @@ jobs:
           retention-days: 1
 
   deploy-prod:
-    name: Deploy to ozwell-prod landing
+    name: Deploy to ozwell-phxdc-node1 landing
     needs: build
     if: github.ref_name == 'main'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, ozwell-phxdc-node1]
 
     steps:
       - name: Download build artifact
@@ -47,47 +47,46 @@ jobs:
         with:
           name: landing-page-build
 
-      # v0.1.7
+      - name: Prepare SSH host
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan "${DEPLOY_HOST#*@}" >> ~/.ssh/known_hosts
+
       - name: Upload to server
-        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
-        with:
-          host: ${{ vars.OZWELL_PROD_HOST }}
-          port: 2061
-          username: ${{ vars.OZWELL_PROD_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: landing-page-build.tar.gz
-          target: /tmp/
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
+        run: rsync -ruva --progress landing-page-build.tar.gz "$DEPLOY_HOST:/tmp/"
 
-      # v1.0.0
       - name: Extract and restart service
-        uses: appleboy/ssh-action@55dabf81b49d4120609345970c91507e2d734799
-        with:
-          host: ${{ vars.OZWELL_PROD_HOST }}
-          port: 2061
-          username: ${{ vars.OZWELL_PROD_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
+        env:
+          DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
+          DEPLOY_PATH: ${{ vars.OZWELL_LANDING_DEPLOY_PATH || '/storage/apps/ozwellai-api' }}
+          RESTART_COMMAND: ${{ vars.OZWELL_LANDING_RESTART_COMMAND || 'sudo systemctl restart ozwellai-landing' }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_HOST" "DEPLOY_PATH=$(printf '%q' "$DEPLOY_PATH") RESTART_COMMAND=$(printf '%q' "$RESTART_COMMAND") bash -s" <<'REMOTE'
+            set -euo pipefail
 
-            # Ensure directory structure exists (no git repo needed)
-            mkdir -p ~/ozwellai-api/landing-page
-            cd ~/ozwellai-api
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
 
-            # Extract the pre-built package
-            tar -xzf /tmp/landing-page-build.tar.gz
+            # Prepare the release in staging so a failed extract/install leaves the live demo untouched.
+            rm -rf .landing-staging
+            mkdir .landing-staging
+            tar -xzf /tmp/landing-page-build.tar.gz -C .landing-staging
+            (cd .landing-staging/landing-page && npm ci --omit=dev)
 
-            # Install production dependencies only
-            cd landing-page
-            npm ci --omit=dev
+            rm -rf landing-page.prev
+            if [[ -d landing-page ]]; then mv landing-page landing-page.prev; fi
+            mv .landing-staging/landing-page landing-page
+            rm -rf .landing-staging
 
-            # Restart landing service with public reference-server/API base URL
-            pm2 stop landing || true
-            pm2 delete landing || true
-            REFERENCE_SERVER_URL=https://ozwellapi-prod.os.mieweb.org pm2 start server.js --name landing
-            pm2 save
-
-            # Cleanup
+            eval "$RESTART_COMMAND"
             rm /tmp/landing-page-build.tar.gz
+          REMOTE
 
   deploy-dev:
     name: Deploy to ozwell-dev2 landing
