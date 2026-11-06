@@ -67,16 +67,22 @@ jobs:
           RESTART_COMMAND: ${{ vars.OZWELL_LANDING_RESTART_COMMAND || 'sudo systemctl restart ozwellai-landing' }}
         run: |
           set -euo pipefail
-          ssh "$DEPLOY_HOST" "DEPLOY_PATH='$DEPLOY_PATH' RESTART_COMMAND='$RESTART_COMMAND' bash -s" <<'REMOTE'
+          ssh "$DEPLOY_HOST" "DEPLOY_PATH=$(printf '%q' "$DEPLOY_PATH") RESTART_COMMAND=$(printf '%q' "$RESTART_COMMAND") bash -s" <<'REMOTE'
             set -euo pipefail
 
             mkdir -p "$DEPLOY_PATH"
             cd "$DEPLOY_PATH"
-            rm -rf landing-page/public landing-page/scripts
-            tar -xzf /tmp/landing-page-build.tar.gz
 
-            cd landing-page
-            npm ci --omit=dev
+            # Prepare the release in staging so a failed extract/install leaves the live demo untouched.
+            rm -rf .landing-staging
+            mkdir .landing-staging
+            tar -xzf /tmp/landing-page-build.tar.gz -C .landing-staging
+            (cd .landing-staging/landing-page && npm ci --omit=dev)
+
+            rm -rf landing-page.prev
+            if [[ -d landing-page ]]; then mv landing-page landing-page.prev; fi
+            mv .landing-staging/landing-page landing-page
+            rm -rf .landing-staging
 
             eval "$RESTART_COMMAND"
             rm /tmp/landing-page-build.tar.gz
