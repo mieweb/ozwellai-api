@@ -107,32 +107,33 @@ jobs:
           deploy_hostname="${DEPLOY_HOST#*@}"
           ssh-keyscan "$deploy_hostname" >> ~/.ssh/known_hosts
 
-      - name: Checkout lockfile and auth script
+      - name: Checkout lockfile
         uses: actions/checkout@v4
         with:
           path: src
-          sparse-checkout: |
-            package-lock.json
-            scripts/ci
+          sparse-checkout: package-lock.json
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
-      - name: Authenticate git for private npm dependencies
-        env:
-          HARNESS_CORE_SSH_KEY: ${{ secrets.HARNESS_CORE_SSH_KEY }}
-          FALLBACK_SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          HARNESS_CORE_TOKEN: ${{ secrets.HARNESS_CORE_READ_TOKEN }}
-        run: ./src/scripts/ci/git-auth-harness-core.sh
+      - name: Read pinned harness-core commit
+        id: harness
+        run: echo "commit=$(node -p "require('./src/package-lock.json').packages['node_modules/@mieweb/harness-core'].resolved.split('#')[1]")" >> "$GITHUB_OUTPUT"
 
-      # The prod host has no GitHub access to private harness-core, so it is fetched
-      # here at the locked commit and sent straight to the server (never in the artifact).
+      # The prod host has no GitHub access to private harness-core, so it is fetched here
+      # and sent straight to the server (never in the artifact). actions/checkout scopes the
+      # credential to this step and removes it afterwards on the persistent runner.
       - name: Fetch pinned harness-core
-        run: |
-          set -euo pipefail
-          rm -rf harness-core
-          commit=$(node -p "require('./src/package-lock.json').packages['node_modules/@mieweb/harness-core'].resolved.split('#')[1]")
-          git clone -q ssh://git@github.com/mieweb/harness-core.git harness-core
-          git -C harness-core checkout -q "$commit"
-          rm -rf harness-core/.git
+        uses: actions/checkout@v4
+        with:
+          repository: mieweb/harness-core
+          ref: ${{ steps.harness.outputs.commit }}
+          path: harness-core
+          ssh-key: ${{ secrets.HARNESS_CORE_SSH_KEY || secrets.SSH_PRIVATE_KEY }}
+          token: ${{ secrets.HARNESS_CORE_READ_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Strip harness-core git metadata
+        run: rm -rf harness-core/.git
 
       - name: Upload to server
         env:
