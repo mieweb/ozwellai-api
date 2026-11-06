@@ -24,6 +24,8 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
+const THINKING_LABELS: Record<ThinkingMode, string> = { 0: 'Never', 1: 'Collapsed', 2: 'Auto', 3: 'Expanded' };
+const THINKING_OPTIONS: ThinkingMode[] = [THINKING.NONE, THINKING.PEEK, THINKING.SMART, THINKING.EXPANDED];
 const MCP_TOOL_TIMEOUT_MS = 30000;
 // A frame's WindowProxy survives reloads. This identity belongs to the loaded
 // document, so hosts can retire its tool requests before accepting a new one.
@@ -451,6 +453,9 @@ export function WidgetApp() {
   // True while `queuedMessage` holds host-composed content the user has not yet
   // confirmed, so the completion follow-up never auto-sends it.
   const queuedIsDraftRef = useRef(false);
+  const [widgetOpen, setWidgetOpen] = useState(true);
+  // Bumped on reset so SuperChat drops any in-flight dictation for the old conversation.
+  const [conversationEpoch, setConversationEpoch] = useState(0);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
   const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
@@ -488,6 +493,7 @@ export function WidgetApp() {
     setQueuedMessage(null);
     setHistoryMessages([]);
     setDisplayMessages([]);
+    setConversationEpoch((epoch) => epoch + 1);
     setEffectiveModels([]);
     setActiveModel(null);
     setAgents([]);
@@ -1212,6 +1218,7 @@ export function WidgetApp() {
       clearMessages: () => {
         clearHistory();
         setDisplayMessages(configRef.current.welcomeMessage ? [assistantDisplayMessage(configRef.current.welcomeMessage)] : []);
+        setConversationEpoch((epoch) => epoch + 1);
         fallbackToastShownRef.current = false;
       },
       reset: () => {
@@ -1277,9 +1284,12 @@ export function WidgetApp() {
         applyConfig(data.payload.config);
       }
 
+      if (data.type === 'open') setWidgetOpen(true);
+
       if (data.type === 'focus') focusInput();
 
       if (data.type === 'close') {
+        setWidgetOpen(false);
         postToParent({
           source: 'ozwell-chat-widget',
           type: 'closed',
@@ -1383,6 +1393,40 @@ export function WidgetApp() {
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
 
+  // Server-side transcription keeps the widget bundle small (no on-device Whisper download).
+  const transcribe = useCallback(async (audio: Blob, signal: AbortSignal) => {
+    const headers = new Headers(requestHeaders(requestConfig()));
+    // Let fetch set the multipart boundary.
+    headers.delete('content-type');
+    const type = audio.type.split(';')[0] || 'audio/webm';
+    const form = new FormData();
+    form.append('file', new File([audio], `dictation.${type.split('/')[1] || 'webm'}`, { type }));
+    form.append('model', 'whisper-1');
+    const response = await fetch(`${apiOriginFor(configRef.current.endpoint)}/v1/audio/transcriptions`, {
+      method: 'POST',
+      headers,
+      body: form,
+      signal,
+    });
+    if (response.status === 503) throw new Error('Voice input is not available on this server.');
+    if (!response.ok) throw new Error(`Transcription failed (${response.status})`);
+    const payload = await response.json() as { text?: string };
+    return payload.text ?? '';
+  }, [requestConfig]);
+  // The button's own caption is generic; explain cases a retry cannot fix.
+  const onDictationError = useCallback((error: Error) => {
+    const message = error.name === 'NotFoundError'
+      ? 'No microphone was found. Connect one, or type your message instead.'
+      : /not available/i.test(error.message) || error.name === 'NotSupportedError'
+        ? 'Voice input is not available here. You can still type your message.'
+        : null;
+    if (message) setToast(message);
+  }, []);
+  const dictation = useMemo(
+    () => ({ transcribe, onError: onDictationError, disabled: !widgetOpen }),
+    [transcribe, onDictationError, widgetOpen],
+  );
+
   const conversation = useMemo<SuperChatConversation>(() => {
     const assistantName = config.title || DEFAULT_CONFIG.title;
     const participants: Participant[] = [
@@ -1417,8 +1461,8 @@ export function WidgetApp() {
           status: message.status,
         };
       });
-    return { id: 'ozwell-widget', title: assistantName, participants, thread };
-  }, [agents, config.title, displayMessages, thinkingMode]);
+    return { id: `ozwell-widget-${conversationEpoch}`, title: assistantName, participants, thread };
+  }, [agents, config.title, conversationEpoch, displayMessages, thinkingMode]);
 
   if (!initialConfigReady) return null;
 
@@ -1450,27 +1494,6 @@ export function WidgetApp() {
         <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
       </div>
     )}
-    {(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) && (
-      <div className="ozwell-thinking-bar">
-        <label>
-          Show thinking
-          <select
-            aria-label="Show thinking"
-            value={thinkingMode}
-            onChange={(event) => {
-              const mode = Number(event.target.value) as ThinkingMode;
-              setThinkingMode(mode);
-              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
-            }}
-          >
-            <option value={THINKING.NONE}>Never</option>
-            <option value={THINKING.PEEK}>Collapsed</option>
-            <option value={THINKING.SMART}>Auto</option>
-            <option value={THINKING.EXPANDED}>Expanded</option>
-          </select>
-        </label>
-      </div>
-    )}
     {queuedMessage !== null && (
       <div className="ozwell-queued" role="group" aria-label="Queued message">
         <textarea
@@ -1498,6 +1521,27 @@ export function WidgetApp() {
       placeholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       renderTextContent={renderTextContent}
       onMessageSent={(message) => { void sendMessage(message); }}
+      dictation={dictation}
+      composerSelectorsEndSlot={(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) ? (
+        <div className="ozwell-thinking-control">
+          <span aria-hidden="true">Thinking: {THINKING_LABELS[thinkingMode]}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+          {/* Invisible native select covers the whole control so any click opens it. */}
+          <select
+            aria-label="Show thinking"
+            value={thinkingMode}
+            onChange={(event) => {
+              const mode = Number(event.target.value) as ThinkingMode;
+              setThinkingMode(mode);
+              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
+            }}
+          >
+            {THINKING_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>{THINKING_LABELS[mode]}</option>
+            ))}
+          </select>
+        </div>
+      ) : undefined}
       agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
       selectedAgent={activeAgentId}
       onAgentChange={selectAgent}

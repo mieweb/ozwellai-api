@@ -28,6 +28,7 @@ export function installDesktopSessionAuthorization(fastify: FastifyInstance, ser
     }
     if (pathname.startsWith('/auth/')) return;
     const allowed = (request.method === 'POST' && pathname === '/v1/chat/completions') ||
+      (request.method === 'POST' && pathname === '/v1/audio/transcriptions') ||
       (request.method === 'GET' && pathname === '/v1/models/effective') ||
       (request.method === 'GET' && pathname === '/v1/agents');
     if (!allowed) return;
