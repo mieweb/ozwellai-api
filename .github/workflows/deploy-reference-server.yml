@@ -107,10 +107,42 @@ jobs:
           deploy_hostname="${DEPLOY_HOST#*@}"
           ssh-keyscan "$deploy_hostname" >> ~/.ssh/known_hosts
 
+      - name: Checkout lockfile
+        uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: package-lock.json
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Read pinned harness-core commit
+        id: harness
+        run: echo "commit=$(node -p "require('./src/package-lock.json').packages['node_modules/@mieweb/harness-core'].resolved.split('#')[1]")" >> "$GITHUB_OUTPUT"
+
+      # The prod host has no GitHub access to private harness-core, so it is fetched here
+      # and sent straight to the server (never in the artifact). actions/checkout scopes the
+      # credential to this step and removes it afterwards on the persistent runner.
+      - name: Fetch pinned harness-core
+        uses: actions/checkout@v4
+        with:
+          repository: mieweb/harness-core
+          ref: ${{ steps.harness.outputs.commit }}
+          path: harness-core
+          ssh-key: ${{ secrets.HARNESS_CORE_SSH_KEY || secrets.SSH_PRIVATE_KEY }}
+          token: ${{ secrets.HARNESS_CORE_READ_TOKEN || github.token }}
+          persist-credentials: false
+
+      - name: Strip harness-core git metadata
+        run: rm -rf harness-core/.git
+
       - name: Upload to server
         env:
           DEPLOY_HOST: ${{ vars.OZWELL_REFSERVER_DEPLOY_HOST || 'ozwell-phxdc-node1' }}
-        run: rsync -ruva --progress reference-server-build.tar.gz "$DEPLOY_HOST:/tmp/"
+          DEPLOY_PATH: ${{ vars.OZWELL_REFSERVER_DEPLOY_PATH || '/storage/apps/ozwellai-api' }}
+        run: |
+          set -euo pipefail
+          rsync -ruva --progress reference-server-build.tar.gz "$DEPLOY_HOST:/tmp/"
+          rsync -a --delete --mkpath harness-core/ "$DEPLOY_HOST:$DEPLOY_PATH/vendor-deps/harness-core/"
 
       - name: Extract and restart service
         env:
@@ -158,7 +190,11 @@ jobs:
             rm -rf reference-server/dist clients/typescript/dist spec/dist
             tar -xzf /tmp/reference-server-build.tar.gz
 
-            npm ci --omit=dev --workspace reference-server --include-workspace-root=false
+            npm pkg set "dependencies.@mieweb/harness-core=file:../vendor-deps/harness-core" -w reference-server
+            # Drop every recorded git source for harness-core so npm never tries to reach GitHub.
+            rm -rf node_modules/@mieweb/harness-core reference-server/node_modules/@mieweb/harness-core node_modules/.package-lock.json
+            node -e 'const fs=require("fs");const l=JSON.parse(fs.readFileSync("package-lock.json"));for(const k of Object.keys(l.packages))if(k.endsWith("node_modules/@mieweb/harness-core"))delete l.packages[k];fs.writeFileSync("package-lock.json",JSON.stringify(l,null,2)+"\n")'
+            npm install --omit=dev -w reference-server --include-workspace-root=false --no-audit --no-fund --install-links
 
             sudo mkdir -p "$(dirname "$env_file")"
             sudo touch "$env_file"
@@ -185,6 +221,11 @@ jobs:
             eval "$RESTART_COMMAND"
             rm /tmp/reference-server-build.tar.gz
           REMOTE
+
+      # Self-hosted workspaces persist between runs; don't leave private source behind.
+      - name: Remove local harness-core copy
+        if: always()
+        run: rm -rf harness-core
 
   deploy-dev:
     name: Deploy to ozwell-dev2 refserver
