@@ -1,10 +1,29 @@
 import { FastifyPluginAsync } from 'fastify';
-import { validateAuth, createError, extractToken, isLLMBackendConfigured } from '../util';
+import { validateAuth, createError, extractToken, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import { agentStore } from '../storage/agents';
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
 const LLM_API_KEY = process.env.LLM_API_KEY || '';
-const LLM_PROVIDER = process.env.LLM_PROVIDER || '';
+
+// Prefer direct OpenAI like chat does, else any configured gateway; mock only when no real backend exists.
+async function transcriptionUpstream(): Promise<{ url: string; headers: Record<string, string> } | 'unavailable' | null> {
+  const openaiKey = (process.env.OPENAI_API_KEY || '').trim();
+  const gatewayForced = process.env.LLM_TRANSPORT === 'gateway' && isLLMBackendConfigured();
+  if (openaiKey && !gatewayForced) {
+    const base = (process.env.OPENAI_BASE_URL || '').trim() || 'https://api.openai.com/v1';
+    return { url: `${base.replace(/\/+$/, '')}/audio/transcriptions`, headers: { Authorization: `Bearer ${openaiKey}` } };
+  }
+  if (isLLMBackendConfigured()) {
+    return {
+      url: `${LLM_BASE_URL}/v1/audio/transcriptions`,
+      // whisper-1 is an OpenAI model regardless of the chat provider (LLM_PROVIDER).
+      headers: { Authorization: `Bearer ${LLM_API_KEY}`, 'x-portkey-provider': 'openai' },
+    };
+  }
+  // Real chat backends without speech-to-text must not get mock transcripts.
+  if (process.env.ANTHROPIC_API_KEY?.trim() || await isOllamaAvailable()) return 'unavailable';
+  return null;
+}
 
 const audioRoute: FastifyPluginAsync = async (fastify) => {
   // POST /v1/audio/transcriptions
@@ -110,12 +129,12 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     const allowedMimeTypes = [
       'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/mpga',
       'audio/m4a', 'audio/wav', 'audio/webm', 'audio/x-m4a',
-      'audio/x-wav', 'video/mp4', 'video/webm',
+      'audio/x-wav', 'audio/ogg', 'video/mp4', 'video/webm',
     ];
     if (fileMimetype && !allowedMimeTypes.includes(fileMimetype)) {
       reply.code(400);
       return createError(
-        `Invalid file format. Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm`,
+        `Invalid file format. Supported formats: mp3, mp4, mpeg, mpga, m4a, ogg, wav, webm`,
         'invalid_request_error',
         'file',
       );
@@ -129,7 +148,12 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
     });
 
     // Forward to real backend if configured, otherwise return mock
-    if (isLLMBackendConfigured()) {
+    const upstream = await transcriptionUpstream();
+    if (upstream === 'unavailable') {
+      reply.code(503);
+      return createError('Audio transcription is not available on this server', 'server_error');
+    }
+    if (upstream) {
       const upstreamForm = new FormData();
       upstreamForm.append('file', new Blob([Buffer.concat(chunks)], { type: fileMimetype }), filename);
       upstreamForm.append('model', model);
@@ -143,14 +167,9 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${LLM_API_KEY}`,
-      };
-      if (LLM_PROVIDER) headers['x-portkey-provider'] = LLM_PROVIDER;
-
-      const upstreamResp = await fetch(`${LLM_BASE_URL}/v1/audio/transcriptions`, {
+      const upstreamResp = await fetch(upstream.url, {
         method: 'POST',
-        headers,
+        headers: upstream.headers,
         body: upstreamForm,
       });
 

@@ -15,6 +15,7 @@ Table of contents for Ozwell API documentation.
 Embed Ozwell into your website or web application.
 
 - [Frontend Overview](./frontend/overview.md) — Integration options and security model
+- [Desktop Login](./frontend/desktop-login.md) — Browser sign-in walkthrough with screenshots
 
 ### Quick Embed
 
@@ -53,6 +54,7 @@ Server-side API access for custom workflows.
 - [API Documentation](./backend/api-overview.md) — Getting started with the API
 - [Endpoints](./backend/api-endpoints.md) — Complete endpoint reference
 - [Authentication](./backend/api-authentication.md) — API keys and security
+- [Desktop Authentication](./backend/desktop-authentication.md) — Client registration, PKCE, and Apple attestation
 - [Examples](./backend/api-examples.md) — Code samples and recipes
 
 ---

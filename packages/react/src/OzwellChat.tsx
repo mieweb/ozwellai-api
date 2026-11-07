@@ -27,6 +27,7 @@ export function OzwellChat(props: OzwellChatProps) {
     height = 420,
     containerId,
     defaultUI = true,
+    buttonIcon,
 
     // Configuration
     endpoint,
@@ -164,6 +165,7 @@ export function OzwellChat(props: OzwellChatProps) {
 
       // Layout config
       defaultUI,
+      buttonIcon,
       autoMount: false, // Prevent auto-mount, we'll mount manually
       autoOpenOnReply,
 
@@ -240,6 +242,7 @@ export function OzwellChat(props: OzwellChatProps) {
     headers,
     widgetUrl,
     defaultUI,
+    buttonIcon,
     autoOpenOnReply,
     width,
     height,

@@ -83,6 +83,14 @@ function localMiewebUiPlugin() {
 
 async function build() {
   await esbuild.build({
+    entryPoints: [path.join(projectRoot, 'embed/src/desktop-login.tsx')],
+    outfile: path.join(projectRoot, 'embed/desktop-login.js'),
+    bundle: true, format: 'iife', platform: 'browser', target: ['es2020'], jsx: 'automatic',
+    plugins: [inlineCssPlugin()],
+    define: { 'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production') },
+  });
+  if (process.argv.includes('--desktop-only')) return;
+  await esbuild.build({
     entryPoints: [entryPoint],
     outfile,
     bundle: true,

@@ -16,7 +16,8 @@ async function readWidgetSource() {
 }
 
 async function readWidgetAppSource() {
-  return readFile(WIDGET_APP_PATH, 'utf8');
+  // Windows checkouts may use CRLF; source regexes below anchor on \n.
+  return (await readFile(WIDGET_APP_PATH, 'utf8')).replace(/\r\n/g, '\n');
 }
 
 async function readWidgetTypesSource() {
@@ -143,25 +144,34 @@ test('widget chat payload can include selected provider and model', async () => 
   assert.match(appSource, /requestBody\.model = selectedModel\.model/);
 });
 
-test('widget adapter uses OzwellChat for the shared model selector', async () => {
+test('widget adapter uses SuperChat composer selectors for agents and models', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();
 
-  assert.match(appSource, /<OzwellChat/);
-  assert.match(appSource, /models=\{activeModel \? \{/);
+  assert.match(appSource, /<SuperChat/);
+  assert.match(appSource, /selectedAgent=\{activeAgentId\}/);
+  // A single allowed model stays selectable when the agent default is unresolved.
+  assert.match(appSource, /modelSelectorProps=\{effectiveModels\.length > 1 \|\| \(activeAgentId && !activeModel && effectiveModels\.length === 1\) \? \{/);
+  // Switching agents drops the previous agent's options until rediscovery.
+  assert.match(appSource, /setActiveModel\(null\);\n    setEffectiveModels\(\[\]\);/);
+  // Thinking display follows the current mode without discarding stored reasoning.
+  assert.match(appSource, /content: applyThinkingMode\(message\.content, thinkingMode, message\.status\)/);
+  // An agent with no resolvable default sends no model so the server applies its policy.
+  assert.match(appSource, /kept \?\? \(defaultMatch \? \{ provider: defaultMatch\.provider, model: defaultMatch\.model \} : null\)/);
+  assert.match(appSource, /aria-label="Show thinking"/);
   assert.match(appSource, /providerFilter,/);
   assert.match(appSource, /useState<string \| null>\(null\)/);
   assert.match(bundleSource, /composer-model-selector-trigger/);
 });
 
-test('widget adapter delegates queued message controls to OzwellChat', async () => {
+test('widget keeps queued drafts editable and never auto-sends them', async () => {
   const appSource = await readWidgetAppSource();
 
-  assert.match(appSource, /queuedMessage=\{queuedMessage\}/);
+  assert.match(appSource, /queuedMessage !== null &&/);
   // Editing a queued draft preserves its draft marker; only an explicit submit
   // or cancel clears it.
-  assert.match(appSource, /onQueuedMessageChange=\{setQueuedMessage\}/);
-  assert.match(appSource, /onCancelQueuedMessage=\{\(\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(null\); \}\}/);
+  assert.match(appSource, /onChange=\{\(event\) => setQueuedMessage\(event\.target\.value\)\}/);
+  assert.match(appSource, /onClick=\{\(\) => \{ queuedIsDraftRef\.current = false; setQueuedMessage\(null\); \}\}/);
   assert.doesNotMatch(appSource, /id: 'queued-message'/);
   // Host-composed drafts must never be auto-sent by the completion follow-up.
   assert.match(appSource, /if \(!next \|\| queuedIsDraftRef\.current\) return;/);
@@ -234,7 +244,12 @@ test('widget drops empty assistant turns instead of rendering "(no response)"', 
   assert.doesNotMatch(bundleSource, /\(no response\)/);
   assert.match(
     appSource,
-    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== assistantMessageId\)\);/
+    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*dropAssistantBubble\(\);/
+  );
+  // The bubble is removed only when it has no MCP tool cards; otherwise the cards stay.
+  assert.match(
+    appSource,
+    /const dropAssistantBubble = \(\) => \{[\s\S]*?if \(serverTools\.length\) \{\s*updateDisplayMessage\(id, \(message\) => \(\{ \.\.\.message, content: withServerTools\(\[\]\), status: 'complete' \}\)\);\s*\} else \{\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== id\)\);/
   );
   assert.match(appSource, /Empty assistant turn[^']*Raw chunks:', rawChunks\)/);
 });

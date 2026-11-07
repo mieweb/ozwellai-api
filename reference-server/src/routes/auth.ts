@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createOtpChallenge, verifyOtp, validateSession, destroySession, createSessionForIdentity, allowOtpRequest } from '../storage/sessions';
+import { desktopLoginAvailable } from '../storage/desktop-auth';
 import { isGoogleConfigured } from './oidc-google';
 import { isAppleConfigured } from './oidc-apple';
 import { createError, extractToken } from '../util';
@@ -116,7 +117,7 @@ export default async function authRoute(fastify: FastifyInstance) {
   fastify.get('/auth/methods', {
     schema: { tags: ['Auth'], summary: 'List sign-in methods this server offers' },
   }, async () => {
-    return { google: isGoogleConfigured(), apple: isAppleConfigured(), email_otp: emailSignInAvailable(), user_key: true };
+    return { google: isGoogleConfigured(), apple: isAppleConfigured(), email_otp: emailSignInAvailable(), user_key: true, desktop_login: desktopLoginAvailable() };
   });
 
   fastify.post('/auth/logout', {

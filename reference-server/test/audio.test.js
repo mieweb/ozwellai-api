@@ -21,6 +21,9 @@ before(async () => {
   env.LLM_BASE_URL = '';
   env.LLM_API_KEY = '';
   env.LLM_PROVIDER = '';
+  env.OPENAI_API_KEY = '';
+  env.ANTHROPIC_API_KEY = '';
+  env.OLLAMA_BASE_URL = '';
   server = spawn(process.execPath, ['dist/reference-server/src/server.js'], {
     cwd: process.cwd(),
     stdio: 'pipe',

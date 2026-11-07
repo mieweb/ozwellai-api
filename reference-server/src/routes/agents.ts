@@ -3,6 +3,7 @@ import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAge
 import * as yaml from 'yaml';
 import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
+import { assertNoLiteralCredentials, discoverMcpTools, McpConfigError, McpError, parseMcpServer, parseMcpServers, referencedSecrets, SECRET_NAME_RE } from '../mcp/remote';
 
 // Extend FastifyRequest to include auth data
 declare module 'fastify' {
@@ -131,6 +132,37 @@ function extractYamlInput(body: string | { yaml: string }): string | null {
     const raw = typeof body === 'string' ? body : body?.yaml;
     if (typeof raw !== 'string' || !raw.trim()) return null;
     return raw;
+}
+
+const MAX_SECRET_LENGTH = 8192;
+
+/**
+ * Validate the optional `secrets` map sent alongside the YAML. Values are
+ * write-only; a null value deletes the secret. Returns an error message on failure.
+ */
+function extractSecrets(body: unknown, secretsFromRaw?: unknown): { secrets: Record<string, string | null>; error: null } | { secrets: null; error: string } {
+    const raw = secretsFromRaw ?? (body && typeof body === 'object' ? (body as { secrets?: unknown }).secrets : undefined);
+    if (raw === undefined || raw === null) return { secrets: {}, error: null };
+    if (typeof raw !== 'object' || Array.isArray(raw)) return { secrets: null, error: "'secrets' must be an object of NAME: value" };
+    const out: Record<string, string | null> = {};
+    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+        if (!SECRET_NAME_RE.test(name)) return { secrets: null, error: `Invalid secret name '${name}'` };
+        if (value !== null && (typeof value !== 'string' || !value || value.length > MAX_SECRET_LENGTH)) {
+            return { secrets: null, error: `Secret '${name}' must be a non-empty string or null` };
+        }
+        out[name] = value as string | null;
+    }
+    return { secrets: out, error: null };
+}
+
+/** Every ${{ secrets.NAME }} the YAML references must be set after applying this request. */
+function missingSecrets(parsed: ParsedAgentFields, existing: string[], incoming: Record<string, string | null>): string[] {
+    const available = new Set(existing);
+    for (const [name, value] of Object.entries(incoming)) {
+        if (value === null) available.delete(name);
+        else available.add(name);
+    }
+    return referencedSecrets(parseMcpServers(parsed.mcp_servers)).filter(name => !available.has(name));
 }
 
 interface ParsedAgentFields {
@@ -282,6 +314,13 @@ function parseAndValidate(
         reply.code(400);
         return { parsed: null, error: createError("'instructions' is required", 'invalid_request_error') };
     }
+    try {
+        assertNoLiteralCredentials(parseMcpServers(parsed.mcp_servers));
+    } catch (err) {
+        if (!(err instanceof McpConfigError)) throw err;
+        reply.code(400);
+        return { parsed: null, error: createError(err.message, 'invalid_request_error', 'mcp_servers') };
+    }
     return { parsed, error: null };
 }
 
@@ -311,6 +350,8 @@ function toAgentView(agent: Agent) {
         temperature: parsed.temperature,
         tools: parsed.tools,
         behavior: parsed.behavior,
+        mcp_servers: parsed.mcp_servers,
+        secret_names: agentStore.listAgentSecretNames(agent.id),
         metrics: agentStore.getAgentMetrics(agent.id),
     };
 }
@@ -514,12 +555,24 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             const validation = parseAndValidate(yamlInput, reply);
             if (validation.error) return validation.error;
 
+            const secretsInput = extractSecrets(request.body);
+            if (secretsInput.error !== null) {
+                reply.code(400);
+                return createError(secretsInput.error, 'invalid_request_error', 'secrets');
+            }
+            const missing = missingSecrets(validation.parsed, [], secretsInput.secrets);
+            if (missing.length) {
+                reply.code(400);
+                return createError(`Missing secrets referenced by mcp_servers: ${missing.join(', ')}`, 'invalid_request_error', 'secrets', 'missing_secrets');
+            }
+
             const agent = agentStore.createAgent({
                 id: generateId('agent'),
                 agent_key: generateAgentKey(),
                 parent_key: parentKey,
                 yaml: yamlInput,
             });
+            agentStore.setAgentSecrets(agent.id, secretsInput.secrets);
 
             reply.code(201);
             reply.header('Cache-Control', 'no-store');
@@ -568,11 +621,27 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             const validation = parseAndValidate(yamlInput, reply);
             if (validation.error) return validation.error;
 
+            const secretsInput = extractSecrets(request.body);
+            if (secretsInput.error !== null) {
+                reply.code(400);
+                return createError(secretsInput.error, 'invalid_request_error', 'secrets');
+            }
+            if (!agentStore.getOwned(agent_id, parentKey)) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error');
+            }
+            const missing = missingSecrets(validation.parsed, agentStore.listAgentSecretNames(agent_id), secretsInput.secrets);
+            if (missing.length) {
+                reply.code(400);
+                return createError(`Missing secrets referenced by mcp_servers: ${missing.join(', ')}`, 'invalid_request_error', 'secrets', 'missing_secrets');
+            }
+
             const updated = agentStore.updateAgent(agent_id, parentKey, yamlInput);
             if (!updated) {
                 reply.code(404);
                 return createError('Agent not found', 'invalid_request_error');
             }
+            agentStore.setAgentSecrets(agent_id, secretsInput.secrets);
 
             return { ...toAgentView(updated), updated: true };
         } catch (error) {
@@ -1266,7 +1335,12 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                         type: 'object',
                         description: 'JSON wrapper with yaml field (application/json)',
                         properties: {
-                            yaml: { type: 'string', description: 'YAML agent definition string' }
+                            yaml: { type: 'string', description: 'YAML agent definition string' },
+                            secrets: {
+                                type: 'object',
+                                description: 'Write-only secret values referenced from YAML as ${{ secrets.NAME }}',
+                                additionalProperties: { type: ['string', 'null'] },
+                            },
                         },
                         required: ['yaml']
                     }
@@ -1461,6 +1535,73 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         schema: { headers: authHeaders, params: agentIdParam, tags: ['Agents'], summary: 'Delete an agent' },
         preHandler: apiKeyAuth
     }, deleteAgentForCurrentKey);
+
+    type DiscoverBody = { server?: unknown; secrets?: unknown; agent_id?: string };
+
+    // Lists a remote MCP server's tools so the editor can build the allowlist.
+    // Credentials may come from `secrets` in the body, a literal in auth, or the stored
+    // secrets of an agent this key owns (so editors needn't re-enter tokens).
+    async function discoverMcpForCurrentKey(request: FastifyRequest<{ Body: DiscoverBody }>, reply: FastifyReply) {
+        const parentKey = request.apiKey!.id;
+        let server;
+        try {
+            server = parseMcpServer(request.body?.server, 'server');
+        } catch (err) {
+            if (!(err instanceof McpConfigError)) throw err;
+            reply.code(400);
+            return createError(err.message, 'invalid_request_error', 'server');
+        }
+        const secretsInput = extractSecrets(null, request.body?.secrets);
+        if (secretsInput.error !== null) {
+            reply.code(400);
+            return createError(secretsInput.error, 'invalid_request_error', 'secrets');
+        }
+        let secrets: Record<string, string> = {};
+        if (request.body?.agent_id) {
+            if (!agentStore.getOwned(request.body.agent_id, parentKey)) {
+                reply.code(404);
+                return createError('Agent not found', 'invalid_request_error', 'agent_id');
+            }
+            secrets = agentStore.getAgentSecrets(request.body.agent_id);
+        }
+        for (const [name, value] of Object.entries(secretsInput.secrets)) {
+            if (value === null) delete secrets[name];
+            else secrets[name] = value;
+        }
+
+        try {
+            const tools = await discoverMcpTools(server, secrets);
+            reply.header('Cache-Control', 'no-store');
+            return { object: 'list', server: server.name, data: tools };
+        } catch (err) {
+            if (!(err instanceof McpError)) throw err;
+            request.log.warn({ server: server.name }, err.message);
+            reply.code(502);
+            return createError(err.message, 'mcp_error', 'server', 'mcp_discovery_failed');
+        }
+    }
+
+    const discoverSchema = {
+        type: 'object',
+        properties: {
+            server: { type: 'object', additionalProperties: true },
+            secrets: { type: 'object', additionalProperties: { type: ['string', 'null'] } },
+            agent_id: { type: 'string' },
+        },
+        required: ['server'],
+    };
+
+    // POST /v1/mcp/discover (parent key auth)
+    fastify.post<{ Body: DiscoverBody }>('/v1/mcp/discover', {
+        schema: { headers: authHeaders, body: discoverSchema, tags: ['MCP'], summary: "List a remote MCP server's tools" },
+        preHandler: apiKeyAuth,
+    }, discoverMcpForCurrentKey);
+
+    // POST /v1/manager/mcp/discover (manager-console auth)
+    fastify.post<{ Body: DiscoverBody }>('/v1/manager/mcp/discover', {
+        schema: { body: discoverSchema, tags: ['Manager Agents'], summary: "List a remote MCP server's tools" },
+        preHandler: managerHeaderAuth,
+    }, discoverMcpForCurrentKey);
 };
 
 export default agentsRoute;

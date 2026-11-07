@@ -45,6 +45,7 @@ export type WidgetSession = {
   userId: string;
   /** Parent key this user owns; requests are authorized as this key. */
   parentKey: string;
+  desktopAttestation?: { clientId: string; keyId: string; registrationHash: string };
 };
 
 type PendingOidcFlow = { codeVerifier: string; nonce: string; expiresAt: number; provider: string };
@@ -132,8 +133,18 @@ export function validateSession(token: string): WidgetSession | null {
     sessions.delete(token);
     return null;
   }
-  const { email, userId, parentKey } = session;
-  return { email, userId, parentKey };
+  const { email, userId, parentKey, desktopAttestation } = session;
+  return { email, userId, parentKey, ...(desktopAttestation ? { desktopAttestation: { ...desktopAttestation } } : {}) };
+}
+
+/** Copy only an existing browser session's authority; never turn a personal/agent key into a session. */
+export function createAttestedDesktopSession(sourceToken: string, binding: NonNullable<WidgetSession['desktopAttestation']>): string | null {
+  const source = sessions.get(sourceToken);
+  if (!source || source.expiresAt <= Date.now() || source.desktopAttestation) return null;
+  const token = `${SESSION_TOKEN_PREFIX}${randomBytes(24).toString('hex')}`;
+  sessions.set(token, { ...source, desktopAttestation: { ...binding } });
+  sessions.delete(sourceToken);
+  return token;
 }
 
 export function destroySession(token: string): void {

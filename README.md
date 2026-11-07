@@ -42,11 +42,16 @@ on-demand, whitelist, always-on, and off modes, see the
 
 ## Quick Start
 
+For the installed desktop app, follow the
+[desktop login walkthrough](docs/frontend/desktop-login.md). Server operators
+can use [desktop authentication deployment](docs/backend/desktop-authentication.md)
+to configure the matching client registration and sign-in methods.
+
 Get a local development environment running in under 5 minutes:
 
 ### Prerequisites
 
-- **Node.js 18+** - [Download here](https://nodejs.org/)
+- **Node.js 22.12+** - [Download here](https://nodejs.org/)
 - **npm** - Comes with Node.js
 - **Optional: Ollama** - [Install Ollama](https://ollama.ai/) for real AI responses (otherwise mock responses are used)
 

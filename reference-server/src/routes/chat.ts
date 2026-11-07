@@ -1,13 +1,18 @@
 import { FastifyPluginAsync, FastifyReply } from 'fastify';
-import { validateAuth, createError, generateId, countTokens, isOllamaAvailable, getOllamaBaseUrl, envFallbackModel, isAgentKey, extractToken, isLLMBackendConfigured, parsePositiveEnvNumber } from '../util';
+import { validateAuth, createError, generateId, countTokens, envFallbackModel, isAgentKey, extractToken, parsePositiveEnvNumber } from '../util';
 import { agentStore, findProviderModel, modelRecordMatches, type AgentModelPolicy, type PageToolsPolicy } from '../storage/agents';
 import * as yaml from 'yaml';
 import OzwellAI from 'ozwellai';
 import type { ChatCompletionRequest as ClientChatCompletionRequest } from 'ozwellai';
 import type { ChatCompletionRequest, Message } from '../../../spec/index';
+import { createAICompletion, collectCompletionStream, type CompletionParams } from '@mieweb/harness-core';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 import { getCachedModelsList } from './models';
 import { quotaExceededError, resolveRouteUsageContext } from './quota';
+import { ensureProvidersConfigured, isDirectProviderConfigured, resolveChatTransport } from '../llm/providers';
+import { convertTiffParts, TiffConversionError } from '../llm/tiff';
+import { capabilitiesFor, createChunkTranslator, toChatCompletion, toChatUsage, toResponsesInput, toResponsesTools, usesReasoningTokenParam, type ChatInputMessage, type ChatToolDef } from '../llm/harness-adapter';
+import { MCP_MAX_TOOL_ITERATIONS, MCP_TOOL_PREFIX, openMcpSession, parseMcpServers, type McpServerConfig, type McpSession } from '../mcp/remote';
 
 // SSE Heartbeat Configuration
 // Send keepalive every 25s to prevent 60s Nginx timeout
@@ -78,6 +83,15 @@ type UsageContext = {
   authType: 'parent' | 'agent';
   parentKeyId: string | null;
   agentId: string | null;
+};
+
+// Minimal non-streaming completion shape shared by the direct and gateway transports.
+type LoopResponse = {
+  id: string;
+  created: number;
+  model: string;
+  choices: Array<{ index: number; message: ChatMessage & { thinking?: string }; finish_reason: string | null }>;
+  usage?: TokenUsage;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -283,8 +297,9 @@ function normalizeMessageThinking(message: Record<string, unknown>): void {
   }
 }
 
-// Detect model-not-found errors from gateway (404, model_not_found, etc.)
+// Detect model-not-found errors: provider SDKs carry `status: 404`; the gateway path surfaces it in the message.
 function isModelNotFoundError(error: unknown): boolean {
+  if (error && typeof error === 'object' && (error as { status?: unknown }).status === 404) return true;
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     return msg.includes('404') || msg.includes('model_not_found') || msg.includes('does not exist');
@@ -327,10 +342,9 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
-
-function usesReasoningTokenParam(model: string) {
-  return /(^|\/)(o\d|gpt-5)/.test(model);
-}
+// harness-core always sends an output cap; this is the direct-provider default when neither the
+// request nor LLM_MAX_TOKENS names one.
+const DEFAULT_DIRECT_MAX_TOKENS = 4096;
 
 function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
   const effectiveMaxTokens = requestedMaxTokens
@@ -355,22 +369,44 @@ function createLlmClient(provider: string | null) {
   });
 }
 
-// Built on first use rather than at module load: when Ollama is disabled
-// getOllamaBaseUrl() is null, and a client hoisted with an empty baseURL would be
-// reachable by any future caller that forgets the isOllamaAvailable() guard.
-let ollamaClient: OzwellAI | null = null;
+// Opens the SSE response and keeps it alive with heartbeats until `end()`.
+function startSse(reply: FastifyReply, origin: string | undefined) {
+  reply.raw.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    'connection': 'keep-alive',
+    'access-control-allow-origin': origin || '*',
+    'access-control-allow-credentials': 'true',
+  });
 
-function getOllamaClient(): OzwellAI {
-  const baseURL = getOllamaBaseUrl();
-  if (!baseURL) throw new Error('Ollama is disabled (OLLAMA_BASE_URL is empty)');
-  if (!ollamaClient) {
-    ollamaClient = new OzwellAI({
-      apiKey: 'ollama',
-      baseURL,
-      timeout: 120000,
-    });
+  let heartbeat: NodeJS.Timeout | null = null;
+  const stopHeartbeat = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
+  if (STREAMING_HEARTBEAT_ENABLED) {
+    // Initial warming comment so proxies see bytes before the model loads
+    reply.raw.write(': heartbeat\n\n');
+    heartbeat = setInterval(() => {
+      try {
+        reply.raw.write(': heartbeat\n\n');
+      } catch {
+        stopHeartbeat();
+      }
+    }, STREAMING_HEARTBEAT_MS);
   }
-  return ollamaClient;
+
+  return {
+    writeData: (payload: unknown) => { reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`); },
+    writeEvent: (event: string, payload: unknown) => { reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`); },
+    end: () => {
+      stopHeartbeat();
+      reply.raw.write('data: [DONE]\n\n');
+      reply.raw.end();
+    },
+  };
 }
 
 // Mock dispatch — split into stream / non-stream variants so the call-site
@@ -603,7 +639,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     // --- Agent key resolution ---
-    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null } | null = null;
+    let agentConfig: { systemPrompt: string; allowedTools: string[] | null; pageTools: PageToolsPolicy; modelPolicy: AgentModelPolicy; temperature: number | null; type: 'mock' | null; mcpServers: McpServerConfig[] } | null = null;
 
     if (tokenIsAgentKey) {
       if (!resolvedUsageContext.agent || !resolvedUsageContext.parentKey) {
@@ -649,6 +685,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const tools = parsed.tools;
+      let mcpServers: McpServerConfig[] = [];
+      try {
+        mcpServers = parseMcpServers(parsed.mcp_servers);
+      } catch (err) {
+        request.log.warn({ agentId: agent.id, reason: err instanceof Error ? err.message : 'invalid' }, 'Ignoring invalid mcp_servers');
+      }
       agentConfig = {
         systemPrompt,
         allowedTools: Array.isArray(tools) && tools.length > 0
@@ -658,6 +700,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         modelPolicy: agentStore.getAgentModelPolicy(agent.id, agent.yaml),
         temperature: (parsed.temperature as number | undefined) ?? null,
         type: parsed.type === 'mock' ? 'mock' : null,
+        mcpServers,
       };
     } else {
       usageContext = {
@@ -702,7 +745,19 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return inputTokens + outputTokens;
     };
 
-    const { tools } = body;
+    // Runs only after auth, model and quota checks so rejected requests never pay for decoding.
+    const tiffError = async (items: { content?: unknown }[]) => {
+      try {
+        await convertTiffParts(items);
+        return null;
+      } catch (err) {
+        if (!(err instanceof TiffConversionError)) throw err;
+        reply.code(400);
+        return createError(err.message, 'invalid_request_error', 'messages', 'invalid_image');
+      }
+    };
+
+    const { tools } = body as ChatCompletionRequestWithTools;
     // --- Agent: filter tools ---
     // Tools arriving from the widget use two namespaces:
     //   • bare names       — server-side tools (defined in the agent's tools array)
@@ -720,6 +775,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       filteredTools = tools.filter((t) => {
         if (!t || t.type !== 'function' || !t.function || typeof t.function.name !== 'string') return false;
         const name = t.function.name;
+        // The mcp__ namespace is reserved for server-executed tools.
+        if (name.startsWith(MCP_TOOL_PREFIX)) return false;
 
         const pagePrefix = PM_PREFIXES.find((prefix) => name.startsWith(prefix));
         if (pagePrefix) {
@@ -746,6 +803,8 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const { messages: rawMessages, stream = false, max_tokens } = body as ChatCompletionRequestWithTools;
       const quota = quotaError(estimateChatTokens(rawMessages as Message[], max_tokens));
       if (quota) return quota;
+      const mockTiffError = await tiffError(rawMessages as Message[]);
+      if (mockTiffError) return mockTiffError;
       const mockMessages: NonNullableMessage[] = (rawMessages as Message[]).map((m) => ({
         role: m.role,
         content: m.content ?? '',
@@ -760,13 +819,13 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return response;
     }
 
-    // Backend selection priority:
-    // 1. LLM_BASE_URL configured → use it (OpenAI, Portkey Gateway, etc.)
-    // 2. Ollama reachable → use Ollama
-    // 3. Mock/simple generator
-    const llmConfigured = isLLMBackendConfigured();
-    const ollamaAvailable = llmConfigured ? false : await isOllamaAvailable();
-    const backend = llmConfigured ? 'llm' : ollamaAvailable ? 'ollama' : 'fallback';
+    // Transport selection (see llm/providers.ts):
+    // direct   → OpenAI / Anthropic / Ollama through harness-core
+    // gateway  → LLM_BASE_URL (OpenAI-compatible gateway; rollback path)
+    // fallback → mock/simple generator
+    const { transport, ollamaAvailable } = await resolveChatTransport();
+    const llmConfigured = transport === 'gateway';
+    const backend = transport === 'gateway' ? 'llm' : transport;
 
     // Provider and model together, so an ambiguous fallback model resolves instead of returning
     // provider_required. Read per request: the env constants above are hoisted at module load, and
@@ -862,8 +921,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const quota = quotaError(estimateChatTokens(messages as Message[], max_tokens));
+    // Direct providers always send an output cap, so the quota estimate must reserve the same number
+    // the request will actually carry. Gateway requests keep the request/env value (possibly none).
+    const directMaxOutputTokens = max_tokens
+      ?? LLM_MAX_TOKENS
+      ?? (provider === 'anthropic' ? DEFAULT_ANTHROPIC_MAX_TOKENS : DEFAULT_DIRECT_MAX_TOKENS);
+    const quota = quotaError(estimateChatTokens(messages as Message[], backend === 'direct' ? directMaxOutputTokens : max_tokens));
     if (quota) return quota;
+    const imageError = await tiffError(normalizedMessages);
+    if (imageError) return imageError;
 
     // No backend reachable — deterministic mock (if enabled) so client gets a valid response.
     if (backend === 'fallback') {
@@ -872,11 +938,361 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       return response;
     }
 
-    // Use a real LLM backend
-    {
+    // --- Agent: remote MCP tools (allowlisted, executed server-side) ---
+    const openAgentMcp = async (): Promise<McpSession | null> => {
+      if (!agentConfig?.mcpServers.length || !usageContext?.agentId) return null;
+      const session = await openMcpSession(
+        agentConfig.mcpServers,
+        agentStore.getAgentSecrets(usageContext.agentId),
+        (err) => request.log.warn({ agentId: usageContext?.agentId, server: err.server }, err.message),
+      );
+      if (session.tools.length > 0) return session;
+      await session.close();
+      return null;
+    };
+
+    type CompleteFn = (msgs: NonNullableMessage[], tools: ToolDef[] | undefined, m: string) => Promise<LoopResponse>;
+
+    // Runs the model, executes MCP tool calls server-side, and repeats until the model answers,
+    // asks only for page tools (client round-trip), or the iteration cap is hit.
+    const respondWithMcp = async (session: McpSession, complete: CompleteFn) => {
+      const pageTools = (filteredTools as ToolDef[] | undefined) ?? [];
+      const allTools = [...pageTools, ...session.tools] as ToolDef[];
+      const loopMessages = [...normalizedMessages];
+      loopMessages.unshift({
+        role: 'system',
+        content: 'Earlier tool calls and their results in this conversation are still valid. Reuse them instead of calling the same tool again with the same arguments, unless the user asks to refresh or check again.',
+      });
+      // Messages added by this loop; streamed back so the client keeps them for follow-up turns.
+      const toolHistory: NonNullableMessage[] = [];
+      let disconnected = false;
+      // request.raw.destroyed is already true once the body is read, so watch the response socket instead.
+      reply.raw.once('close', () => { if (!reply.raw.writableFinished) disconnected = true; });
+      const usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+      const sse = stream ? startSse(reply, request.headers.origin) : null;
+      let activeModel = model;
+      let warning: ReturnType<typeof buildFallbackWarning> | null = null;
+      // Tokens already spent still count toward quota, and ending the stream stops the heartbeat.
+      const stopIfDisconnected = () => {
+        if (!disconnected) return false;
+        request.log.info('Client disconnected during MCP tool loop; stopping');
+        recordUsage(activeModel, 499, { usage }, provider);
+        try { sse?.end(); } catch { /* socket already closed */ }
+        return true;
+      };
+
+      const completeWithFallback = async (tools: ToolDef[] | undefined) => {
+        try {
+          return await complete(loopMessages, tools, activeModel);
+        } catch (err) {
+          if (!isModelNotFoundError(err) || !fallbackRetryModel || activeModel === fallbackRetryModel) throw err;
+          request.log.info({ originalModel: activeModel, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+          warning = buildFallbackWarning(activeModel, fallbackRetryModel);
+          sse?.writeEvent('warning', warning);
+          activeModel = fallbackRetryModel;
+          return complete(loopMessages, tools, activeModel);
+        }
+      };
+
       try {
-        // Select pre-constructed client based on backend
-        const client = llmConfigured ? createLlmClient(provider) : getOllamaClient();
+        let response!: LoopResponse;
+        for (let i = 0; i <= MCP_MAX_TOOL_ITERATIONS; i++) {
+          if (stopIfDisconnected()) return;
+          if (i > 0 && usageContext) {
+            // Usage from earlier rounds is not recorded yet, so it is added to this round's estimate.
+            const nextEstimate = usage.total_tokens + estimateChatTokens(loopMessages as unknown as Message[], max_tokens);
+            if (agentStore.getQuotaBlocks(usageContext.parentKeyId, usageContext.agentId, nextEstimate).length > 0) {
+              recordUsage(activeModel, 429, { usage }, provider);
+              const quotaErr = createError('Monthly token quota exceeded during tool use', 'rate_limit_error', null, 'quota_exceeded');
+              if (sse) {
+                sse.writeEvent('error', quotaErr);
+                sse.end();
+                return;
+              }
+              reply.code(429);
+              return quotaErr;
+            }
+          }
+          // Final round offers no MCP tools so the model must answer.
+          const lastRound = i === MCP_MAX_TOOL_ITERATIONS;
+          response = await completeWithFallback(lastRound ? (pageTools.length ? pageTools : undefined) : allTools);
+          usage.prompt_tokens += response.usage?.prompt_tokens ?? 0;
+          usage.completion_tokens += response.usage?.completion_tokens ?? 0;
+          usage.total_tokens += response.usage?.total_tokens ?? 0;
+          const calls = response.choices[0].message.tool_calls ?? [];
+          const mcpCalls = calls.filter(c => session.isMcpTool(c.function.name));
+          if (lastRound || mcpCalls.length === 0) break;
+          // Page calls in a mixed turn are dropped here; the model re-issues them after seeing the MCP results.
+          const assistantTurn = { role: 'assistant', content: response.choices[0].message.content ?? '', tool_calls: mcpCalls } as NonNullableMessage;
+          loopMessages.push(assistantTurn);
+          toolHistory.push(assistantTurn);
+          for (const call of mcpCalls) {
+            if (stopIfDisconnected()) return;
+            const { server, tool } = session.describe(call.function.name) ?? { server: '', tool: call.function.name };
+            let args: unknown = {};
+            try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* shown as empty */ }
+            const startedAt = Date.now();
+            sse?.writeEvent('tool_status', { id: call.id, server, tool, arguments: args, status: 'running' });
+            const result = await session.call(call.function.name, call.function.arguments);
+            let error: string | undefined;
+            try { error = (JSON.parse(result) as { error?: string })?.error; } catch { /* plain-text result */ }
+            sse?.writeEvent('tool_status', { id: call.id, status: error ? 'error' : 'success', duration: Date.now() - startedAt, ...(error && { error }) });
+            const toolTurn = { role: 'tool', tool_call_id: call.id, content: result } as NonNullableMessage;
+            loopMessages.push(toolTurn);
+            toolHistory.push(toolTurn);
+          }
+          // Sent per batch so a later model failure can't make the client forget actions that already ran.
+          sse?.writeEvent('tool_history', { messages: [assistantTurn, ...loopMessages.slice(-mcpCalls.length)] });
+        }
+
+        const choice = response.choices[0];
+        const msg = choice.message;
+        const clientCalls = (msg.tool_calls ?? []).filter(c => !session.isMcpTool(c.function.name));
+        if (clientCalls.length) {
+          msg.tool_calls = clientCalls;
+          choice.finish_reason = 'tool_calls';
+        } else {
+          delete msg.tool_calls;
+          if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
+        }
+        if (!msg.content && !msg.tool_calls && toolHistory.length) {
+          // The model hit the iteration cap still asking for MCP tools; don't end with an empty turn.
+          msg.content = 'I ran out of tool calls before finishing. Ask me to continue and I will pick up from these results.';
+        }
+
+        recordUsage(activeModel, 200, { usage }, provider);
+        const fallbackWarning = warning as ReturnType<typeof buildFallbackWarning> | null;
+        if (!sse) return { ...response, usage, ...(fallbackWarning ? { warning: fallbackWarning } : {}) };
+
+        const base = { id: response.id, object: 'chat.completion.chunk', created: response.created, model: response.model };
+        sse.writeData({ ...base, choices: [{ index: 0, delta: { role: 'assistant', ...(msg.thinking && { thinking: msg.thinking }), ...(msg.content && { content: msg.content }) }, finish_reason: null }] });
+        if (clientCalls.length) {
+          sse.writeData({ ...base, choices: [{ index: 0, delta: { tool_calls: clientCalls.map((tc, index) => ({ index, ...tc })) }, finish_reason: null }] });
+        }
+        sse.writeData({ ...base, choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason }], usage });
+        sse.end();
+        return;
+      } catch (err) {
+        request.log.error({ err, backend, provider }, 'LLM request failed during MCP tool loop');
+        recordUsage(activeModel, 502, { usage }, provider);
+        if (sse) {
+          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          sse.end();
+          return;
+        }
+        reply.code(502);
+        return createError('Upstream provider request failed', 'server_error');
+      } finally {
+        await session.close();
+      }
+    };
+
+    // --- Direct providers via harness-core ---
+    if (backend === 'direct') {
+      if (!isDirectProviderConfigured(provider)) {
+        reply.code(503);
+        return createError(`Provider '${provider}' is not configured on this server.`, 'server_error', 'provider', 'provider_not_configured');
+      }
+      ensureProvidersConfigured();
+
+      // Legacy function-role messages carry no call id, so they cannot become a
+      // function_call_output; refuse rather than silently re-role them as a user turn.
+      const legacyFunctionIndex = normalizedMessages.findIndex((m) => m.role === 'function');
+      if (legacyFunctionIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${legacyFunctionIndex}].role 'function' is not supported for direct providers; send a 'tool' message with tool_call_id.`,
+          'invalid_request_error',
+          `messages[${legacyFunctionIndex}].role`,
+        );
+      }
+      const orphanToolIndex = normalizedMessages.findIndex((m) => m.role === 'tool' && !m.tool_call_id);
+      if (orphanToolIndex !== -1) {
+        reply.code(400);
+        return createError(
+          `messages[${orphanToolIndex}].tool_call_id is required for tool messages`,
+          'invalid_request_error',
+          `messages[${orphanToolIndex}].tool_call_id`,
+        );
+      }
+
+      const { instructions, input } = toResponsesInput(normalizedMessages as ChatInputMessage[]);
+      const harnessTools = toResponsesTools(filteredTools as ChatToolDef[] | undefined);
+      const maxOutputTokens = directMaxOutputTokens;
+      const buildParams = (m: string): CompletionParams => ({
+        model: m,
+        provider,
+        instructions,
+        input,
+        temperature,
+        maxOutputTokens,
+        ...(harnessTools && { tools: harnessTools }),
+        capabilities: capabilitiesFor(provider, m, maxOutputTokens),
+        ...(response_format && { responseFormat: response_format as CompletionParams['responseFormat'] }),
+      });
+      const canRetryWithFallback = (error: unknown, m: string) =>
+        isModelNotFoundError(error) && Boolean(fallbackRetryModel) && m !== fallbackRetryModel;
+
+      const directMcp = await openAgentMcp();
+      if (directMcp) {
+        return respondWithMcp(directMcp, async (msgs, loopTools, m) => {
+          const conv = toResponsesInput(msgs as ChatInputMessage[]);
+          const loopHarnessTools = toResponsesTools(loopTools as ChatToolDef[] | undefined);
+          const params: CompletionParams = { ...buildParams(m), instructions: conv.instructions, input: conv.input };
+          delete params.tools;
+          if (loopHarnessTools) params.tools = loopHarnessTools;
+          const collected = await collectCompletionStream(await createAICompletion(params));
+          if (collected.status === 'failed' || collected.status === 'error') {
+            throw new Error(collected.reason || `Provider returned ${collected.status}`);
+          }
+          const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model: m, created: Math.floor(Date.now() / 1000) }) as unknown as LoopResponse;
+          const msg = response.choices[0].message;
+          normalizeMessageThinking(msg as Record<string, unknown>);
+          if (!msg.tool_calls && typeof msg.content === 'string') {
+            const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
+            if (extracted && extracted.length > 0) msg.tool_calls = extracted;
+          }
+          return response;
+        });
+      }
+      if (stream) {
+        const sse = startSse(reply, request.headers.origin);
+
+        // Throws before any body write when the provider rejects the request (e.g. 404),
+        // so a fallback retry can still start a clean stream.
+        const streamOnce = async (m: string) => {
+          const source = await createAICompletion(buildParams(m));
+          const id = generateId('chatcmpl');
+          const created = Math.floor(Date.now() / 1000);
+          const translator = createChunkTranslator({ id, model: m, created });
+          const thinkBuffer = { partial: '' };
+          for await (const chunk of source) {
+            for (const ccChunk of translator.translate(chunk)) {
+              sse.writeData(normalizeChunkThinking(ccChunk as unknown as Record<string, unknown>, thinkBuffer));
+            }
+          }
+          const terminal = translator.terminal;
+          const usage = toChatUsage(terminal?.usage);
+          // A provider failure or a stream that closed without any terminal chunk is not a
+          // truncated success: report an error event so clients do not treat partial output as final.
+          if (!terminal || terminal.status === 'failed' || terminal.status === 'error') {
+            const reason = terminal?.reason || (terminal ? `Provider returned ${terminal.status}` : 'Provider stream ended without completing');
+            request.log.error({ reason, provider, model: m }, 'Provider stream ended in failure');
+            sse.writeEvent('error', { error: { message: reason, type: 'server_error' } });
+            return { usage, statusCode: 502 };
+          }
+          let hasToolCalls = translator.toolCallCount > 0;
+          if (!hasToolCalls) {
+            const extracted = tryExtractToolCallsFromContent(translator.text, filteredTools as ToolDef[] | undefined);
+            if (extracted && extracted.length > 0) {
+              hasToolCalls = true;
+              sse.writeData({
+                id,
+                object: 'chat.completion.chunk',
+                created,
+                model: m,
+                choices: [{ index: 0, delta: { tool_calls: extracted.map((tc, idx) => ({ index: idx, ...tc })) }, finish_reason: null }],
+              });
+            }
+          }
+          for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
+          return { usage, statusCode: 200 };
+        };
+
+        const failStream = (m: string, err: unknown) => {
+          const status = err && typeof err === 'object' && typeof (err as { status?: unknown }).status === 'number'
+            ? (err as { status: number }).status
+            : 502;
+          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          recordUsage(m, status >= 400 ? status : 502, undefined, provider);
+        };
+
+        try {
+          const result = await streamOnce(model);
+          recordUsage(model, result.statusCode, result, provider);
+        } catch (streamError: unknown) {
+          request.log.error({ err: streamError, backend, provider }, 'Direct LLM streaming failed');
+          if (canRetryWithFallback(streamError, model)) {
+            request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+            sse.writeEvent('warning', buildFallbackWarning(model, fallbackRetryModel!));
+            try {
+              const result = await streamOnce(fallbackRetryModel!);
+              recordUsage(fallbackRetryModel!, result.statusCode, result, provider);
+            } catch (retryError) {
+              request.log.error({ err: retryError }, 'Fallback model also failed');
+              failStream(fallbackRetryModel!, retryError);
+            }
+          } else {
+            failStream(model, streamError);
+          }
+        }
+        sse.end();
+        return;
+      }
+
+      const completeOnce = async (m: string) => {
+        const source = await createAICompletion(buildParams(m));
+        const collected = await collectCompletionStream(source);
+        if (collected.status === 'failed' || collected.status === 'error') {
+          throw new Error(collected.reason || `Provider returned ${collected.status}`);
+        }
+        const response = toChatCompletion(collected, { id: generateId('chatcmpl'), model: m, created: Math.floor(Date.now() / 1000) });
+        const msg = response.choices[0].message as ChatMessage;
+        normalizeMessageThinking(msg as Record<string, unknown>);
+        if (!msg.tool_calls && typeof msg.content === 'string') {
+          const extracted = tryExtractToolCallsFromContent(msg.content, filteredTools as ToolDef[] | undefined);
+          if (extracted && extracted.length > 0) {
+            msg.tool_calls = extracted;
+            response.choices[0].finish_reason = 'tool_calls';
+          }
+        }
+        return response;
+      };
+
+      try {
+        const response = await completeOnce(model);
+        recordUsage(model, 200, response, provider);
+        return response;
+      } catch (error: unknown) {
+        request.log.error({ err: error, backend, provider }, 'Direct LLM request failed');
+        if (canRetryWithFallback(error, model)) {
+          request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
+          try {
+            const retryResponse = await completeOnce(fallbackRetryModel!);
+            recordUsage(fallbackRetryModel!, 200, retryResponse, provider);
+            return { ...retryResponse, warning: buildFallbackWarning(model, fallbackRetryModel!) };
+          } catch (retryError) {
+            request.log.error({ err: retryError }, 'Fallback model also failed');
+          }
+        }
+      }
+      // Fall through to the llm_error mock/503 below.
+    } else {
+    // --- Gateway (LLM_BASE_URL) ---
+      const gatewayMcp = await openAgentMcp();
+      if (gatewayMcp) {
+        return respondWithMcp(gatewayMcp, async (msgs, loopTools, m) => {
+          const response = await createLlmClient(provider).createChatCompletion({
+            model: m,
+            messages: msgs,
+            ...tokenParamFor(m),
+            ...temperatureParamFor(m),
+            ...(response_format && { response_format }),
+            ...(loopTools && loopTools.length > 0 && { tools: loopTools }),
+            stream: false,
+          } as unknown as ClientChatCompletionRequest) as unknown as LoopResponse;
+          const msg = response.choices?.[0]?.message;
+          if (!msg) throw new Error('Gateway returned no choices');
+          normalizeMessageThinking(msg as Record<string, unknown>);
+          if (!msg.tool_calls && typeof msg.content === 'string') {
+            const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
+            if (extracted && extracted.length > 0) msg.tool_calls = extracted;
+          }
+          return response;
+        });
+      }
+      try {
+        const client = createLlmClient(provider);
 
         // Build request options once — gateway handles provider-specific quirks
         const requestOptions: ChatCompletionRequestWithTools = {

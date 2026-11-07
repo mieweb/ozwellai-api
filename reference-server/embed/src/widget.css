@@ -487,7 +487,8 @@ body {
   border-radius: 8px;
   background: #ffffff;
   color: #111827;
-  font-size: 13px;
+  /* iOS Safari zooms the host page when a focused input is below 16px */
+  font-size: 16px;
   box-sizing: border-box;
 }
 
@@ -569,7 +570,7 @@ body {
   overflow: hidden;
 }
 
-.ozwell-session-layout > [data-slot="ozwell-chat"] {
+.ozwell-session-layout > [data-slot="superchat"] {
   flex: 1 1 0;
   min-height: 0;
   height: auto;
@@ -579,6 +580,61 @@ body {
   color: #63717b;
   font-size: 11px;
   font-weight: 500;
+}
+
+.ozwell-warning,
+.ozwell-queued {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.ozwell-warning {
+  background: #fff7e6;
+  color: #7a4b00;
+}
+
+.ozwell-queued {
+  background: #f4f8fa;
+  color: #334155;
+}
+
+.ozwell-warning > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ozwell-queued-text {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 4px 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+  background: #ffffff;
+}
+
+.ozwell-queued button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ozwell-warning button,
+.ozwell-queued button {
+  border: 0;
+  background: transparent;
+  color: #0f7495;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .ozwell-account-action {
@@ -656,4 +712,63 @@ body {
   content: "";
   flex: 1;
   border-top: 1px solid #e2e8f0;
+}
+
+/* The narrow-container composer stacks the send button on its own row; with no
+   add menu that row is empty space, so keep input and actions on one row. */
+.ozwell-session-layout [data-slot="superchat"] .grid:has([data-slot="chat-composer-send-button"]) > :first-child {
+  grid-column: 1 / span 2;
+}
+
+.ozwell-session-layout [data-slot="superchat"] .grid > :has([data-slot="chat-composer-send-button"]) {
+  grid-row: 1;
+  align-self: end;
+}
+
+/* Mirror the wide one-row composer spacing so the input and send button align. */
+.ozwell-session-layout [data-slot="superchat"] .grid:has([data-slot="chat-composer-send-button"]) > :first-child {
+  align-self: end;
+  padding: 6px 0 6px 6px;
+}
+
+.ozwell-session-layout [data-slot="superchat"] [data-slot="chat-composer-input"] {
+  padding: 6px 8px;
+}
+
+.ozwell-session-layout [data-slot="superchat"] .grid > :has([data-slot="chat-composer-send-button"]) {
+  padding: 6px;
+}
+
+/* Mirrors the composer's ghost model-selector trigger so the row reads as one set of controls. */
+.ozwell-thinking-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #525252;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ozwell-thinking-control:hover {
+  background: #f5f5f5;
+  color: #171717;
+}
+
+.ozwell-thinking-control:focus-within {
+  outline: 2px solid #0f7495;
+  outline-offset: 1px;
+}
+
+.ozwell-thinking-control select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
 }

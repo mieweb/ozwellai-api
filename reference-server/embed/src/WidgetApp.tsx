@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  OzwellChat,
   type AIMessage,
   type MCPToolCall,
-  type OzwellThinkingMode,
 } from '@mieweb/ui';
+import {
+  SuperChat,
+  type Participant,
+  type SuperChatConversation,
+} from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import { buildSystemPrompt, getAuthKey } from './system-prompt';
@@ -21,12 +24,17 @@ import type {
 } from './types';
 
 const THINKING = { NONE: 0, PEEK: 1, SMART: 2, EXPANDED: 3 } as const;
+const THINKING_LABELS: Record<ThinkingMode, string> = { 0: 'Never', 1: 'Collapsed', 2: 'Auto', 3: 'Expanded' };
+const THINKING_OPTIONS: ThinkingMode[] = [THINKING.NONE, THINKING.PEEK, THINKING.SMART, THINKING.EXPANDED];
 const MCP_TOOL_TIMEOUT_MS = 30000;
 // A frame's WindowProxy survives reloads. This identity belongs to the loaded
 // document, so hosts can retire its tool requests before accepting a new one.
 const newWidgetDocumentId = () => [...crypto.getRandomValues(new Uint32Array(4))].map(value => value.toString(16).padStart(8, '0')).join('');
 let widgetDocumentId = newWidgetDocumentId();
 const ASSISTANT_UNAVAILABLE_MESSAGE = 'This assistant is temporarily unavailable. Please try again later.';
+const USER_PARTICIPANT = 'user';
+const ASSISTANT_PARTICIPANT = 'ozwell';
+const SYSTEM_PARTICIPANT = 'system';
 
 type ProviderModelOption = {
   provider: string;
@@ -112,6 +120,26 @@ function effectiveModelsEndpoint(endpoint?: string) {
   url.search = '';
   url.hash = '';
   return url.toString();
+}
+
+type AgentOption = { id: string; label: string; defaultModel: { provider: string | null; model: string } | null };
+
+function normalizeAgents(payload: unknown): AgentOption[] {
+  const data = payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown[] }).data)
+    ? (payload as { data: unknown[] }).data
+    : [];
+  return data.flatMap((item) => {
+    const record = item as Record<string, unknown> | null;
+    const id = typeof record?.id === 'string' ? record.id : '';
+    if (!id) return [];
+    const label = typeof record?.name === 'string' && record.name.trim() ? record.name : id;
+    const dm = record?.default_model as { provider?: unknown; model?: unknown } | null | undefined;
+    // Legacy agents expose only `model`; its provider is resolved against the effective list.
+    const model = typeof dm?.model === 'string' ? dm.model : typeof record?.model === 'string' ? record.model : '';
+    const provider = typeof dm?.provider === 'string' ? dm.provider : typeof record?.provider === 'string' ? record.provider : null;
+    const defaultModel = model ? { provider, model } : null;
+    return [{ id, label, defaultModel }];
+  });
 }
 
 function apiOriginFor(endpoint?: string) {
@@ -265,10 +293,40 @@ function resolveToolCallIndex(toolCallDelta: { index?: unknown; id?: unknown }, 
   return Math.max(accumulated.length - 1, 0);
 }
 
-function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status']): MCPToolCall {
+const PAGE_TOOL_PREFIX = /^postMessage[_:]/;
+
+// The UI kit uses toolName as the pill text, so it carries the source and short failure reason.
+function toolLabel(rawName: string, server?: string, error?: string): string {
+  const isPageTool = PAGE_TOOL_PREFIX.test(rawName);
+  const name = rawName.replace(PAGE_TOOL_PREFIX, '').replace(/_/g, ' ');
+  const source = server ? server.charAt(0).toUpperCase() + server.slice(1) : isPageTool ? 'Page' : '';
+  const label = source ? `${name} · ${source}` : name;
+  return error ? `${label} — ${shortError(error)}` : label;
+}
+
+function shortError(error: string): string {
+  // Server errors look like "MCP tool 'x' on 'y' failed: request timed out"; keep the reason.
+  const reason = /failed: (.+)$/.exec(error)?.[1] ?? error;
+  return reason.length > 60 ? `${reason.slice(0, 57)}…` : reason;
+}
+
+function withLiveDuration(toolCall: MCPToolCall): MCPToolCall {
+  if (toolCall.status !== 'running') return toolCall;
+  // Whole seconds so the pill ticks once per second instead of jittering.
+  const elapsed = Math.floor((Date.now() - new Date(toolCall.startedAt).getTime()) / 1000) * 1000;
+  return { ...toolCall, duration: elapsed };
+}
+
+// The UI kit auto-expands finished cards; outside debug, drop the box content so they stay a one-line pill.
+function compactFinishedTool(toolCall: MCPToolCall, debug: boolean | undefined): MCPToolCall {
+  if (debug || toolCall.status === 'running') return toolCall;
+  return { ...toolCall, parameters: [], error: undefined, result: undefined };
+}
+
+function createToolDisplay(toolCall: OpenAIToolCall, args: Record<string, unknown>, status: MCPToolCall['status'], server?: string): MCPToolCall {
   return {
     id: String(toolCall.id || createMessageId('tool')),
-    toolName: toolCall.function?.name || 'unknown',
+    toolName: toolLabel(toolCall.function?.name || 'unknown', server),
     parameters: Object.entries(args).map(([name, value]) => ({
       name,
       type: typeof value,
@@ -316,6 +374,16 @@ function shouldCollapseThinking(mode: ThinkingMode, status: AIMessage['status'],
   return true;
 }
 
+// Display-only: stored thinking stays intact so switching modes can reveal it again.
+function applyThinkingMode(content: WidgetMessage['content'], mode: ThinkingMode, status: AIMessage['status']): WidgetMessage['content'] {
+  if (!content.some((block) => block.type === 'thinking')) return content;
+  if (mode === THINKING.NONE) return content.filter((block) => block.type !== 'thinking');
+  const hasText = content.some((block) => block.type === 'text' && Boolean(block.text));
+  return content.map((block) => (
+    block.type === 'thinking' ? { ...block, collapsed: shouldCollapseThinking(mode, status, hasText) } : block
+  ));
+}
+
 function systemDisplayMessage(content: string): WidgetMessage {
   return {
     id: createMessageId('system'),
@@ -354,6 +422,13 @@ export function WidgetApp() {
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const activeAgentIdRef = useRef<string | null>(null);
+  const lastAgentIdRef = useRef<string | null>(null);
+  // Agent and model pinned for the whole user turn, including tool follow-ups and retries.
+  const turnRef = useRef<{ agentId: string | null; model: ProviderModelSelection | null }>({ agentId: null, model: null });
+  const [agentsLoading, setAgentsLoading] = useState(false);
   const [credentialSource, setCredentialSource] = useState<'host' | 'session' | 'user-key' | null>(
     () => (getAuthKey({ ...DEFAULT_CONFIG, ...(window.OZWELL_CONFIG || {}) }) ? 'host' : null)
   );
@@ -378,6 +453,9 @@ export function WidgetApp() {
   // True while `queuedMessage` holds host-composed content the user has not yet
   // confirmed, so the completion follow-up never auto-sends it.
   const queuedIsDraftRef = useRef(false);
+  const [widgetOpen, setWidgetOpen] = useState(true);
+  // Bumped on reset so SuperChat drops any in-flight dictation for the old conversation.
+  const [conversationEpoch, setConversationEpoch] = useState(0);
   const sendingRef = useRef(false);
   const fallbackToastShownRef = useRef(false);
   const needsAuthentication = !getAuthKey(config) && !userCredential && credentialSource !== 'host';
@@ -398,6 +476,7 @@ export function WidgetApp() {
 
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeModelRef.current = activeModel; }, [activeModel]);
+  useEffect(() => { activeAgentIdRef.current = activeAgentId; }, [activeAgentId]);
   useEffect(() => { historyRef.current = historyMessages; }, [historyMessages]);
   useEffect(() => { queuedRef.current = queuedMessage; }, [queuedMessage]);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
@@ -414,14 +493,24 @@ export function WidgetApp() {
     setQueuedMessage(null);
     setHistoryMessages([]);
     setDisplayMessages([]);
+    setConversationEpoch((epoch) => epoch + 1);
     setEffectiveModels([]);
     setActiveModel(null);
+    setAgents([]);
+    setActiveAgentId(null);
+    activeAgentIdRef.current = null;
     return true;
   }, []);
 
-  const requestConfig = useCallback(() => userCredentialRef.current
-    ? { ...configRef.current, apiKey: userCredentialRef.current.key }
-    : configRef.current, []);
+  const requestConfig = useCallback((agentId: string | null = activeAgentIdRef.current): OzwellConfig => {
+    const credential = userCredentialRef.current;
+    if (!credential) return configRef.current;
+    return {
+      ...configRef.current,
+      apiKey: credential.key,
+      ...(agentId ? { headers: { ...configRef.current.headers, 'X-Ozwell-Agent-Id': agentId } } : {}),
+    };
+  }, []);
 
   // Keyless embeds only: restore a key the user opted to remember here.
   useEffect(() => {
@@ -445,6 +534,9 @@ export function WidgetApp() {
 
     const controller = new AbortController();
     const endpoint = effectiveModelsEndpoint(config.endpoint);
+
+    // Wait for the agent list so the first fetch is already scoped to the selected agent.
+    if (agentsLoading) return;
 
     async function fetchEffectiveModels() {
       try {
@@ -472,9 +564,67 @@ export function WidgetApp() {
     void fetchEffectiveModels();
 
     return () => controller.abort();
-  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential]);
+  }, [config.endpoint, config.apiKey, config.openaiApiKey, config.headers, userCredential, requestConfig, resetUserCredential, activeAgentId, agentsLoading]);
+
+  // Signed-in users pick one of their own agents, then a model that agent allows.
+  useEffect(() => {
+    const sessionKey = userCredential?.source === 'session' ? userCredential.key : '';
+    if (!sessionKey) {
+      setAgents([]);
+      setActiveAgentId(null);
+      setAgentsLoading(false);
+      return;
+    }
+    setAgentsLoading(true);
+
+    const controller = new AbortController();
+    const url = new URL(effectiveModelsEndpoint(config.endpoint));
+    url.pathname = '/v1/agents';
+
+    async function fetchAgents() {
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: requestHeaders(requestConfig()),
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (response.status === 401 && resetUserCredential(sessionKey)) return;
+        const list = response.ok ? normalizeAgents(await response.json()) : [];
+        setAgents(list);
+        setActiveAgentId((current) => (
+          current && list.some((item) => item.id === current) ? current : list[0]?.id ?? null
+        ));
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
+          setAgents([]);
+          setActiveAgentId(null);
+        }
+      } finally {
+        if (!controller.signal.aborted) setAgentsLoading(false);
+      }
+    }
+
+    void fetchAgents();
+    return () => controller.abort();
+  }, [config.endpoint, userCredential, requestConfig, resetUserCredential]);
 
   useEffect(() => {
+    const agentDefault = agents.find((item) => item.id === activeAgentId)?.defaultModel;
+    const defaultMatch = agentDefault && effectiveModels.find((item) => (
+      item.model === agentDefault.model && (!agentDefault.provider || item.provider === agentDefault.provider)
+    ));
+    const agentChanged = lastAgentIdRef.current !== activeAgentId;
+    lastAgentIdRef.current = activeAgentId;
+    if (activeAgentId) {
+      // Never auto-pick a fallback for an agent: an unset model lets the server apply (or reject) its default.
+      const current = activeModelRef.current;
+      const kept = !agentChanged && current && effectiveModels.some((item) => sameProviderModel(item, current)) ? current : null;
+      const resolved = kept ?? (defaultMatch ? { provider: defaultMatch.provider, model: defaultMatch.model } : null);
+      setActiveModel((existing) => sameProviderModel(existing, resolved) ? existing : resolved);
+      return;
+    }
     const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
   }, [config.provider, config.model, effectiveModels]);
@@ -581,25 +731,22 @@ export function WidgetApp() {
       const args = parseToolArgs(toolCall.function?.arguments);
       const toolCallId = ensureToolCallId(toolCall, () => ++mcpRequestIdRef.current);
 
-      if (configRef.current.debug) {
-        const displayToolCall = createToolDisplay(toolCall, args, 'running');
-        toolExecutionsRef.current.push({
-          toolCallId,
-          toolName,
-          arguments: args,
-          result: null,
-          timestamp: Date.now(),
-          completedAt: null,
-        });
-        appendDisplay({
-          id: createMessageId('tool'),
-          role: 'tool',
-          content: [{ type: 'tool_use', toolCall: displayToolCall }],
-          timestamp: new Date(),
-          status: 'complete',
-          metadata: { source: 'debug-tool', toolCallId },
-        });
-      }
+      toolExecutionsRef.current.push({
+        toolCallId,
+        toolName,
+        arguments: args,
+        result: null,
+        timestamp: Date.now(),
+        completedAt: null,
+      });
+      appendDisplay({
+        id: createMessageId('tool'),
+        role: 'tool',
+        content: [{ type: 'tool_use', toolCall: createToolDisplay(toolCall, args, 'running') }],
+        timestamp: new Date(),
+        status: 'complete',
+        metadata: { source: 'tool', toolCallId },
+      });
 
       activeToolCallsRef.current[toolName] = toolCallId;
       trackPendingToolCall(toolCallId);
@@ -622,8 +769,9 @@ export function WidgetApp() {
     const rawChunks: string[] = [];
 
     try {
-      const authConfig = requestConfig();
-      const systemPrompt = buildSystemPrompt(authConfig);
+      const turn = turnRef.current;
+      const authConfig = requestConfig(turn.agentId);
+      const systemPrompt = turn.agentId ? '' : buildSystemPrompt(authConfig);
       const requestMessages = historyToRequestMessages(historyRef.current);
       if (systemPrompt) {
         requestMessages.unshift({ role: 'system', content: systemPrompt });
@@ -633,10 +781,12 @@ export function WidgetApp() {
         messages: requestMessages,
         stream: true,
       };
-      const selectedModel = activeModelRef.current;
+      const selectedModel = turn.model;
       if (selectedModel) {
         requestBody.provider = selectedModel.provider;
         requestBody.model = selectedModel.model;
+      } else if (turn.agentId) {
+        // No model resolved yet: let the agent's default apply server-side.
       } else if (configRef.current.provider && configRef.current.model) {
         requestBody.provider = configRef.current.provider;
         requestBody.model = configRef.current.model;
@@ -666,6 +816,22 @@ export function WidgetApp() {
       let fullThinking = '';
       let sawThinking = false;
       const accumulatedToolCalls: OpenAIToolCall[] = [];
+      const serverTools: MCPToolCall[] = [];
+      const serverToolNames = new Map<string, { tool: string; server?: string }>();
+      const withServerTools = (blocks: WidgetMessage['content']): WidgetMessage['content'] => [
+        ...serverTools.map((toolCall) => ({ type: 'tool_use' as const, toolCall: compactFinishedTool(withLiveDuration(toolCall), configRef.current.debug) })),
+        ...blocks,
+      ];
+      // A bubble with no text still keeps any MCP tool cards it showed.
+      const dropAssistantBubble = () => {
+        const id = assistantMessageId;
+        if (!id) return;
+        if (serverTools.length) {
+          updateDisplayMessage(id, (message) => ({ ...message, content: withServerTools([]), status: 'complete' }));
+        } else {
+          setDisplayMessages((current) => current.filter((message) => message.id !== id));
+        }
+      };
       const modeAtStart = (configRef.current.thinkingDefaultMode ?? thinkingMode) as ThinkingMode;
 
       assistantMessageId = createMessageId('assistant');
@@ -675,8 +841,11 @@ export function WidgetApp() {
         content: [],
         timestamp: new Date(),
         status: 'streaming',
+        metadata: { agentId: turn.agentId },
       }]);
 
+      // Outlives a single read: an `event:` line and its `data:` line can arrive in different chunks.
+      let currentEventType: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -684,7 +853,6 @@ export function WidgetApp() {
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-        let currentEventType: string | null = null;
 
         for (const line of lines) {
           if (line.trim() === '') {
@@ -711,6 +879,50 @@ export function WidgetApp() {
               }
             } catch {
               // Ignore malformed warning events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'tool_history') {
+            try {
+              const { messages } = JSON.parse(data) as { messages?: ChatHistoryMessage[] };
+              if (Array.isArray(messages)) {
+                for (const message of messages) {
+                  if (message && (message.role === 'assistant' || message.role === 'tool')) appendHistory(message);
+                }
+              }
+            } catch {
+              // Ignore malformed tool history events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'tool_status') {
+            try {
+              const event = JSON.parse(data);
+              const id = String(event.id ?? '');
+              const existing = serverTools.find((tool) => tool.id === id);
+              if (existing) {
+                existing.status = event.status;
+                existing.completedAt = new Date();
+                if (typeof event.duration === 'number') existing.duration = event.duration;
+                if (typeof event.error === 'string') {
+                  const names = serverToolNames.get(id);
+                  existing.error = event.error;
+                  if (names) existing.toolName = toolLabel(names.tool, names.server, event.error);
+                }
+              } else if (typeof event.tool === 'string') {
+                const args = event.arguments && typeof event.arguments === 'object' ? event.arguments as Record<string, unknown> : {};
+                const server = typeof event.server === 'string' && event.server ? event.server : undefined;
+                serverToolNames.set(id, { tool: event.tool, server });
+                serverTools.push(createToolDisplay({ id, type: 'function', function: { name: event.tool, arguments: '' } }, args, 'running', server));
+              }
+              updateDisplayMessage(assistantMessageId, (message) => ({
+                ...message,
+                content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
+              }));
+            } catch {
+              // Ignore malformed tool status events.
             }
             currentEventType = null;
             continue;
@@ -758,7 +970,7 @@ export function WidgetApp() {
 
             updateDisplayMessage(assistantMessageId, (message) => ({
               ...message,
-              content: assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content,
+              content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, fullContent ? THINKING.SMART : modeAtStart, 'streaming').content),
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
@@ -783,13 +995,13 @@ export function WidgetApp() {
           tool_calls: toolCalls,
         });
         if (shouldHideContent && !hasVisibleThinking) {
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
         } else {
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: shouldHideContent
+            content: withServerTools(shouldHideContent
               ? assistantDisplayMessage('', fullThinking, modeAtStart).content
-              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+              : assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -802,14 +1014,14 @@ export function WidgetApp() {
           const MAX_THINKING_RETRIES = 3;
           if (thinkingRetryCount < MAX_THINKING_RETRIES) {
             needsThinkingRetry = true;
-            setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+            dropAssistantBubble();
           } else {
             const fallback = 'The model is not responding right now. Please try again or refresh the page.';
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
           // Empty turn: drop the streaming bubble rather than rendering a placeholder.
-          setDisplayMessages((current) => current.filter((message) => message.id !== assistantMessageId));
+          dropAssistantBubble();
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
@@ -821,7 +1033,7 @@ export function WidgetApp() {
           });
           updateDisplayMessage(assistantMessageId, (message) => ({
             ...message,
-            content: assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content,
+            content: withServerTools(assistantDisplayMessage(fullContent, fullThinking, modeAtStart).content),
             status: 'complete',
           }));
         }
@@ -895,6 +1107,7 @@ export function WidgetApp() {
       return;
     }
 
+    turnRef.current = { agentId: activeAgentIdRef.current, model: activeModelRef.current };
     await sendMessageStreaming(trimmed, toolsForRequest());
   }
 
@@ -923,34 +1136,62 @@ export function WidgetApp() {
   }, []);
 
   const updateToolExecutionResult = useCallback((toolCallId: string | number, result: unknown) => {
-    if (!configRef.current.debug) return;
     const execution = toolExecutionsRef.current.find((item) => item.toolCallId === toolCallId);
     if (execution) {
       execution.result = result;
       execution.completedAt = Date.now();
     }
+    const error = (result as { error?: unknown } | null)?.error;
+    const errorText = error ? String(typeof error === 'string' ? error : JSON.stringify(error)) : undefined;
     setDisplayMessages((current) => current.map((message) => {
       if (message.metadata?.toolCallId !== toolCallId) return message;
       const content = message.content[0];
       if (content?.type !== 'tool_use' || !content.toolCall) return message;
+      const startedAt = new Date(content.toolCall.startedAt).getTime();
+      const rawName = execution?.toolName;
       return {
         ...message,
         content: [{
           type: 'tool_use',
-          toolCall: {
+          toolCall: compactFinishedTool({
             ...content.toolCall,
-            status: (result as any)?.error ? 'error' : 'success',
+            ...(errorText && rawName && { toolName: toolLabel(rawName, undefined, errorText) }),
+            status: errorText ? 'error' : 'success',
             completedAt: new Date(),
-            result: {
-              type: (result as any)?.error ? 'error' : 'json',
-              data: result,
-              summary: (result as any)?.error || 'Tool completed',
-            },
-          },
+            duration: Date.now() - startedAt,
+            ...(errorText && { error: errorText }),
+            ...(configRef.current.debug && {
+              result: {
+                type: errorText ? 'error' : 'json',
+                data: result,
+                summary: errorText || 'Tool completed',
+              },
+            }),
+          }, configRef.current.debug),
         }],
       };
     }));
   }, []);
+
+  const hasRunningTool = displayMessages.some((message) => message.content.some(
+    (block) => block.type === 'tool_use' && block.toolCall?.status === 'running',
+  ));
+  useEffect(() => {
+    if (!hasRunningTool) return;
+    const timer = window.setInterval(() => {
+      setDisplayMessages((current) => current.map((message) => (
+        message.content.some((block) => block.type === 'tool_use' && block.toolCall?.status === 'running')
+          ? {
+            ...message,
+            content: message.content.map((block) => (
+              block.type === 'tool_use' && block.toolCall ? { ...block, toolCall: withLiveDuration(block.toolCall) } : block
+            )),
+          }
+          : message
+      )));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningTool]);
 
   useEffect(() => {
     window.OzwellDebug = {
@@ -977,6 +1218,7 @@ export function WidgetApp() {
       clearMessages: () => {
         clearHistory();
         setDisplayMessages(configRef.current.welcomeMessage ? [assistantDisplayMessage(configRef.current.welcomeMessage)] : []);
+        setConversationEpoch((epoch) => epoch + 1);
         fallbackToastShownRef.current = false;
       },
       reset: () => {
@@ -1042,9 +1284,12 @@ export function WidgetApp() {
         applyConfig(data.payload.config);
       }
 
+      if (data.type === 'open') setWidgetOpen(true);
+
       if (data.type === 'focus') focusInput();
 
       if (data.type === 'close') {
+        setWidgetOpen(false);
         postToParent({
           source: 'ozwell-chat-widget',
           type: 'closed',
@@ -1118,6 +1363,15 @@ export function WidgetApp() {
     };
   }, [appendDisplay, appendHistory, applyConfig, insertIntoComposer, mcpNotify, mcpSend, postToParent, toolsForRequest, updateToolExecutionResult]);
 
+  const selectAgent = useCallback((agentId: string) => {
+    activeAgentIdRef.current = agentId;
+    setActiveAgentId(agentId);
+    // Drop the old agent's model so a send before rediscovery can't pair it with the new agent.
+    activeModelRef.current = null;
+    setActiveModel(null);
+    setEffectiveModels([]);
+  }, []);
+
   const handleAuthenticated = useCallback((credential: WidgetCredential) => {
     setCredentialSource(credential.source);
     userCredentialRef.current = credential;
@@ -1139,32 +1393,76 @@ export function WidgetApp() {
     <MarkdownContent text={text} cacheKey={ctx.messageId} streaming={ctx.streaming} />
   ), []);
 
-  const chatMessages = useMemo(() => {
-    return displayMessages
+  // Server-side transcription keeps the widget bundle small (no on-device Whisper download).
+  const transcribe = useCallback(async (audio: Blob, signal: AbortSignal) => {
+    const headers = new Headers(requestHeaders(requestConfig()));
+    // Let fetch set the multipart boundary.
+    headers.delete('content-type');
+    const type = audio.type.split(';')[0] || 'audio/webm';
+    const form = new FormData();
+    form.append('file', new File([audio], `dictation.${type.split('/')[1] || 'webm'}`, { type }));
+    form.append('model', 'whisper-1');
+    const response = await fetch(`${apiOriginFor(configRef.current.endpoint)}/v1/audio/transcriptions`, {
+      method: 'POST',
+      headers,
+      body: form,
+      signal,
+    });
+    if (response.status === 503) throw new Error('Voice input is not available on this server.');
+    if (!response.ok) throw new Error(`Transcription failed (${response.status})`);
+    const payload = await response.json() as { text?: string };
+    return payload.text ?? '';
+  }, [requestConfig]);
+  // The button's own caption is generic; explain cases a retry cannot fix.
+  const onDictationError = useCallback((error: Error) => {
+    const message = error.name === 'NotFoundError'
+      ? 'No microphone was found. Connect one, or type your message instead.'
+      : /not available/i.test(error.message) || error.name === 'NotSupportedError'
+        ? 'Voice input is not available here. You can still type your message.'
+        : null;
+    if (message) setToast(message);
+  }, []);
+  const dictation = useMemo(
+    () => ({ transcribe, onError: onDictationError, disabled: !widgetOpen }),
+    [transcribe, onDictationError, widgetOpen],
+  );
+
+  const conversation = useMemo<SuperChatConversation>(() => {
+    const assistantName = config.title || DEFAULT_CONFIG.title;
+    const participants: Participant[] = [
+      { id: USER_PARTICIPANT, kind: 'human', name: 'You' },
+      { id: ASSISTANT_PARTICIPANT, kind: 'agent', name: assistantName, color: '#0f7495' },
+      { id: SYSTEM_PARTICIPANT, kind: 'system', name: 'System' },
+      ...agents.map((agent): Participant => ({
+        id: `agent:${agent.id}`,
+        kind: 'agent',
+        name: agent.label,
+        color: '#2563eb',
+      })),
+    ];
+    const thread = displayMessages
       .filter((message) => (
         message.status === 'streaming'
         || message.content.length > 0
         || message.role === 'tool'
-      ));
-  }, [displayMessages]);
-
-  const displayThinkingMode: OzwellThinkingMode = [
-    'never',
-    'collapsed',
-    'auto',
-    'expanded',
-  ][thinkingMode] as OzwellThinkingMode;
-
-  const setDisplayThinkingMode = useCallback((mode: OzwellThinkingMode) => {
-    const nextMode = {
-      never: THINKING.NONE,
-      collapsed: THINKING.PEEK,
-      auto: THINKING.SMART,
-      expanded: THINKING.EXPANDED,
-    }[mode] as ThinkingMode;
-    setThinkingMode(nextMode);
-    setConfig((current) => ({ ...current, thinkingDefaultMode: nextMode }));
-  }, []);
+      ))
+      .map((message) => {
+        const agentId = typeof message.metadata?.agentId === 'string' ? message.metadata.agentId : null;
+        const participantId = message.role === 'user'
+          ? USER_PARTICIPANT
+          : message.role === 'system'
+            ? SYSTEM_PARTICIPANT
+            : agentId && agents.some((agent) => agent.id === agentId) ? `agent:${agentId}` : ASSISTANT_PARTICIPANT;
+        return {
+          id: message.id,
+          participantId,
+          content: applyThinkingMode(message.content, thinkingMode, message.status),
+          time: message.timestamp,
+          status: message.status,
+        };
+      });
+    return { id: `ozwell-widget-${conversationEpoch}`, title: assistantName, participants, thread };
+  }, [agents, config.title, conversationEpoch, displayMessages, thinkingMode]);
 
   if (!initialConfigReady) return null;
 
@@ -1190,29 +1488,72 @@ export function WidgetApp() {
         </button>
       </div>
     )}
-    <OzwellChat
-      messages={chatMessages}
-      isGenerating={sending}
-      inputPlaceholder={config.placeholder || DEFAULT_CONFIG.placeholder}
-      onSendMessage={(message) => void sendMessage(message)}
-      queuedMessage={queuedMessage}
-      onQueuedMessageChange={setQueuedMessage}
-      onCancelQueuedMessage={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}
+    {toast && (
+      <div className="ozwell-warning" role="status">
+        <span>{toast}</span>
+        <button type="button" aria-label="Dismiss warning" onClick={() => setToast(null)}>×</button>
+      </div>
+    )}
+    {queuedMessage !== null && (
+      <div className="ozwell-queued" role="group" aria-label="Queued message">
+        <textarea
+          className="ozwell-queued-text"
+          aria-label="Edit queued message"
+          rows={2}
+          value={queuedMessage}
+          onChange={(event) => setQueuedMessage(event.target.value)}
+        />
+        {queuedIsDraftRef.current && !sending && (
+          <button type="button" disabled={!queuedMessage.trim()} onClick={() => { const text = queuedMessage; queuedIsDraftRef.current = false; setQueuedMessage(null); void sendMessage(text); }}>
+            Send
+          </button>
+        )}
+        <button type="button" onClick={() => { queuedIsDraftRef.current = false; setQueuedMessage(null); }}>
+          Cancel
+        </button>
+      </div>
+    )}
+    <SuperChat
+      conversation={conversation}
+      currentParticipantId={USER_PARTICIPANT}
+      showHeader={false}
+      allowAttachments={false}
+      placeholder={config.placeholder || DEFAULT_CONFIG.placeholder}
       renderTextContent={renderTextContent}
-      thinking={{
-        enabled: config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled,
-        mode: displayThinkingMode,
-        onModeChange: setDisplayThinkingMode,
-      }}
-      models={activeModel ? {
-        options: effectiveModels,
+      onMessageSent={(message) => { void sendMessage(message); }}
+      dictation={dictation}
+      composerSelectorsEndSlot={(config.thinkingEnabled ?? DEFAULT_CONFIG.thinkingEnabled) ? (
+        <div className="ozwell-thinking-control">
+          <span aria-hidden="true">Thinking: {THINKING_LABELS[thinkingMode]}</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+          {/* Invisible native select covers the whole control so any click opens it. */}
+          <select
+            aria-label="Show thinking"
+            value={thinkingMode}
+            onChange={(event) => {
+              const mode = Number(event.target.value) as ThinkingMode;
+              setThinkingMode(mode);
+              setConfig((current) => ({ ...current, thinkingDefaultMode: mode }));
+            }}
+          >
+            {THINKING_OPTIONS.map((mode) => (
+              <option key={mode} value={mode}>{THINKING_LABELS[mode]}</option>
+            ))}
+          </select>
+        </div>
+      ) : undefined}
+      agents={agents.map((agent) => ({ id: agent.id, label: agent.label }))}
+      selectedAgent={activeAgentId}
+      onAgentChange={selectAgent}
+      modelSelectorProps={effectiveModels.length > 1 || (activeAgentId && !activeModel && effectiveModels.length === 1) ? {
+        models: effectiveModels,
         value: activeModel,
         onChange: setActiveModel,
         providerFilter,
         onProviderFilterChange: setProviderFilter,
+        placeholder: 'Agent default',
+        variant: 'ghost',
       } : undefined}
-      warning={toast}
-      onDismissWarning={() => setToast(null)}
     />
     </div>
   );

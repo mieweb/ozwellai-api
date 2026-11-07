@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'frontend/overview',
+        'frontend/desktop-login',
         {
           type: 'category',
           label: 'Quick Embed',
@@ -68,6 +69,7 @@ const sidebars: SidebarsConfig = {
             'backend/agents',
             'backend/api-authentication',
             'backend/widget-authentication',
+            'backend/desktop-authentication',
             'backend/api-examples',
           ],
         },

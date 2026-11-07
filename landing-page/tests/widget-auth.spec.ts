@@ -29,6 +29,7 @@ test.describe('Widget authentication', () => {
       json: { google: false, apple: false, email_otp: true, user_key: true },
     }));
     await page.route('**/v1/models/effective', route => route.fulfill({ json: { data: [] } }));
+    await page.route('**/v1/agents', route => route.fulfill({ json: { data: [] } }));
     await page.route('**/v1/keys/validate', route => route.fulfill({ json: { valid: true } }));
   });
 

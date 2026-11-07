@@ -13,7 +13,7 @@ import path from 'node:path';
  */
 
 const widgetInput = (iframe: FrameLocator) => iframe.getByRole('textbox', { name: 'Message' });
-const widgetMessageBubbles = (iframe: FrameLocator) => iframe.locator('[data-slot="ai-message-bubble"]');
+const widgetMessageBubbles = (iframe: FrameLocator) => iframe.locator('[data-slot="superchat-message"]');
 
 test.describe('Ozwell Embed Widget', () => {
   let iframe: FrameLocator;
