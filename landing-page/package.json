@@ -21,7 +21,7 @@
     "@fastify/swagger-ui": "^2.1.0",
     "@mieweb/page-controller": "git+https://github.com/mieweb/page-agent.git#6963ab7a183ce38cce3f1bfc29e5c3ff206a1973",
     "dotenv": "^17.2.3",
-    "express": "^4.22.1"
+    "express": "^4.22.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
