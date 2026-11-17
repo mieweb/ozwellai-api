@@ -30,7 +30,7 @@
     "@modelcontextprotocol/sdk": "^1.24.0",
     "@types/nodemailer": "^8.0.1",
     "asn1js": "3.0.7",
-    "better-sqlite3": "^12.5.0",
+    "better-sqlite3": "^12.11.1",
     "cbor": "10.0.12",
     "dompurify": "^3.4.7",
     "dotenv": "^17.2.3",
