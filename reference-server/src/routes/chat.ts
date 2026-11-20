@@ -350,7 +350,7 @@ const INCOMPLETE_MESSAGE = 'The response was cut off before it could finish (out
 const EMPTY_RESPONSE_MESSAGE = 'The model returned an empty response. Please try again.';
 const truncatedWarning = { type: 'response_truncated', message: 'This response was cut off at the output token limit and may be incomplete.' };
 class IncompleteResponseError extends Error {
-  constructor() { super(INCOMPLETE_MESSAGE); }
+  constructor(readonly usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }) { super(INCOMPLETE_MESSAGE); }
 }
 
 function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
@@ -1085,15 +1085,22 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return;
       } catch (err) {
         request.log.error({ err, backend, provider, model: activeModel }, 'LLM request failed during MCP tool loop');
+        if (err instanceof IncompleteResponseError) {
+          usage.prompt_tokens += err.usage?.prompt_tokens ?? 0;
+          usage.completion_tokens += err.usage?.completion_tokens ?? 0;
+          usage.total_tokens += err.usage?.total_tokens ?? 0;
+        }
         recordUsage(activeModel, 502, { usage }, provider);
-        const known = err instanceof Error && (err.message === INCOMPLETE_MESSAGE || err.message === EMPTY_RESPONSE_MESSAGE) ? err.message : null;
+        const incomplete = err instanceof IncompleteResponseError;
+        const known = incomplete || (err instanceof Error && err.message === EMPTY_RESPONSE_MESSAGE) ? (err as Error).message : null;
+        const code = incomplete ? 'response_incomplete' : undefined;
         if (sse) {
-          sse.writeEvent('error', { error: { message: known ?? 'Upstream provider request failed', type: 'server_error' } });
+          sse.writeEvent('error', { error: { message: known ?? 'Upstream provider request failed', type: 'server_error', ...(code && { code }) } });
           sse.end();
           return;
         }
         reply.code(502);
-        return createError(known ?? 'Upstream provider request failed', 'server_error');
+        return createError(known ?? 'Upstream provider request failed', 'server_error', null, code);
       } finally {
         await session.close();
       }
@@ -1167,7 +1174,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
           if (collected.status === 'incomplete') {
             request.log.warn({ provider, model: m, reason: collected.reason, hasText: Boolean(msg.content), toolCalls: Boolean(msg.tool_calls) }, 'Provider response incomplete in MCP tool loop');
-            if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new Error(INCOMPLETE_MESSAGE);
+            if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new IncompleteResponseError(response.usage);
           }
           return response;
         });
@@ -1285,7 +1292,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
         if (collected.status === 'incomplete') {
           request.log.warn({ provider, model: m, reason: collected.reason, hasText: Boolean(msg.content), toolCalls: Boolean(msg.tool_calls) }, 'Provider response incomplete');
-          if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new IncompleteResponseError();
+          if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new IncompleteResponseError(response.usage);
         }
         return response;
       };
@@ -1296,7 +1303,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return response;
       } catch (error: unknown) {
         if (error instanceof IncompleteResponseError) {
-          recordUsage(model, 502, undefined, provider);
+          recordUsage(model, 502, { usage: error.usage }, provider);
           reply.code(502);
           return createError(INCOMPLETE_MESSAGE, 'server_error', null, 'response_incomplete');
         }
@@ -1334,8 +1341,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
             if (extracted && extracted.length > 0) msg.tool_calls = extracted;
           }
-          if (response.choices[0].finish_reason === 'length' && !msg.tool_calls && !(typeof msg.content === 'string' && msg.content.trim())) {
-            throw new Error(INCOMPLETE_MESSAGE);
+          // A cut-off tool call may carry truncated arguments, so it must not run.
+          if (response.choices[0].finish_reason === 'length' && (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim()))) {
+            throw new IncompleteResponseError(response.usage);
           }
           return response;
         });
@@ -1404,6 +1412,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const thinkBuffer = { partial: '' };
             let latestUsage: TokenUsage | undefined;
             let sawOutput = false;
+            let sawToolCalls = false;
             let lastFinish: string | undefined;
 
             for await (const chunk of streamResponse) {
@@ -1417,6 +1426,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 const delta = choice?.delta as Record<string, unknown> | undefined;
                 // Thinking-only turns are left to the widget's thinking-retry handling.
                 if (delta?.content || delta?.tool_calls || delta?.thinking) sawOutput = true;
+                if (delta?.tool_calls) sawToolCalls = true;
                 if (typeof choice?.finish_reason === 'string') lastFinish = choice.finish_reason;
 
                 // Initialize buffer
@@ -1465,16 +1475,18 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               }
             }
 
-            request.log.info({ provider, model, finishReason: lastFinish, hasOutput: sawOutput, usage: latestUsage }, 'Gateway LLM stream completed');
-            if (!sawOutput) {
+            request.log.info({ provider, model, finishReason: lastFinish, hasOutput: sawOutput, toolCalls: sawToolCalls, usage: latestUsage }, 'Gateway LLM stream completed');
+            // A cut-off tool call may carry truncated arguments, so it must not run.
+            const unusable = !sawOutput || (lastFinish === 'length' && sawToolCalls);
+            if (unusable) {
               const truncated = lastFinish === 'length';
-              request.log.warn({ provider, model, finishReason: lastFinish }, 'Gateway stream produced no usable output');
+              request.log.warn({ provider, model, finishReason: lastFinish, toolCalls: sawToolCalls }, 'Gateway stream produced no usable output');
               reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: { message: truncated ? INCOMPLETE_MESSAGE : EMPTY_RESPONSE_MESSAGE, type: 'server_error', ...(truncated && { code: 'response_incomplete' }) } })}\n\n`);
             } else if (lastFinish === 'length') {
               request.log.warn({ provider, model }, 'Gateway stream truncated at output limit; partial output sent');
               reply.raw.write(`event: warning\ndata: ${JSON.stringify(truncatedWarning)}\n\n`);
             }
-            recordUsage(model, sawOutput ? 200 : 502, latestUsage ? { usage: latestUsage } : undefined, provider);
+            recordUsage(model, unusable ? 502 : 200, latestUsage ? { usage: latestUsage } : undefined, provider);
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
 
@@ -1570,7 +1582,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           }
           const first = response?.choices?.[0];
           const firstMsg = first?.message as ChatMessage | undefined;
-          if (first?.finish_reason === 'length' && !firstMsg?.tool_calls && !(typeof firstMsg?.content === 'string' && firstMsg.content.trim())) {
+          if (first?.finish_reason === 'length' && (firstMsg?.tool_calls || !(typeof firstMsg?.content === 'string' && firstMsg.content.trim()))) {
             request.log.warn({ provider, model }, 'Gateway response truncated with no usable output');
             recordUsage(model, 502, response, provider);
             reply.code(502);

@@ -259,9 +259,13 @@ test('widget surfaces SSE error events instead of ending the turn silently', asy
   const appSource = await readWidgetAppSource();
 
   assert.match(appSource, /if \(currentEventType === 'error'\) \{[\s\S]*?streamError = /);
-  assert.match(appSource, /if \(streamError\) throw new Error\(streamError\);/);
+  assert.match(appSource, /if \(streamError\) throw new ChatStreamError\(streamError\);/);
   assert.match(appSource, /warning\.type === 'response_truncated'/);
-  assert.match(appSource, /reportClientError\(\{ kind: 'chat', message \}\);/);
+  // Reports carry fixed categories only, never error text that could quote response bodies.
+  assert.match(appSource, /reportClientError\(\{ kind: 'chat', message: `Chat request failed: \$\{chatFailureCategory\(error\)\}` \}\);/);
+  assert.doesNotMatch(appSource, /reportClientError\([^)]*error\.message/);
+  // Server-side tool cards survive a failed turn.
+  assert.match(appSource, /filter\(\(block\) => block\.type === 'tool_use'\)/);
 });
 
 test('widget SSE parsing accepts vendor reasoning fields and tool_calls without an index', async () => {

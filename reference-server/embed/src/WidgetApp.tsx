@@ -396,6 +396,19 @@ function systemDisplayMessage(content: string): WidgetMessage {
 }
 
 class AssistantUnavailableError extends Error {}
+class ChatHttpError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+class ChatStreamError extends Error {}
+
+// Fixed categories only: error messages can quote response bodies or streamed content.
+function chatFailureCategory(error: unknown) {
+  if (error instanceof AssistantUnavailableError) return 'assistant_unavailable';
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'timeout';
+  if (error instanceof ChatHttpError) return `http_${error.status}`;
+  if (error instanceof ChatStreamError) return 'stream_error';
+  return error instanceof Error ? `client_${error.name}` : 'unknown';
+}
 
 function chatRequestError(status: number, errorText: string) {
   try {
@@ -406,7 +419,7 @@ function chatRequestError(status: number, errorText: string) {
   } catch {
     // Keep the original response text for unknown non-JSON failures.
   }
-  return new Error(`Request failed with status ${status}: ${errorText}`);
+  return new ChatHttpError(status, `Request failed with status ${status}: ${errorText}`);
 }
 
 export function WidgetApp() {
@@ -557,7 +570,7 @@ export function WidgetApp() {
         setEffectiveModels(normalizeEffectiveModels(payload));
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportClientError({ kind: 'chat', message: `Effective model fetch failed: ${error instanceof Error ? error.message : String(error)}` });
+          reportClientError({ kind: 'chat', message: `Effective model fetch failed: ${chatFailureCategory(error)}` });
         }
         if (!controller.signal.aborted && configRef.current.debug) {
           console.debug('[Ozwell] Effective model fetch failed', error);
@@ -603,7 +616,7 @@ export function WidgetApp() {
         ));
       } catch (error) {
         if (!controller.signal.aborted) {
-          reportClientError({ kind: 'chat', message: `Agent list fetch failed: ${error instanceof Error ? error.message : String(error)}` });
+          reportClientError({ kind: 'chat', message: `Agent list fetch failed: ${chatFailureCategory(error)}` });
           if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
           setAgents([]);
           setActiveAgentId(null);
@@ -992,12 +1005,12 @@ export function WidgetApp() {
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
-            reportClientError({ kind: 'chat', message: `Failed to parse stream chunk: ${error instanceof Error ? error.message : String(error)}` });
+            reportClientError({ kind: 'chat', message: 'Failed to parse stream chunk' });
           }
         }
       }
 
-      if (streamError) throw new Error(streamError);
+      if (streamError) throw new ChatStreamError(streamError);
 
       const hasToolCalls = accumulatedToolCalls.some((tc) => tc?.function?.name);
       const parsedResult = !hasToolCalls && fullContent.trim()
@@ -1079,10 +1092,15 @@ export function WidgetApp() {
       const message = error instanceof DOMException && error.name === 'TimeoutError'
         ? 'The assistant took too long to respond. Please try again.'
         : error instanceof Error ? error.message : 'Unexpected error';
-      // Error text only; conversation content never leaves the widget.
-      reportClientError({ kind: 'chat', message });
+      reportClientError({ kind: 'chat', message: `Chat request failed: ${chatFailureCategory(error)}` });
       if (assistantMessageId) {
-        setDisplayMessages((current) => current.filter((item) => item.id !== assistantMessageId));
+        // Server-side tools may have already run; keep their cards and drop only the partial text.
+        const id = assistantMessageId;
+        setDisplayMessages((current) => current.flatMap((item) => {
+          if (item.id !== id) return [item];
+          const toolBlocks = (item.content ?? []).filter((block) => block.type === 'tool_use');
+          return toolBlocks.length ? [{ ...item, content: toolBlocks, status: 'complete' as const }] : [];
+        }));
       }
       appendDisplay(error instanceof AssistantUnavailableError
         ? assistantDisplayMessage(message)
