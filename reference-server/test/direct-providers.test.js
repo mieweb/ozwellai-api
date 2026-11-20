@@ -187,10 +187,19 @@ function fakeOpenAI({ models = ['gpt-4o-mini', 'gpt-5-mini'], toolCall = null, t
     });
 }
 
-function fakeAnthropic({ models = ['claude-sonnet-4-5'], text = 'Hello from Claude' } = {}) {
+function fakeAnthropic({ models = ['claude-sonnet-4-5'], text = 'Hello from Claude', truncatedToolCall = false } = {}) {
     return listen((req, res, body) => {
         if (req.method === 'GET' && req.url.startsWith('/v1/models')) {
             return json(res, 200, { data: models.map(id => ({ id, type: 'model', display_name: id })), has_more: false, first_id: models[0], last_id: models.at(-1) });
+        }
+        if (req.method === 'POST' && req.url === '/v1/messages' && truncatedToolCall) {
+            return sse(res, [
+                { type: 'message_start', message: { id: 'msg_a2', type: 'message', role: 'assistant', model: body.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 9, output_tokens: 1 } } },
+                { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'toolu_1', name: 'set_form', input: {} } },
+                { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"fields":[{"type":"rad' } },
+                { type: 'message_delta', delta: { stop_reason: 'max_tokens', stop_sequence: null }, usage: { output_tokens: 1024 } },
+                { type: 'message_stop' },
+            ]);
         }
         if (req.method === 'POST' && req.url === '/v1/messages') {
             return sse(res, [
@@ -421,9 +430,35 @@ test('direct providers — Anthropic gets a system prompt, default max_tokens, a
         assert.equal(sent.headers['x-api-key'], 'sk-ant-test');
         assert.equal(sent.body.model, 'claude-sonnet-4-5');
         assert.equal(sent.body.system, 'You are terse.');
-        assert.equal(sent.body.max_tokens, 1024);
+        assert.equal(sent.body.max_tokens, 8192);
         assert.equal(sent.body.temperature, undefined);
         assert.deepEqual(sent.body.messages, [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }]);
+    } finally {
+        await stopServer(server, tmp);
+        await anthropic.close();
+    }
+});
+
+test('direct providers — a stream truncated mid tool call emits an error event, not an empty success', async () => {
+    const anthropic = await fakeAnthropic({ truncatedToolCall: true });
+    const { server, tmp, dbPath } = startServer({
+        ANTHROPIC_API_KEY: 'sk-ant-test',
+        ANTHROPIC_BASE_URL: anthropic.baseURL,
+        LLM_MODEL: 'claude-sonnet-4-5',
+    });
+    try {
+        const key = await readyKey(dbPath);
+        const res = await chat(key, {
+            stream: true,
+            messages: [{ role: 'user', content: 'Make an E&M calculator.' }],
+            tools: [{ type: 'function', function: { name: 'set_form', parameters: { type: 'object' } } }],
+        });
+        assert.equal(res.status, 200);
+        const events = parseSse(await res.text());
+        const error = events.find(e => e.event === 'error');
+        assert.ok(error, 'expected an error event');
+        assert.equal(error.data.error.code, 'response_incomplete');
+        assert.ok(!events.some(e => e.data?.choices?.[0]?.finish_reason), 'no finish chunk for an unusable turn');
     } finally {
         await stopServer(server, tmp);
         await anthropic.close();

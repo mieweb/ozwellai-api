@@ -317,7 +317,7 @@ test('provider models — anthropic chat requests include default max_tokens', a
         assert.equal(response.status, 200);
         assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
         assert.equal(gateway.getLastBody().model, 'claude-sonnet-4-6');
-        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().max_tokens, 8192);
         assert.equal(gateway.getLastBody().temperature, undefined);
     } finally {
         stopServer(server, tmp);
@@ -368,7 +368,7 @@ temperature: 0.7
         assert.equal(response.status, 200);
         assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
         assert.equal(gateway.getLastBody().model, 'claude-sonnet-5');
-        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().max_tokens, 8192);
         assert.equal(gateway.getLastBody().temperature, undefined);
     } finally {
         stopServer(server, tmp);

@@ -341,7 +341,8 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
-const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
+// Large enough for tool calls that carry whole documents (e.g. eSheet form JSON); 1024 truncated them.
+const DEFAULT_ANTHROPIC_MAX_TOKENS = 8192;
 // harness-core always sends an output cap; this is the direct-provider default when neither the
 // request nor LLM_MAX_TOKENS names one.
 const DEFAULT_DIRECT_MAX_TOKENS = 4096;
@@ -1196,6 +1197,12 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 choices: [{ index: 0, delta: { tool_calls: extracted.map((tc, idx) => ({ index: idx, ...tc })) }, finish_reason: null }],
               });
             }
+          }
+          // Output limit hit before any usable text or complete tool call: nothing for the client to show.
+          if (terminal.status === 'incomplete' && !hasToolCalls && !translator.text.trim()) {
+            request.log.warn({ provider, model: m, reason: terminal.reason, usage }, 'Provider stream incomplete with no usable output');
+            sse.writeEvent('error', { error: { message: 'The response was cut off before it could finish (output token limit reached). Please try again or ask for a smaller change.', type: 'server_error', code: 'response_incomplete' } });
+            return { usage, statusCode: 502 };
           }
           for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
           // Shape only, never content, so client render failures can be correlated with what was sent.

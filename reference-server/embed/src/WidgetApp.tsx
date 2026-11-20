@@ -846,6 +846,7 @@ export function WidgetApp() {
 
       // Outlives a single read: an `event:` line and its `data:` line can arrive in different chunks.
       let currentEventType: string | null = null;
+      let streamError: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -879,6 +880,16 @@ export function WidgetApp() {
               }
             } catch {
               // Ignore malformed warning events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'error') {
+            try {
+              const message = JSON.parse(data)?.error?.message;
+              streamError = typeof message === 'string' && message ? message : 'The assistant could not complete this response.';
+            } catch {
+              streamError = 'The assistant could not complete this response.';
             }
             currentEventType = null;
             continue;
@@ -978,6 +989,8 @@ export function WidgetApp() {
         }
       }
 
+      if (streamError) throw new Error(streamError);
+
       const hasToolCalls = accumulatedToolCalls.some((tc) => tc?.function?.name);
       const parsedResult = !hasToolCalls && fullContent.trim()
         ? parseToolCallsFromContent(fullContent)
@@ -1020,8 +1033,12 @@ export function WidgetApp() {
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
-          // Empty turn: drop the streaming bubble rather than rendering a placeholder.
-          dropAssistantBubble();
+          // Never leave the user with no outcome; keep any MCP tool cards above the notice.
+          updateDisplayMessage(assistantMessageId, (message) => ({
+            ...message,
+            content: withServerTools(assistantDisplayMessage('The assistant returned an empty response. Please try again.').content),
+            status: 'complete',
+          }));
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
