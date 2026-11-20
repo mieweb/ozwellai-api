@@ -236,7 +236,7 @@ test('widget refuses overlapping sendMessageStreaming calls and defers the follo
   );
 });
 
-test('widget drops empty assistant turns instead of rendering "(no response)"', async () => {
+test('widget shows a visible notice for empty assistant turns instead of silently dropping them', async () => {
   const appSource = await readWidgetAppSource();
   const bundleSource = await readWidgetSource();
 
@@ -244,14 +244,28 @@ test('widget drops empty assistant turns instead of rendering "(no response)"', 
   assert.doesNotMatch(bundleSource, /\(no response\)/);
   assert.match(
     appSource,
-    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*dropAssistantBubble\(\);/
+    /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*updateDisplayMessage\(assistantMessageId,[\s\S]*?The assistant returned an empty response\. Please try again\./
   );
+  assert.doesNotMatch(appSource, /\} else if \(!trimmedContent\) \{\s*\/\/[^\n]*\n\s*dropAssistantBubble\(\);/);
   // The bubble is removed only when it has no MCP tool cards; otherwise the cards stay.
   assert.match(
     appSource,
     /const dropAssistantBubble = \(\) => \{[\s\S]*?if \(serverTools\.length\) \{\s*updateDisplayMessage\(id, \(message\) => \(\{ \.\.\.message, content: withServerTools\(\[\]\), status: 'complete' \}\)\);\s*\} else \{\s*setDisplayMessages\(\(current\) => current\.filter\(\(message\) => message\.id !== id\)\);/
   );
   assert.match(appSource, /Empty assistant turn[^']*Raw chunks:', rawChunks\)/);
+});
+
+test('widget surfaces SSE error events instead of ending the turn silently', async () => {
+  const appSource = await readWidgetAppSource();
+
+  assert.match(appSource, /if \(currentEventType === 'error'\) \{[\s\S]*?streamError = /);
+  assert.match(appSource, /if \(streamError\) throw new ChatStreamError\(streamError\);/);
+  assert.match(appSource, /warning\.type === 'response_truncated'/);
+  // Reports carry fixed categories only, never error text that could quote response bodies.
+  assert.match(appSource, /reportClientError\(\{ kind: 'chat', message: `Chat request failed: \$\{chatFailureCategory\(error\)\}` \}\);/);
+  assert.doesNotMatch(appSource, /reportClientError\([^)]*error\.message/);
+  // Server-side tool cards survive a failed turn.
+  assert.match(appSource, /filter\(\(block\) => block\.type === 'tool_use'\)/);
 });
 
 test('widget SSE parsing accepts vendor reasoning fields and tool_calls without an index', async () => {

@@ -9,6 +9,7 @@ import {
   type SuperChatConversation,
 } from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
+import { reportClientError } from './ErrorBoundary';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import { buildSystemPrompt, getAuthKey } from './system-prompt';
 import { createToolResultMessage } from './tool-results';
@@ -395,6 +396,19 @@ function systemDisplayMessage(content: string): WidgetMessage {
 }
 
 class AssistantUnavailableError extends Error {}
+class ChatHttpError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+class ChatStreamError extends Error {}
+
+// Fixed categories only: error messages can quote response bodies or streamed content.
+function chatFailureCategory(error: unknown) {
+  if (error instanceof AssistantUnavailableError) return 'assistant_unavailable';
+  if (error instanceof DOMException && error.name === 'TimeoutError') return 'timeout';
+  if (error instanceof ChatHttpError) return `http_${error.status}`;
+  if (error instanceof ChatStreamError) return 'stream_error';
+  return error instanceof Error ? `client_${error.name}` : 'unknown';
+}
 
 function chatRequestError(status: number, errorText: string) {
   try {
@@ -405,7 +419,7 @@ function chatRequestError(status: number, errorText: string) {
   } catch {
     // Keep the original response text for unknown non-JSON failures.
   }
-  return new Error(`Request failed with status ${status}: ${errorText}`);
+  return new ChatHttpError(status, `Request failed with status ${status}: ${errorText}`);
 }
 
 export function WidgetApp() {
@@ -548,12 +562,16 @@ export function WidgetApp() {
         if (controller.signal.aborted) return;
         if (response.status === 401 && resetUserCredential(authKey)) return;
         if (!response.ok) {
+          reportClientError({ kind: 'chat', message: `Effective model fetch failed (${response.status})` });
           setEffectiveModels([]);
           return;
         }
         const payload = await response.json();
         setEffectiveModels(normalizeEffectiveModels(payload));
       } catch (error) {
+        if (!controller.signal.aborted) {
+          reportClientError({ kind: 'chat', message: `Effective model fetch failed: ${chatFailureCategory(error)}` });
+        }
         if (!controller.signal.aborted && configRef.current.debug) {
           console.debug('[Ozwell] Effective model fetch failed', error);
         }
@@ -590,6 +608,7 @@ export function WidgetApp() {
         });
         if (controller.signal.aborted) return;
         if (response.status === 401 && resetUserCredential(sessionKey)) return;
+        if (!response.ok) reportClientError({ kind: 'chat', message: `Agent list fetch failed (${response.status})` });
         const list = response.ok ? normalizeAgents(await response.json()) : [];
         setAgents(list);
         setActiveAgentId((current) => (
@@ -597,6 +616,7 @@ export function WidgetApp() {
         ));
       } catch (error) {
         if (!controller.signal.aborted) {
+          reportClientError({ kind: 'chat', message: `Agent list fetch failed: ${chatFailureCategory(error)}` });
           if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
           setAgents([]);
           setActiveAgentId(null);
@@ -846,6 +866,7 @@ export function WidgetApp() {
 
       // Outlives a single read: an `event:` line and its `data:` line can arrive in different chunks.
       let currentEventType: string | null = null;
+      let streamError: string | null = null;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -874,11 +895,21 @@ export function WidgetApp() {
           if (currentEventType === 'warning') {
             try {
               const warning = JSON.parse(data);
-              if (warning.type === 'model_fallback' || warning.type === 'mock_response') {
+              if (warning.type === 'model_fallback' || warning.type === 'mock_response' || warning.type === 'response_truncated') {
                 showToast(warning.message);
               }
             } catch {
               // Ignore malformed warning events.
+            }
+            currentEventType = null;
+            continue;
+          }
+          if (currentEventType === 'error') {
+            try {
+              const message = JSON.parse(data)?.error?.message;
+              streamError = typeof message === 'string' && message ? message : 'The assistant could not complete this response.';
+            } catch {
+              streamError = 'The assistant could not complete this response.';
             }
             currentEventType = null;
             continue;
@@ -974,9 +1005,12 @@ export function WidgetApp() {
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
+            reportClientError({ kind: 'chat', message: 'Failed to parse stream chunk' });
           }
         }
       }
+
+      if (streamError) throw new ChatStreamError(streamError);
 
       const hasToolCalls = accumulatedToolCalls.some((tc) => tc?.function?.name);
       const parsedResult = !hasToolCalls && fullContent.trim()
@@ -1020,8 +1054,13 @@ export function WidgetApp() {
             updateDisplayMessage(assistantMessageId, () => assistantDisplayMessage(fallback));
           }
         } else if (!trimmedContent) {
-          // Empty turn: drop the streaming bubble rather than rendering a placeholder.
-          dropAssistantBubble();
+          // Never leave the user with no outcome; keep any MCP tool cards above the notice.
+          updateDisplayMessage(assistantMessageId, (message) => ({
+            ...message,
+            content: withServerTools(assistantDisplayMessage('The assistant returned an empty response. Please try again.').content),
+            status: 'complete',
+          }));
+          reportClientError({ kind: 'chat', message: 'Empty assistant turn (no content, thinking, or tool_calls)' });
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
@@ -1050,9 +1089,18 @@ export function WidgetApp() {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected error';
+      const message = error instanceof DOMException && error.name === 'TimeoutError'
+        ? 'The assistant took too long to respond. Please try again.'
+        : error instanceof Error ? error.message : 'Unexpected error';
+      reportClientError({ kind: 'chat', message: `Chat request failed: ${chatFailureCategory(error)}` });
       if (assistantMessageId) {
-        setDisplayMessages((current) => current.filter((item) => item.id !== assistantMessageId));
+        // Server-side tools may have already run; keep their cards and drop only the partial text.
+        const id = assistantMessageId;
+        setDisplayMessages((current) => current.flatMap((item) => {
+          if (item.id !== id) return [item];
+          const toolBlocks = (item.content ?? []).filter((block) => block.type === 'tool_use');
+          return toolBlocks.length ? [{ ...item, content: toolBlocks, status: 'complete' as const }] : [];
+        }));
       }
       appendDisplay(error instanceof AssistantUnavailableError
         ? assistantDisplayMessage(message)

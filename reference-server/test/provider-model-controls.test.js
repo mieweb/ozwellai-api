@@ -57,7 +57,7 @@ function stopServer(server, tmp) {
     try { rmSync(tmp, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
-async function startGateway(modelsByProvider = { openai: ['gpt-4o-mini', 'gpt-4o'] }) {
+async function startGateway(modelsByProvider = { openai: ['gpt-4o-mini', 'gpt-4o'] }, { truncated = false } = {}) {
     let chatCount = 0;
     let modelCount = 0;
     let lastBody = null;
@@ -91,13 +91,28 @@ async function startGateway(modelsByProvider = { openai: ['gpt-4o-mini', 'gpt-4o
             chatCount += 1;
             lastHeaders = req.headers;
             lastBody = JSON.parse(raw);
+            if (truncated && lastBody.stream) {
+                res.writeHead(200, { 'content-type': 'text/event-stream' });
+                const chunk = (delta, finish_reason = null) => ({ id: 'chatcmpl_trunc', object: 'chat.completion.chunk', created: 1, model: lastBody.model, choices: [{ index: 0, delta, finish_reason }] });
+                res.write(`data: ${JSON.stringify(chunk({ role: 'assistant' }))}\n\n`);
+                if (truncated === 'toolCall') {
+                    res.write(`data: ${JSON.stringify(chunk({ tool_calls: [{ index: 0, id: 'call_t', type: 'function', function: { name: 'set_form', arguments: '{"fields":[{"ty' } }] }))}\n\n`);
+                }
+                res.write(`data: ${JSON.stringify(chunk({}, 'length'))}\n\n`);
+                res.end('data: [DONE]\n\n');
+                return;
+            }
             res.writeHead(200, { 'content-type': 'application/json' });
             res.end(JSON.stringify({
                 id: 'chatcmpl_provider_test',
                 object: 'chat.completion',
                 created: 1,
                 model: lastBody.model,
-                choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+                choices: [truncated === 'toolCall'
+                    ? { index: 0, message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_t', type: 'function', function: { name: 'set_form', arguments: '{"fields":[{"ty' } }] }, finish_reason: 'length' }
+                    : truncated
+                    ? { index: 0, message: { role: 'assistant', content: '' }, finish_reason: 'length' }
+                    : { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
                 usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
             }));
         });
@@ -317,12 +332,42 @@ test('provider models — anthropic chat requests include default max_tokens', a
         assert.equal(response.status, 200);
         assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
         assert.equal(gateway.getLastBody().model, 'claude-sonnet-4-6');
-        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().max_tokens, 8192);
         assert.equal(gateway.getLastBody().temperature, undefined);
     } finally {
         stopServer(server, tmp);
         await gateway.close();
     }
+});
+
+test('provider models — gateway replies cut off with no output or mid tool call surface response_incomplete', async () => {
+  for (const truncated of ['empty', 'toolCall']) {
+    const gateway = await startGateway({ openai: ['gpt-4o-mini'] }, { truncated });
+    const { server, tmp, dbPath } = startServer({
+        extraEnv: { LLM_BASE_URL: gateway.baseURL, LLM_API_KEY: 'test-key', LLM_MODEL: 'gpt-4o-mini', ALLOW_MOCK: '' },
+    });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
+        await fetch(`${BASE}/v1/manager/models`, { headers: HEADERS });
+        const key = activeKey(dbPath);
+        const post = (body) => fetch(`${BASE}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.key}` },
+            body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hello' }], ...body }),
+        });
+
+        const nonStream = await post({});
+        assert.equal(nonStream.status, 502, truncated);
+        assert.equal((await nonStream.json()).error.code, 'response_incomplete');
+
+        const streamed = await (await post({ stream: true })).text();
+        assert.match(streamed, /event: error\ndata: [^\n]*"response_incomplete"/);
+    } finally {
+        stopServer(server, tmp);
+        await gateway.close();
+    }
+  }
 });
 
 test('provider models — anthropic agent temperature is not forwarded', async () => {
@@ -368,7 +413,7 @@ temperature: 0.7
         assert.equal(response.status, 200);
         assert.equal(gateway.getLastHeaders()['x-portkey-provider'], 'anthropic');
         assert.equal(gateway.getLastBody().model, 'claude-sonnet-5');
-        assert.equal(gateway.getLastBody().max_tokens, 1024);
+        assert.equal(gateway.getLastBody().max_tokens, 8192);
         assert.equal(gateway.getLastBody().temperature, undefined);
     } finally {
         stopServer(server, tmp);

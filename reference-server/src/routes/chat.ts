@@ -341,10 +341,17 @@ const MOCK_ENABLED = process.env.ALLOW_MOCK === 'true';
 // No output cap by default. LLM_MAX_TOKENS sets a server-wide ceiling; a client
 // that sends its own max_tokens always overrides this.
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
-const DEFAULT_ANTHROPIC_MAX_TOKENS = 1024;
+// Large enough for tool calls that carry whole documents (e.g. eSheet form JSON); 1024 truncated them.
+const DEFAULT_ANTHROPIC_MAX_TOKENS = 8192;
 // harness-core always sends an output cap; this is the direct-provider default when neither the
 // request nor LLM_MAX_TOKENS names one.
 const DEFAULT_DIRECT_MAX_TOKENS = 4096;
+const INCOMPLETE_MESSAGE = 'The response was cut off before it could finish (output token limit reached). Please try again or ask for a smaller change.';
+const EMPTY_RESPONSE_MESSAGE = 'The model returned an empty response. Please try again.';
+const truncatedWarning = { type: 'response_truncated', message: 'This response was cut off at the output token limit and may be incomplete.' };
+class IncompleteResponseError extends Error {
+  constructor(readonly usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }) { super(INCOMPLETE_MESSAGE); }
+}
 
 function providerTokenParams(provider: string, model: string, requestedMaxTokens?: number): Record<string, number> {
   const effectiveMaxTokens = requestedMaxTokens
@@ -1037,6 +1044,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const result = await session.call(call.function.name, call.function.arguments);
             let error: string | undefined;
             try { error = (JSON.parse(result) as { error?: string })?.error; } catch { /* plain-text result */ }
+            if (error) request.log.warn({ server, tool, error }, 'MCP tool call failed');
             sse?.writeEvent('tool_status', { id: call.id, status: error ? 'error' : 'success', duration: Date.now() - startedAt, ...(error && { error }) });
             const toolTurn = { role: 'tool', tool_call_id: call.id, content: result } as NonNullableMessage;
             loopMessages.push(toolTurn);
@@ -1057,9 +1065,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           if (choice.finish_reason === 'tool_calls') choice.finish_reason = 'stop';
         }
         if (!msg.content && !msg.tool_calls && toolHistory.length) {
+          request.log.warn({ model: activeModel, iterations: MCP_MAX_TOOL_ITERATIONS }, 'MCP tool loop hit the iteration cap without a final answer');
           // The model hit the iteration cap still asking for MCP tools; don't end with an empty turn.
           msg.content = 'I ran out of tool calls before finishing. Ask me to continue and I will pick up from these results.';
         }
+        if (!msg.content && !msg.tool_calls) throw new Error(EMPTY_RESPONSE_MESSAGE);
 
         recordUsage(activeModel, 200, { usage }, provider);
         const fallbackWarning = warning as ReturnType<typeof buildFallbackWarning> | null;
@@ -1075,14 +1085,22 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         return;
       } catch (err) {
         request.log.error({ err, backend, provider, model: activeModel }, 'LLM request failed during MCP tool loop');
+        if (err instanceof IncompleteResponseError) {
+          usage.prompt_tokens += err.usage?.prompt_tokens ?? 0;
+          usage.completion_tokens += err.usage?.completion_tokens ?? 0;
+          usage.total_tokens += err.usage?.total_tokens ?? 0;
+        }
         recordUsage(activeModel, 502, { usage }, provider);
+        const incomplete = err instanceof IncompleteResponseError;
+        const known = incomplete || (err instanceof Error && err.message === EMPTY_RESPONSE_MESSAGE) ? (err as Error).message : null;
+        const code = incomplete ? 'response_incomplete' : undefined;
         if (sse) {
-          sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
+          sse.writeEvent('error', { error: { message: known ?? 'Upstream provider request failed', type: 'server_error', ...(code && { code }) } });
           sse.end();
           return;
         }
         reply.code(502);
-        return createError('Upstream provider request failed', 'server_error');
+        return createError(known ?? 'Upstream provider request failed', 'server_error', null, code);
       } finally {
         await session.close();
       }
@@ -1154,6 +1172,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
             if (extracted && extracted.length > 0) msg.tool_calls = extracted;
           }
+          if (collected.status === 'incomplete') {
+            request.log.warn({ provider, model: m, reason: collected.reason, hasText: Boolean(msg.content), toolCalls: Boolean(msg.tool_calls) }, 'Provider response incomplete in MCP tool loop');
+            if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new IncompleteResponseError(response.usage);
+          }
           return response;
         });
       }
@@ -1196,6 +1218,17 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 choices: [{ index: 0, delta: { tool_calls: extracted.map((tc, idx) => ({ index: idx, ...tc })) }, finish_reason: null }],
               });
             }
+          }
+          // Output limit hit before any usable text or complete tool call: nothing for the client to show.
+          // A cut-off tool call may carry truncated arguments, so it must not run.
+          if (terminal.status === 'incomplete' && (translator.toolCallCount > 0 || (!hasToolCalls && !translator.text.trim()))) {
+            request.log.warn({ provider, model: m, reason: terminal.reason, usage }, 'Provider stream incomplete with no usable output');
+            sse.writeEvent('error', { error: { message: INCOMPLETE_MESSAGE, type: 'server_error', code: 'response_incomplete' } });
+            return { usage, statusCode: 502 };
+          }
+          if (terminal.status === 'incomplete') {
+            request.log.warn({ provider, model: m, reason: terminal.reason, usage }, 'Provider stream incomplete; partial output sent');
+            sse.writeEvent('warning', truncatedWarning);
           }
           for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
           // Shape only, never content, so client render failures can be correlated with what was sent.
@@ -1257,6 +1290,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             response.choices[0].finish_reason = 'tool_calls';
           }
         }
+        if (collected.status === 'incomplete') {
+          request.log.warn({ provider, model: m, reason: collected.reason, hasText: Boolean(msg.content), toolCalls: Boolean(msg.tool_calls) }, 'Provider response incomplete');
+          if (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim())) throw new IncompleteResponseError(response.usage);
+        }
         return response;
       };
 
@@ -1265,6 +1302,11 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         recordUsage(model, 200, response, provider);
         return response;
       } catch (error: unknown) {
+        if (error instanceof IncompleteResponseError) {
+          recordUsage(model, 502, { usage: error.usage }, provider);
+          reply.code(502);
+          return createError(INCOMPLETE_MESSAGE, 'server_error', null, 'response_incomplete');
+        }
         request.log.error({ err: error, backend, provider, model }, 'Direct LLM request failed');
         if (canRetryWithFallback(error, model)) {
           request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
@@ -1298,6 +1340,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           if (!msg.tool_calls && typeof msg.content === 'string') {
             const extracted = tryExtractToolCallsFromContent(msg.content, loopTools);
             if (extracted && extracted.length > 0) msg.tool_calls = extracted;
+          }
+          // A cut-off tool call may carry truncated arguments, so it must not run.
+          if (response.choices[0].finish_reason === 'length' && (msg.tool_calls || !(typeof msg.content === 'string' && msg.content.trim()))) {
+            throw new IncompleteResponseError(response.usage);
           }
           return response;
         });
@@ -1365,6 +1411,9 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             // Buffer for partial <think> tags that span multiple chunks
             const thinkBuffer = { partial: '' };
             let latestUsage: TokenUsage | undefined;
+            let sawOutput = false;
+            let sawToolCalls = false;
+            let lastFinish: string | undefined;
 
             for await (const chunk of streamResponse) {
               latestUsage = (chunk as unknown as { usage?: TokenUsage }).usage || latestUsage;
@@ -1375,6 +1424,10 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 const normalized = normalizeChunkThinking(chunk as unknown as Record<string, unknown>, thinkBuffer);
                 const choice = (normalized.choices as Array<Record<string, unknown>>)?.[0];
                 const delta = choice?.delta as Record<string, unknown> | undefined;
+                // Thinking-only turns are left to the widget's thinking-retry handling.
+                if (delta?.content || delta?.tool_calls || delta?.thinking) sawOutput = true;
+                if (delta?.tool_calls) sawToolCalls = true;
+                if (typeof choice?.finish_reason === 'string') lastFinish = choice.finish_reason;
 
                 // Initialize buffer
                 if (!buffers[id]) buffers[id] = '';
@@ -1416,12 +1469,24 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   delete buffers[id];
                 }
               } catch (err) {
+                request.log.warn({ err, provider, model }, 'Failed to normalize gateway stream chunk; forwarding raw');
                 // If anything goes wrong, still forward the chunk to the client
                 reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
               }
             }
 
-            recordUsage(model, 200, latestUsage ? { usage: latestUsage } : undefined, provider);
+            request.log.info({ provider, model, finishReason: lastFinish, hasOutput: sawOutput, toolCalls: sawToolCalls, usage: latestUsage }, 'Gateway LLM stream completed');
+            // A cut-off tool call may carry truncated arguments, so it must not run.
+            const unusable = !sawOutput || (lastFinish === 'length' && sawToolCalls);
+            if (unusable) {
+              const truncated = lastFinish === 'length';
+              request.log.warn({ provider, model, finishReason: lastFinish, toolCalls: sawToolCalls }, 'Gateway stream produced no usable output');
+              reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: { message: truncated ? INCOMPLETE_MESSAGE : EMPTY_RESPONSE_MESSAGE, type: 'server_error', ...(truncated && { code: 'response_incomplete' }) } })}\n\n`);
+            } else if (lastFinish === 'length') {
+              request.log.warn({ provider, model }, 'Gateway stream truncated at output limit; partial output sent');
+              reply.raw.write(`event: warning\ndata: ${JSON.stringify(truncatedWarning)}\n\n`);
+            }
+            recordUsage(model, unusable ? 502 : 200, latestUsage ? { usage: latestUsage } : undefined, provider);
             reply.raw.write('data: [DONE]\n\n');
             reply.raw.end();
 
@@ -1443,6 +1508,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             }
 
             // Model not found → retry with fallback model
+            let recovered = false;
             if (isModelNotFoundError(streamError) && fallbackRetryModel && model !== fallbackRetryModel && llmConfigured) {
               request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
               const warning = buildFallbackWarning(model, fallbackRetryModel);
@@ -1467,9 +1533,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                   reply.raw.write(`data: ${JSON.stringify(normalized)}\n\n`);
                 }
                 recordUsage(fallbackRetryModel, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined, provider);
+                recovered = true;
               } catch (retryError) {
                 request.log.error({ err: retryError, provider, fallbackModel: fallbackRetryModel }, 'Fallback model also failed');
               }
+            }
+
+            if (!recovered) {
+              recordUsage(model, 502, undefined, provider);
+              reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: { message: 'Upstream provider request failed', type: 'server_error' } })}\n\n`);
             }
 
             // Headers already sent, just end the stream
@@ -1506,7 +1578,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               }
             }
           } catch (e) {
-            // No-op: parsing fallback should not break the response
+            request.log.warn({ err: e, provider, model }, 'Failed to normalize gateway response');
+          }
+          const first = response?.choices?.[0];
+          const firstMsg = first?.message as ChatMessage | undefined;
+          if (first?.finish_reason === 'length' && (firstMsg?.tool_calls || !(typeof firstMsg?.content === 'string' && firstMsg.content.trim()))) {
+            request.log.warn({ provider, model }, 'Gateway response truncated with no usable output');
+            recordUsage(model, 502, response, provider);
+            reply.code(502);
+            return createError(INCOMPLETE_MESSAGE, 'server_error', null, 'response_incomplete');
           }
           recordUsage(model, 200, response, provider);
           return response;
