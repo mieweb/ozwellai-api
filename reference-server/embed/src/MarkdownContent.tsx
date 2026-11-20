@@ -1,6 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
+import { reportClientError } from './ErrorBoundary';
 
 interface MarkdownContentProps {
   text: string;
@@ -35,11 +36,24 @@ export function MarkdownContent({ text, cacheKey, streaming = false }: MarkdownC
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const html = useMemo(() => {
-    const raw = marked.parse(text || '', { async: false }) as string;
-    const withCodeControls = enhanceCodeBlocks(raw);
-    return DOMPurify.sanitize(withCodeControls, {
-      ADD_ATTR: ['data-copy-code'],
-    });
+    const source = typeof text === 'string' ? text : String(text ?? '');
+    try {
+      const raw = marked.parse(source, { async: false }) as string;
+      const withCodeControls = enhanceCodeBlocks(raw);
+      return DOMPurify.sanitize(withCodeControls, {
+        ADD_ATTR: ['data-copy-code'],
+      });
+    } catch (error) {
+      // Partial streamed markdown can trip the parser; show plain text rather than losing the conversation.
+      reportClientError({
+        kind: 'render',
+        message: `Markdown render failed: ${error instanceof Error ? error.message : String(error)}`,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      const escaped = document.createElement('div');
+      escaped.textContent = source;
+      return escaped.innerHTML.replace(/\n/g, '<br>');
+    }
   }, [text, cacheKey, streaming]);
 
   const handleCopy = async (event: MouseEvent<HTMLDivElement>) => {

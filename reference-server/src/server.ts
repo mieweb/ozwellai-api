@@ -16,6 +16,7 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
+import clientErrorsRoute from './routes/client-errors';
 import authRoute from './routes/auth';
 import desktopAuthRoute from './routes/desktop-auth';
 import apiKeyIdentityRoute from './routes/api-key-identity';
@@ -61,7 +62,11 @@ function getCommitHash(): string {
 }
 
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== 'production',
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    timestamp: () => `,"time":"${new Date().toISOString()}"`,
+    formatters: { level: (label: string) => ({ level: label }) },
+  },
   bodyLimit: getBodyLimitBytes(),
   trustProxy: process.env.TRUSTED_PROXY_CIDRS?.split(',').map(value => value.trim()).filter(Boolean) || false,
 });
@@ -213,7 +218,7 @@ async function buildServer() {
   });
 
   // Health check endpoint
-  fastify.get('/health', async (_request, _reply) => {
+  fastify.get('/health', { logLevel: 'warn' }, async (_request, _reply) => {
     return { status: 'ok', timestamp: new Date().toISOString(), commit: commitHash };
   });
 
@@ -245,6 +250,7 @@ async function buildServer() {
   await fastify.register(filesRoute);
   await fastify.register(agentsRoute);  // Agent registration CRUD
   await fastify.register(audioRoute);   // Audio transcription
+  await fastify.register(clientErrorsRoute);
 
   // Expose only the widget runtime files under the API origin.
   await fastify.register(fastifyStatic, {
@@ -252,27 +258,30 @@ async function buildServer() {
     serve: false,
   });
 
-  fastify.get('/auth/desktop/login.js', async (_request, reply) => {
+  // Static widget assets are requested on every page load; only log their failures.
+  const quiet = { logLevel: 'warn' as const };
+
+  fastify.get('/auth/desktop/login.js', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('desktop-login.js');
   });
 
-  fastify.get('/widget', async (_request, reply) => {
+  fastify.get('/widget', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell-loader.js');
   });
 
-  fastify.get('/widget/ozwell.js', async (_request, reply) => {
+  fastify.get('/widget/ozwell.js', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
   });
 
-  fastify.get('/widget/ozwell-icon.png', async (_request, reply) => {
+  fastify.get('/widget/ozwell-icon.png', quiet, async (_request, reply) => {
     return reply.type('image/png').sendFile('ozwell-icon.png');
   });
 
-  fastify.get('/widget/frame/', async (_request, reply) => {
+  fastify.get('/widget/frame/', quiet, async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').sendFile('frame/index.html');
   });
 
-  fastify.get('/embed/ozwell-loader.js', async (_request, reply) => {
+  fastify.get('/embed/ozwell-loader.js', quiet, async (_request, reply) => {
     return reply.redirect('/widget');
   });
 
@@ -297,7 +306,7 @@ async function buildServer() {
 
   // Error handler
   fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
+    request.log.error({ err: error, method: request.method, url: request.url }, 'Unhandled route error');
 
     // Handle validation errors
     if (error.validation) {
@@ -327,6 +336,14 @@ async function buildServer() {
 
 // Start server if this file is executed directly
 if (require.main === module) {
+  process.on('unhandledRejection', (reason) => {
+    fastify.log.error({ err: reason }, 'Unhandled promise rejection');
+  });
+  process.on('uncaughtException', (err) => {
+    fastify.log.fatal({ err }, 'Uncaught exception; exiting');
+    process.exit(1);
+  });
+
   const start = async () => {
     try {
       const server = await buildServer();

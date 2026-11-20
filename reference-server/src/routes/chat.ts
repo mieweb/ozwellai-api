@@ -1196,6 +1196,15 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             }
           }
           for (const ccChunk of translator.finish(hasToolCalls)) sse.writeData(ccChunk);
+          // Shape only, never content, so client render failures can be correlated with what was sent.
+          request.log.info({
+            provider,
+            model: m,
+            status: terminal.status,
+            textChars: translator.text.length,
+            toolCalls: hasToolCalls,
+            usage,
+          }, 'Direct LLM stream completed');
           return { usage, statusCode: 200 };
         };
 
