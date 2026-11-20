@@ -272,6 +272,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
         deleted: true,
       };
     } catch (error) {
+      request.log.error({ err: error, file_id }, 'File deletion failed');
       reply.code(500);
       return createError('File deletion failed', 'server_error');
     }

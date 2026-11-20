@@ -523,6 +523,7 @@ function respondMockOrError(
   }
 
   if (!MOCK_ENABLED) {
+    reply.log.warn({ reason, model }, 'No LLM backend available and mock responses disabled');
     reply.code(503);
     return createError(
       `No LLM response available (${reason}) and mock responses are disabled. Set ALLOW_MOCK=true to return deterministic mock responses.`,
@@ -1090,6 +1091,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
     // --- Direct providers via harness-core ---
     if (backend === 'direct') {
       if (!isDirectProviderConfigured(provider)) {
+        request.log.warn({ provider, model }, 'Requested provider is not configured');
         reply.code(503);
         return createError(`Provider '${provider}' is not configured on this server.`, 'server_error', 'provider', 'provider_not_configured');
       }

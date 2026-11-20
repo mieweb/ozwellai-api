@@ -175,6 +175,7 @@ const audioRoute: FastifyPluginAsync = async (fastify) => {
 
       if (!upstreamResp.ok) {
         const errBody = await upstreamResp.text();
+        request.log.warn({ status: upstreamResp.status, model }, 'Upstream transcription request rejected');
         reply.code(upstreamResp.status);
         try {
           return JSON.parse(errBody);
