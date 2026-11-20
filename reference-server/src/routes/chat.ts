@@ -660,7 +660,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         const p = yaml.parse(agent.yaml);
         if (p && typeof p === 'object') parsed = p as Record<string, unknown>;
       } catch (err) {
-        request.log.warn({ err, agentId: agent.id }, 'Failed to parse agent YAML');
+        request.log.warn({ err, agentId: agent.id }, 'Agent YAML is invalid; using an empty agent config');
       }
 
       // Use agent instructions as the system prompt
@@ -690,7 +690,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       try {
         mcpServers = parseMcpServers(parsed.mcp_servers);
       } catch (err) {
-        request.log.warn({ agentId: agent.id, reason: err instanceof Error ? err.message : 'invalid' }, 'Ignoring invalid mcp_servers');
+        request.log.warn({ agentId: agent.id, reason: err instanceof Error ? err.message : 'invalid' }, 'Agent mcp_servers config is invalid; MCP tools disabled for this request');
       }
       agentConfig = {
         systemPrompt,
@@ -945,7 +945,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       const session = await openMcpSession(
         agentConfig.mcpServers,
         agentStore.getAgentSecrets(usageContext.agentId),
-        (err) => request.log.warn({ agentId: usageContext?.agentId, server: err.server }, err.message),
+        (err) => request.log.warn({ agentId: usageContext?.agentId, server: err.server, reason: err.message }, 'MCP server error; its tools are skipped'),
       );
       if (session.tools.length > 0) return session;
       await session.close();
@@ -976,7 +976,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
       // Tokens already spent still count toward quota, and ending the stream stops the heartbeat.
       const stopIfDisconnected = () => {
         if (!disconnected) return false;
-        request.log.info('Client disconnected during MCP tool loop; stopping');
+        request.log.info({ model: activeModel }, 'Client disconnected during MCP tool loop; stopping');
         recordUsage(activeModel, 499, { usage }, provider);
         try { sse?.end(); } catch { /* socket already closed */ }
         return true;
@@ -1074,7 +1074,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         sse.end();
         return;
       } catch (err) {
-        request.log.error({ err, backend, provider }, 'LLM request failed during MCP tool loop');
+        request.log.error({ err, backend, provider, model: activeModel }, 'LLM request failed during MCP tool loop');
         recordUsage(activeModel, 502, { usage }, provider);
         if (sse) {
           sse.writeEvent('error', { error: { message: 'Upstream provider request failed', type: 'server_error' } });
@@ -1222,7 +1222,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
           const result = await streamOnce(model);
           recordUsage(model, result.statusCode, result, provider);
         } catch (streamError: unknown) {
-          request.log.error({ err: streamError, backend, provider }, 'Direct LLM streaming failed');
+          request.log.error({ err: streamError, backend, provider, model }, 'Direct LLM streaming failed');
           if (canRetryWithFallback(streamError, model)) {
             request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
             sse.writeEvent('warning', buildFallbackWarning(model, fallbackRetryModel!));
@@ -1230,7 +1230,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               const result = await streamOnce(fallbackRetryModel!);
               recordUsage(fallbackRetryModel!, result.statusCode, result, provider);
             } catch (retryError) {
-              request.log.error({ err: retryError }, 'Fallback model also failed');
+              request.log.error({ err: retryError, provider, fallbackModel: fallbackRetryModel }, 'Fallback model also failed');
               failStream(fallbackRetryModel!, retryError);
             }
           } else {
@@ -1265,7 +1265,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         recordUsage(model, 200, response, provider);
         return response;
       } catch (error: unknown) {
-        request.log.error({ err: error, backend, provider }, 'Direct LLM request failed');
+        request.log.error({ err: error, backend, provider, model }, 'Direct LLM request failed');
         if (canRetryWithFallback(error, model)) {
           request.log.info({ originalModel: model, fallbackModel: fallbackRetryModel }, 'Model not found, retrying with fallback');
           try {
@@ -1273,7 +1273,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             recordUsage(fallbackRetryModel!, 200, retryResponse, provider);
             return { ...retryResponse, warning: buildFallbackWarning(model, fallbackRetryModel!) };
           } catch (retryError) {
-            request.log.error({ err: retryError }, 'Fallback model also failed');
+            request.log.error({ err: retryError, provider, fallbackModel: fallbackRetryModel }, 'Fallback model also failed');
           }
         }
       }
@@ -1434,7 +1434,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             return;
           } catch (streamError: unknown) {
             const errToLog = streamError instanceof Error ? streamError : new Error(String(streamError));
-            request.log.error({ err: errToLog, backend }, 'LLM streaming failed after headers sent');
+            request.log.error({ err: errToLog, backend, provider, model }, 'LLM streaming failed after response started');
 
             // Clear heartbeat interval
             if (heartbeatInterval) {
@@ -1468,7 +1468,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
                 }
                 recordUsage(fallbackRetryModel, 200, retryLatestUsage ? { usage: retryLatestUsage } : undefined, provider);
               } catch (retryError) {
-                request.log.error({ err: retryError }, 'Fallback model also failed');
+                request.log.error({ err: retryError, provider, fallbackModel: fallbackRetryModel }, 'Fallback model also failed');
               }
             }
 
@@ -1513,7 +1513,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
         }
       } catch (error: unknown) {
         const errToLog = error instanceof Error ? error : new Error(String(error));
-        request.log.error({ err: errToLog, backend }, 'LLM request failed, falling back to local generator');
+        request.log.error({ err: errToLog, backend, provider, model }, 'LLM request failed');
         // Only fall through if headers haven't been sent yet
         if (reply.raw.headersSent) {
           return;
@@ -1553,7 +1553,7 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
               warning: buildFallbackWarning(model, fallbackRetryModel),
             };
           } catch (retryError) {
-            request.log.error({ err: retryError }, 'Fallback model also failed');
+            request.log.error({ err: retryError, provider, fallbackModel: fallbackRetryModel }, 'Fallback model also failed');
           }
         }
       }

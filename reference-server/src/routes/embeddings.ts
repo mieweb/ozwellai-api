@@ -202,7 +202,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
         recordUsage(200, response, LLM_PROVIDER || null);
         return response;
       } catch (err) {
-        request.log.error({ err }, 'LLM embeddings backend request failed');
+        request.log.error({ err, model }, 'LLM embeddings backend request failed');
         reply.code(502);
         return createError(
           `Embeddings backend request failed: ${err instanceof Error ? err.message : 'unknown error'}`,
@@ -233,7 +233,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
         recordUsage(200, response, 'ollama');
         return response;
       } catch (err) {
-        request.log.error({ err }, 'Ollama embeddings backend request failed');
+        request.log.error({ err, model }, 'Ollama embeddings backend request failed');
         reply.code(502);
         return createError(
           `Embeddings backend request failed: ${err instanceof Error ? err.message : 'unknown error'}`,

@@ -27,6 +27,7 @@ import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from '
 import { sweepExpiredSessionState } from './storage/sessions';
 import { desktopAttestation } from './storage/desktop-attestation';
 import { installDesktopSessionAuthorization } from './util/desktop-session-auth';
+import { redactUrl } from './util/log-redaction';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -66,6 +67,15 @@ const fastify = Fastify({
     level: process.env.LOG_LEVEL || 'info',
     timestamp: () => `,"time":"${new Date().toISOString()}"`,
     formatters: { level: (label: string) => ({ level: label }) },
+    serializers: {
+      req: (req: { method: string; url: string; hostname?: string; ip?: string; socket?: { remotePort?: number } }) => ({
+        method: req.method,
+        url: redactUrl(req.url),
+        hostname: req.hostname,
+        remoteAddress: req.ip,
+        remotePort: req.socket?.remotePort,
+      }),
+    },
   },
   bodyLimit: getBodyLimitBytes(),
   trustProxy: process.env.TRUSTED_PROXY_CIDRS?.split(',').map(value => value.trim()).filter(Boolean) || false,
@@ -122,6 +132,48 @@ function scheduleSessionSweep(server: FastifyInstance) {
 
 async function buildServer() {
   const rootDir = path.resolve(process.cwd());
+
+  // Must be set before any register() call: route plugins capture the handler when they are registered.
+  fastify.setErrorHandler((error, request, reply) => {
+    const statusCode = typeof error.statusCode === 'number' && error.statusCode >= 400 && error.statusCode < 500
+      ? error.statusCode
+      : error.validation ? 400 : 500;
+    const logDetails = { err: error, statusCode, method: request.method, url: redactUrl(request.url) };
+    if (statusCode >= 500) request.log.error(logDetails, 'Unhandled route error');
+    else request.log.warn(logDetails, 'Request rejected');
+
+    if (error.validation) {
+      return reply.code(400).send({
+        error: {
+          message: 'Invalid request body',
+          type: 'invalid_request_error',
+          param: error.validation[0]?.schemaPath || null,
+          code: null,
+        },
+      });
+    }
+
+    // Client errors raised by Fastify itself (e.g. 413 body too large) keep their status.
+    if (statusCode < 500) {
+      return reply.code(statusCode).send({
+        error: {
+          message: error.message,
+          type: 'invalid_request_error',
+          param: null,
+          code: error.code ?? null,
+        },
+      });
+    }
+
+    reply.code(500).send({
+      error: {
+        message: 'Internal server error',
+        type: 'server_error',
+        param: null,
+        code: null,
+      },
+    });
+  });
 
   // Register CORS
   await fastify.register(cors, {
@@ -304,40 +356,15 @@ async function buildServer() {
     });
   });
 
-  // Error handler
-  fastify.setErrorHandler((error, request, reply) => {
-    request.log.error({ err: error, method: request.method, url: request.url }, 'Unhandled route error');
-
-    // Handle validation errors
-    if (error.validation) {
-      return reply.code(400).send({
-        error: {
-          message: 'Invalid request body',
-          type: 'invalid_request_error',
-          param: error.validation[0]?.schemaPath || null,
-          code: null,
-        },
-      });
-    }
-
-    // Default error response
-    reply.code(500).send({
-      error: {
-        message: 'Internal server error',
-        type: 'server_error',
-        param: null,
-        code: null,
-      },
-    });
-  });
-
   return fastify;
 }
 
 // Start server if this file is executed directly
 if (require.main === module) {
+  // Exit so the process supervisor (pm2) restarts a server left in an unknown state.
   process.on('unhandledRejection', (reason) => {
-    fastify.log.error({ err: reason }, 'Unhandled promise rejection');
+    fastify.log.fatal({ err: reason }, 'Unhandled promise rejection; exiting');
+    process.exit(1);
   });
   process.on('uncaughtException', (err) => {
     fastify.log.fatal({ err }, 'Uncaught exception; exiting');

@@ -78,7 +78,7 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
       }
       idToken = payload.id_token;
     } catch (err) {
-      request.log.warn({ err }, 'Google token exchange threw');
+      request.log.warn({ err }, 'Google token exchange request could not be sent');
       return popupResultPage({ error: 'token_exchange_failed' });
     }
 
@@ -118,7 +118,7 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
       return popupResultPage({ error: 'account_not_permitted' });
     }
 
-    request.log.info({ email }, 'widget Google sign-in');
+    request.log.info({ email }, 'Widget Google sign-in succeeded');
     return popupResultPage({ session_token: sessionToken, email });
   });
 }

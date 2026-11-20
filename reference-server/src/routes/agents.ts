@@ -601,7 +601,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             }
             return toAgentView(agent);
         } catch (error) {
-            request.log.error({ err: error }, 'Failed to retrieve agent');
+            request.log.error({ err: error, agentId: agent_id }, 'Failed to retrieve agent');
             reply.code(500);
             return createError('Failed to retrieve agent', 'server_error');
         }
@@ -645,7 +645,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
 
             return { ...toAgentView(updated), updated: true };
         } catch (error) {
-            request.log.error({ err: error }, 'Agent update failed');
+            request.log.error({ err: error, agentId: agent_id }, 'Agent update failed');
             reply.code(500);
             return createError('Agent update failed', 'server_error');
         }
@@ -662,7 +662,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'agent_key revealed');
+        request.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'Agent key revealed');
         return {
             agent_id: agent.id,
             agent_key: agent.agent_key,
@@ -682,7 +682,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
         }
 
         reply.header('Cache-Control', 'no-store');
-        fastify.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'agent_key rotated');
+        request.log.info({ agentId: agent_id, parentKeyId: parentKey }, 'Agent key rotated');
         return {
             agent_id: updated.id,
             agent_key: newKey,
@@ -705,7 +705,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             reply.code(200);
             return { id: agent_id, deleted: true };
         } catch (error) {
-            request.log.error({ err: error }, 'Agent deletion failed');
+            request.log.error({ err: error, agentId: agent_id }, 'Agent deletion failed');
             reply.code(500);
             return createError('Agent deletion failed', 'server_error');
         }
@@ -1379,7 +1379,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
                 tools: normalizeTools(parsed.tools),
             };
         } catch (error) {
-            fastify.log.error({ err: error, agentId: agent.id }, 'agent yaml parse failed');
+            request.log.error({ err: error, agentId: agent.id }, 'Failed to parse stored agent YAML');
             reply.code(500);
             return createError('Failed to parse agent', 'server_error');
         }
@@ -1575,7 +1575,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             return { object: 'list', server: server.name, data: tools };
         } catch (err) {
             if (!(err instanceof McpError)) throw err;
-            request.log.warn({ server: server.name }, err.message);
+            request.log.warn({ server: server.name, reason: err.message }, 'MCP tool discovery failed');
             reply.code(502);
             return createError(err.message, 'mcp_error', 'server', 'mcp_discovery_failed');
         }

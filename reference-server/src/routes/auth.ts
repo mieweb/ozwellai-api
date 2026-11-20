@@ -56,17 +56,17 @@ export default async function authRoute(fastify: FastifyInstance) {
       try {
         await sendOtpEmail(normalized, code);
       } catch (err) {
-        request.log.error({ err, email }, 'sign-in code delivery failed');
+        request.log.error({ err, email }, 'Sign-in code email delivery failed');
         reply.code(502);
         return createError('Could not send the sign-in code. Try again shortly.', 'server_error');
       }
       // Deliberately not logged: once mail works, a logged code would let
       // anyone with log access sign in as the user who requested it.
-      request.log.info({ email }, 'widget OTP sent');
+      request.log.info({ email }, 'Widget sign-in code emailed');
     } else {
       // No sender configured — the log is the delivery mechanism, which is how
       // local development works.
-      request.log.info({ email, code }, 'widget OTP issued (no mail sender configured)');
+      request.log.info({ email, code }, 'Widget sign-in code issued (no mail sender configured; code logged for local dev)');
     }
 
     const body: Record<string, string> = { challenge_id: challengeId };
