@@ -5,6 +5,11 @@ import { getAnthropicClient, getOpenAIClient } from '../llm/providers';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
 
+type DiscoveryWarn = (details: Record<string, unknown>, msg: string) => void;
+const noWarn: DiscoveryWarn = () => {};
+
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
 function uniqueProviders(providers: Array<string | undefined>) {
   return Array.from(new Set(providers.map(provider => provider?.trim()).filter(Boolean))) as string[];
 }
@@ -32,7 +37,7 @@ function toModelRecord(id: string, source: string, provider = providerFromModelI
   };
 }
 
-async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
+async function discoverGatewayModels(warn: DiscoveryWarn): Promise<ProviderModelRecord[]> {
   // Direct provider keys supersede the gateway for chat, so its catalog would only advertise
   // models no request can reach.
   if (!isLLMBackendConfigured() || (directProviderKeysPresent() && process.env.LLM_TRANSPORT !== 'gateway')) return [];
@@ -48,7 +53,10 @@ async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
           'x-portkey-provider': provider,
         },
       });
-      if (!resp.ok) continue;
+      if (!resp.ok) {
+        warn({ source: 'gateway', provider, status: resp.status }, 'Model discovery request rejected');
+        continue;
+      }
 
       const payload = await resp.json() as { data?: Array<{ id?: string }> };
       const models = Array.isArray(payload.data) ? payload.data : [];
@@ -56,8 +64,9 @@ async function discoverGatewayModels(): Promise<ProviderModelRecord[]> {
         if (typeof model.id !== 'string' || !model.id) continue;
         records.push(toModelRecord(model.id, 'gateway', provider));
       }
-    } catch {
+    } catch (err) {
       // A single provider discovery failure should not block other providers.
+      warn({ source: 'gateway', provider, error: errorMessage(err) }, 'Model discovery failed');
     }
   }
 
@@ -69,7 +78,7 @@ function directProviderKeysPresent() {
 }
 
 // Native catalogs from providers configured with keys. Ollama has its own discovery below.
-async function discoverDirectProviderModels(): Promise<ProviderModelRecord[]> {
+async function discoverDirectProviderModels(warn: DiscoveryWarn): Promise<ProviderModelRecord[]> {
   // Under a forced gateway these models would be advertised but dispatched to a gateway
   // that may not serve them.
   if (process.env.LLM_TRANSPORT === 'gateway' && isLLMBackendConfigured()) return [];
@@ -81,8 +90,9 @@ async function discoverDirectProviderModels(): Promise<ProviderModelRecord[]> {
       for await (const model of openai.models.list()) {
         if (model?.id) records.push(toModelRecord(model.id, 'openai', 'openai'));
       }
-    } catch {
+    } catch (err) {
       // One provider's discovery failure should not block the others.
+      warn({ source: 'direct', provider: 'openai', error: errorMessage(err) }, 'Model discovery failed');
     }
   }
 
@@ -92,15 +102,15 @@ async function discoverDirectProviderModels(): Promise<ProviderModelRecord[]> {
       for await (const model of anthropic.models.list({ limit: 1000 })) {
         if (model?.id) records.push(toModelRecord(model.id, 'anthropic', 'anthropic'));
       }
-    } catch {
-      // See above.
+    } catch (err) {
+      warn({ source: 'direct', provider: 'anthropic', error: errorMessage(err) }, 'Model discovery failed');
     }
   }
 
   return records;
 }
 
-async function discoverDirectOllamaModels(): Promise<ProviderModelRecord[]> {
+async function discoverDirectOllamaModels(warn: DiscoveryWarn): Promise<ProviderModelRecord[]> {
   // Same resolution as chat/embeddings: if those will route to Ollama, discovery
   // has to register its models, or a bare request resolves a model the registry
   // has never heard of and 400s with provider_required.
@@ -108,12 +118,16 @@ async function discoverDirectOllamaModels(): Promise<ProviderModelRecord[]> {
   if (!baseUrl) return [];
   try {
     const resp = await fetch(`${baseUrl}/api/tags`);
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      warn({ source: 'ollama', provider: 'ollama', status: resp.status }, 'Model discovery request rejected');
+      return [];
+    }
     const data = await resp.json() as { models?: { name?: string }[] };
     return (data.models || [])
       .filter((model): model is { name: string } => typeof model.name === 'string' && Boolean(model.name))
       .map((model) => toModelRecord(model.name, 'ollama', 'ollama'));
-  } catch {
+  } catch (err) {
+    warn({ source: 'ollama', provider: 'ollama', error: errorMessage(err) }, 'Model discovery failed');
     return [];
   }
 }
@@ -130,10 +144,11 @@ function listResponse(records: ProviderModelRecord[]) {
   };
 }
 
-export async function refreshProviderModels() {
-  const gatewayRecords = await discoverGatewayModels();
-  const directRecords = await discoverDirectProviderModels();
-  const ollamaRecords = await discoverDirectOllamaModels();
+export async function refreshProviderModels(log?: { warn: DiscoveryWarn }) {
+  const warn: DiscoveryWarn = log ? (details, msg) => log.warn(details, msg) : noWarn;
+  const gatewayRecords = await discoverGatewayModels(warn);
+  const directRecords = await discoverDirectProviderModels(warn);
+  const ollamaRecords = await discoverDirectOllamaModels(warn);
   const discoveredRecords = [...gatewayRecords, ...directRecords, ...ollamaRecords];
   return agentStore.replaceProviderModels(discoveredRecords);
 }

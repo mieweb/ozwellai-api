@@ -78,7 +78,7 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
       }
       idToken = payload.id_token;
     } catch (err) {
-      request.log.warn({ err }, 'Google token exchange threw');
+      request.log.warn({ err }, 'Google token exchange request could not be sent');
       return popupResultPage({ error: 'token_exchange_failed' });
     }
 
@@ -113,11 +113,12 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
       firstName: typeof claims.given_name === 'string' ? claims.given_name : null,
       lastName: typeof claims.family_name === 'string' ? claims.family_name : null,
       });
-    } catch {
+    } catch (err) {
+      request.log.warn({ reason: err instanceof Error ? err.message : String(err) }, 'Google sign-in account not permitted');
       return popupResultPage({ error: 'account_not_permitted' });
     }
 
-    request.log.info({ email }, 'widget Google sign-in');
+    request.log.info({ email }, 'Widget Google sign-in succeeded');
     return popupResultPage({ session_token: sessionToken, email });
   });
 }

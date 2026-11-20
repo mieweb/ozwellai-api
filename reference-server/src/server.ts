@@ -16,6 +16,7 @@ import embeddingsRoute from './routes/embeddings';
 import filesRoute from './routes/files';
 import agentsRoute from './routes/agents';
 import audioRoute from './routes/audio';
+import clientErrorsRoute from './routes/client-errors';
 import authRoute from './routes/auth';
 import desktopAuthRoute from './routes/desktop-auth';
 import apiKeyIdentityRoute from './routes/api-key-identity';
@@ -26,6 +27,7 @@ import { getDatabase, initializeAuthTables, seedDemoData, seedMockAgent } from '
 import { sweepExpiredSessionState } from './storage/sessions';
 import { desktopAttestation } from './storage/desktop-attestation';
 import { installDesktopSessionAuthorization } from './util/desktop-session-auth';
+import { redactUrl } from './util/log-redaction';
 // Import schemas for OpenAPI generation
 import * as schemas from '../../spec';
 
@@ -61,7 +63,20 @@ function getCommitHash(): string {
 }
 
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== 'production',
+  logger: {
+    level: process.env.LOG_LEVEL || 'info',
+    timestamp: () => `,"time":"${new Date().toISOString()}"`,
+    formatters: { level: (label: string) => ({ level: label }) },
+    serializers: {
+      req: (req: { method: string; url: string; hostname?: string; ip?: string; socket?: { remotePort?: number } }) => ({
+        method: req.method,
+        url: redactUrl(req.url),
+        hostname: req.hostname,
+        remoteAddress: req.ip,
+        remotePort: req.socket?.remotePort,
+      }),
+    },
+  },
   bodyLimit: getBodyLimitBytes(),
   trustProxy: process.env.TRUSTED_PROXY_CIDRS?.split(',').map(value => value.trim()).filter(Boolean) || false,
 });
@@ -79,7 +94,7 @@ function scheduleModelDiscoveryRefresh(server: FastifyInstance) {
 
   const refresh = async () => {
     try {
-      const models = await refreshProviderModels();
+      const models = await refreshProviderModels(server.log);
       server.log.info({ model_count: models.length }, 'Provider model registry refreshed');
     } catch (err) {
       server.log.warn({ err }, 'Provider model registry refresh failed');
@@ -117,6 +132,48 @@ function scheduleSessionSweep(server: FastifyInstance) {
 
 async function buildServer() {
   const rootDir = path.resolve(process.cwd());
+
+  // Must be set before any register() call: route plugins capture the handler when they are registered.
+  fastify.setErrorHandler((error, request, reply) => {
+    const statusCode = typeof error.statusCode === 'number' && error.statusCode >= 400 && error.statusCode < 500
+      ? error.statusCode
+      : error.validation ? 400 : 500;
+    const logDetails = { err: error, statusCode, method: request.method, url: redactUrl(request.url) };
+    if (statusCode >= 500) request.log.error(logDetails, 'Unhandled route error');
+    else request.log.warn(logDetails, 'Request rejected');
+
+    if (error.validation) {
+      return reply.code(400).send({
+        error: {
+          message: 'Invalid request body',
+          type: 'invalid_request_error',
+          param: error.validation[0]?.schemaPath || null,
+          code: null,
+        },
+      });
+    }
+
+    // Client errors raised by Fastify itself (e.g. 413 body too large) keep their status.
+    if (statusCode < 500) {
+      return reply.code(statusCode).send({
+        error: {
+          message: error.message,
+          type: 'invalid_request_error',
+          param: null,
+          code: error.code ?? null,
+        },
+      });
+    }
+
+    reply.code(500).send({
+      error: {
+        message: 'Internal server error',
+        type: 'server_error',
+        param: null,
+        code: null,
+      },
+    });
+  });
 
   // Register CORS
   await fastify.register(cors, {
@@ -213,7 +270,7 @@ async function buildServer() {
   });
 
   // Health check endpoint
-  fastify.get('/health', async (_request, _reply) => {
+  fastify.get('/health', { logLevel: 'warn' }, async (_request, _reply) => {
     return { status: 'ok', timestamp: new Date().toISOString(), commit: commitHash };
   });
 
@@ -245,6 +302,7 @@ async function buildServer() {
   await fastify.register(filesRoute);
   await fastify.register(agentsRoute);  // Agent registration CRUD
   await fastify.register(audioRoute);   // Audio transcription
+  await fastify.register(clientErrorsRoute);
 
   // Expose only the widget runtime files under the API origin.
   await fastify.register(fastifyStatic, {
@@ -252,27 +310,30 @@ async function buildServer() {
     serve: false,
   });
 
-  fastify.get('/auth/desktop/login.js', async (_request, reply) => {
+  // Static widget assets are requested on every page load; only log their failures.
+  const quiet = { logLevel: 'warn' as const };
+
+  fastify.get('/auth/desktop/login.js', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('desktop-login.js');
   });
 
-  fastify.get('/widget', async (_request, reply) => {
+  fastify.get('/widget', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell-loader.js');
   });
 
-  fastify.get('/widget/ozwell.js', async (_request, reply) => {
+  fastify.get('/widget/ozwell.js', quiet, async (_request, reply) => {
     return reply.type('application/javascript; charset=utf-8').sendFile('ozwell.js');
   });
 
-  fastify.get('/widget/ozwell-icon.png', async (_request, reply) => {
+  fastify.get('/widget/ozwell-icon.png', quiet, async (_request, reply) => {
     return reply.type('image/png').sendFile('ozwell-icon.png');
   });
 
-  fastify.get('/widget/frame/', async (_request, reply) => {
+  fastify.get('/widget/frame/', quiet, async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').sendFile('frame/index.html');
   });
 
-  fastify.get('/embed/ozwell-loader.js', async (_request, reply) => {
+  fastify.get('/embed/ozwell-loader.js', quiet, async (_request, reply) => {
     return reply.redirect('/widget');
   });
 
@@ -295,38 +356,21 @@ async function buildServer() {
     });
   });
 
-  // Error handler
-  fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
-
-    // Handle validation errors
-    if (error.validation) {
-      return reply.code(400).send({
-        error: {
-          message: 'Invalid request body',
-          type: 'invalid_request_error',
-          param: error.validation[0]?.schemaPath || null,
-          code: null,
-        },
-      });
-    }
-
-    // Default error response
-    reply.code(500).send({
-      error: {
-        message: 'Internal server error',
-        type: 'server_error',
-        param: null,
-        code: null,
-      },
-    });
-  });
-
   return fastify;
 }
 
 // Start server if this file is executed directly
 if (require.main === module) {
+  // Exit so the process supervisor (pm2) restarts a server left in an unknown state.
+  process.on('unhandledRejection', (reason) => {
+    fastify.log.fatal({ err: reason }, 'Unhandled promise rejection; exiting');
+    process.exit(1);
+  });
+  process.on('uncaughtException', (err) => {
+    fastify.log.fatal({ err }, 'Uncaught exception; exiting');
+    process.exit(1);
+  });
+
   const start = async () => {
     try {
       const server = await buildServer();

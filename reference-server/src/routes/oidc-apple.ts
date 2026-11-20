@@ -79,11 +79,13 @@ export default async function appleOidcRoute(fastify: FastifyInstance, options: 
       let sessionToken: string;
       try {
         sessionToken = createSessionForIdentity({ email, externalUserId: `apple:${payload.sub}`, username: email });
-      } catch {
+      } catch (err) {
+        request.log.warn({ reason: err instanceof Error ? err.message : String(err) }, 'Apple sign-in account not permitted');
         return popupResultPage({ error: 'account_not_permitted' });
       }
       return popupResultPage({ session_token: sessionToken, email });
-    } catch {
+    } catch (err) {
+      request.log.warn({ reason: err instanceof Error ? err.message : String(err) }, 'Apple sign-in failed');
       return popupResultPage({ error: 'apple_sign_in_failed' });
     }
   });

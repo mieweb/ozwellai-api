@@ -15,7 +15,10 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
     try {
       const data = await fs.readFile(indexFile, 'utf-8');
       return JSON.parse(data);
-    } catch {
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        fastify.log.warn({ err }, 'File index unreadable; treating as empty');
+      }
       return [];
     }
   }
@@ -83,6 +86,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
 
       return fileObject;
     } catch (error) {
+      request.log.error({ err: error }, 'File upload failed');
       reply.code(500);
       return createError('File upload failed', 'server_error');
     }
@@ -268,6 +272,7 @@ const filesRoute: FastifyPluginAsync = async (fastify) => {
         deleted: true,
       };
     } catch (error) {
+      request.log.error({ err: error, file_id }, 'File deletion failed');
       reply.code(500);
       return createError('File deletion failed', 'server_error');
     }
