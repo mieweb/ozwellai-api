@@ -84,7 +84,7 @@ function scheduleModelDiscoveryRefresh(server: FastifyInstance) {
 
   const refresh = async () => {
     try {
-      const models = await refreshProviderModels();
+      const models = await refreshProviderModels(server.log);
       server.log.info({ model_count: models.length }, 'Provider model registry refreshed');
     } catch (err) {
       server.log.warn({ err }, 'Provider model registry refresh failed');

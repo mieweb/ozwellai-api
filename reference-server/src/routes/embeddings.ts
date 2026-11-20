@@ -188,6 +188,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
 
         if (!upstream.ok) {
           const errBody = await upstream.text();
+          request.log.warn({ status: upstream.status, model }, 'Upstream embeddings request rejected');
           reply.code(upstream.status);
           try {
             return JSON.parse(errBody);

@@ -113,7 +113,8 @@ export default async function googleOidcRoute(fastify: FastifyInstance) {
       firstName: typeof claims.given_name === 'string' ? claims.given_name : null,
       lastName: typeof claims.family_name === 'string' ? claims.family_name : null,
       });
-    } catch {
+    } catch (err) {
+      request.log.warn({ reason: err instanceof Error ? err.message : String(err) }, 'Google sign-in account not permitted');
       return popupResultPage({ error: 'account_not_permitted' });
     }
 
