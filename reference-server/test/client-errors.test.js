@@ -74,7 +74,8 @@ test('full server keeps 413 for oversized reports instead of turning it into a 5
     assert.equal(response.json().error.type, 'invalid_request_error');
   } finally {
     await server.close();
-    rmSync(directory, { recursive: true, force: true });
+    // Windows keeps the open SQLite file locked, so cleanup is best effort.
+    try { rmSync(directory, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 });
 
