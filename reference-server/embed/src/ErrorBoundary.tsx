@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 type ClientErrorReport = {
-  kind: 'render' | 'error' | 'unhandledrejection';
+  kind: 'render' | 'error' | 'unhandledrejection' | 'chat';
   message?: string;
   stack?: string;
   componentStack?: string;

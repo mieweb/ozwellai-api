@@ -9,6 +9,7 @@ import {
   type SuperChatConversation,
 } from '@mieweb/ui/components/SuperChat';
 import { MarkdownContent } from './MarkdownContent';
+import { reportClientError } from './ErrorBoundary';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import { buildSystemPrompt, getAuthKey } from './system-prompt';
 import { createToolResultMessage } from './tool-results';
@@ -548,12 +549,16 @@ export function WidgetApp() {
         if (controller.signal.aborted) return;
         if (response.status === 401 && resetUserCredential(authKey)) return;
         if (!response.ok) {
+          reportClientError({ kind: 'chat', message: `Effective model fetch failed (${response.status})` });
           setEffectiveModels([]);
           return;
         }
         const payload = await response.json();
         setEffectiveModels(normalizeEffectiveModels(payload));
       } catch (error) {
+        if (!controller.signal.aborted) {
+          reportClientError({ kind: 'chat', message: `Effective model fetch failed: ${error instanceof Error ? error.message : String(error)}` });
+        }
         if (!controller.signal.aborted && configRef.current.debug) {
           console.debug('[Ozwell] Effective model fetch failed', error);
         }
@@ -590,6 +595,7 @@ export function WidgetApp() {
         });
         if (controller.signal.aborted) return;
         if (response.status === 401 && resetUserCredential(sessionKey)) return;
+        if (!response.ok) reportClientError({ kind: 'chat', message: `Agent list fetch failed (${response.status})` });
         const list = response.ok ? normalizeAgents(await response.json()) : [];
         setAgents(list);
         setActiveAgentId((current) => (
@@ -597,6 +603,7 @@ export function WidgetApp() {
         ));
       } catch (error) {
         if (!controller.signal.aborted) {
+          reportClientError({ kind: 'chat', message: `Agent list fetch failed: ${error instanceof Error ? error.message : String(error)}` });
           if (configRef.current.debug) console.debug('[Ozwell] Agent fetch failed', error);
           setAgents([]);
           setActiveAgentId(null);
@@ -875,7 +882,7 @@ export function WidgetApp() {
           if (currentEventType === 'warning') {
             try {
               const warning = JSON.parse(data);
-              if (warning.type === 'model_fallback' || warning.type === 'mock_response') {
+              if (warning.type === 'model_fallback' || warning.type === 'mock_response' || warning.type === 'response_truncated') {
                 showToast(warning.message);
               }
             } catch {
@@ -985,6 +992,7 @@ export function WidgetApp() {
             }));
           } catch (error) {
             console.error('[widget.js] Failed to parse chunk:', error);
+            reportClientError({ kind: 'chat', message: `Failed to parse stream chunk: ${error instanceof Error ? error.message : String(error)}` });
           }
         }
       }
@@ -1039,6 +1047,7 @@ export function WidgetApp() {
             content: withServerTools(assistantDisplayMessage('The assistant returned an empty response. Please try again.').content),
             status: 'complete',
           }));
+          reportClientError({ kind: 'chat', message: 'Empty assistant turn (no content, thinking, or tool_calls)' });
           if (configRef.current.debug) {
             console.debug('[Ozwell] Empty assistant turn (no content, thinking, or tool_calls). Raw chunks:', rawChunks);
           }
@@ -1067,7 +1076,11 @@ export function WidgetApp() {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected error';
+      const message = error instanceof DOMException && error.name === 'TimeoutError'
+        ? 'The assistant took too long to respond. Please try again.'
+        : error instanceof Error ? error.message : 'Unexpected error';
+      // Error text only; conversation content never leaves the widget.
+      reportClientError({ kind: 'chat', message });
       if (assistantMessageId) {
         setDisplayMessages((current) => current.filter((item) => item.id !== assistantMessageId));
       }

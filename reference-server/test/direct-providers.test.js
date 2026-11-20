@@ -465,6 +465,27 @@ test('direct providers — a stream truncated mid tool call emits an error event
     }
 });
 
+test('direct providers — a non-streamed reply truncated mid tool call returns a 502 response_incomplete error', async () => {
+    const anthropic = await fakeAnthropic({ truncatedToolCall: true });
+    const { server, tmp, dbPath } = startServer({
+        ANTHROPIC_API_KEY: 'sk-ant-test',
+        ANTHROPIC_BASE_URL: anthropic.baseURL,
+        LLM_MODEL: 'claude-sonnet-4-5',
+    });
+    try {
+        const key = await readyKey(dbPath);
+        const res = await chat(key, {
+            messages: [{ role: 'user', content: 'Make an E&M calculator.' }],
+            tools: [{ type: 'function', function: { name: 'set_form', parameters: { type: 'object' } } }],
+        });
+        assert.equal(res.status, 502);
+        assert.equal((await res.json()).error.code, 'response_incomplete');
+    } finally {
+        await stopServer(server, tmp);
+        await anthropic.close();
+    }
+});
+
 test('direct providers — Ollama streams through /v1 with <think> tags split into thinking deltas', async () => {
     const ollama = await fakeOllama();
     const { server, tmp, dbPath } = startServer({ OLLAMA_BASE_URL: ollama.baseURL });

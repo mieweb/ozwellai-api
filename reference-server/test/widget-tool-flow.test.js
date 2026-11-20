@@ -260,6 +260,8 @@ test('widget surfaces SSE error events instead of ending the turn silently', asy
 
   assert.match(appSource, /if \(currentEventType === 'error'\) \{[\s\S]*?streamError = /);
   assert.match(appSource, /if \(streamError\) throw new Error\(streamError\);/);
+  assert.match(appSource, /warning\.type === 'response_truncated'/);
+  assert.match(appSource, /reportClientError\(\{ kind: 'chat', message \}\);/);
 });
 
 test('widget SSE parsing accepts vendor reasoning fields and tool_calls without an index', async () => {
