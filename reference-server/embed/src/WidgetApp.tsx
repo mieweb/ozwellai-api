@@ -12,6 +12,12 @@ import { MarkdownContent } from './MarkdownContent';
 import { AuthGate, REMEMBERED_KEY_STORAGE, type WidgetCredential } from './AuthGate';
 import { buildSystemPrompt, getAuthKey } from './system-prompt';
 import { createToolResultMessage } from './tool-results';
+import {
+  normalizeSystemDefault,
+  resolveActiveModel,
+  type ProviderModelOption,
+  type ProviderModelSelection,
+} from './model-selection';
 import type {
   ChatHistoryMessage,
   OpenAITool,
@@ -36,15 +42,6 @@ const USER_PARTICIPANT = 'user';
 const ASSISTANT_PARTICIPANT = 'ozwell';
 const SYSTEM_PARTICIPANT = 'system';
 
-type ProviderModelOption = {
-  provider: string;
-  model: string;
-  id: string;
-  label: string;
-  providerLabel?: string;
-};
-
-type ProviderModelSelection = Pick<ProviderModelOption, 'provider' | 'model'>;
 
 const DEFAULT_CONFIG: Required<Pick<OzwellConfig, 'title' | 'placeholder' | 'endpoint' | 'debug' | 'thinkingEnabled' | 'thinkingDefaultMode'>> = {
   title: 'Ozwell',
@@ -180,30 +177,6 @@ function providerLabel(provider: string) {
 
 function sameProviderModel(left: ProviderModelSelection | null, right: ProviderModelSelection | null) {
   return left?.provider === right?.provider && left?.model === right?.model;
-}
-
-function resolveActiveModel(
-  config: OzwellConfig,
-  models: ProviderModelOption[],
-  current: ProviderModelSelection | null
-): ProviderModelSelection | null {
-  if (models.length === 0) return null;
-  if (config.provider && config.model) {
-    const configured = models.find((item) => item.provider === config.provider && (item.model === config.model || item.id === config.model));
-    if (configured) return { provider: configured.provider, model: configured.model };
-  }
-
-  if (config.model) {
-    const matches = models.filter((item) => item.model === config.model || item.id === config.model);
-    if (matches.length === 1) return { provider: matches[0].provider, model: matches[0].model };
-  }
-
-  const currentAllowed = current
-    ? models.find((item) => item.provider === current.provider && item.model === current.model)
-    : null;
-  if (currentAllowed) return { provider: currentAllowed.provider, model: currentAllowed.model };
-
-  return { provider: models[0].provider, model: models[0].model };
 }
 
 function parseToolCallsFromContent(content: string) {
@@ -420,6 +393,7 @@ export function WidgetApp() {
   const [toast, setToast] = useState<string | null>(null);
   const [thinkingMode, setThinkingMode] = useState<ThinkingMode>(() => (window.OZWELL_CONFIG?.thinkingDefaultMode ?? THINKING.SMART) as ThinkingMode);
   const [effectiveModels, setEffectiveModels] = useState<ProviderModelOption[]>([]);
+  const [systemDefaultModel, setSystemDefaultModel] = useState<ProviderModelSelection | null>(null);
   const [activeModel, setActiveModel] = useState<ProviderModelSelection | null>(null);
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -552,6 +526,7 @@ export function WidgetApp() {
           return;
         }
         const payload = await response.json();
+        setSystemDefaultModel(normalizeSystemDefault(payload));
         setEffectiveModels(normalizeEffectiveModels(payload));
       } catch (error) {
         if (!controller.signal.aborted && configRef.current.debug) {
@@ -625,9 +600,9 @@ export function WidgetApp() {
       setActiveModel((existing) => sameProviderModel(existing, resolved) ? existing : resolved);
       return;
     }
-    const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current);
+    const resolved = resolveActiveModel(config, effectiveModels, activeModelRef.current, systemDefaultModel);
     setActiveModel((current) => sameProviderModel(current, resolved) ? current : resolved);
-  }, [config.provider, config.model, effectiveModels]);
+  }, [config.provider, config.model, effectiveModels, systemDefaultModel]);
 
   const postToParent = useCallback((message: Record<string, unknown>) => {
     window.parent.postMessage({ ...message, ozwellDocumentId: widgetDocumentId }, parentOriginRef.current || '*');
