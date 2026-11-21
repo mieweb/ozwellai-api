@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, isLLMBackendConfigured, getOllamaBaseUrl, extractToken, isAgentKey, envFallbackModel } from '../util';
 import { agentStore, ProviderModelRecord } from '../storage/agents';
-import { getAnthropicClient, getOpenAIClient } from '../llm/providers';
+import { getAnthropicClient, getOpenAIClient, resolveChatTransport } from '../llm/providers';
 
 const GATEWAY_DISCOVERY_PROVIDERS = ['openai', 'anthropic', 'ollama'];
 
@@ -132,8 +132,12 @@ function listResponse(records: ProviderModelRecord[]) {
 
 // The system default is advertised only when the caller may actually use it; null tells clients
 // to pick a chat-capable model themselves.
-function withSystemDefault(response: ReturnType<typeof listResponse>) {
-  const fallback = agentStore.getServerDefaultModel() ?? envFallbackModel(isLLMBackendConfigured(), false);
+async function withSystemDefault(response: ReturnType<typeof listResponse>) {
+  const serverDefault = agentStore.getServerDefaultModel();
+  const fallback = serverDefault ?? await (async () => {
+    const { transport, ollamaAvailable } = await resolveChatTransport();
+    return envFallbackModel(transport === 'gateway', ollamaAvailable);
+  })();
   const match = response.data.find(item => item.provider === fallback.provider && (item.model === fallback.model || item.id === fallback.model));
   return { ...response, default_model: match ? { provider: match.provider, model: match.model } : null };
 }

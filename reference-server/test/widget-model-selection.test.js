@@ -29,6 +29,10 @@ test('unavailable system default falls back to the first chat model, never whisp
   assert.deepEqual(resolveActiveModel({}, models, null, null), { provider: 'openai', model: 'gpt-4o-mini' });
 });
 
+test('non-chat system default is skipped for the first chat model', () => {
+  assert.deepEqual(resolveActiveModel({}, models, null, { provider: 'openai', model: 'whisper-1' }), { provider: 'openai', model: 'gpt-4o-mini' });
+});
+
 test('no chat-capable model resolves to null', () => {
   assert.equal(resolveActiveModel({}, models.slice(0, 3), null, null), null);
 });

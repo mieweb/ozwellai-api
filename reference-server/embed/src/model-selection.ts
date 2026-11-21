@@ -40,7 +40,7 @@ export function resolveActiveModel(
   if (currentAllowed) return { provider: currentAllowed.provider, model: currentAllowed.model };
 
   const systemMatch = systemDefault
-    ? models.find((item) => item.provider === systemDefault.provider && item.model === systemDefault.model)
+    ? models.find((item) => item.provider === systemDefault.provider && item.model === systemDefault.model && isChatModel(item))
     : null;
   if (systemMatch) return { provider: systemMatch.provider, model: systemMatch.model };
 
