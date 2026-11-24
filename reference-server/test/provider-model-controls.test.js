@@ -942,6 +942,11 @@ test('provider models — stored fallback beats the env value, live, and clearin
         assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
         return gateway.getLastBody().model;
     };
+    const effectiveDefault = async token => {
+        const response = await fetch(`${BASE}/v1/models/effective`, { headers: { Authorization: `Bearer ${token}` } });
+        assert.equal(response.status, 200);
+        return (await response.json()).default_model;
+    };
     try {
         await waitForServer(server, BASE);
         await fetch(`${BASE}/v1/manager/me`, { headers: HEADERS });
@@ -955,6 +960,7 @@ test('provider models — stored fallback beats the env value, live, and clearin
         // model the server knows about, exactly like any other request.
         await fetch(`${BASE}/v1/models`, { headers: { Authorization: `Bearer ${key.key}` } });
         assert.equal(await chatWithNoModel(key), 'gpt-4o', 'env value applies while nothing is stored');
+        assert.deepEqual(await effectiveDefault(key.key), { provider: 'openai', model: 'gpt-4o' }, 'env default is advertised');
 
         const saved = await fetch(`${BASE}/v1/manager/admin/default-model`, {
             method: 'PUT',
@@ -964,6 +970,27 @@ test('provider models — stored fallback beats the env value, live, and clearin
         assert.equal(saved.status, 200);
         assert.deepEqual((await saved.json()).default_model, { provider: 'openai', model: 'gpt-4o-mini' });
         assert.equal(await chatWithNoModel(key), 'gpt-4o-mini', 'stored fallback applies without a restart');
+        assert.deepEqual(await effectiveDefault(key.key), { provider: 'openai', model: 'gpt-4o-mini' }, 'stored default is advertised');
+
+        // A parent restriction that excludes the stored default hides it from that key.
+        const narrowed = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [{ provider: 'openai', model: 'gpt-4o' }] }),
+        });
+        assert.equal(narrowed.status, 200);
+        assert.equal(await effectiveDefault(key.key), null, 'disallowed default is not advertised to the parent key');
+
+        const agent = await fetch(`${BASE}/v1/manager/agents`, { method: 'POST', headers: H_YAML, body: 'name: Default Probe\ninstructions: probe\n' });
+        assert.equal(agent.status, 201);
+        assert.equal(await effectiveDefault((await agent.json()).agent_key), null, 'disallowed default is not advertised to agent keys');
+
+        const widened = await fetch(`${BASE}/v1/manager/admin/parent-keys/${key.id}/model-restrictions`, {
+            method: 'PUT',
+            headers: H_JSON,
+            body: JSON.stringify({ allowed_models: [] }),
+        });
+        assert.equal(widened.status, 200);
 
         // An explicitly requested model is still the caller's choice — the fallback only fills a gap.
         const explicit = await fetch(`${BASE}/v1/chat/completions`, {
@@ -982,6 +1009,7 @@ test('provider models — stored fallback beats the env value, live, and clearin
         assert.equal(cleared.status, 200);
         assert.equal((await cleared.json()).default_model, null);
         assert.equal(await chatWithNoModel(key), 'gpt-4o', 'clearing drops back to the env value');
+        assert.deepEqual(await effectiveDefault(key.key), { provider: 'openai', model: 'gpt-4o' }, 'clearing advertises the env default again');
     } finally {
         stopServer(server, tmp);
         await gateway.close();
