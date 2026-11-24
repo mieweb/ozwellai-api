@@ -242,18 +242,55 @@ export interface UsageEventInput {
 }
 
 export type QuotaScopeType = 'user' | 'agent';
+export type QuotaPeriod = 'hourly' | 'daily' | 'monthly';
+export const QUOTA_PERIODS: QuotaPeriod[] = ['hourly', 'daily', 'monthly'];
+
+export interface QuotaPolicyInput {
+    hourly_token_limit: number | null;
+    daily_token_limit: number | null;
+    monthly_token_limit: number | null;
+    warning_threshold: number | null;
+    status: 'active' | 'disabled';
+}
+
+export interface QuotaWindowStatus {
+    period: QuotaPeriod;
+    limit: number;
+    used_tokens: number;
+    remaining_tokens: number;
+    requested_tokens: number;
+    window_start: string;
+    window_end: string;
+    allowed: boolean;
+}
 
 export interface QuotaStatus {
     scope_type: QuotaScopeType;
     scope_id: string;
-    monthly_token_limit: number | null;
     status: 'active' | 'disabled';
+    hourly_token_limit: number | null;
+    daily_token_limit: number | null;
+    monthly_token_limit: number | null;
+    warning_threshold: number | null;
+    // Monthly-window fields, kept for clients written against the monthly-only API.
     used_tokens: number;
     remaining_tokens: number | null;
     requested_tokens: number;
     window_start: string;
     window_end: string;
+    windows: QuotaWindowStatus[];
     allowed: boolean;
+}
+
+export type QuotaNotificationKind = 'warning' | 'limit';
+
+export interface QuotaNotification {
+    scope_type: QuotaScopeType;
+    scope_id: string;
+    scope_name: string;
+    owner_email: string | null;
+    kind: QuotaNotificationKind;
+    window: QuotaWindowStatus;
 }
 
 export interface ProviderModelRecord {
@@ -505,7 +542,25 @@ export class AgentStore {
         UNIQUE(scope_type, scope_id)
       );
       CREATE INDEX IF NOT EXISTS idx_quota_policies_scope ON quota_policies(scope_type, scope_id);
+
+      -- One row per (scope, period, kind, window); the UNIQUE constraint is what de-duplicates emails.
+      CREATE TABLE IF NOT EXISTS quota_notifications (
+        id TEXT PRIMARY KEY,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        period TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        window_start TEXT NOT NULL,
+        used_tokens INTEGER NOT NULL,
+        token_limit INTEGER NOT NULL,
+        recipient TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(scope_type, scope_id, period, kind, window_start)
+      );
     `);
+        ensureColumn(this.db, 'quota_policies', 'hourly_token_limit', 'INTEGER');
+        ensureColumn(this.db, 'quota_policies', 'daily_token_limit', 'INTEGER');
+        ensureColumn(this.db, 'quota_policies', 'warning_threshold', 'REAL');
     }
 
     /** Check if a token is a valid parent or agent key (single query) */
@@ -808,26 +863,43 @@ export class AgentStore {
         });
     }
 
-    monthWindow(now = new Date()): { start: string; end: string } {
-        const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-        return { start: start.toISOString(), end: end.toISOString() };
+    /** UTC-aligned window containing `now`. */
+    quotaWindow(period: QuotaPeriod, now = new Date()): { start: string; end: string } {
+        const y = now.getUTCFullYear(), m = now.getUTCMonth(), d = now.getUTCDate(), h = now.getUTCHours();
+        const [start, end] = period === 'hourly'
+            ? [Date.UTC(y, m, d, h), Date.UTC(y, m, d, h + 1)]
+            : period === 'daily'
+                ? [Date.UTC(y, m, d), Date.UTC(y, m, d + 1)]
+                : [Date.UTC(y, m, 1), Date.UTC(y, m + 1, 1)];
+        return { start: new Date(start).toISOString(), end: new Date(end).toISOString() };
     }
 
-    upsertQuotaPolicy(scopeType: QuotaScopeType, scopeId: string, monthlyTokenLimit: number | null, status: 'active' | 'disabled'): QuotaStatus {
+    monthWindow(now = new Date()): { start: string; end: string } {
+        return this.quotaWindow('monthly', now);
+    }
+
+    upsertQuotaPolicy(scopeType: QuotaScopeType, scopeId: string, policy: QuotaPolicyInput): QuotaStatus {
         this.db.prepare(`
-          INSERT INTO quota_policies (id, scope_type, scope_id, monthly_token_limit, status, created_at, updated_at)
-          VALUES (@id, @scope_type, @scope_id, @monthly_token_limit, @status, @now, @now)
+          INSERT INTO quota_policies (
+            id, scope_type, scope_id, hourly_token_limit, daily_token_limit, monthly_token_limit,
+            warning_threshold, status, created_at, updated_at
+          )
+          VALUES (
+            @id, @scope_type, @scope_id, @hourly_token_limit, @daily_token_limit, @monthly_token_limit,
+            @warning_threshold, @status, @now, @now
+          )
           ON CONFLICT(scope_type, scope_id) DO UPDATE SET
+            hourly_token_limit = excluded.hourly_token_limit,
+            daily_token_limit = excluded.daily_token_limit,
             monthly_token_limit = excluded.monthly_token_limit,
+            warning_threshold = excluded.warning_threshold,
             status = excluded.status,
             updated_at = excluded.updated_at
         `).run({
             id: generateId('quota'),
             scope_type: scopeType,
             scope_id: scopeId,
-            monthly_token_limit: monthlyTokenLimit,
-            status,
+            ...policy,
             now: new Date().toISOString(),
         });
         return this.getQuotaStatus(scopeType, scopeId);
@@ -835,6 +907,10 @@ export class AgentStore {
 
     getMonthlyTokenUsage(scopeType: QuotaScopeType, scopeId: string, now = new Date()): number {
         const { start, end } = this.monthWindow(now);
+        return this.getTokenUsage(scopeType, scopeId, start, end);
+    }
+
+    getTokenUsage(scopeType: QuotaScopeType, scopeId: string, start: string, end: string): number {
         if (scopeType === 'agent') {
             const row = this.db.prepare(`
               SELECT COALESCE(SUM(total_tokens), 0) AS total
@@ -856,39 +932,123 @@ export class AgentStore {
         return row.total;
     }
 
-    getQuotaStatus(scopeType: QuotaScopeType, scopeId: string, requestedTokens = 0): QuotaStatus {
+    getQuotaStatus(scopeType: QuotaScopeType, scopeId: string, requestedTokens = 0, now = new Date()): QuotaStatus {
         const policy = this.db.prepare(`
-          SELECT monthly_token_limit, status
+          SELECT hourly_token_limit, daily_token_limit, monthly_token_limit, warning_threshold, status
           FROM quota_policies
           WHERE scope_type = ? AND scope_id = ?
-        `).get(scopeType, scopeId) as { monthly_token_limit: number | null; status: 'active' | 'disabled' } | undefined;
-        const now = new Date();
-        const { start, end } = this.monthWindow(now);
-        const used = this.getMonthlyTokenUsage(scopeType, scopeId, now);
-        const active = policy?.status === 'active' && typeof policy.monthly_token_limit === 'number';
-        const remaining = active ? Math.max((policy.monthly_token_limit as number) - used, 0) : null;
+        `).get(scopeType, scopeId) as QuotaPolicyInput | undefined;
+        const status = policy?.status ?? 'disabled';
+        const limits: Record<QuotaPeriod, number | null> = {
+            hourly: policy?.hourly_token_limit ?? null,
+            daily: policy?.daily_token_limit ?? null,
+            monthly: policy?.monthly_token_limit ?? null,
+        };
+        const windows: QuotaWindowStatus[] = [];
+        if (status === 'active') {
+            for (const period of QUOTA_PERIODS) {
+                const limit = limits[period];
+                if (typeof limit !== 'number') continue;
+                const { start, end } = this.quotaWindow(period, now);
+                const used = this.getTokenUsage(scopeType, scopeId, start, end);
+                windows.push({
+                    period,
+                    limit,
+                    used_tokens: used,
+                    remaining_tokens: Math.max(limit - used, 0),
+                    requested_tokens: requestedTokens,
+                    window_start: start,
+                    window_end: end,
+                    allowed: used + requestedTokens <= limit,
+                });
+            }
+        }
+        const monthly = windows.find(w => w.period === 'monthly');
+        const month = this.monthWindow(now);
         return {
             scope_type: scopeType,
             scope_id: scopeId,
-            monthly_token_limit: policy?.monthly_token_limit ?? null,
-            status: policy?.status ?? 'disabled',
-            used_tokens: used,
-            remaining_tokens: remaining,
+            status,
+            hourly_token_limit: limits.hourly,
+            daily_token_limit: limits.daily,
+            monthly_token_limit: limits.monthly,
+            warning_threshold: policy?.warning_threshold ?? null,
+            used_tokens: monthly?.used_tokens ?? this.getTokenUsage(scopeType, scopeId, month.start, month.end),
+            remaining_tokens: monthly?.remaining_tokens ?? null,
             requested_tokens: requestedTokens,
-            window_start: start,
-            window_end: end,
-            allowed: !active || used + requestedTokens <= (policy.monthly_token_limit as number),
+            window_start: month.start,
+            window_end: month.end,
+            windows,
+            allowed: windows.every(w => w.allowed),
         };
     }
 
-    getQuotaBlocks(parentKeyId: string | null, agentId: string | null, requestedTokens: number): QuotaStatus[] {
-        const checks: QuotaStatus[] = [];
+    /** Quota scopes (user via parent key, and agent) that apply to a request. */
+    private quotaScopes(parentKeyId: string | null, agentId: string | null): Array<{ scopeType: QuotaScopeType; scopeId: string }> {
+        const scopes: Array<{ scopeType: QuotaScopeType; scopeId: string }> = [];
         if (parentKeyId) {
             const row = this.db.prepare('SELECT user_id FROM api_keys WHERE id = ?').get(parentKeyId) as { user_id: string | null } | undefined;
-            if (row?.user_id) checks.push(this.getQuotaStatus('user', row.user_id, requestedTokens));
+            if (row?.user_id) scopes.push({ scopeType: 'user', scopeId: row.user_id });
         }
-        if (agentId) checks.push(this.getQuotaStatus('agent', agentId, requestedTokens));
-        return checks.filter(check => !check.allowed);
+        if (agentId) scopes.push({ scopeType: 'agent', scopeId: agentId });
+        return scopes;
+    }
+
+    /**
+     * Claims quota notifications that are due and not yet sent for the current windows.
+     * `blocked` marks a request rejected by quota, which counts as the limit being reached
+     * even when the recorded usage is still below it.
+     */
+    claimQuotaNotifications(parentKeyId: string | null, agentId: string | null, blocked: QuotaStatus[] = [], now = new Date()): QuotaNotification[] {
+        const claimed: QuotaNotification[] = [];
+        for (const { scopeType, scopeId } of this.quotaScopes(parentKeyId, agentId)) {
+            const status = blocked.find(b => b.scope_type === scopeType && b.scope_id === scopeId)
+                ?? this.getQuotaStatus(scopeType, scopeId, 0, now);
+            for (const window of status.windows) {
+                let kind: QuotaNotificationKind | null = null;
+                if (window.used_tokens >= window.limit || !window.allowed) kind = 'limit';
+                else if (status.warning_threshold !== null && window.used_tokens >= window.limit * status.warning_threshold) kind = 'warning';
+                if (!kind) continue;
+
+                const owner = this.quotaOwner(scopeType, scopeId);
+                const result = this.db.prepare(`
+                  INSERT OR IGNORE INTO quota_notifications (
+                    id, scope_type, scope_id, period, kind, window_start, used_tokens, token_limit, recipient, created_at
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    generateId('quotanotif'), scopeType, scopeId, window.period, kind, window.window_start,
+                    window.used_tokens, window.limit, owner.email, now.toISOString(),
+                );
+                if (result.changes === 0) continue;
+                claimed.push({ scope_type: scopeType, scope_id: scopeId, scope_name: owner.name, owner_email: owner.email, kind, window });
+            }
+        }
+        return claimed;
+    }
+
+    private quotaOwner(scopeType: QuotaScopeType, scopeId: string): { name: string; email: string | null } {
+        if (scopeType === 'user') {
+            const user = this.getManagerUserById(scopeId);
+            return { name: user?.username || user?.email || scopeId, email: user?.email ?? null };
+        }
+        const agent = this.getById(scopeId);
+        let name = scopeId;
+        try {
+            const parsed = agent ? yaml.parse(agent.yaml) : null;
+            if (parsed && typeof parsed.name === 'string' && parsed.name.trim()) name = parsed.name.trim();
+        } catch {
+            // Unparseable YAML falls back to the agent id.
+        }
+        const row = agent ? this.db.prepare(`
+          SELECT u.email FROM api_keys k JOIN users u ON u.id = k.user_id WHERE k.id = ?
+        `).get(agent.parent_key) as { email: string | null } | undefined : undefined;
+        return { name, email: row?.email ?? null };
+    }
+
+    getQuotaBlocks(parentKeyId: string | null, agentId: string | null, requestedTokens: number): QuotaStatus[] {
+        return this.quotaScopes(parentKeyId, agentId)
+            .map(({ scopeType, scopeId }) => this.getQuotaStatus(scopeType, scopeId, requestedTokens))
+            .filter(check => !check.allowed);
     }
 
     upsertProviderModels(records: Array<Omit<ProviderModelRecord, 'enabled' | 'last_discovered_at'> & Partial<Pick<ProviderModelRecord, 'enabled' | 'last_discovered_at'>>>): ProviderModelRecord[] {

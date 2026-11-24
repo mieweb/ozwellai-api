@@ -1058,6 +1058,148 @@ test('manager admin — previous-month usage does not count against user quota',
     }
 });
 
+function insertParentUsage(dbPath, keyId, totalTokens, createdAt) {
+    const db = new Database(dbPath);
+    try {
+        db.prepare(`
+          INSERT INTO usage_events (
+            id, parent_key_id, agent_id, auth_type, route, model, status_code,
+            prompt_tokens, completion_tokens, total_tokens, created_at
+          )
+          VALUES (?, ?, NULL, 'parent', '/v1/chat/completions', 'mock', 200, ?, 0, ?, ?)
+        `).run(`usage-${Math.random().toString(36).slice(2)}`, keyId, totalTokens, totalTokens, createdAt);
+    } finally {
+        db.close();
+    }
+}
+
+function readQuotaNotifications(dbPath) {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+        return db.prepare('SELECT scope_type, period, kind, recipient FROM quota_notifications ORDER BY created_at').all();
+    } finally {
+        db.close();
+    }
+}
+
+async function putUserQuota(userId, body) {
+    return fetch(`${BASE}/v1/manager/admin/quotas/users/${userId}`, {
+        method: 'PUT',
+        headers: { ...MANAGER_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+}
+
+async function parentChat(key) {
+    return fetch(`${BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'quota window test' }] }),
+    });
+}
+
+test('manager admin — hourly quota rolls over and blocks within the current hour', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        insertParentUsage(dbPath, key.id, 5000, new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+        const quota = await putUserQuota(user.id, { hourly_token_limit: 1000, status: 'active' });
+        assert.equal(quota.status, 200);
+        const quotaBody = await quota.json();
+        assert.equal(quotaBody.hourly_token_limit, 1000);
+        assert.equal(quotaBody.monthly_token_limit, null);
+        assert.deepEqual(quotaBody.windows.map(w => w.period), ['hourly']);
+
+        assert.equal((await parentChat(key.key)).status, 200);
+
+        insertParentUsage(dbPath, key.id, 5000, new Date().toISOString());
+        const blocked = await parentChat(key.key);
+        assert.equal(blocked.status, 429);
+        const body = await blocked.json();
+        assert.equal(body.error.code, 'quota_exceeded');
+        assert.match(body.error.message, /^Hourly token quota exceeded/);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — daily quota enforced while monthly still has room', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        insertParentUsage(dbPath, key.id, 500, new Date().toISOString());
+        const quota = await putUserQuota(user.id, { daily_token_limit: 100, monthly_token_limit: 1000000, status: 'active' });
+        assert.equal(quota.status, 200);
+
+        const status = await (await fetch(`${BASE}/v1/manager/admin/quotas/users/${user.id}`, { headers: MANAGER_HEADERS })).json();
+        assert.deepEqual(status.windows.map(w => w.period), ['daily', 'monthly']);
+        const daily = status.windows.find(w => w.period === 'daily');
+        assert.equal(daily.used_tokens, 500);
+        assert.equal(daily.remaining_tokens, 0);
+        assert.equal(daily.allowed, false);
+        assert.equal(status.allowed, false);
+        assert.equal(status.remaining_tokens, 1000000 - 500);
+
+        const blocked = await parentChat(key.key);
+        assert.equal(blocked.status, 429);
+        assert.match((await blocked.json()).error.message, /^Daily token quota exceeded/);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — quota policy validation', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user } = getUserAndActiveKey(dbPath);
+
+        assert.equal((await putUserQuota(user.id, { status: 'active' })).status, 400);
+        assert.equal((await putUserQuota(user.id, { hourly_token_limit: -5, status: 'active' })).status, 400);
+        assert.equal((await putUserQuota(user.id, { daily_token_limit: 10, warning_threshold: 1.5 })).status, 400);
+        const ok = await putUserQuota(user.id, { daily_token_limit: 10, warning_threshold: 0.8 });
+        assert.equal(ok.status, 200);
+        assert.equal((await ok.json()).warning_threshold, 0.8);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — quota notifications fire once per threshold per window', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        insertParentUsage(dbPath, key.id, 600, new Date().toISOString());
+        assert.equal((await putUserQuota(user.id, { monthly_token_limit: 1000, warning_threshold: 0.5 })).status, 200);
+        assert.equal((await parentChat(key.key)).status, 200);
+        assert.equal((await parentChat(key.key)).status, 200);
+
+        let rows = readQuotaNotifications(dbPath);
+        assert.deepEqual(rows, [{ scope_type: 'user', period: 'monthly', kind: 'warning', recipient: 'test-admin@example.test' }]);
+
+        insertParentUsage(dbPath, key.id, 1000, new Date().toISOString());
+        assert.equal((await parentChat(key.key)).status, 429);
+        assert.equal((await parentChat(key.key)).status, 429);
+
+        rows = readQuotaNotifications(dbPath);
+        assert.equal(rows.length, 2);
+        assert.equal(rows.filter(r => r.kind === 'limit').length, 1);
+        assert.equal(rows.filter(r => r.kind === 'warning').length, 1);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
 test('manager admin — embeddings and responses record usage events', async () => {
     const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
     try {

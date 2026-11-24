@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, SimpleTextGenerator, generateId, countTokens, parsePositiveEnvNumber, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
-import { quotaExceededError, resolveRouteUsageContext } from './quota';
+import { quotaExceededError, recordUsageAndNotify, resolveRouteUsageContext } from './quota';
 
 const LLM_MAX_TOKENS = parsePositiveEnvNumber('LLM_MAX_TOKENS');
 
@@ -57,7 +57,7 @@ const responsesRoute: FastifyPluginAsync = async (fastify) => {
 
     const recordUsage = (statusCode: number, usage: { input_tokens: number; output_tokens: number; total_tokens: number }) => {
       if (!usageContext.parentKey) return;
-      agentStore.recordUsageEvent({
+      recordUsageAndNotify({
         parent_key_id: usageContext.parentKey.id,
         agent_id: usageContext.agentId,
         auth_type: usageContext.authType,
