@@ -38,10 +38,10 @@ test('no chat-capable model resolves to null', () => {
 });
 
 test('isChatModel filters non-chat models', () => {
-  for (const model of ['whisper-1', 'tts-1-hd', 'text-embedding-ada-002', 'dall-e-3', 'omni-moderation-latest', 'gpt-4o-transcribe', 'nomic-embed-text']) {
+  for (const model of ['whisper-1', 'tts-1-hd', 'text-embedding-ada-002', 'dall-e-3', 'omni-moderation-latest', 'gpt-4o-transcribe', 'nomic-embed-text', 'embeddinggemma', 'embeddinggemma:300m', 'all-minilm', 'all-minilm:l6-v2', 'text-search-ada-doc-001']) {
     assert.equal(isChatModel({ model }), false, model);
   }
-  for (const model of ['gpt-4o-mini', 'gpt-5', 'claude-sonnet-4-5', 'llama3.1:8b', 'qwen2.5']) {
+  for (const model of ['gpt-4o-mini', 'gpt-5', 'claude-sonnet-4-5', 'llama3.1:8b', 'qwen2.5', 'gpt-4o-search-preview', 'gpt-4o-mini-search-preview']) {
     assert.equal(isChatModel({ model }), true, model);
   }
 });

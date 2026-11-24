@@ -11,7 +11,7 @@ export type ProviderModelOption = {
 export type ProviderModelSelection = Pick<ProviderModelOption, 'provider' | 'model'>;
 
 // Catalogs list audio, image, embedding and moderation models next to chat ones; none can answer a chat turn.
-const NON_CHAT_MODEL = /(^|[/:_.-])(whisper|tts|dall-e|gpt-image|embed|embedding|moderation|transcribe|realtime|audio|search|davinci|babbage|sora)([/:_.-]|\d|$)/i;
+const NON_CHAT_MODEL = /(^|[/:_.-])(whisper|tts|dall-e|gpt-image|embed|embedding|embeddinggemma|all-minilm|moderation|transcribe|realtime|audio|davinci|babbage|sora)([/:_.-]|\d|$)|(^|[/:_.-])text-search-/i;
 
 export function isChatModel(item: Pick<ProviderModelOption, 'model'>) {
   return !NON_CHAT_MODEL.test(item.model);
