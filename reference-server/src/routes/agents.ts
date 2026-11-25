@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import { createError, generateId, getKeyHint, isValidApiKey, extractToken, isAgentKey, AGENT_KEY_PREFIX, formatAgentKeyHint, envFallbackModel, isLLMBackendConfigured, isOllamaAvailable } from '../util';
 import * as yaml from 'yaml';
-import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, QuotaScopeType } from '../storage/agents';
+import { agentStore, selectionAllows, findProviderModel, modelRecordMatches, Agent, ManagerIdentity, ManagerUser, QuotaPolicyInput, QuotaScopeType } from '../storage/agents';
 import { getCachedModelsList, getModelsList } from './models';
 import { assertNoLiteralCredentials, discoverMcpTools, McpConfigError, McpError, parseMcpServer, parseMcpServers, referencedSecrets, SECRET_NAME_RE } from '../mcp/remote';
 
@@ -226,24 +226,55 @@ type ProviderModelSelectionBody = {
 };
 
 type QuotaBody = {
+    hourly_token_limit?: unknown;
+    daily_token_limit?: unknown;
     monthly_token_limit?: unknown;
+    warning_threshold?: unknown;
     status?: unknown;
 };
 
-function normalizeQuotaBody(body: QuotaBody | undefined): { monthlyTokenLimit: number | null; status: 'active' | 'disabled' } | null {
+const QUOTA_LIMIT_FIELDS = ['hourly_token_limit', 'daily_token_limit', 'monthly_token_limit'] as const;
+
+const QUOTA_BODY_SCHEMA = {
+    type: 'object',
+    properties: {
+        hourly_token_limit: { type: ['number', 'null'] },
+        daily_token_limit: { type: ['number', 'null'] },
+        monthly_token_limit: { type: ['number', 'null'] },
+        warning_threshold: { type: ['number', 'null'] },
+        status: { type: 'string', enum: ['active', 'disabled'] },
+    },
+};
+
+function normalizeQuotaBody(body: QuotaBody | undefined): { policy: QuotaPolicyInput } | { error: string; param: string } {
     const status = body?.status === 'disabled' ? 'disabled' : 'active';
-    if (status === 'disabled') {
-        return {
-            monthlyTokenLimit: typeof body?.monthly_token_limit === 'number' && body.monthly_token_limit > 0
-                ? Math.floor(body.monthly_token_limit)
-                : null,
+    const limits = {} as Record<typeof QUOTA_LIMIT_FIELDS[number], number | null>;
+    for (const field of QUOTA_LIMIT_FIELDS) {
+        const value = body?.[field];
+        if (value === undefined || value === null) {
+            limits[field] = null;
+        } else if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+            limits[field] = value;
+        } else if (status === 'disabled') {
+            limits[field] = null;
+        } else {
+            return { error: `'${field}' must be a positive integer or null`, param: field };
+        }
+    }
+    if (status === 'active' && QUOTA_LIMIT_FIELDS.every(field => limits[field] === null)) {
+        return { error: 'An active quota needs at least one of hourly_token_limit, daily_token_limit or monthly_token_limit', param: 'monthly_token_limit' };
+    }
+    const threshold = body?.warning_threshold;
+    if (threshold !== undefined && threshold !== null && (typeof threshold !== 'number' || !(threshold > 0 && threshold < 1))) {
+        return { error: "'warning_threshold' must be a number between 0 and 1 (exclusive) or null", param: 'warning_threshold' };
+    }
+    return {
+        policy: {
+            ...limits,
+            warning_threshold: typeof threshold === 'number' ? threshold : null,
             status,
-        };
-    }
-    if (typeof body?.monthly_token_limit !== 'number' || !Number.isFinite(body.monthly_token_limit) || body.monthly_token_limit <= 0) {
-        return null;
-    }
-    return { monthlyTokenLimit: Math.floor(body.monthly_token_limit), status };
+        },
+    };
 }
 
 // Shared by the server-wide and per-parent-key restriction endpoints, which take the same body.
@@ -794,17 +825,17 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
             return createError(`${scopeType === 'user' ? 'User' : 'Agent'} not found`, 'invalid_request_error', 'scope_id', 'not_found');
         }
         const normalized = normalizeQuotaBody(body);
-        if (!normalized) {
+        if ('error' in normalized) {
             reply.code(400);
-            return createError("'monthly_token_limit' must be a positive number for active quotas", 'invalid_request_error', 'monthly_token_limit', 'invalid_quota');
+            return createError(normalized.error, 'invalid_request_error', normalized.param, 'invalid_quota');
         }
-        return agentStore.upsertQuotaPolicy(scopeType, scopeId, normalized.monthlyTokenLimit, normalized.status);
+        return agentStore.upsertQuotaPolicy(scopeType, scopeId, normalized.policy);
     }
 
     fastify.get<{ Params: { user_id: string } }>('/v1/manager/admin/quotas/users/:user_id', {
         schema: {
             tags: ['Manager Admin'],
-            summary: 'Get user monthly token quota',
+            summary: 'Get user token quota status',
             params: {
                 type: 'object',
                 properties: { user_id: { type: 'string' } },
@@ -817,19 +848,13 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.put<{ Params: { user_id: string }; Body: QuotaBody }>('/v1/manager/admin/quotas/users/:user_id', {
         schema: {
             tags: ['Manager Admin'],
-            summary: 'Set user monthly token quota',
+            summary: 'Set user token quota (hourly, daily, monthly)',
             params: {
                 type: 'object',
                 properties: { user_id: { type: 'string' } },
                 required: ['user_id'],
             },
-            body: {
-                type: 'object',
-                properties: {
-                    monthly_token_limit: { type: 'number' },
-                    status: { type: 'string', enum: ['active', 'disabled'] },
-                },
-            },
+            body: QUOTA_BODY_SCHEMA,
         },
         preHandler: requireManagerAdmin,
     }, async (request, reply) => putQuota('user', request.params.user_id, request.body, reply));
@@ -837,7 +862,7 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.get<{ Params: { agent_id: string } }>('/v1/manager/admin/quotas/agents/:agent_id', {
         schema: {
             tags: ['Manager Admin'],
-            summary: 'Get agent monthly token quota',
+            summary: 'Get agent token quota status',
             params: {
                 type: 'object',
                 properties: { agent_id: { type: 'string' } },
@@ -850,19 +875,13 @@ const agentsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.put<{ Params: { agent_id: string }; Body: QuotaBody }>('/v1/manager/admin/quotas/agents/:agent_id', {
         schema: {
             tags: ['Manager Admin'],
-            summary: 'Set agent monthly token quota',
+            summary: 'Set agent token quota (hourly, daily, monthly)',
             params: {
                 type: 'object',
                 properties: { agent_id: { type: 'string' } },
                 required: ['agent_id'],
             },
-            body: {
-                type: 'object',
-                properties: {
-                    monthly_token_limit: { type: 'number' },
-                    status: { type: 'string', enum: ['active', 'disabled'] },
-                },
-            },
+            body: QUOTA_BODY_SCHEMA,
         },
         preHandler: requireManagerAdmin,
     }, async (request, reply) => putQuota('agent', request.params.agent_id, request.body, reply));

@@ -273,3 +273,52 @@ export const AudioTranscriptionResponseSchema = z.object({
 
 export type AudioTranscriptionRequest = z.infer<typeof AudioTranscriptionRequestSchema>;
 export type AudioTranscriptionResponse = z.infer<typeof AudioTranscriptionResponseSchema>;
+
+// Token quotas (Agent Controls, manager admin)
+export const QuotaPeriodSchema = z.enum(['hourly', 'daily', 'monthly']);
+
+const TokenLimitSchema = z.number().int().positive().nullable().optional();
+
+export const QuotaPolicyRequestSchema = z.object({
+  status: z.enum(['active', 'disabled']).optional(),
+  hourly_token_limit: TokenLimitSchema,
+  daily_token_limit: TokenLimitSchema,
+  monthly_token_limit: TokenLimitSchema,
+  /** Fraction of a limit (0-1, exclusive) at which a warning email is sent. Null disables warnings. */
+  warning_threshold: z.number().gt(0).lt(1).nullable().optional(),
+});
+
+export const QuotaWindowStatusSchema = z.object({
+  period: QuotaPeriodSchema,
+  limit: z.number().int().positive(),
+  used_tokens: z.number().int().nonnegative(),
+  remaining_tokens: z.number().int().nonnegative(),
+  requested_tokens: z.number().int().nonnegative(),
+  window_start: z.string(),
+  window_end: z.string(),
+  allowed: z.boolean(),
+});
+
+export const QuotaStatusSchema = z.object({
+  scope_type: z.enum(['user', 'agent']),
+  scope_id: z.string(),
+  status: z.enum(['active', 'disabled']),
+  hourly_token_limit: z.number().int().positive().nullable(),
+  daily_token_limit: z.number().int().positive().nullable(),
+  monthly_token_limit: z.number().int().positive().nullable(),
+  warning_threshold: z.number().nullable(),
+  /** Monthly-window fields kept for backward compatibility. */
+  used_tokens: z.number().int().nonnegative(),
+  remaining_tokens: z.number().int().nonnegative().nullable(),
+  requested_tokens: z.number().int().nonnegative(),
+  window_start: z.string(),
+  window_end: z.string(),
+  /** One entry per enabled period; empty when the policy is disabled. */
+  windows: z.array(QuotaWindowStatusSchema),
+  allowed: z.boolean(),
+});
+
+export type QuotaPeriod = z.infer<typeof QuotaPeriodSchema>;
+export type QuotaPolicyRequest = z.infer<typeof QuotaPolicyRequestSchema>;
+export type QuotaWindowStatus = z.infer<typeof QuotaWindowStatusSchema>;
+export type QuotaStatus = z.infer<typeof QuotaStatusSchema>;

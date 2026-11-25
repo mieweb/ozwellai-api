@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { validateAuth, createError, generateEmbedding, countTokens, isLLMBackendConfigured, isOllamaAvailable, getOllamaBaseUrl, extractToken } from '../util';
 import { agentStore } from '../storage/agents';
-import { quotaExceededError, resolveRouteUsageContext } from './quota';
+import { quotaExceededError, recordUsageAndNotify, resolveRouteUsageContext } from './quota';
 
 // Hoist static env reads (these never change at runtime)
 const LLM_BASE_URL = process.env.LLM_BASE_URL || '';
@@ -148,7 +148,7 @@ const embeddingsRoute: FastifyPluginAsync = async (fastify) => {
 
     const recordUsage = (statusCode: number, response?: { usage?: { prompt_tokens?: number; total_tokens?: number } }, provider?: string | null) => {
       if (!usageContext.parentKey) return;
-      agentStore.recordUsageEvent({
+      recordUsageAndNotify({
         parent_key_id: usageContext.parentKey.id,
         agent_id: usageContext.agentId,
         auth_type: usageContext.authType,

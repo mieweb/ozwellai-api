@@ -26,6 +26,39 @@ function getTransport(): Transporter {
   return transport;
 }
 
+export interface QuotaEmail {
+  to: string;
+  kind: 'warning' | 'limit';
+  scopeType: 'user' | 'agent';
+  scopeName: string;
+  period: 'hourly' | 'daily' | 'monthly';
+  usedTokens: number;
+  limit: number;
+  resetsAt: string;
+}
+
+export async function sendQuotaEmail(email: QuotaEmail): Promise<void> {
+  const subject = email.scopeType === 'agent' ? `Agent "${email.scopeName}"` : `Your account`;
+  const verb = email.kind === 'limit' ? 'has reached' : 'is approaching';
+  await getTransport().sendMail({
+    from: process.env.SMTP_FROM || DEFAULT_FROM,
+    to: email.to,
+    subject: `${subject} ${verb} its ${email.period} Ozwell token quota`,
+    text: [
+      `${subject} ${verb} its ${email.period} token quota.`,
+      '',
+      `${email.scopeType === 'agent' ? 'Agent' : 'User'}: ${email.scopeName}`,
+      `Quota period: ${email.period}`,
+      `Usage: ${email.usedTokens.toLocaleString('en-US')} of ${email.limit.toLocaleString('en-US')} tokens`,
+      `Window resets at: ${email.resetsAt}`,
+      '',
+      email.kind === 'limit'
+        ? 'Further requests are rejected until the window resets or the limit is raised.'
+        : 'Requests continue to work until the limit is reached.',
+    ].join('\n'),
+  });
+}
+
 /** Propagate delivery failures so callers do not report a code as sent. */
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
   await getTransport().sendMail({
