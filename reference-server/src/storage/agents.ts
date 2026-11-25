@@ -994,19 +994,14 @@ export class AgentStore {
         return scopes;
     }
 
-    /**
-     * Claims quota notifications that are due and not yet sent for the current windows.
-     * `blocked` marks a request rejected by quota, which counts as the limit being reached
-     * even when the recorded usage is still below it.
-     */
-    claimQuotaNotifications(parentKeyId: string | null, agentId: string | null, blocked: QuotaStatus[] = [], now = new Date()): QuotaNotification[] {
+    /** Claims quota notifications due from consumed usage that were not yet claimed for the current windows. */
+    claimQuotaNotifications(parentKeyId: string | null, agentId: string | null, now = new Date()): QuotaNotification[] {
         const claimed: QuotaNotification[] = [];
         for (const { scopeType, scopeId } of this.quotaScopes(parentKeyId, agentId)) {
-            const status = blocked.find(b => b.scope_type === scopeType && b.scope_id === scopeId)
-                ?? this.getQuotaStatus(scopeType, scopeId, 0, now);
+            const status = this.getQuotaStatus(scopeType, scopeId, 0, now);
             for (const window of status.windows) {
                 let kind: QuotaNotificationKind | null = null;
-                if (window.used_tokens >= window.limit || !window.allowed) kind = 'limit';
+                if (window.used_tokens >= window.limit) kind = 'limit';
                 else if (status.warning_threshold !== null && window.used_tokens >= window.limit * status.warning_threshold) kind = 'warning';
                 if (!kind) continue;
 
@@ -1024,6 +1019,14 @@ export class AgentStore {
             }
         }
         return claimed;
+    }
+
+    /** Releases a claim so a later request can retry a failed delivery. */
+    releaseQuotaNotification(n: QuotaNotification): void {
+        this.db.prepare(`
+          DELETE FROM quota_notifications
+          WHERE scope_type = ? AND scope_id = ? AND period = ? AND kind = ? AND window_start = ?
+        `).run(n.scope_type, n.scope_id, n.window.period, n.kind, n.window.window_start);
     }
 
     private quotaOwner(scopeType: QuotaScopeType, scopeId: string): { name: string; email: string | null } {

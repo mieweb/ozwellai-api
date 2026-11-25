@@ -1163,6 +1163,7 @@ test('manager admin — quota policy validation', async () => {
 
         assert.equal((await putUserQuota(user.id, { status: 'active' })).status, 400);
         assert.equal((await putUserQuota(user.id, { hourly_token_limit: -5, status: 'active' })).status, 400);
+        assert.equal((await putUserQuota(user.id, { hourly_token_limit: 0.5, status: 'active' })).status, 400);
         assert.equal((await putUserQuota(user.id, { daily_token_limit: 10, warning_threshold: 1.5 })).status, 400);
         const ok = await putUserQuota(user.id, { daily_token_limit: 10, warning_threshold: 0.8 });
         assert.equal(ok.status, 200);
@@ -1195,6 +1196,21 @@ test('manager admin — quota notifications fire once per threshold per window',
         assert.equal(rows.length, 2);
         assert.equal(rows.filter(r => r.kind === 'limit').length, 1);
         assert.equal(rows.filter(r => r.kind === 'warning').length, 1);
+    } finally {
+        stopServer(server, tmp);
+    }
+});
+
+test('manager admin — request rejected only by its estimate does not send a limit alert', async () => {
+    const { server, tmp, dbPath } = startServer({ adminExternalUserIds: 'admin-user' });
+    try {
+        await waitForServer(server, BASE);
+        await fetch(`${BASE}/v1/manager/me`, { headers: MANAGER_HEADERS });
+        const { user, key } = getUserAndActiveKey(dbPath);
+
+        assert.equal((await putUserQuota(user.id, { monthly_token_limit: 1 })).status, 200);
+        assert.equal((await parentChat(key.key)).status, 429);
+        assert.deepEqual(readQuotaNotifications(dbPath), []);
     } finally {
         stopServer(server, tmp);
     }

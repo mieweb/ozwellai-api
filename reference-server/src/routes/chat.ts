@@ -8,7 +8,7 @@ import type { ChatCompletionRequest, Message } from '../../../spec/index';
 import { createAICompletion, collectCompletionStream, type CompletionParams } from '@mieweb/harness-core';
 import { generateMockResponse, extractUserMessage, hasToolResult, extractToolResult, contentToText, type ChatMessage as MockChatMessage } from './mock-chat';
 import { getCachedModelsList } from './models';
-import { notifyQuotaThresholds, quotaExceededError, quotaExceededMessage, recordUsageAndNotify, resolveRouteUsageContext } from './quota';
+import { quotaExceededError, quotaExceededMessage, recordUsageAndNotify, resolveRouteUsageContext } from './quota';
 import { ensureProvidersConfigured, isDirectProviderConfigured, resolveChatTransport } from '../llm/providers';
 import { convertTiffParts, TiffConversionError } from '../llm/tiff';
 import { capabilitiesFor, createChunkTranslator, toChatCompletion, toChatUsage, toResponsesInput, toResponsesTools, usesReasoningTokenParam, type ChatInputMessage, type ChatToolDef } from '../llm/harness-adapter';
@@ -1012,7 +1012,6 @@ const chatRoute: FastifyPluginAsync = async (fastify) => {
             const blocks = agentStore.getQuotaBlocks(usageContext.parentKeyId, usageContext.agentId, nextEstimate);
             if (blocks.length > 0) {
               recordUsage(activeModel, 429, { usage }, provider);
-              notifyQuotaThresholds(usageContext.parentKeyId, usageContext.agentId, blocks);
               const quotaErr = createError(quotaExceededMessage(blocks[0], ' during tool use'), 'rate_limit_error', null, 'quota_exceeded');
               if (sse) {
                 sse.writeEvent('error', quotaErr);

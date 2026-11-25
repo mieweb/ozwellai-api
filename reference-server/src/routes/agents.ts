@@ -253,12 +253,12 @@ function normalizeQuotaBody(body: QuotaBody | undefined): { policy: QuotaPolicyI
         const value = body?.[field];
         if (value === undefined || value === null) {
             limits[field] = null;
-        } else if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-            limits[field] = Math.floor(value);
+        } else if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+            limits[field] = value;
         } else if (status === 'disabled') {
             limits[field] = null;
         } else {
-            return { error: `'${field}' must be a positive number or null`, param: field };
+            return { error: `'${field}' must be a positive integer or null`, param: field };
         }
     }
     if (status === 'active' && QUOTA_LIMIT_FIELDS.every(field => limits[field] === null)) {

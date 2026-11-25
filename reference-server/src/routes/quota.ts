@@ -30,10 +30,10 @@ export function resolveRouteUsageContext(authorization: string | undefined): Rou
 }
 
 /** Sends emails for newly reached quota thresholds; the store de-duplicates per window. */
-export function notifyQuotaThresholds(parentKeyId: string | null, agentId: string | null, blocked: QuotaStatus[] = []): void {
+export function notifyQuotaThresholds(parentKeyId: string | null, agentId: string | null): void {
   let due;
   try {
-    due = agentStore.claimQuotaNotifications(parentKeyId, agentId, blocked);
+    due = agentStore.claimQuotaNotifications(parentKeyId, agentId);
   } catch (err) {
     console.warn('[quota] Failed to evaluate quota notifications:', err);
     return;
@@ -50,7 +50,14 @@ export function notifyQuotaThresholds(parentKeyId: string | null, agentId: strin
       usedTokens: n.window.used_tokens,
       limit: n.window.limit,
       resetsAt: n.window.window_end,
-    }).catch(err => console.warn('[quota] Failed to send quota email:', err));
+    }).catch(err => {
+      console.warn('[quota] Failed to send quota email:', err);
+      try {
+        agentStore.releaseQuotaNotification(n);
+      } catch (releaseErr) {
+        console.warn('[quota] Failed to release quota notification:', releaseErr);
+      }
+    });
   }
 }
 
@@ -69,7 +76,7 @@ export function quotaExceededError(reply: FastifyReply, parentKeyId: string | nu
   const quotaBlocks = agentStore.getQuotaBlocks(parentKeyId, agentId, Math.max(requestedTokens, 1));
   if (quotaBlocks.length === 0) return null;
 
-  notifyQuotaThresholds(parentKeyId, agentId, quotaBlocks);
+  notifyQuotaThresholds(parentKeyId, agentId);
   reply.code(429);
   return createError(quotaExceededMessage(quotaBlocks[0]), 'rate_limit_error', null, 'quota_exceeded');
 }
